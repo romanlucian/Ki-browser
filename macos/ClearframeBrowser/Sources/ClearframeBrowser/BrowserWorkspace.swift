@@ -223,6 +223,20 @@ final class BrowserWorkspace: ObservableObject {
         )
     }
 
+    @discardableResult
+    func fileBookmarkFromDrop(_ url: URL, to folderID: UUID?) -> BookmarkDropResult? {
+        guard let safeURL = BookmarkURLPolicy.validatedURL(url.absoluteString) else { return nil }
+        let normalizedURL = safeURL.absoluteString
+        let existing = dataStore.bookmark(for: normalizedURL)
+        let sourceTitle: String
+        if selectedTab?.session.currentURLString == normalizedURL {
+            sourceTitle = selectedTab?.session.pageTitle ?? ""
+        } else {
+            sourceTitle = existing?.title ?? safeURL.host ?? normalizedURL
+        }
+        return dataStore.fileBookmarkFromDrop(safeURL, title: sourceTitle, to: folderID)
+    }
+
     func requestBookmarkLibrary() {
         bookmarkLibraryRequest += 1
     }

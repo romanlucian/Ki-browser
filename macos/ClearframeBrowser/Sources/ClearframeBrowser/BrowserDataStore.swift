@@ -78,13 +78,20 @@ final class BrowserDataStore: ObservableObject {
 
     @discardableResult
     func addBookmark(title: String, url: String, folderID: UUID?) -> BookmarkRecord? {
-        guard Self.isWebURL(url) else { return nil }
+        guard let safeURL = BookmarkURLPolicy.validatedURL(url) else { return nil }
+        let normalizedURL = safeURL.absoluteString
         var collection = bookmarkCollection
-        let existing = bookmarks.first { $0.url == url }
+        let existing = bookmarks.first { $0.url == normalizedURL }
+        let proposedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedProposedTitle = proposedTitle
+            .lowercased()
+            .replacingOccurrences(of: "…", with: "...")
+        let usableTitle = ["loading", "loading...", "new tab"]
+            .contains(normalizedProposedTitle) ? nil : proposedTitle.nilIfEmpty
         let bookmark = BookmarkRecord(
             id: existing?.id ?? UUID(),
-            title: title.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty ?? existing?.title ?? url,
-            url: url,
+            title: usableTitle ?? existing?.title ?? safeURL.host ?? normalizedURL,
+            url: normalizedURL,
             createdAt: existing?.createdAt ?? Date(),
             folderID: folderID
         )
@@ -93,15 +100,40 @@ final class BrowserDataStore: ObservableObject {
         return bookmarks.first { $0.id == bookmark.id }
     }
 
+    /// Files a URL delivered by a native drag. An exact normalized URL is unique:
+    /// dropping it again reuses and, when needed, moves the existing record.
+    @discardableResult
+    func fileBookmarkFromDrop(_ url: URL, title: String?, to folderID: UUID?) -> BookmarkDropResult? {
+        guard let safeURL = BookmarkURLPolicy.validatedURL(url.absoluteString) else { return nil }
+        if let folderID, bookmarkFolder(id: folderID) == nil { return nil }
+
+        let normalizedURL = safeURL.absoluteString
+        let existing = bookmark(for: normalizedURL)
+        guard let bookmark = addBookmark(
+            title: title ?? existing?.title ?? safeURL.host ?? normalizedURL,
+            url: normalizedURL,
+            folderID: folderID
+        ) else { return nil }
+
+        let disposition: BookmarkDropDisposition
+        if let existing {
+            disposition = existing.folderID == bookmark.folderID ? .alreadyFiled : .moved
+        } else {
+            disposition = .created
+        }
+        return BookmarkDropResult(bookmark: bookmark, disposition: disposition)
+    }
+
     func toggleBookmark(title: String, url: String) {
-        guard Self.isWebURL(url) else { return }
+        guard let safeURL = BookmarkURLPolicy.validatedURL(url) else { return }
+        let normalizedURL = safeURL.absoluteString
         var collection = bookmarkCollection
-        if let bookmark = bookmarks.first(where: { $0.url == url }) {
+        if let bookmark = bookmarks.first(where: { $0.url == normalizedURL }) {
             collection.removeBookmark(id: bookmark.id)
         } else {
             collection.addBookmark(BookmarkRecord(
-                title: title.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty ?? url,
-                url: url,
+                title: title.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty ?? normalizedURL,
+                url: normalizedURL,
                 folderID: nil
             ))
         }
@@ -158,7 +190,7 @@ final class BrowserDataStore: ObservableObject {
 
     func recordVisit(title: String, url: String, at date: Date = Date()) {
         guard defaults.bool(forKey: saveHistoryKey) else { return }
-        guard Self.isWebURL(url) else { return }
+        guard BookmarkURLPolicy.validatedURL(url) != nil else { return }
         if history.first?.url == url, date.timeIntervalSince(history.first?.visitedAt ?? .distantPast) < 30 {
             return
         }
@@ -207,10 +239,17 @@ final class BrowserDataStore: ObservableObject {
         return try? JSONDecoder().decode(type, from: data)
     }
 
-    private static func isWebURL(_ value: String) -> Bool {
-        guard let url = URL(string: value), let scheme = url.scheme?.lowercased() else { return false }
-        return ["http", "https"].contains(scheme)
-    }
+}
+
+enum BookmarkDropDisposition: Equatable {
+    case created
+    case moved
+    case alreadyFiled
+}
+
+struct BookmarkDropResult {
+    let bookmark: BookmarkRecord
+    let disposition: BookmarkDropDisposition
 }
 
 private extension String {

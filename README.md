@@ -9,7 +9,7 @@ The native app provides:
 - multi-tab browsing with safe per-tab WebKit and assistant state;
 - local restoration of recent tabs, with lazy loading and an opt-out setting;
 - downloads with a user-selected destination plus an obvious toolbar panel for status, destination, cancel, reveal, and the Downloads folder;
-- a visible Clearframe bookmarks bar below navigation, with horizontally scrollable top-level links, nested emoji-folder menus, fixed overflow access, and a locally persisted show/hide setting;
+- a visible Clearframe bookmarks bar below navigation, with horizontally scrollable top-level links, nested emoji-folder menus, current-page and saved-bookmark drag filing, fixed overflow access, and a locally persisted show/hide setting;
 - searchable local bookmarks organized into emoji-labeled nested folders, plus local history with clear/disable controls;
 - explicit loading, offline, timeout, blocked-link, and general error states;
 - explicit on-device voice input that fills the visible address/search field for review without automatic submission;
@@ -66,7 +66,7 @@ Then:
 4. Browse with independent tabs; use `⌘T` for a new tab and the tab strip to switch or close tabs.
 5. Open **Assistant** and click **Analyze page**.
 6. Use local summary, claims, Plain English, visible risk signals, and source comparison.
-7. The bookmarks bar directly below the address row shows every top-level folder as its emoji plus a visible text name; long names truncate instead of collapsing to an icon. It also shows Unfiled bookmarks. Select a folder for its bookmarks and nested subfolders, scroll horizontally when needed, or use **More** for reliable overflow access. Secondary-click (right-click) or Control-click the bar to add the current page, create a folder, open the organizer, or hide the bar; secondary-click a folder to add/move the current page there or create a nested subfolder. The same actions remain accessible from **More**, the Library, and the native **Page** menu; **⌘⌥B** opens the organizer. Use the star to add or remove the current page. The bar is visible by default and can be hidden or restored from **Settings → Bookmarks bar** or the Page menu. Existing bookmarks remain available under **Unfiled**.
+7. The bookmarks bar directly below the address row shows every top-level folder as its emoji plus a visible text name; long names truncate instead of collapsing to an icon. It also shows Unfiled bookmarks. Drag the lock/globe page-link chip at the left edge of the address text onto bar space to save the current page in **Unfiled**, or onto a visible emoji folder to file it there. Existing bar or organizer bookmarks are also draggable onto visible folders; dropping the same URL moves its one saved record rather than duplicating it. Select a folder for its bookmarks and nested subfolders, scroll horizontally when needed, or use **More** for reliable overflow access. Secondary-click (right-click) or Control-click the bar to add the current page, create a folder, open the organizer, or hide the bar; secondary-click a folder to add/move the current page there or create a nested subfolder. The same actions remain accessible from **More**, the Library, and the native **Page** menu; **⌘⌥B** opens the organizer. Use the star to add or remove the current page. The bar is visible by default and can be hidden or restored from **Settings → Bookmarks bar** or the Page menu. Existing bookmarks remain available under **Unfiled**.
 8. Use the Downloads toolbar button to see a clear empty state or the current session’s download status, destination, and Reveal action; **Open Downloads Folder** remains available even when the list is empty. Attachment downloads keep the existing page visible instead of presenting WebKit's internal policy-handoff message as a page error.
 9. Click the provider name inside the address bar, or open **ClearframeBrowser → Settings…** (`⌘,`), to choose the search engine. After a toolbar choice, the address field is ready for typing.
 10. Optional AI, tab-restoration, bookmark-bar, and local-history settings are available in the same Settings window.
@@ -83,7 +83,7 @@ swift test
 ./scripts/run-browser-smoke.sh
 ```
 
-The smoke test exercises a native SwiftUI window, launch/address focus, deterministic WebKit navigation, tabs, local search resolution, default/persisted bookmark-bar visibility, nested bookmark menu queries/persistence/moves, download-panel state, history, session restore, and the local assistant. It requires a logged-in desktop session; restricted/headless environments can block WebKit services.
+The smoke test exercises a native SwiftUI window, launch/address focus, deterministic WebKit navigation, tabs, local search resolution, default/persisted bookmark-bar visibility, nested bookmark menu queries/persistence, duplicate-safe URL-drop filing/moves, download-panel state, history, session restore, and the local assistant. It requires a logged-in desktop session; restricted/headless environments can block WebKit services.
 
 The Swift package separates the Foundation-only analysis/service contract (`ClearframeCore`) from the macOS-specific SwiftUI/WebKit interface (`ClearframeBrowser`). A future Windows app can reuse the language-neutral service contract and tests, but not the native SwiftUI/WebKit UI.
 
@@ -123,7 +123,7 @@ npm run validate
 - Risk signals are heuristic and do not prove that a page is safe or malicious.
 - Clearframe can save downloads but does not scan their contents or provide a reputation verdict. It also does not inspect certificate details, network traffic, reputation databases, or hidden page behavior.
 - The download list is session-only in this version; saved files remain at the destination the user selected, and the toolbar panel can always open the local Downloads folder.
-- The bookmarks bar and folder organizer are local only. Their secondary-click menus use normal macOS context-menu behavior; they do not add drag-and-drop, an account, sync, or cloud backup. Hiding the bar does not delete bookmarks. Deleting a non-empty folder requires confirmation and rehomes its direct contents instead of deleting saved pages.
+- The bookmarks bar and folder organizer are local only. Native URL drag-and-drop creates or moves bookmarks into Unfiled or visible folders; it does not reorder items or move folders, and the existing Move menu remains the keyboard alternative. The organizer supports drops onto the folders currently visible in it, not closed submenu rows. There is no account, sync, or cloud backup. Hiding the bar does not delete bookmarks. Deleting a non-empty folder requires confirmation and rehomes its direct contents instead of deleting saved pages.
 - Browser-internal pages, extension stores, PDF viewers, and some restricted pages cannot be analyzed.
 - The native browser is a single-window version-1 MVP with basic tabs; it is not yet a signed, notarized, independently security-reviewed consumer release.
 - WebKit does not provide Chrome extension compatibility and is not a drop-in substitute for a future Chromium product.

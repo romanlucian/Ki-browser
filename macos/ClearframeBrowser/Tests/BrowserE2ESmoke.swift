@@ -306,6 +306,43 @@ struct BrowserE2ESmoke {
             try require(refiledContextualBookmark?.id == contextualBookmark?.id, "refiling an existing current-page bookmark changed its identity")
             try require(dataStore.bookmarks.filter { $0.url == "https://example.com/context-bookmark" }.count == 1, "refiling created a duplicate bookmark")
             try require(dataStore.bookmarks(in: swiftFolder.id).contains(where: { $0.id == contextualBookmark?.id }), "folder context action did not move the existing bookmark")
+            let draggedURL = URL(string: "https://example.com/address-drag")!
+            let createdFromAddressDrag = dataStore.fileBookmarkFromDrop(
+                draggedURL,
+                title: "Address drag verification",
+                to: nil
+            )
+            try require(createdFromAddressDrag?.disposition == .created, "address-link drop did not create an Unfiled bookmark")
+            let movedFromBarDrag = dataStore.fileBookmarkFromDrop(
+                draggedURL,
+                title: nil,
+                to: programmingFolder.id
+            )
+            try require(movedFromBarDrag?.disposition == .moved, "saved bookmark drag did not move the existing record into a folder")
+            try require(movedFromBarDrag?.bookmark.id == createdFromAddressDrag?.bookmark.id, "drag refiling changed bookmark identity")
+            try require(dataStore.bookmarks.filter { $0.url == draggedURL.absoluteString }.count == 1, "drag refiling created a duplicate URL")
+            let repeatedFolderDrop = dataStore.fileBookmarkFromDrop(
+                draggedURL,
+                title: nil,
+                to: programmingFolder.id
+            )
+            try require(repeatedFolderDrop?.disposition == .alreadyFiled, "repeated folder drop did not report an existing filing")
+            let loadingTitleDropURL = URL(string: "https://example.com/loading-title-drag")!
+            let loadingTitleDrop = dataStore.fileBookmarkFromDrop(
+                loadingTitleDropURL,
+                title: "Loading…",
+                to: nil
+            )
+            try require(loadingTitleDrop?.bookmark.title == "example.com", "address drag persisted a transient Loading title")
+            if let loadingTitleBookmark = dataStore.bookmark(for: loadingTitleDropURL.absoluteString) {
+                dataStore.removeBookmark(loadingTitleBookmark)
+            }
+            let unsafeDrag = dataStore.fileBookmarkFromDrop(
+                URL(string: "file:///tmp/not-a-web-bookmark")!,
+                title: "Unsafe",
+                to: nil
+            )
+            try require(unsafeDrag == nil, "non-web drag payload was persisted as a bookmark")
             try require(dataStore.bookmarkFolders(in: nil).map(\.id) == [programmingFolder.id], "bookmarks bar root included a nested folder")
             try require(dataStore.bookmarkFolders(in: programmingFolder.id).map(\.id) == [swiftFolder.id], "bookmarks bar folder hierarchy omitted a nested submenu")
             try require(dataStore.bookmarks(in: nil).isEmpty, "bookmarks bar root showed a filed bookmark as Unfiled")
@@ -319,13 +356,20 @@ struct BrowserE2ESmoke {
             let restoredBookmarkStore = BrowserDataStore(defaults: defaults)
             try require(restoredBookmarkStore.bookmarkFolder(id: swiftFolder.id)?.parentID == programmingFolder.id, "nested folders did not persist locally")
             try require(restoredBookmarkStore.bookmarks(in: swiftFolder.id).count == 2, "folder assignments did not persist locally")
+            try require(restoredBookmarkStore.bookmarks(in: programmingFolder.id).contains(where: { $0.id == createdFromAddressDrag?.bookmark.id }), "dragged bookmark folder assignment did not persist locally")
             dataStore.deleteBookmarkFolderPreservingContents(programmingFolder)
-            try require(dataStore.bookmarks.count == 2, "deleting a parent folder discarded a bookmark")
+            try require(dataStore.bookmarks.count == 3, "deleting a parent folder discarded a bookmark")
             try require(dataStore.bookmarkFolder(id: swiftFolder.id)?.parentID == nil, "nested folder was not safely rehomed")
-            print("PASS bookmark organizer: nested emoji folders, context refiling, menu requests, and safe parent deletion succeeded")
+            print("PASS bookmark organizer: nested emoji folders, safe URL drag filing/refiling, context actions, and safe parent deletion succeeded")
             dataStore.toggleBookmark(title: "Local verification", url: localURL)
             if let contextualBookmark = dataStore.bookmark(for: "https://example.com/context-bookmark") {
                 dataStore.removeBookmark(contextualBookmark)
+            }
+            if let draggedBookmark = dataStore.bookmark(for: draggedURL.absoluteString) {
+                dataStore.removeBookmark(draggedBookmark)
+            }
+            if let loadingTitleBookmark = dataStore.bookmark(for: loadingTitleDropURL.absoluteString) {
+                dataStore.removeBookmark(loadingTitleBookmark)
             }
             dataStore.clearHistory()
             try require(dataStore.bookmarks.isEmpty && dataStore.history.isEmpty, "library remove/clear controls failed")

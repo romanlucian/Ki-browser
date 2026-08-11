@@ -314,9 +314,11 @@ private struct BrowserToolbar: View {
                     .frame(height: 17)
 
                 HStack(spacing: 8) {
-                    Image(systemName: session.isSecure ? "lock.fill" : "globe")
-                        .foregroundStyle(session.isSecure ? Color.green : Color.secondary)
-                        .font(.system(size: 11, weight: .semibold))
+                    PageLinkDragHandle(
+                        urlString: session.currentURLString,
+                        title: session.pageTitle,
+                        isSecure: session.isSecure
+                    )
                     TextField("Search \(searchSettings.selectedEngine.displayName) or enter a website", text: $addressText)
                         .textFieldStyle(.plain)
                         .focused(addressFocused)
@@ -436,6 +438,7 @@ private struct BrowserToolbar: View {
                     currentBookmark: currentBookmark,
                     open: { workspace.open($0) },
                     addCurrentPage: { workspace.addSelectedPageBookmark(to: $0) },
+                    fileDroppedURL: { workspace.fileBookmarkFromDrop($0, to: $1) },
                     newFolder: { presentFolderEditor(parentID: $0) }
                 )
             }
@@ -530,6 +533,41 @@ private struct NavigationButton: View {
     }
 }
 
+private struct PageLinkDragHandle: View {
+    let urlString: String
+    let title: String
+    let isSecure: Bool
+
+    @ViewBuilder
+    var body: some View {
+        if let url = BookmarkURLPolicy.validatedURL(urlString) {
+            symbol
+                .frame(width: 20, height: 22)
+                .background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 5))
+                .contentShape(RoundedRectangle(cornerRadius: 5))
+                .draggable(url) {
+                    Label(title.isEmpty ? (url.host ?? "Web page") : title, systemImage: "link")
+                        .lineLimit(1)
+                        .padding(8)
+                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
+                }
+                .help("Drag this page link to the bookmarks bar or a visible folder")
+                .accessibilityLabel("Page link drag handle")
+                .accessibilityHint("Drag to the bookmarks bar to save this page, or onto a folder to file it there.")
+        } else {
+            symbol
+                .frame(width: 20, height: 22)
+                .accessibilityHidden(true)
+        }
+    }
+
+    private var symbol: some View {
+        Image(systemName: isSecure ? "lock.fill" : "globe")
+            .foregroundStyle(isSecure ? Color.green : Color.secondary)
+            .font(.system(size: 11, weight: .semibold))
+    }
+}
+
 private struct BookmarksBar: View {
     @ObservedObject var store: BrowserDataStore
     @Binding var showsLibrary: Bool
@@ -537,7 +575,10 @@ private struct BookmarksBar: View {
     let currentBookmark: BookmarkRecord?
     let open: (String) -> Void
     let addCurrentPage: (UUID?) -> Void
+    let fileDroppedURL: (URL, UUID?) -> BookmarkDropResult?
     let newFolder: (UUID?) -> Void
+    @State private var isRootDropTargeted = false
+    @State private var dropConfirmation: String?
 
     private var rootFolders: [BookmarkFolderRecord] {
         store.bookmarkFolders(in: nil)
@@ -592,6 +633,8 @@ private struct BookmarksBar: View {
                                 canBookmarkCurrentPage: canBookmarkCurrentPage,
                                 open: open,
                                 addCurrentPage: addCurrentPage,
+                                fileDroppedURL: fileDroppedURL,
+                                reportDrop: reportDrop,
                                 newFolder: newFolder,
                                 organize: { showsLibrary = true }
                             )
@@ -617,6 +660,8 @@ private struct BookmarksBar: View {
                             canBookmarkCurrentPage: canBookmarkCurrentPage,
                             open: open,
                             addCurrentPage: addCurrentPage,
+                            fileDroppedURL: fileDroppedURL,
+                            reportDrop: reportDrop,
                             newFolder: newFolder,
                             organize: { showsLibrary = true }
                         )
@@ -671,11 +716,35 @@ private struct BookmarksBar: View {
             .fixedSize()
             .help("All bookmarks and bar options")
             .accessibilityLabel("More bookmarks")
+
+            if let dropConfirmation {
+                Label(dropConfirmation, systemImage: "checkmark.circle.fill")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(Color(red: 0.12, green: 0.47, blue: 0.33))
+                    .lineLimit(1)
+                    .transition(.opacity.combined(with: .move(edge: .trailing)))
+                    .accessibilityLabel(dropConfirmation)
+            }
         }
         .padding(.horizontal, 11)
         .frame(height: 33)
-        .background(Color.primary.opacity(0.018))
+        .background(
+            isRootDropTargeted ? Color.green.opacity(0.11) : Color.primary.opacity(0.018),
+            in: RoundedRectangle(cornerRadius: 7)
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: 7)
+                .stroke(isRootDropTargeted ? Color.green.opacity(0.75) : Color.clear, lineWidth: 1.5)
+        }
         .contentShape(Rectangle())
+        .dropDestination(for: URL.self) { urls, _ in
+            guard let url = urls.first,
+                  let result = fileDroppedURL(url, nil) else { return false }
+            reportDrop(result, folderName: "Unfiled")
+            return true
+        } isTargeted: { isTargeted in
+            isRootDropTargeted = isTargeted
+        }
         .contextMenu {
             if canBookmarkCurrentPage {
                 if currentBookmark == nil {
@@ -707,7 +776,29 @@ private struct BookmarksBar: View {
                 Label("Hide Bookmarks Bar", systemImage: "eye.slash")
             }
         }
-        .help("Secondary-click or Control-click for bookmark-bar actions")
+        .help("Drop a page link here to save it in Unfiled. Secondary-click or Control-click for more actions.")
+    }
+
+    private func reportDrop(_ result: BookmarkDropResult, folderName: String) {
+        let message: String
+        switch result.disposition {
+        case .created:
+            message = "Saved to \(folderName)"
+        case .moved:
+            message = "Moved to \(folderName)"
+        case .alreadyFiled:
+            message = "Already in \(folderName)"
+        }
+        withAnimation(.easeOut(duration: 0.16)) {
+            dropConfirmation = message
+        }
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(2.4))
+            guard dropConfirmation == message else { return }
+            withAnimation(.easeIn(duration: 0.16)) {
+                dropConfirmation = nil
+            }
+        }
     }
 }
 
@@ -715,7 +806,16 @@ private struct BookmarkBarLink: View {
     let bookmark: BookmarkRecord
     let open: (String) -> Void
 
+    @ViewBuilder
     var body: some View {
+        if let url = BookmarkURLPolicy.validatedURL(bookmark.url) {
+            linkButton.draggable(url)
+        } else {
+            linkButton
+        }
+    }
+
+    private var linkButton: some View {
         Button {
             open(bookmark.url)
         } label: {
@@ -734,7 +834,7 @@ private struct BookmarkBarLink: View {
         .buttonStyle(.plain)
         .frame(maxWidth: 180)
         .help("Open \(bookmark.title) — \(bookmark.url)")
-        .accessibilityHint("Opens this bookmark in the current tab.")
+        .accessibilityHint("Opens this bookmark in the current tab. Drag it onto a visible folder to move it.")
     }
 }
 
@@ -746,8 +846,11 @@ private struct BookmarkFolderMenu: View {
     let canBookmarkCurrentPage: Bool
     let open: (String) -> Void
     let addCurrentPage: (UUID?) -> Void
+    let fileDroppedURL: (URL, UUID?) -> BookmarkDropResult?
+    let reportDrop: (BookmarkDropResult, String) -> Void
     let newFolder: (UUID?) -> Void
     let organize: () -> Void
+    @State private var isDropTargeted = false
 
     @ViewBuilder
     var body: some View {
@@ -775,10 +878,25 @@ private struct BookmarkFolderMenu: View {
                     .font(.system(size: 11, weight: .semibold))
                     .padding(.horizontal, 7)
                     .frame(width: 140, height: 24)
-                    .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 6))
+                    .background(
+                        isDropTargeted ? Color.green.opacity(0.17) : Color.primary.opacity(0.05),
+                        in: RoundedRectangle(cornerRadius: 6)
+                    )
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 6)
+                            .stroke(isDropTargeted ? Color.green.opacity(0.9) : Color.clear, lineWidth: 1.5)
+                    }
                     .allowsHitTesting(false)
                 }
                 .frame(width: 140, height: 24)
+                .dropDestination(for: URL.self) { urls, _ in
+                    guard let url = urls.first,
+                          let result = fileDroppedURL(url, folder.id) else { return false }
+                    reportDrop(result, folder.title)
+                    return true
+                } isTargeted: { isTargeted in
+                    isDropTargeted = isTargeted
+                }
             } else {
                 Menu(folder.barLabel) {
                     menuContents
@@ -787,7 +905,7 @@ private struct BookmarkFolderMenu: View {
         }
         .help("Open \(folder.title) folder")
         .accessibilityLabel("\(folder.title) bookmark folder")
-        .accessibilityHint("Opens this folder. Secondary-click or Control-click for folder actions.")
+        .accessibilityHint("Opens this folder. Drop a page link or saved bookmark here to file it in this folder.")
         .contextMenu {
             if canBookmarkCurrentPage {
                 if currentBookmark?.folderID == folder.id {
@@ -826,6 +944,8 @@ private struct BookmarkFolderMenu: View {
             canBookmarkCurrentPage: canBookmarkCurrentPage,
             open: open,
             addCurrentPage: addCurrentPage,
+            fileDroppedURL: fileDroppedURL,
+            reportDrop: reportDrop,
             newFolder: newFolder,
             organize: organize
         )
@@ -839,6 +959,8 @@ private struct BookmarkFolderMenuContents: View {
     let canBookmarkCurrentPage: Bool
     let open: (String) -> Void
     let addCurrentPage: (UUID?) -> Void
+    let fileDroppedURL: (URL, UUID?) -> BookmarkDropResult?
+    let reportDrop: (BookmarkDropResult, String) -> Void
     let newFolder: (UUID?) -> Void
     let organize: () -> Void
 
@@ -863,6 +985,8 @@ private struct BookmarkFolderMenuContents: View {
                     canBookmarkCurrentPage: canBookmarkCurrentPage,
                     open: open,
                     addCurrentPage: addCurrentPage,
+                    fileDroppedURL: fileDroppedURL,
+                    reportDrop: reportDrop,
                     newFolder: newFolder,
                     organize: organize
                 )
@@ -1001,6 +1125,7 @@ private struct BookmarkOrganizerView: View {
     @State private var currentFolderID: UUID?
     @State private var editorRequest: BookmarkFolderEditorRequest?
     @State private var pendingDeletion: BookmarkFolderRecord?
+    @State private var dropConfirmation: String?
 
     private var currentFolder: BookmarkFolderRecord? {
         currentFolderID.flatMap(store.bookmarkFolder(id:))
@@ -1081,6 +1206,7 @@ private struct BookmarkOrganizerView: View {
                                     emoji: folder.emoji
                                 )
                             },
+                            fileDroppedURL: { fileDroppedURL($0, to: folder) },
                             delete: { requestDeletion(folder) }
                         )
                     }
@@ -1111,10 +1237,10 @@ private struct BookmarkOrganizerView: View {
 
             HStack {
                 Image(systemName: "lock")
-                Text("Folders and bookmarks stay in this Mac user profile.")
+                Text(dropConfirmation ?? "Folders and bookmarks stay in this Mac user profile.")
             }
             .font(.caption2)
-            .foregroundStyle(.secondary)
+            .foregroundStyle(dropConfirmation == nil ? Color.secondary : Color.green)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .sheet(item: $editorRequest) { request in
@@ -1152,6 +1278,25 @@ private struct BookmarkOrganizerView: View {
             store.deleteBookmarkFolderPreservingContents(folder)
         }
     }
+
+    private func fileDroppedURL(_ url: URL, to folder: BookmarkFolderRecord) -> Bool {
+        guard let result = store.fileBookmarkFromDrop(url, title: nil, to: folder.id) else { return false }
+        let message: String
+        switch result.disposition {
+        case .created:
+            message = "Saved to \(folder.title)"
+        case .moved:
+            message = "Moved to \(folder.title)"
+        case .alreadyFiled:
+            message = "Already in \(folder.title)"
+        }
+        dropConfirmation = message
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(2.4))
+            if dropConfirmation == message { dropConfirmation = nil }
+        }
+        return true
+    }
 }
 
 private struct BookmarkFolderRow: View {
@@ -1160,7 +1305,9 @@ private struct BookmarkFolderRow: View {
     let subfolderCount: Int
     let open: () -> Void
     let rename: () -> Void
+    let fileDroppedURL: (URL) -> Bool
     let delete: () -> Void
+    @State private var isDropTargeted = false
 
     var body: some View {
         HStack(spacing: 9) {
@@ -1192,7 +1339,21 @@ private struct BookmarkFolderRow: View {
             .help("Folder actions")
         }
         .padding(9)
-        .background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 9))
+        .background(
+            isDropTargeted ? Color.green.opacity(0.14) : Color.primary.opacity(0.045),
+            in: RoundedRectangle(cornerRadius: 9)
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: 9)
+                .stroke(isDropTargeted ? Color.green.opacity(0.85) : Color.clear, lineWidth: 1.5)
+        }
+        .dropDestination(for: URL.self) { urls, _ in
+            guard let url = urls.first else { return false }
+            return fileDroppedURL(url)
+        } isTargeted: { isTargeted in
+            isDropTargeted = isTargeted
+        }
+        .help("Open \(folder.title), or drop a saved bookmark here to move it")
     }
 }
 
@@ -1204,7 +1365,16 @@ private struct BookmarkOrganizerRow: View {
     let move: (UUID?) -> Void
     let remove: () -> Void
 
+    @ViewBuilder
     var body: some View {
+        if let url = BookmarkURLPolicy.validatedURL(bookmark.url) {
+            row.draggable(url)
+        } else {
+            row
+        }
+    }
+
+    private var row: some View {
         HStack(spacing: 8) {
             Button(action: open) {
                 VStack(alignment: .leading, spacing: 3) {
@@ -1242,6 +1412,7 @@ private struct BookmarkOrganizerRow: View {
         }
         .padding(8)
         .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 8))
+        .accessibilityHint("Drag this bookmark onto a visible folder to move it. The Move menu is the keyboard alternative.")
     }
 }
 

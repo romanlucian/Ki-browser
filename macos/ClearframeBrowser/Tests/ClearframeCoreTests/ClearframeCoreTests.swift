@@ -383,6 +383,20 @@ final class ClearframeCoreTests: XCTestCase {
         XCTAssertEqual(collection.bookmarks(in: nil).first?.url, legacy.url)
     }
 
+    func testBookmarkURLPolicyAcceptsOnlyCredentialFreeWebLinks() throws {
+        let secure = try XCTUnwrap(BookmarkURLPolicy.validatedURL("  https://example.com/guide?q=swift  "))
+        let local = try XCTUnwrap(BookmarkURLPolicy.validatedURL("http://127.0.0.1:8765/test"))
+
+        XCTAssertEqual(secure.absoluteString, "https://example.com/guide?q=swift")
+        XCTAssertEqual(local.host, "127.0.0.1")
+        XCTAssertNil(BookmarkURLPolicy.validatedURL("javascript:alert(1)"))
+        XCTAssertNil(BookmarkURLPolicy.validatedURL("data:text/plain,secret"))
+        XCTAssertNil(BookmarkURLPolicy.validatedURL("file:///Users/example/private.txt"))
+        XCTAssertNil(BookmarkURLPolicy.validatedURL("https://user:password@example.com/private"))
+        XCTAssertNil(BookmarkURLPolicy.validatedURL("https:///missing-host"))
+        XCTAssertNil(BookmarkURLPolicy.validatedURL("example.com/no-scheme"))
+    }
+
     func testBookmarkFolderTreeMovesAndSafeDeletionPreserveSavedPages() throws {
         var collection = BookmarkCollection()
         let programming = try XCTUnwrap(

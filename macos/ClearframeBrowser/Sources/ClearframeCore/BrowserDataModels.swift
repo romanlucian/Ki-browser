@@ -1,5 +1,23 @@
 import Foundation
 
+public enum BookmarkURLPolicy {
+    /// Returns a normalized, bookmark-safe web URL. Bookmark drags deliberately
+    /// reject local files, script/data schemes, incomplete hosts, and credentials
+    /// embedded in a URL so a drop cannot persist an unsafe or secret-bearing link.
+    public static func validatedURL(_ value: String) -> URL? {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty,
+              let components = URLComponents(string: trimmed),
+              let scheme = components.scheme?.lowercased(),
+              ["http", "https"].contains(scheme),
+              components.host?.isEmpty == false,
+              components.user == nil,
+              components.password == nil,
+              let url = components.url else { return nil }
+        return url
+    }
+}
+
 public struct BrowserTabRecord: Codable, Equatable, Identifiable, Sendable {
     public let id: UUID
     public let url: String?
