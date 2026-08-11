@@ -36,14 +36,31 @@ struct DownloadItem: Identifiable, Equatable {
 
 @MainActor
 final class DownloadCenter: NSObject, ObservableObject {
+    static let emptyStateTitle = "No downloads yet"
+    static let emptyStateMessage = "Downloads from this session appear here after you choose where to save them."
+
     @Published private(set) var items: [DownloadItem] = []
     @Published var isShelfVisible = false
+    @Published var isPanelPresented = false
 
     private var itemIDByDownload: [ObjectIdentifier: UUID] = [:]
     private var downloadsByItemID: [UUID: WKDownload] = [:]
 
     var activeCount: Int {
         items.filter { $0.status.isActive }.count
+    }
+
+    var downloadsDirectory: URL? {
+        FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first
+    }
+
+    func togglePanel() {
+        isPanelPresented.toggle()
+    }
+
+    func openDownloadsFolder() {
+        guard let downloadsDirectory else { return }
+        NSWorkspace.shared.open(downloadsDirectory)
     }
 
     func track(_ download: WKDownload, sourceURL: URL?) {
@@ -120,7 +137,7 @@ extension DownloadCenter: WKDownloadDelegate {
         panel.prompt = "Download"
         panel.nameFieldStringValue = safeFilename
         panel.canCreateDirectories = true
-        panel.directoryURL = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first
+        panel.directoryURL = downloadsDirectory
 
         panel.begin { [weak self] result in
             Task { @MainActor in

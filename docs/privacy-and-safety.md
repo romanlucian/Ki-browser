@@ -13,7 +13,8 @@ Clearframe is designed as an on-demand reading tool, not a browsing monitor. The
 - No form values, cookies, passwords, bookmarks, or history feed are included in the extraction result.
 - Local analysis runs in the app process.
 - A saved source comparison is kept only in memory in this foundation.
-- Bookmarks, completed-visit history, and recent-tab URL/title metadata stay in the local Mac user profile. Users can clear history, disable future history, and disable tab restoration.
+- Bookmarks, their titled/emoji folder hierarchy, completed-visit history, and recent-tab URL/title metadata stay in the local Mac user profile. Legacy bookmarks without folder data remain visible as Unfiled. Users can remove bookmarks, clear or disable future history, and disable tab restoration; this phase has no bookmark account or sync service.
+- Download contents and chosen destinations are handled locally. The in-app list describes only the current session; saved files remain at the user-selected destination, and Clearframe does not upload them or claim to scan them.
 - The selected search provider stays in local macOS preferences. Clearframe sends search text only when the user submits it, to the selected provider’s normal HTTPS results page; it does not request remote suggestions while the user types. Direct website addresses bypass search.
 - The new-tab AI catalog and its text filter are defined and evaluated locally. Selecting a card performs ordinary navigation to the provider's listed official HTTPS website. Clearframe does not append the current page, a generated prompt, an affiliate identifier, or tracking parameters.
 - The first-run introduction stores one local completion boolean and reuses the existing local search-provider preference. It has no account, analytics event, identifier, purchase state, or remote onboarding service. Reopening the introduction does not clear browser data.

@@ -373,9 +373,10 @@ private struct BrowserToolbar: View {
                 )
             }
 
-            Button { downloads.isShelfVisible.toggle() } label: {
+            Button { downloads.togglePanel() } label: {
                 ZStack(alignment: .topTrailing) {
-                    Image(systemName: "arrow.down.circle").frame(width: 28, height: 28)
+                    Image(systemName: downloads.items.isEmpty ? "arrow.down.circle" : "arrow.down.circle.fill")
+                        .frame(width: 28, height: 28)
                     if downloads.activeCount > 0 {
                         Text("\(downloads.activeCount)")
                             .font(.system(size: 8, weight: .bold))
@@ -387,7 +388,12 @@ private struct BrowserToolbar: View {
                 }
             }
             .buttonStyle(.plain)
-            .help("Downloads")
+            .help("Show downloads")
+            .accessibilityLabel("Downloads")
+            .accessibilityHint("Shows downloaded files and their save locations.")
+            .popover(isPresented: $downloads.isPanelPresented, arrowEdge: .top) {
+                DownloadsPopover(center: downloads)
+            }
 
             Button { showsAssistant.toggle() } label: {
                 HStack(spacing: 6) {
@@ -524,11 +530,6 @@ private struct LibraryPopover: View {
     @State private var section: LibrarySection = .bookmarks
     @State private var search = ""
 
-    private var filteredBookmarks: [BookmarkRecord] {
-        guard !search.isEmpty else { return store.bookmarks }
-        return store.bookmarks.filter { $0.title.localizedCaseInsensitiveContains(search) || $0.url.localizedCaseInsensitiveContains(search) }
-    }
-
     private var filteredHistory: [HistoryRecord] {
         guard !search.isEmpty else { return store.history }
         return store.history.filter { $0.title.localizedCaseInsensitiveContains(search) || $0.url.localizedCaseInsensitiveContains(search) }
@@ -543,21 +544,11 @@ private struct LibraryPopover: View {
             TextField("Search saved pages", text: $search)
                 .textFieldStyle(.roundedBorder)
 
-            ScrollView {
-                LazyVStack(spacing: 5) {
-                    if section == .bookmarks {
-                        if filteredBookmarks.isEmpty { libraryEmpty("No bookmarks yet", "Bookmark pages with the star button.") }
-                        ForEach(filteredBookmarks) { bookmark in
-                            LibraryRow(
-                                title: bookmark.title,
-                                url: bookmark.url,
-                                detail: nil,
-                                open: { open(bookmark.url, false) },
-                                openNewTab: { open(bookmark.url, true) },
-                                remove: { store.removeBookmark(bookmark) }
-                            )
-                        }
-                    } else {
+            if section == .bookmarks {
+                BookmarkOrganizerView(store: store, search: search, open: open)
+            } else {
+                ScrollView {
+                    LazyVStack(spacing: 5) {
                         if filteredHistory.isEmpty { libraryEmpty("No local history", "Completed page visits appear here.") }
                         ForEach(filteredHistory) { item in
                             LibraryRow(
@@ -571,12 +562,12 @@ private struct LibraryPopover: View {
                         }
                     }
                 }
-            }
-            if section == .history && !store.history.isEmpty {
-                HStack {
-                    Text("Stored only in this Mac user profile.").font(.caption2).foregroundStyle(.secondary)
-                    Spacer()
-                    Button("Clear History", role: .destructive) { store.clearHistory() }.font(.caption)
+                if !store.history.isEmpty {
+                    HStack {
+                        Text("Stored only in this Mac user profile.").font(.caption2).foregroundStyle(.secondary)
+                        Spacer()
+                        Button("Clear History", role: .destructive) { store.clearHistory() }.font(.caption)
+                    }
                 }
             }
         }
@@ -587,6 +578,328 @@ private struct LibraryPopover: View {
     private func libraryEmpty(_ title: String, _ detail: String) -> some View {
         ContentUnavailableView(title, systemImage: "books.vertical", description: Text(detail))
             .frame(height: 270)
+    }
+}
+
+private struct BookmarkFolderEditorRequest: Identifiable {
+    let id = UUID()
+    let folderID: UUID?
+    let parentID: UUID?
+    let title: String
+    let emoji: String
+}
+
+private struct BookmarkFolderDestination: Identifiable {
+    let folderID: UUID?
+    let label: String
+    var id: String { folderID?.uuidString ?? "unfiled" }
+}
+
+private struct BookmarkOrganizerView: View {
+    @ObservedObject var store: BrowserDataStore
+    let search: String
+    let open: (String, Bool) -> Void
+    @State private var currentFolderID: UUID?
+    @State private var editorRequest: BookmarkFolderEditorRequest?
+    @State private var pendingDeletion: BookmarkFolderRecord?
+
+    private var currentFolder: BookmarkFolderRecord? {
+        currentFolderID.flatMap(store.bookmarkFolder(id:))
+    }
+
+    private var visibleFolders: [BookmarkFolderRecord] {
+        search.isEmpty ? store.bookmarkFolders(in: currentFolderID) : []
+    }
+
+    private var visibleBookmarks: [BookmarkRecord] {
+        if search.isEmpty { return store.bookmarks(in: currentFolderID) }
+        return store.bookmarks.filter {
+            $0.title.localizedCaseInsensitiveContains(search) || $0.url.localizedCaseInsensitiveContains(search)
+        }
+    }
+
+    private var destinations: [BookmarkFolderDestination] {
+        var result = [BookmarkFolderDestination(folderID: nil, label: "Unfiled")]
+        func appendChildren(of parentID: UUID?, prefix: String) {
+            for folder in store.bookmarkFolders(in: parentID) {
+                let path = prefix.isEmpty ? "\(folder.emoji) \(folder.title)" : "\(prefix) › \(folder.emoji) \(folder.title)"
+                result.append(BookmarkFolderDestination(folderID: folder.id, label: path))
+                appendChildren(of: folder.id, prefix: path)
+            }
+        }
+        appendChildren(of: nil, prefix: "")
+        return result
+    }
+
+    var body: some View {
+        VStack(spacing: 8) {
+            HStack(spacing: 8) {
+                if let currentFolder {
+                    Button {
+                        currentFolderID = currentFolder.parentID
+                    } label: {
+                        Image(systemName: "chevron.left")
+                    }
+                    .buttonStyle(.plain)
+                    .help("Back to parent folder")
+                }
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(currentFolder.map { "\($0.emoji) \($0.title)" } ?? "Bookmarks")
+                        .font(.callout.bold())
+                    Text(search.isEmpty ? (currentFolder == nil ? "Folders and unfiled bookmarks" : "Local bookmark folder") : "Search all bookmarks")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button {
+                    editorRequest = BookmarkFolderEditorRequest(
+                        folderID: nil,
+                        parentID: currentFolderID,
+                        title: "",
+                        emoji: "📁"
+                    )
+                } label: {
+                    Label("New Folder", systemImage: "folder.badge.plus")
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .accessibilityHint("Creates a subfolder inside the folder currently shown.")
+            }
+
+            ScrollView {
+                LazyVStack(spacing: 6) {
+                    ForEach(visibleFolders) { folder in
+                        BookmarkFolderRow(
+                            folder: folder,
+                            bookmarkCount: store.bookmarks(in: folder.id).count,
+                            subfolderCount: store.bookmarkFolders(in: folder.id).count,
+                            open: { currentFolderID = folder.id },
+                            rename: {
+                                editorRequest = BookmarkFolderEditorRequest(
+                                    folderID: folder.id,
+                                    parentID: folder.parentID,
+                                    title: folder.title,
+                                    emoji: folder.emoji
+                                )
+                            },
+                            delete: { requestDeletion(folder) }
+                        )
+                    }
+
+                    ForEach(visibleBookmarks) { bookmark in
+                        BookmarkOrganizerRow(
+                            bookmark: bookmark,
+                            destinations: destinations,
+                            open: { open(bookmark.url, false) },
+                            openNewTab: { open(bookmark.url, true) },
+                            move: { store.moveBookmark(bookmark, to: $0) },
+                            remove: { store.removeBookmark(bookmark) }
+                        )
+                    }
+
+                    if visibleFolders.isEmpty && visibleBookmarks.isEmpty {
+                        ContentUnavailableView(
+                            search.isEmpty ? "Nothing saved here" : "No matching bookmarks",
+                            systemImage: "bookmark",
+                            description: Text(search.isEmpty
+                                              ? "Use the star to save a page, or create folders such as Web Design, Programming, and Shopping."
+                                              : "Try a different title or website address.")
+                        )
+                        .frame(height: 255)
+                    }
+                }
+            }
+
+            HStack {
+                Image(systemName: "lock")
+                Text("Folders and bookmarks stay in this Mac user profile.")
+            }
+            .font(.caption2)
+            .foregroundStyle(.secondary)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .sheet(item: $editorRequest) { request in
+            BookmarkFolderEditor(request: request) { title, emoji in
+                if let folderID = request.folderID {
+                    store.updateBookmarkFolder(id: folderID, title: title, emoji: emoji)
+                } else {
+                    _ = store.createBookmarkFolder(title: title, emoji: emoji, parentID: request.parentID)
+                }
+                editorRequest = nil
+            }
+        }
+        .alert(
+            "Delete folder?",
+            isPresented: Binding(
+                get: { pendingDeletion != nil },
+                set: { if !$0 { pendingDeletion = nil } }
+            ),
+            presenting: pendingDeletion
+        ) { folder in
+            Button("Delete Folder", role: .destructive) {
+                store.deleteBookmarkFolderPreservingContents(folder)
+                pendingDeletion = nil
+            }
+            Button("Cancel", role: .cancel) { pendingDeletion = nil }
+        } message: { folder in
+            Text("\(folder.emoji) \(folder.title) contains saved items. Its bookmarks and subfolders will move to the parent folder; nothing will be deleted.")
+        }
+    }
+
+    private func requestDeletion(_ folder: BookmarkFolderRecord) {
+        if store.bookmarkFolderContainsItems(folder) {
+            pendingDeletion = folder
+        } else {
+            store.deleteBookmarkFolderPreservingContents(folder)
+        }
+    }
+}
+
+private struct BookmarkFolderRow: View {
+    let folder: BookmarkFolderRecord
+    let bookmarkCount: Int
+    let subfolderCount: Int
+    let open: () -> Void
+    let rename: () -> Void
+    let delete: () -> Void
+
+    var body: some View {
+        HStack(spacing: 9) {
+            Button(action: open) {
+                HStack(spacing: 9) {
+                    Text(folder.emoji).font(.title3)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(folder.title).font(.callout.weight(.semibold)).lineLimit(1)
+                        Text("\(bookmarkCount) bookmarks · \(subfolderCount) folders")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.right").foregroundStyle(.tertiary)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("\(folder.title) folder, \(bookmarkCount) bookmarks, \(subfolderCount) subfolders")
+
+            Menu {
+                Button("Rename Folder", action: rename)
+                Button("Delete Folder", role: .destructive, action: delete)
+            } label: {
+                Image(systemName: "ellipsis.circle").frame(width: 24, height: 24)
+            }
+            .menuStyle(.borderlessButton)
+            .fixedSize()
+            .help("Folder actions")
+        }
+        .padding(9)
+        .background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 9))
+    }
+}
+
+private struct BookmarkOrganizerRow: View {
+    let bookmark: BookmarkRecord
+    let destinations: [BookmarkFolderDestination]
+    let open: () -> Void
+    let openNewTab: () -> Void
+    let move: (UUID?) -> Void
+    let remove: () -> Void
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Button(action: open) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(bookmark.title).font(.callout.weight(.medium)).lineLimit(1)
+                    Text(bookmark.url).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            Menu {
+                ForEach(destinations) { destination in
+                    Button {
+                        move(destination.folderID)
+                    } label: {
+                        if destination.folderID == bookmark.folderID {
+                            Label(destination.label, systemImage: "checkmark")
+                        } else {
+                            Text(destination.label)
+                        }
+                    }
+                }
+            } label: {
+                Image(systemName: "folder").frame(width: 22, height: 22)
+            }
+            .menuStyle(.borderlessButton)
+            .fixedSize()
+            .help("Move bookmark")
+
+            Button(action: openNewTab) { Image(systemName: "plus.square.on.square").frame(width: 22, height: 22) }
+                .buttonStyle(.plain).help("Open in new tab")
+            Button(action: remove) { Image(systemName: "trash").frame(width: 22, height: 22) }
+                .buttonStyle(.plain).foregroundStyle(.secondary).help("Remove bookmark")
+        }
+        .padding(8)
+        .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 8))
+    }
+}
+
+private struct BookmarkFolderEditor: View {
+    let request: BookmarkFolderEditorRequest
+    let save: (String, String) -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var title: String
+    @State private var emoji: String
+
+    private let suggestedEmoji = ["📁", "🎨", "💻", "🛍️", "📚", "✈️", "💡", "❤️"]
+
+    init(request: BookmarkFolderEditorRequest, save: @escaping (String, String) -> Void) {
+        self.request = request
+        self.save = save
+        _title = State(initialValue: request.title)
+        _emoji = State(initialValue: request.emoji)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text(request.folderID == nil ? "New bookmark folder" : "Edit bookmark folder")
+                .font(.title2.bold())
+            TextField("Folder title", text: $title)
+                .textFieldStyle(.roundedBorder)
+            HStack {
+                TextField("Emoji", text: $emoji)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 85)
+                    .onChange(of: emoji) { _, value in
+                        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+                        if trimmed.count > 1 { emoji = String(trimmed.prefix(1)) }
+                    }
+                Text("Choose one or enter your own")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            HStack(spacing: 8) {
+                ForEach(suggestedEmoji, id: \.self) { suggestion in
+                    Button(suggestion) { emoji = suggestion }
+                        .buttonStyle(.bordered)
+                        .accessibilityLabel("Use \(suggestion) folder icon")
+                }
+            }
+            HStack {
+                Spacer()
+                Button("Cancel") { dismiss() }
+                Button("Save") {
+                    save(title, emoji)
+                    dismiss()
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+        }
+        .padding(22)
+        .frame(width: 470)
     }
 }
 
@@ -619,6 +932,65 @@ private struct LibraryRow: View {
     }
 }
 
+private struct DownloadsPopover: View {
+    @ObservedObject var center: DownloadCenter
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Label("Downloads", systemImage: "arrow.down.circle.fill")
+                    .font(.headline)
+                Spacer()
+                if center.items.contains(where: { !$0.status.isActive }) {
+                    Button("Clear Finished") { center.clearFinished() }
+                        .buttonStyle(.plain)
+                        .font(.caption.weight(.semibold))
+                }
+            }
+
+            if center.items.isEmpty {
+                VStack(spacing: 10) {
+                    Image(systemName: "arrow.down.doc")
+                        .font(.system(size: 30))
+                        .foregroundStyle(.secondary)
+                    Text(DownloadCenter.emptyStateTitle)
+                        .font(.headline)
+                    Text(DownloadCenter.emptyStateMessage)
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                    Text("Clearframe asks where to save every file and does not keep permanent download history yet.")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                        .multilineTextAlignment(.center)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 20)
+            } else {
+                ScrollView {
+                    LazyVStack(spacing: 8) {
+                        ForEach(center.items) { item in
+                            DownloadItemView(item: item, center: center, detailWidth: 275)
+                        }
+                    }
+                }
+                .frame(maxHeight: 320)
+            }
+
+            Divider()
+            Button {
+                center.openDownloadsFolder()
+            } label: {
+                Label("Open Downloads Folder", systemImage: "folder")
+            }
+            .buttonStyle(.plain)
+            .font(.callout.weight(.medium))
+        }
+        .padding(16)
+        .frame(width: 420)
+    }
+}
+
 private struct DownloadShelf: View {
     @ObservedObject var center: DownloadCenter
 
@@ -636,11 +1008,11 @@ private struct DownloadShelf: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
                     if center.items.isEmpty {
-                        Text("Downloads will appear here after you choose a file destination.")
+                        Text(DownloadCenter.emptyStateMessage)
                             .font(.caption).foregroundStyle(.secondary).padding(.vertical, 8)
                     }
                     ForEach(center.items) { item in
-                        DownloadItemView(item: item, center: center)
+                        DownloadItemView(item: item, center: center, detailWidth: 210)
                     }
                 }
             }
@@ -654,6 +1026,7 @@ private struct DownloadShelf: View {
 private struct DownloadItemView: View {
     let item: DownloadItem
     @ObservedObject var center: DownloadCenter
+    let detailWidth: CGFloat
 
     var body: some View {
         HStack(spacing: 9) {
@@ -669,11 +1042,11 @@ private struct DownloadItemView: View {
                     Text(destination.deletingLastPathComponent().path).font(.caption2).foregroundStyle(.tertiary).lineLimit(1)
                 }
             }
-            .frame(width: 210, alignment: .leading)
+            .frame(width: detailWidth, alignment: .leading)
             if item.status.isActive {
                 Button("Cancel") { center.cancel(item) }.buttonStyle(.plain).font(.caption)
             } else if item.status == .finished {
-                Button("Show") { center.reveal(item) }.buttonStyle(.plain).font(.caption)
+                Button("Reveal") { center.reveal(item) }.buttonStyle(.plain).font(.caption)
             }
         }
         .padding(8)

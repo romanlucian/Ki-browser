@@ -18,6 +18,11 @@ private func require(_ condition: @autoclosure () -> Bool, _ message: String) th
     guard condition() else { throw SmokeFailure.check(message) }
 }
 
+private func requireValue<T>(_ value: T?, _ message: String) throws -> T {
+    guard let value else { throw SmokeFailure.check(message) }
+    return value
+}
+
 @MainActor
 private func waitUntil(
     timeout: TimeInterval = 8,
@@ -118,6 +123,23 @@ struct BrowserE2ESmoke {
                 downloads: DownloadCenter(),
                 searchSettings: searchSettings
             )
+            try require(workspace.downloads.items.isEmpty, "new download center was not empty")
+            try require(!workspace.downloads.isPanelPresented, "downloads panel started open")
+            workspace.downloads.togglePanel()
+            try require(workspace.downloads.isPanelPresented, "downloads control did not present the panel")
+            try require(DownloadCenter.emptyStateTitle == "No downloads yet", "downloads empty state was unclear")
+            try require(workspace.downloads.downloadsDirectory?.lastPathComponent == "Downloads", "downloads folder destination was unavailable")
+            try require(
+                BrowserSession.isDownloadTransitionError(NSError(domain: "WebKitErrorDomain", code: 102)),
+                "expected WebKit download transition was not recognized"
+            )
+            try require(
+                !BrowserSession.isDownloadTransitionError(NSError(domain: NSURLErrorDomain, code: NSURLErrorCannotConnectToHost)),
+                "ordinary navigation failures were incorrectly hidden as downloads"
+            )
+            workspace.downloads.togglePanel()
+            try require(!workspace.downloads.isPanelPresented, "downloads control did not dismiss the panel")
+            print("PASS downloads: toolbar state, clear empty presentation, Downloads-folder destination, and policy-transition handling succeeded")
             let aiConfiguration = AIConfigurationStore(defaults: defaults)
             let rootView = BrowserView()
                 .environmentObject(workspace)
@@ -250,6 +272,23 @@ struct BrowserE2ESmoke {
             dataStore.recordVisit(title: "Local verification", url: localURL)
             try require(dataStore.bookmarks.count == 1, "bookmark control did not persist a local record")
             try require(dataStore.history.count == 1, "history control did not persist a completed visit")
+            let programmingFolder = try requireValue(
+                dataStore.createBookmarkFolder(title: "Programming", emoji: "💻", parentID: nil),
+                "bookmark organizer did not create a root folder"
+            )
+            let swiftFolder = try requireValue(
+                dataStore.createBookmarkFolder(title: "Swift", emoji: "🐦", parentID: programmingFolder.id),
+                "bookmark organizer did not create a nested folder"
+            )
+            dataStore.moveBookmark(dataStore.bookmarks[0], to: swiftFolder.id)
+            try require(dataStore.bookmarks(in: swiftFolder.id).count == 1, "bookmark did not move into a nested folder")
+            let restoredBookmarkStore = BrowserDataStore(defaults: defaults)
+            try require(restoredBookmarkStore.bookmarkFolder(id: swiftFolder.id)?.parentID == programmingFolder.id, "nested folders did not persist locally")
+            try require(restoredBookmarkStore.bookmarks(in: swiftFolder.id).count == 1, "folder assignment did not persist locally")
+            dataStore.deleteBookmarkFolderPreservingContents(programmingFolder)
+            try require(dataStore.bookmarks.count == 1, "deleting a parent folder discarded its bookmark")
+            try require(dataStore.bookmarkFolder(id: swiftFolder.id)?.parentID == nil, "nested folder was not safely rehomed")
+            print("PASS bookmark organizer: nested folders, emoji metadata, moves, and safe parent deletion succeeded")
             dataStore.toggleBookmark(title: "Local verification", url: localURL)
             dataStore.clearHistory()
             try require(dataStore.bookmarks.isEmpty && dataStore.history.isEmpty, "library remove/clear controls failed")

@@ -46,6 +46,7 @@ final class BrowserSession: NSObject, ObservableObject {
 
     private var isShowingStartPage = true
     private var lastRequestedURL: URL?
+    private var lastCommittedWebURL: URL?
     private var navigationDisplayName: String?
     private var activeNavigation: WKNavigation?
 
@@ -214,12 +215,33 @@ final class BrowserSession: NSObject, ObservableObject {
             loadState = isShowingStartPage ? .startPage : .content
             return
         }
+        if Self.isDownloadTransitionError(nsError) {
+            activeNavigation = nil
+            isLoading = false
+            navigationDisplayName = nil
+            if let lastCommittedWebURL {
+                isShowingStartPage = false
+                lastRequestedURL = lastCommittedWebURL
+                hasCommittedNavigation = true
+                loadState = .content
+                refreshState()
+            } else {
+                showStartPage()
+            }
+            return
+        }
         activeNavigation = nil
         isLoading = false
         navigationDisplayName = nil
         hasCommittedNavigation = false
         loadState = .failed(Self.describe(error))
         refreshState()
+    }
+
+    /// WebKit reports code 102 when a navigation policy converts a frame load
+    /// into a download. It is an expected handoff to WKDownload, not a page error.
+    static func isDownloadTransitionError(_ error: NSError) -> Bool {
+        error.domain == "WebKitErrorDomain" && error.code == 102
     }
 
     var loadingTitle: String {
@@ -370,6 +392,11 @@ extension BrowserSession: WKNavigationDelegate {
         if let activeNavigation, navigation !== activeNavigation { return }
         estimatedProgress = 0.65
         hasCommittedNavigation = true
+        if let url = webView.url,
+           let scheme = url.scheme?.lowercased(),
+           ["http", "https"].contains(scheme) {
+            lastCommittedWebURL = url
+        }
         navigationDisplayName = nil
         refreshState()
     }

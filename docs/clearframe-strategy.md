@@ -40,7 +40,7 @@ The installed local version currently includes:
 - multiple tabs with safe close/teardown, recent-tab restoration, and local session metadata;
 - address/search input plus a local choice of DuckDuckGo, Google, Bing, Brave Search, or Startpage;
 - loading, offline, timeout, blocked-link, and general error states;
-- bookmarks, capped history, and user-confirmed downloads with local controls;
+- bookmarks with local emoji-labeled nested folders, capped history, and user-confirmed downloads with a clear toolbar status/destination panel;
 - a native first-run introduction and a Settings action to revisit it;
 - a curated AI home organized around Ask & Learn, Write, Research, Create Images, Create Videos, Translate, and Code;
 - user-triggered Analyze Page with a local extractive gist, key points, candidate claims, reading time, explained risk signals, English-source Plain English simplification, and two-source comparison;

@@ -320,4 +320,77 @@ final class ClearframeCoreTests: XCTestCase {
         preferences.resetIntroduction()
         XCTAssertFalse(OnboardingPreferences(defaults: defaults).hasCompletedIntroduction)
     }
+
+    func testLegacyFlatBookmarksMigrateToUnfiledWithoutDataLoss() throws {
+        struct LegacyBookmark: Encodable {
+            let id: UUID
+            let title: String
+            let url: String
+            let createdAt: Date
+        }
+
+        let legacy = LegacyBookmark(
+            id: UUID(),
+            title: "Saved before folders",
+            url: "https://example.com/legacy",
+            createdAt: Date(timeIntervalSince1970: 1_700_000_000)
+        )
+        let encoded = try JSONEncoder().encode([legacy])
+        let decoded = try JSONDecoder().decode([BookmarkRecord].self, from: encoded)
+        let collection = BookmarkCollection(bookmarks: decoded)
+
+        XCTAssertEqual(collection.bookmarks.count, 1)
+        XCTAssertEqual(collection.bookmarks.first?.id, legacy.id)
+        XCTAssertEqual(collection.bookmarks.first?.title, legacy.title)
+        XCTAssertNil(collection.bookmarks.first?.folderID)
+        XCTAssertEqual(collection.bookmarks(in: nil).first?.url, legacy.url)
+    }
+
+    func testBookmarkFolderTreeMovesAndSafeDeletionPreserveSavedPages() throws {
+        var collection = BookmarkCollection()
+        let programming = try XCTUnwrap(
+            collection.createFolder(title: "Programming", emoji: "💻", parentID: nil)
+        )
+        let swift = try XCTUnwrap(
+            collection.createFolder(title: "Swift", emoji: "🐦", parentID: programming.id)
+        )
+        let nestedBookmark = BookmarkRecord(
+            title: "Swift documentation",
+            url: "https://swift.org/documentation/",
+            folderID: swift.id
+        )
+        let rootBookmark = BookmarkRecord(
+            title: "Developer news",
+            url: "https://example.com/news",
+            folderID: programming.id
+        )
+        collection.addBookmark(nestedBookmark)
+        collection.addBookmark(rootBookmark)
+
+        XCTAssertEqual(collection.folders(in: programming.id).map(\.id), [swift.id])
+        XCTAssertEqual(collection.bookmarks(in: swift.id).map(\.id), [nestedBookmark.id])
+        XCTAssertTrue(collection.containsItems(in: programming.id))
+
+        collection.moveBookmark(id: rootBookmark.id, to: swift.id)
+        XCTAssertEqual(Set(collection.bookmarks(in: swift.id).map(\.id)), [nestedBookmark.id, rootBookmark.id])
+
+        collection.deleteFolderPreservingContents(id: programming.id)
+        XCTAssertNil(collection.folder(id: programming.id))
+        XCTAssertNil(collection.folder(id: swift.id)?.parentID)
+        XCTAssertEqual(collection.bookmarks.count, 2)
+        XCTAssertEqual(Set(collection.bookmarks(in: swift.id).map(\.id)), [nestedBookmark.id, rootBookmark.id])
+    }
+
+    func testBookmarkCollectionNormalizesInvalidImportedReferences() {
+        let missingFolderID = UUID()
+        let bookmark = BookmarkRecord(
+            title: "Imported page",
+            url: "https://example.com/imported",
+            folderID: missingFolderID
+        )
+        let collection = BookmarkCollection(bookmarks: [bookmark])
+
+        XCTAssertNil(collection.bookmarks.first?.folderID)
+        XCTAssertEqual(collection.bookmarks(in: nil).count, 1)
+    }
 }

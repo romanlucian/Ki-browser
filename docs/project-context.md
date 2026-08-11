@@ -25,7 +25,7 @@ Voice is an additional primary interface, not a replacement for visual search or
 - A configured optional provider may provide deeper multilingual summarization or translation only after a separate explicit action. Opening or locally analyzing a page never triggers that upload.
 - Visible page text is extracted only when the user requests analysis.
 - Optional provider use is separately triggered and disclosed. Prototype credentials are user-owned and stored in macOS Keychain.
-- Browsing history is never sold. Current bookmarks, capped history, and recent-tab metadata stay in the local Mac user profile and have user controls.
+- Browsing history is never sold. Current bookmarks and nested emoji-labeled folders, capped history, and recent-tab metadata stay in the local Mac user profile and have user controls. Legacy flat bookmarks migrate to the Unfiled location without being discarded.
 - Page content is untrusted. The assistant remains read-only and receives no cookies, form values, passwords, unrelated tabs, or browsing-history feed.
 - The new-tab AI guide is a static catalog bundled with the app. Filtering is local, cards use direct official HTTPS destinations, and Clearframe does not attach page content, prompts, affiliate tags, or tracking parameters.
 - The guide is not a live ranking, provider partnership, availability guarantee, or auto-sharing router.
@@ -58,8 +58,8 @@ Do not switch rendering engines now. CEF remains a future gated path for demonst
 - A visible search-provider chooser with a locally persisted selection; direct website addresses bypass search.
 - A polished native new-tab AI guide organized around Ask & Learn, Write, Research, Create Images, Create Videos, Translate, and Code, with a local filter and direct official-site cards. Gemini's image guidance and the separate Veo and Seedance video cards use cautious, provider-controlled availability language. Activating a card navigates the current tab, exposes the exact destination immediately, and shows provider-specific loading feedback.
 - A three-step, locally completed first-run introduction covering the product promise, five-provider search choice, local/cloud privacy boundary, AI home, and the user-triggered Analyze page workflow. It can be reopened from Settings without clearing tabs or data and contains no paywall or purchase flow.
-- User-confirmed downloads with destination, status, cancel, reveal, and clear controls.
-- Local bookmarks and searchable capped history with remove, clear, and disable controls.
+- User-confirmed downloads with an obvious toolbar panel, empty state, destination/status, cancel, reveal, clear-finished, and Open Downloads Folder controls.
+- Local bookmarks with emoji-labeled nested folders, safe legacy migration, move/rename/delete controls, and searchable capped history with remove, clear, and disable controls.
 - User-triggered source-language local gist, key points, candidate claims, reading time, English-only local Plain English simplification, visible risk signals, and two-source comparison.
 - Optional OpenAI provider through a reusable protocol and macOS Keychain-backed prototype settings.
 - A locally built app bundle at `dist/Clearframe.app`; it uses only an ad hoc local signature and is not Developer ID signed or notarized.
@@ -70,4 +70,4 @@ Complex news pages can expose embedded media-player controls and accessibility b
 
 ## Remaining release gaps
 
-This is a practical MVP, not a Chrome/Safari-scale production browser. Remaining work includes broader navigation and hostile-page QA, private browsing, multiple profiles, tab reordering/groups, sync, comprehensive site permissions and certificate UI, a security-reviewed password/import system, complete browsing-data deletion, persisted/resumable downloads and scanning, crash reporting, updater infrastructure, accessibility QA, a production AI backend, independent security review, Developer ID signing, notarization, and public distribution work.
+This is a practical MVP, not a Chrome/Safari-scale production browser. Remaining work includes broader navigation and hostile-page QA, private browsing, multiple profiles, tab reordering/groups, bookmark drag-and-drop/sync, comprehensive site permissions and certificate UI, a security-reviewed password/import system, complete browsing-data deletion, persisted/resumable download history and scanning, crash reporting, updater infrastructure, accessibility QA, a production AI backend, independent security review, Developer ID signing, notarization, and public distribution work.

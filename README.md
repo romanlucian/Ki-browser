@@ -8,8 +8,8 @@ The native app provides:
 
 - multi-tab browsing with safe per-tab WebKit and assistant state;
 - local restoration of recent tabs, with lazy loading and an opt-out setting;
-- downloads with a user-selected destination, visible status, cancel, and reveal controls;
-- searchable local bookmarks and history, including clear/disable controls;
+- downloads with a user-selected destination plus an obvious toolbar panel for status, destination, cancel, reveal, and the Downloads folder;
+- searchable local bookmarks organized into emoji-labeled nested folders, plus local history with clear/disable controls;
 - explicit loading, offline, timeout, blocked-link, and general error states;
 - explicit on-device voice input that fills the visible address/search field for review without automatic submission;
 - a visible, locally persisted search-engine chooser for DuckDuckGo, Google, Bing, Brave Search, and Startpage;
@@ -65,7 +65,7 @@ Then:
 4. Browse with independent tabs; use `⌘T` for a new tab and the tab strip to switch or close tabs.
 5. Open **Assistant** and click **Analyze page**.
 6. Use local summary, claims, Plain English, visible risk signals, and source comparison.
-7. Use the star/Library controls for bookmarks and local history. Downloads ask where to save and appear in the bottom shelf.
+7. Use the star to save a page, then open Library to file it into local emoji-labeled folders or nested subfolders. Existing bookmarks remain available under **Unfiled**. Use the Downloads toolbar button to see a clear empty state or the current session’s download status, destination, and Reveal action; **Open Downloads Folder** remains available even when the list is empty. Attachment downloads keep the existing page visible instead of presenting WebKit's internal policy-handoff message as a page error.
 8. Click the provider name inside the address bar, or open **ClearframeBrowser → Settings…** (`⌘,`), to choose the search engine. After a toolbar choice, the address field is ready for typing.
 9. Optional AI, tab-restoration, and local-history settings are available in the same Settings window.
 
@@ -81,7 +81,7 @@ swift test
 ./scripts/run-browser-smoke.sh
 ```
 
-The smoke test exercises a native SwiftUI window, launch/address focus, deterministic WebKit navigation, tabs, local search resolution, bookmarks/history, session restore, and the local assistant. It requires a logged-in desktop session; restricted/headless environments can block WebKit services.
+The smoke test exercises a native SwiftUI window, launch/address focus, deterministic WebKit navigation, tabs, local search resolution, nested bookmark persistence/moves, download-panel state, history, session restore, and the local assistant. It requires a logged-in desktop session; restricted/headless environments can block WebKit services.
 
 The Swift package separates the Foundation-only analysis/service contract (`ClearframeCore`) from the macOS-specific SwiftUI/WebKit interface (`ClearframeBrowser`). A future Windows app can reuse the language-neutral service contract and tests, but not the native SwiftUI/WebKit UI.
 
@@ -120,6 +120,8 @@ npm run validate
 - AI output can omit context or be wrong.
 - Risk signals are heuristic and do not prove that a page is safe or malicious.
 - Clearframe can save downloads but does not scan their contents or provide a reputation verdict. It also does not inspect certificate details, network traffic, reputation databases, or hidden page behavior.
+- The download list is session-only in this version; saved files remain at the destination the user selected, and the toolbar panel can always open the local Downloads folder.
+- Bookmark folders are local only. There is no drag-and-drop organizer, account, sync, or cloud backup in this phase. Deleting a non-empty folder requires confirmation and rehomes its direct contents instead of deleting saved pages.
 - Browser-internal pages, extension stores, PDF viewers, and some restricted pages cannot be analyzed.
 - The native browser is a single-window version-1 MVP with basic tabs; it is not yet a signed, notarized, independently security-reviewed consumer release.
 - WebKit does not provide Chrome extension compatibility and is not a drop-in substitute for a future Chromium product.

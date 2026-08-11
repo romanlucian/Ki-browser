@@ -14,15 +14,15 @@ The current version-1 release stage includes:
 - a native local AI-guide start page with seven task categories (including Create Images and Create Videos), local filtering, concise informational cards, and direct official-site navigation, plus dedicated loading, offline, timeout, missing-host, unsupported-link, and general error states;
 - AI-guide card activation that immediately shows the exact HTTPS destination in the address field and a provider-specific loading state; replacement navigation is tracked so cancellation of the underlying local start-page load cannot overwrite the new request;
 - opt-out session restoration of up to 12 recent tabs; inactive restored tabs load lazily, and only URL/title/activity metadata is saved;
-- user-confirmed downloads with a macOS save dialog, visible destination and status, cancel, reveal in Finder, and clear-finished controls;
-- local bookmarks and a searchable local history with remove/clear controls and a setting to disable history;
+- user-confirmed downloads with a macOS save dialog and a dedicated toolbar popover containing a clear empty state, visible destination/status, cancel, Reveal in Finder, clear-finished, and Open Downloads Folder controls; WebKit's expected attachment-policy handoff no longer replaces the page with a false “Frame load interrupted” error;
+- local bookmarks organized into titled, emoji-labeled folders and nested subfolders, including safe legacy migration to Unfiled, folder create/rename/delete, bookmark moves, and searchable local history with remove/clear controls and a setting to disable history;
 - user-triggered, on-device English dictation into the visible address field with review before submission and no background listening;
 - user-invoked visible-page extraction that prioritizes rendered reading blocks and filters navigation, consent, hidden, and embedded-media control UI;
 - source-language local gist, key points, candidate claims, read time, English-only local Plain English simplification, and explained risk signals;
 - a one-source save / second-source comparison flow;
 - an optional OpenAI provider and translation action;
 - API-key storage in macOS Keychain;
-- sixteen tests for the reusable core logic, English/Romanian/French/Simplified-Chinese extraction, media-boilerplate handling, local AI-tool catalog, local onboarding completion, search endpoint construction, and safe session-record handling.
+- nineteen tests for the reusable core logic, English/Romanian/French/Simplified-Chinese extraction, media-boilerplate handling, bookmark-tree migration and safe deletion, local AI-tool catalog, local onboarding completion, search endpoint construction, and safe session-record handling.
 
 DuckDuckGo is the changeable initial search default. Submitted search text goes to the selected provider’s ordinary HTTPS results URL; direct website addresses do not. Clearframe requests no search suggestions while the user types and claims no partnership, default-search contract, or revenue-share agreement.
 
@@ -34,6 +34,7 @@ The current app remains the WebKit baseline. A future Chromium/Blink implementat
 
 - page and analysis models;
 - serializable tab, bookmark, history, and workspace records;
+- a platform-neutral local bookmark-folder tree with invalid-reference/cycle normalization and lossless legacy migration;
 - local analysis and simplification;
 - visible-page risk heuristics;
 - source comparison;
@@ -89,7 +90,8 @@ WebKit is a pragmatic macOS-first engine, but this foundation is not equivalent 
 - **Engine differences.** Sites are rendered by Apple WebKit, so behavior and debugging can differ from Chromium/Blink.
 - **Provider-page performance varies.** Clearframe uses WebKit's default persistent website data store and does not proxy, prefetch, or rewrite third-party media. Media-heavy pages such as ByteDance Seed may load images or video incrementally as the user scrolls. Compare the exact URL in Safari on the same connection, once cold and once after caching; a repeatable Clearframe-only slowdown needs a separate WebKit/network trace.
 - **Basic tabs, not Chrome-scale tab management.** This release is single-window and has no tab reordering, pinned tabs, tab groups, multiple profiles, private windows, or cross-device sync. Restoration reloads the current URL; it does not preserve back/forward stacks, form state, or page content.
-- **Basic downloads, not a production download service.** Downloads use a user-selected destination and remain visible while the app runs. There is no byte-level progress, persisted download list, pause/resume UI, background transfer service, quarantine scanner, or reputation verdict.
+- **Basic downloads, not a production download service.** Downloads use a user-selected destination and remain visible in a dedicated toolbar panel while the app runs. The panel explains an empty session and can open the Downloads folder, but there is no byte-level progress, persisted download list, pause/resume UI, background transfer service, quarantine scanner, or reputation verdict.
+- **Local bookmark organization, not sync.** Folder titles, emoji, hierarchy, and bookmark placement remain in the current Mac user profile. Legacy flat records become Unfiled; deleting a non-empty folder rehomes its direct bookmarks/subfolders after confirmation. There is no drag-and-drop, account, cloud backup, conflict resolution, or cross-device sync.
 - **Incomplete browser services.** There is no password/import system, certificate-detail UI, comprehensive site-permission center, content blocker, full browsing-data manager, crash reporter, updater, or enterprise policy.
 - **Distribution is unfinished.** A local `.app` bundle is generated in `dist`, but a public release still needs a maintained Xcode release target, Developer ID signing, notarization, hardened-runtime/entitlement review, update delivery, accessibility QA, and release engineering.
 - **Security claims are narrow.** WebKit provides a modern rendering process, but Clearframe has not completed an independent browser security review. Its risk scanner reads only visible text and page-level facts.
