@@ -46,6 +46,14 @@ Rules:
 
 The risk object is deterministic application output, not an LLM verdict. A remote model may improve the summary, key points, or candidate claims; it must not silently decide safety.
 
+## Language behavior
+
+- Preserve the source language in local output. Local mode is structured extractive analysis, not an implicit translation service.
+- The current macOS deterministic suite covers English, Romanian, French, and Simplified Chinese text and punctuation. Those fixtures demonstrate non-empty source-language gist/key points and boilerplate filtering, not equal semantic quality across languages.
+- Plain English local simplification applies only to English source pages. Other translations require an explicitly configured provider.
+- Provider-assisted analysis should answer in the declared or dominant page language unless the user asks for translation.
+- Text-based claim and risk phrase coverage is language-dependent; page-level HTTPS/form signals remain separate from linguistic heuristics.
+
 ## Provider operations
 
 Conceptually, every platform implements two operations:

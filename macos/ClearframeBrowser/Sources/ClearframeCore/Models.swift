@@ -151,7 +151,7 @@ public enum PageIntelligenceError: LocalizedError, Sendable {
         case .noReadableText:
             return "This page does not expose enough readable text."
         case .localTranslationUnavailable:
-            return "This language needs Optional AI. Plain English works locally."
+            return "Translation needs Optional AI. Plain English simplification is local only for English pages."
         case .invalidResponse:
             return "The AI returned an unexpected response."
         case .remoteFailure(let message):

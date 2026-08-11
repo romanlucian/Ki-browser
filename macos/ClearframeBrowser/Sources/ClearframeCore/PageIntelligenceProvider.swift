@@ -21,7 +21,8 @@ public struct LocalPageIntelligenceProvider: PageIntelligenceProviding {
         sourceLanguage: String,
         targetLanguage: String
     ) async throws -> String {
-        if targetLanguage == "Plain English" {
+        if targetLanguage == "Plain English",
+           LocalAnalysisEngine.canSimplifyToPlainEnglish(sourceLanguage: sourceLanguage) {
             return LocalAnalysisEngine.simplifyEnglish(text)
         }
         throw PageIntelligenceError.localTranslationUnavailable

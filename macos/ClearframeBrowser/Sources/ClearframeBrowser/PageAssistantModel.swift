@@ -69,9 +69,11 @@ final class PageAssistantModel: ObservableObject {
 
     func translateSummary(targetLanguage: String, configuration: OpenAIProviderConfiguration?) async {
         guard let current = analysis, let page = snapshot else { return }
-        state = .loading(targetLanguage == "Plain English" ? "Simplifying locally…" : "Translating…")
+        let canSimplifyLocally = targetLanguage == "Plain English" &&
+            LocalAnalysisEngine.canSimplifyToPlainEnglish(sourceLanguage: page.language)
+        state = .loading(canSimplifyLocally ? "Simplifying locally…" : "Translating…")
         do {
-            if targetLanguage == "Plain English" {
+            if canSimplifyLocally {
                 translatedSummary = try await localProvider.translate(
                     text: current.content.summary,
                     sourceLanguage: page.language,

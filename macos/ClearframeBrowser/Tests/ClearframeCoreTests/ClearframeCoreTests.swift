@@ -61,6 +61,82 @@ final class ClearframeCoreTests: XCTestCase {
         }
     }
 
+    func testLocalExtractionProducesSourceLanguageResultsAcrossTestedLanguages() {
+        let mediaPollution = """
+        subtitles settings, opens subtitles settings dialog
+        Video Player is loading. Stream Type LIVE. Playback controls.
+        """
+        let cases: [(language: String, title: String, text: String, expectedFragment: String)] = [
+            (
+                "en",
+                "Community library expands evening access",
+                """
+                The community library will open three evenings each week so working families can visit after normal office hours.
+                The pilot begins in September and includes study rooms, children's activities, and help with digital public services.
+                Librarians will record attendance and ask visitors which evening programs are most useful.
+                The city approved funding for six months before deciding whether the longer schedule should continue.
+                Residents can submit feedback in person or through a short form on the library website.
+                """,
+                "community library"
+            ),
+            (
+                "fr",
+                "La bibliothèque municipale élargit ses horaires",
+                """
+                La bibliothèque municipale ouvrira trois soirs par semaine afin que les familles puissent venir après leur journée de travail.
+                Le projet commencera en septembre avec des salles d'étude, des activités pour enfants et une aide aux démarches numériques.
+                Les bibliothécaires mesureront la fréquentation et demanderont aux visiteurs quels services sont les plus utiles.
+                La ville a financé une période pilote de six mois avant de décider si ces horaires doivent devenir permanents.
+                Les habitants pourront transmettre leurs commentaires sur place ou au moyen d'un formulaire public.
+                """,
+                "bibliothèque municipale"
+            ),
+            (
+                "zh-Hans",
+                "城市图书馆延长晚间开放时间",
+                """
+                城市图书馆将每周增加三个晚间开放时段，方便上班家庭在工作结束后使用公共服务。
+                试点计划将于九月开始，并提供自习空间、儿童活动以及数字政务咨询服务。
+                图书馆工作人员会记录到访人数，并询问读者哪些晚间项目最有帮助。
+                市政府已经批准六个月的试点经费，之后再决定是否长期保留新的开放时间。
+                居民可以在现场提交意见，也可以通过图书馆网站上的公开表格提供反馈。
+                """,
+                "城市图书馆"
+            )
+        ]
+
+        for testCase in cases {
+            let page = PageSnapshot(
+                title: testCase.title,
+                url: "https://example.org/\(testCase.language)",
+                hostname: "example.org",
+                scheme: "https",
+                language: testCase.language,
+                text: mediaPollution + "\n" + testCase.text,
+                wordCount: 120,
+                hasPasswordField: false,
+                formActions: []
+            )
+
+            let result = LocalAnalysisEngine.summarize(page: page)
+            let allAnalysisText = ([result.summary] + result.keyPoints + result.claimsToCheck)
+                .joined(separator: " ")
+
+            XCTAssertFalse(result.summary.isEmpty, "\(testCase.language) needs a local gist")
+            XCTAssertFalse(result.keyPoints.isEmpty, "\(testCase.language) needs local key points")
+            XCTAssertTrue(
+                result.summary.localizedCaseInsensitiveContains(testCase.expectedFragment),
+                "\(testCase.language) should preserve the source language"
+            )
+            for pollutedPhrase in ["subtitles settings", "Video Player is loading", "Stream Type LIVE", "Playback controls"] {
+                XCTAssertFalse(
+                    allAnalysisText.localizedCaseInsensitiveContains(pollutedPhrase),
+                    "Media-player UI leaked into \(testCase.language) analysis: \(pollutedPhrase)"
+                )
+            }
+        }
+    }
+
     func testSingleMediaPhraseInLegitimateArticleTextIsPreserved() {
         let page = PageSnapshot(
             title: "Troubleshooting a training video",
@@ -103,6 +179,27 @@ final class ClearframeCoreTests: XCTestCase {
 
     func testPlainEnglishRewritesFormalWords() {
         XCTAssertEqual(LocalAnalysisEngine.simplifyEnglish("Individuals utilize numerous tools."), "people use many tools.")
+    }
+
+    func testPlainEnglishLocalSimplifierIsLimitedToEnglishSources() async throws {
+        let provider = LocalPageIntelligenceProvider()
+        let simplified = try await provider.translate(
+            text: "Individuals utilize numerous tools.",
+            sourceLanguage: "en-US",
+            targetLanguage: "Plain English"
+        )
+        XCTAssertEqual(simplified, "people use many tools.")
+
+        do {
+            _ = try await provider.translate(
+                text: "La bibliothèque municipale ouvre plus tard.",
+                sourceLanguage: "fr",
+                targetLanguage: "Plain English"
+            )
+            XCTFail("French-to-English translation must not be presented as a local simplification")
+        } catch let error as PageIntelligenceError {
+            XCTAssertEqual(error.localizedDescription, PageIntelligenceError.localTranslationUnavailable.localizedDescription)
+        }
     }
 
     func testComparisonDoesNotClaimAgreement() {

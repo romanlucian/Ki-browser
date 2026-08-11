@@ -8,6 +8,7 @@ Essential constraints:
 - Do not switch the current product to Chromium. The isolated CEF scaffold is only a future cross-platform/extension gate; it is not linked into the app and is not a full Chromium source fork.
 - The root browser extension is a retained validation artifact, not the primary deliverable.
 - Page assistance is local-first; optional provider use happens only after an explicit user action.
+- Analyze Page must preserve source-language text across languages. Local mode is private extractive structuring, currently tested in English, Romanian, French, and Simplified Chinese; optional configured AI may provide deeper multilingual synthesis. Never claim uniform semantic quality or multilingual risk-detection parity.
 - The AI home is a curated local directory of official links, not live rankings, partnerships, affiliate ordering, or automatic page/prompt sharing.
 - Never sell browsing history, add hidden ads, invent partnerships, or market heuristic risk signals as security verdicts.
 - Prioritize extraction quality, measured calm performance, real-user clarity, Evidence Mode/Translate & Explain, and release security before broad feature expansion or monetization.

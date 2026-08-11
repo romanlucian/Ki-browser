@@ -15,7 +15,7 @@ The native app provides:
 - a visible, locally persisted search-engine chooser for DuckDuckGo, Google, Bing, Brave Search, and Startpage;
 - a native new-tab AI guide with a small, locally defined catalog organized by everyday tasks;
 - a concise three-step first-run introduction covering Clearframe's promise, search choice, privacy boundary, AI home, and Analyze page workflow;
-- an extractive page summary that works without an account or API key;
+- a source-language extractive page summary that works without an account or API key;
 - key points and page claims worth checking;
 - visible risk signals such as unencrypted password forms, encoded domains, urgent payment language, wallet-secret requests, and remote-access prompts;
 - a Plain English mode plus optional AI translation;
@@ -100,7 +100,7 @@ The extension uses the temporary `activeTab` permission. When you navigate to a 
 
 ## Optional AI in either prototype
 
-The local summary is the default. The native app stores a user-owned prototype key in macOS Keychain; the extension stores it in local extension storage. Both send page text only after an explicit AI action and request `store: false`.
+The local summary is the default. It privately selects and structures source-language sentences; deterministic coverage currently includes English, Romanian, French, and Simplified Chinese. This is useful extraction, not proof of equal semantic quality in every language. A configured optional provider may produce deeper multilingual summarization or translation after an explicit AI action. The native app stores a user-owned prototype key in macOS Keychain; the extension stores it in local extension storage. Both request `store: false`.
 
 A production version must put paid API access behind an authenticated backend proxy and must never ship a shared key in an app or extension.
 
@@ -116,6 +116,7 @@ npm run validate
 ## Important limits
 
 - A local summary selects representative sentences; it is not a fact check.
+- Local multilingual analysis preserves the page language but is extractive. Plain English rewriting is local only for English sources, and text-based risk phrases do not have equal language coverage.
 - AI output can omit context or be wrong.
 - Risk signals are heuristic and do not prove that a page is safe or malicious.
 - Clearframe can save downloads but does not scan their contents or provide a reputation verdict. It also does not inspect certificate details, network traffic, reputation databases, or hidden page behavior.

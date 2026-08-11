@@ -9,6 +9,7 @@ Clearframe is designed as an on-demand reading tool, not a browsing monitor. The
 - The WebKit browser renders the page inside Clearframe’s own window.
 - Visible page text is extracted only when the user clicks **Analyze page**.
 - The local extractor removes hidden controls, navigation/consent chrome, and recognizable embedded-media UI before analysis; it does not inspect media streams.
+- Local multilingual mode keeps extracted sentences in the page language. Optional provider-assisted multilingual synthesis or translation sends the disclosed text only after the user separately requests that action.
 - No form values, cookies, passwords, bookmarks, or history feed are included in the extraction result.
 - Local analysis runs in the app process.
 - A saved source comparison is kept only in memory in this foundation.

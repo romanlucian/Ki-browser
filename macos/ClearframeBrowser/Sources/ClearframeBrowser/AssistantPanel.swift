@@ -128,7 +128,7 @@ struct AssistantPanel: View {
                     HStack {
                         sectionLabel("THE GIST")
                         Spacer()
-                        Text(analysis.mode.rawValue.uppercased())
+                        Text(analysis.mode == .local ? "LOCAL · EXTRACTIVE" : "OPTIONAL AI")
                             .font(.system(size: 9, weight: .bold))
                             .padding(.horizontal, 7)
                             .padding(.vertical, 4)
@@ -138,6 +138,11 @@ struct AssistantPanel: View {
                         .font(.callout)
                         .lineSpacing(4)
                         .textSelection(.enabled)
+                    Text(analysis.mode == .local
+                         ? "Private structured extraction · keeps the page language"
+                         : "Provider-assisted result · check important points against the page")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
                     Button {
                         guard let configuration = aiConfiguration.providerConfiguration else {
                             openSettings()
@@ -192,7 +197,9 @@ struct AssistantPanel: View {
                     .labelsHidden()
                     .frame(maxWidth: .infinity)
                     Button("Translate summary") {
-                        if translationLanguage != "Plain English" && !aiConfiguration.canUseRemoteAI {
+                        let canSimplifyLocally = translationLanguage == "Plain English" &&
+                            LocalAnalysisEngine.canSimplifyToPlainEnglish(sourceLanguage: snapshot.language)
+                        if !canSimplifyLocally && !aiConfiguration.canUseRemoteAI {
                             openSettings()
                         } else {
                             Task {

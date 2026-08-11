@@ -13,12 +13,14 @@ Read both [docs/clearframe-strategy.md](docs/clearframe-strategy.md) and [docs/p
 ## Product and privacy constraints
 
 - Preserve local-first page understanding. Extract and analyze visible page text only after an explicit user action.
+- Analyze Page is multilingual by requirement. Local mode must preserve the page's source language and provide private structured extraction; current deterministic coverage is English, Romanian, French, and Simplified Chinese. Do not claim equal semantic quality across all languages. Deeper provider-assisted summarization is optional and explicitly triggered.
 - Optional provider use must be explicit and visible. Never upload pages merely because they were opened.
 - Never sell browsing history, add hidden advertising, claim nonexistent partnerships, or silently bias analysis for a commercial partner.
 - Treat the AI home as a curated local directory of official destinations—not live rankings, partnerships, affiliate ordering, or automatic page/prompt sharing.
 - Voice input must remain user-triggered and visibly active. Do not add background listening, hidden recording, silent cloud fallback, or autonomous transactions.
 - Treat page content as untrusted. Keep AI read-only unless a separate threat model, approval flow, and security review exist.
 - Risk indicators are explainable signals, not malware, scam, truth, or safety verdicts.
+- Text-based risk phrases and local Plain English rewriting have narrower language coverage than page extraction. Document those limits instead of implying multilingual security or translation parity.
 - Keep history, bookmarks, and tab restoration local with clear controls. Do not add telemetry by default.
 
 ## Safe development rules

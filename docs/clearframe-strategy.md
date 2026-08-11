@@ -16,7 +16,7 @@ Clearframe's working differentiation is **“fast and calm even when the web is 
 
 - Build macOS first with native SwiftUI and WebKit. Do not switch the working app to Chromium now.
 - Keep the isolated CEF work as a future gate for demonstrated cross-platform or Chromium-extension needs. It is not linked into today's app and is not permission to begin a disruptive engine migration.
-- Design for ordinary English-speaking users and test with real people. Technical depth should not leak into the first-minute experience.
+- Keep the interface English-first while supporting pages across languages, and test with ordinary people. Technical depth should not leak into the first-minute experience.
 - Preserve radical clarity, high craft, calm interaction, and trust before monetization.
 - Keep visual browsing and search. Voice is an explicit additional input, never background listening.
 - Keep AI read-only unless a separate action threat model, confirmation design, and security review exist.
@@ -43,13 +43,19 @@ The installed local version currently includes:
 - bookmarks, capped history, and user-confirmed downloads with local controls;
 - a native first-run introduction and a Settings action to revisit it;
 - a curated AI home organized around Ask & Learn, Write, Research, Create Images, Create Videos, Translate, and Code;
-- user-triggered Analyze Page with a local extractive gist, key points, candidate claims, reading time, explained risk signals, Plain English, and two-source comparison;
+- user-triggered Analyze Page with a local extractive gist, key points, candidate claims, reading time, explained risk signals, English-source Plain English simplification, and two-source comparison;
 - explicit on-device voice dictation into the visible address field for review;
 - an optional provider contract and user-owned prototype key stored in macOS Keychain.
 
 The AI home is a small catalog bundled with the app. It links directly to official provider destinations. It is not a live ranking, partnership, endorsement marketplace, affiliate feed, regional-availability promise, or automatic prompt router. Selecting a card does not attach the current page or a user prompt.
 
 The installed app is an ad hoc local build. It is not Developer ID signed, notarized, distributed through TestFlight or the App Store, independently security reviewed, or ready to make production password-manager claims.
+
+## Multilingual Analyze Page requirement
+
+Analyze Page must work on pages across languages, not only English or Romanian. Local mode privately extracts rendered reading content, keeps it in the page's declared or dominant language, and structures representative sentences into a gist and key points. Deterministic coverage currently includes English, Romanian, French, and Simplified Chinese, including media-control pollution checks.
+
+That coverage proves the pipeline can preserve and structure those scripts; it does not prove equal linguistic or semantic quality for every language. Local mode is extractive rather than a deep semantic model. Candidate-claim terms, text-based risk phrases, Plain English rewriting, tokenization, and reading-time estimates have language-specific limits. A configured optional provider may provide richer multilingual summarization or translation, but only after an explicit user action that sends the disclosed page text. Provider quality and language coverage depend on the selected model.
 
 ## Recent quality gate
 
@@ -120,6 +126,7 @@ Do not buy paid ads before retention is understood. Do not spam communities, fab
 
 - Keep the closed `zf.ro` extraction-pollution gate covered by deterministic and live regression checks.
 - Build a representative extraction corpus across news, documentation, shopping, forums, international pages, paywalls, and hostile markup.
+- Expand multilingual fixtures and real-page QA beyond the current English, Romanian, French, and Simplified Chinese coverage without promising uniform quality.
 - Measure tab, memory, loading, and video behavior before making performance claims.
 - Test the onboarding, AI home, search choice, and Analyze Page with ordinary users; fix confusion before expanding scope.
 

@@ -2,7 +2,7 @@ import Foundation
 
 public enum LocalAnalysisEngine {
     private static let stopWords: Set<String> = Set(
-        "a an and are as at be been but by can could did do does for from had has have he her hers him his how i if in into is it its may might more most must my no not of on one or our ours she should so some than that the their theirs them then there these they this those to too us was we were what when where which who why will with would you your yours about after again against all am any because before being below between both during each few further here itself just many me nor now off once only other out over own same such through under until up very while acela acea aceea acest aceasta aceste acești ale al ai așa ca care către când cea cei cele cel ce cu cum de din după este fi fost iar în între la mai nici nu o pe pentru prin sau se și sunt un una unei unui vor".split(separator: " ").map(String.init)
+        "a an and are as at be been but by can could did do does for from had has have he her hers him his how i if in into is it its may might more most must my no not of on one or our ours she should so some than that the their theirs them then there these they this those to too us was we were what when where which who why will with would you your yours about after again against all am any because before being below between both during each few further here itself just many me nor now off once only other out over own same such through under until up very while acela acea aceea acest aceasta aceste acești ale al ai așa ca care către când cea cei cele cel ce cu cum de din după este fi fost iar în între la mai nici nu o pe pentru prin sau se și sunt un una unei unui vor alors au aux avec ce ces comme dans de des du elle en est et eux il ils je la le les leur lui ma mais me même mes moi mon ne nos notre nous on ou par pas pour qu que quelle qui sa se ses son sont sur ta te tes toi ton tu un une vos votre vous c d j l à ça était été être 也 个 中 为 了 与 及 和 在 对 将 是 有 的 而 这 那".split(separator: " ").map(String.init)
     )
 
     private static let mediaInterfacePhrases = [
@@ -56,7 +56,10 @@ public enum LocalAnalysisEngine {
 
         let claimTerms = [
             "according", "report", "study", "research", "survey", "million", "billion",
-            "percent", "guarantee", "always", "never", "only", "best", "worst", "first"
+            "percent", "guarantee", "always", "never", "only", "best", "worst", "first",
+            "potrivit", "raport", "studiu", "cercetare", "sondaj", "milioane", "miliarde", "procent",
+            "selon", "rapport", "étude", "recherche", "sondage", "million", "milliard", "pour cent",
+            "报告", "研究", "调查", "百万", "十亿", "百分之", "保证", "最佳", "首次"
         ]
         let claims = scored
             .filter { entry in
@@ -86,6 +89,13 @@ public enum LocalAnalysisEngine {
         return result
     }
 
+    public static func canSimplifyToPlainEnglish(sourceLanguage: String) -> Bool {
+        let primaryLanguage = sourceLanguage.lowercased()
+            .split(whereSeparator: { $0 == "-" || $0 == "_" })
+            .first
+        return primaryLanguage == "en"
+    }
+
     public static func readingTime(wordCount: Int) -> Int {
         max(1, Int((Double(wordCount) / 220.0).rounded()))
     }
@@ -99,7 +109,7 @@ public enum LocalAnalysisEngine {
             current.append(character)
             if endings.contains(character) {
                 let sentence = normalize(current)
-                if sentence.count >= 35 && sentence.count <= 520 {
+                if isUsefulSentenceLength(sentence) {
                     sentences.append(sentence)
                 }
                 current = ""
@@ -107,17 +117,38 @@ public enum LocalAnalysisEngine {
         }
 
         let remainder = normalize(current)
-        if remainder.count >= 35 && remainder.count <= 520 {
+        if isUsefulSentenceLength(remainder) {
             sentences.append(remainder)
         }
         return sentences
     }
 
     public static func tokens(_ value: String) -> [String] {
-        value.lowercased()
-            .split { !$0.isLetter && !$0.isNumber && $0 != "'" && $0 != "’" && $0 != "-" }
-            .map(String.init)
-            .filter { $0.count >= 3 && !stopWords.contains($0) }
+        var result: [String] = []
+        var currentWord = ""
+
+        func appendCurrentWord() {
+            guard currentWord.count >= 2, !stopWords.contains(currentWord) else {
+                currentWord = ""
+                return
+            }
+            result.append(currentWord)
+            currentWord = ""
+        }
+
+        for character in value.lowercased() {
+            if isCJK(character) {
+                appendCurrentWord()
+                let token = String(character)
+                if !stopWords.contains(token) { result.append(token) }
+            } else if character.isLetter || character.isNumber || character == "'" || character == "’" || character == "-" {
+                currentWord.append(character)
+            } else {
+                appendCurrentWord()
+            }
+        }
+        appendCurrentWord()
+        return result
     }
 
     private static func normalize(_ value: String) -> String {
@@ -176,6 +207,23 @@ public enum LocalAnalysisEngine {
         return count
     }
 
+    private static func isUsefulSentenceLength(_ sentence: String) -> Bool {
+        let minimum = sentence.contains(where: isCJK) ? 12 : 35
+        return sentence.count >= minimum && sentence.count <= 520
+    }
+
+    private static func isCJK(_ character: Character) -> Bool {
+        character.unicodeScalars.contains { scalar in
+            switch scalar.value {
+            case 0x3400...0x4DBF, 0x4E00...0x9FFF, 0xF900...0xFAFF,
+                 0x3040...0x30FF, 0xAC00...0xD7AF:
+                return true
+            default:
+                return false
+            }
+        }
+    }
+
     private static func score(sentences: [String], title: String) -> [ScoredSentence] {
         var frequencies: [String: Int] = [:]
         for word in tokens(sentences.joined(separator: " ")) {
@@ -191,7 +239,8 @@ public enum LocalAnalysisEngine {
             }
             let titleOverlap = Double(words.filter(titleWords.contains).count) * 0.7
             let leadBonus = index < 3 ? 0.8 - Double(index) * 0.2 : 0
-            let lengthPenalty = words.count < 7 || words.count > 48 ? 0.7 : 1.0
+            let maximumUsefulTokens = sentence.contains(where: isCJK) ? 100 : 48
+            let lengthPenalty = words.count < 7 || words.count > maximumUsefulTokens ? 0.7 : 1.0
             let score = ((topicality + titleOverlap) / sqrt(Double(max(words.count, 1))) + leadBonus) * lengthPenalty
             return ScoredSentence(sentence: sentence, index: index, score: score)
         }

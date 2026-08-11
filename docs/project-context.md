@@ -6,7 +6,7 @@ The companion [Clearframe strategy and product memory](clearframe-strategy.md) i
 
 ## Product decision
 
-Clearframe is a real, standalone, macOS-first browser for ordinary English-speaking users. The delivered and installed version owns its native window and currently renders pages with SwiftUI + WebKit. The earlier Chromium side-panel extension remains useful validation work, but it is not the current product and must not be presented as the finished browser.
+Clearframe is a real, standalone, macOS-first browser for ordinary users. Its interface is English-first, while Analyze Page must support source-language pages across languages. The delivered and installed version owns its native window and currently renders pages with SwiftUI + WebKit. The earlier Chromium side-panel extension remains useful validation work, but it is not the current product and must not be presented as the finished browser.
 
 The selected migration path for a future Chromium-based Clearframe is the official Chromium Embedded Framework (CEF), hosted behind a narrow Objective-C++ bridge while retaining SwiftUI and `ClearframeCore`. The isolated scaffold at `chromium/cef-spike` is architecture validation only: it is not linked into the current app, does not make the installed app Chromium, and is not a full Chromium source fork. Keep WebKit as the working baseline until the CEF build meets documented parity, privacy, security-update, and distribution gates.
 
@@ -21,6 +21,8 @@ Voice is an additional primary interface, not a replacement for visual search or
 ## AI and privacy decisions
 
 - Useful summaries, Plain English, comparison, and risk signals work locally without an account or API key.
+- Local Analyze Page preserves the source language and provides private extractive gist/key points. Current deterministic coverage includes English, Romanian, French, and Simplified Chinese; it does not imply equal semantic quality or multilingual risk-phrase coverage.
+- A configured optional provider may provide deeper multilingual summarization or translation only after a separate explicit action. Opening or locally analyzing a page never triggers that upload.
 - Visible page text is extracted only when the user requests analysis.
 - Optional provider use is separately triggered and disclosed. Prototype credentials are user-owned and stored in macOS Keychain.
 - Browsing history is never sold. Current bookmarks, capped history, and recent-tab metadata stay in the local Mac user profile and have user controls.
@@ -58,13 +60,13 @@ Do not switch rendering engines now. CEF remains a future gated path for demonst
 - A three-step, locally completed first-run introduction covering the product promise, five-provider search choice, local/cloud privacy boundary, AI home, and the user-triggered Analyze page workflow. It can be reopened from Settings without clearing tabs or data and contains no paywall or purchase flow.
 - User-confirmed downloads with destination, status, cancel, reveal, and clear controls.
 - Local bookmarks and searchable capped history with remove, clear, and disable controls.
-- User-triggered local summary, key points, claims, reading time, Plain English, visible risk signals, and two-source comparison.
+- User-triggered source-language local gist, key points, candidate claims, reading time, English-only local Plain English simplification, visible risk signals, and two-source comparison.
 - Optional OpenAI provider through a reusable protocol and macOS Keychain-backed prototype settings.
 - A locally built app bundle at `dist/Clearframe.app`; it uses only an ad hoc local signature and is not Developer ID signed or notarized.
 
 ## Extraction quality regression gate
 
-Complex news pages can expose embedded media-player controls and accessibility boilerplate as text. `zf.ro` is the standing regression case. The current fix filters rendered reading blocks and Romanian analysis so subtitles, stream, playback, hidden, consent, and navigation UI do not enter the gist, key points, or claims. It passed deterministic fixtures and an installed-app live check on `https://www.zf.ro/`; preserve both forms of coverage.
+Complex news pages can expose embedded media-player controls and accessibility boilerplate as text. `zf.ro` is the standing regression case. The current fix filters rendered reading blocks so subtitles, stream, playback, hidden, consent, and navigation UI do not enter the gist, key points, or claims. It passed deterministic English, Romanian, French, and Simplified Chinese fixtures plus an installed-app live check on `https://www.zf.ro/`; preserve both forms of coverage.
 
 ## Remaining release gaps
 

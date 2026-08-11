@@ -334,6 +334,7 @@ final class BrowserSession: NSObject, ObservableObject {
         });
       const bodyText = clean(clone.innerText || '');
       const text = (blocks.length >= 2 ? blocks.join('\n') : bodyText).slice(0, 48000);
+      const readingUnits = text.match(/[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]|[\p{L}\p{M}\p{N}]+/gu) || [];
       const actions = [...document.forms].map(form => {
         try { return new URL(form.action || location.href, location.href).origin; } catch { return ''; }
       }).filter(Boolean);
@@ -345,7 +346,7 @@ final class BrowserSession: NSObject, ObservableObject {
         scheme: location.protocol.replace(':', ''),
         language: document.documentElement.lang || navigator.language || '',
         text,
-        wordCount: text ? text.split(/\s+/).length : 0,
+        wordCount: readingUnits.length,
         hasPasswordField: Boolean(document.querySelector('input[type="password"]')),
         formActions: actions
       };
