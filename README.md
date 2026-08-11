@@ -133,6 +133,7 @@ npm run validate
 - [Clearframe strategy, vision, non-goals, and roadmap](docs/clearframe-strategy.md)
 - [Durable project context](docs/project-context.md)
 - [AI catalog editorial and update policy](docs/ai-catalog-editorial.md)
+- [Focused zero-budget go-to-market plan](docs/go-to-market.md)
 - [Product and technical foundation](docs/product-foundation.md)
 - [Native macOS architecture and limits](docs/macos-browser-foundation.md)
 - [Chromium/CEF migration foundation](docs/chromium-migration.md)

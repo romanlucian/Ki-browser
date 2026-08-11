@@ -36,6 +36,7 @@ Read both [docs/clearframe-strategy.md](docs/clearframe-strategy.md) and [docs/p
 - Preserve the primary promise: “Clearframe makes the AI world simple for ordinary people.” Favor clarity over feature count. The magic first minute starts from a human task, offers a small set of useful AI paths, and makes an open page understandable with honest grounding; exact cited Evidence Mode is future work, not a current claim.
 - Preserve the roadmap order: real-user validation and extraction/performance quality, Evidence Mode and Translate & Explain, release/security work, then optional Pro/team monetization. Search/referral economics and CEF expansion come later.
 - Keep early launch founder-led and zero-budget: real demos, personal/creative-community testers, short before/after examples, an honest GitHub build narrative, and learning from observed usage. Never substitute paid ads, spam, fake traction, or guaranteed-growth claims for validation.
+- Follow [docs/go-to-market.md](docs/go-to-market.md): keep global English-first positioning but validate first with photographers, designers, video creators, and creative freelancers. Prefer useful workflow/how-to demonstrations over generic tool-list content, and do not recommend paid acquisition before activation, seven-day retention, and organic referral evidence exist.
 - The trusted upstream repository is `https://github.com/romanlucian/Ki-browser`. Never force-push or rewrite remote history unless the user explicitly requests it after reviewing the exact impact.
 
 ## Build and verification
@@ -64,6 +65,7 @@ The preferred user launch path is Finder → `dist/Clearframe.app`. `swift run` 
 - [Strategy, vision, non-goals, and roadmap](docs/clearframe-strategy.md)
 - [Durable project decisions](docs/project-context.md)
 - [AI catalog editorial and update policy](docs/ai-catalog-editorial.md)
+- [Focused zero-budget go-to-market plan](docs/go-to-market.md)
 - [Product foundation](docs/product-foundation.md)
 - [macOS architecture and release gaps](docs/macos-browser-foundation.md)
 - [Chromium/CEF migration foundation](docs/chromium-migration.md)

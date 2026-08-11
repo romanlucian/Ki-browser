@@ -99,6 +99,8 @@ Never sell browsing history. Never let payment, referral, or search relationship
 
 ## Lean, zero-budget launch approach
 
+The detailed creator wedge, hypotheses, measurement boundaries, weekly cadence, and 30/60/90-day stop rules live in [the focused go-to-market plan](go-to-market.md).
+
 Early distribution should optimize for learning, not inflated reach:
 
 - Give founder-led demonstrations that show one concrete confusing task before and after Clearframe.

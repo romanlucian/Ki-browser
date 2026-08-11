@@ -14,6 +14,7 @@ Essential constraints:
 - Prioritize extraction quality, measured calm performance, real-user clarity, Evidence Mode/Translate & Explain, and release security before broad feature expansion or monetization.
 - The primary promise is “Clearframe makes the AI world simple for ordinary people.” Optimize the first minute around a human task, a small set of useful AI paths, and understandable page analysis. Do not present future exact Evidence Mode as delivered.
 - Favor founder-led demos, real early testers, honest before/after examples, GitHub build notes, and observed learning. Do not recommend spam, fake traction, premature paid ads, or guaranteed-growth claims.
+- Use [docs/go-to-market.md](docs/go-to-market.md) for launch decisions: the brand is global and English-first, while the first validation wedge is creators overwhelmed by AI. Treat activation, seven-day retention, and voluntary referrals as stronger evidence than views or follower counts.
 - Preserve the `ClearframeCore` versus macOS UI/WebKit boundary and document material behavior or data-flow changes.
 - Do not claim production signing, notarization, App Store readiness, password security, or security review without evidence.
 
