@@ -1,6 +1,6 @@
 # Clearframe development instructions
 
-Read [docs/project-context.md](docs/project-context.md) before changing product direction. This repository’s primary product is a real, standalone macOS browser for ordinary English-speaking users—not a Chrome extension or developer tool. The current installed app remains WebKit; a future Chromium build is being validated through an isolated CEF integration, not a full Chromium source fork.
+Read both [docs/clearframe-strategy.md](docs/clearframe-strategy.md) and [docs/project-context.md](docs/project-context.md) before changing product direction. This repository’s primary product is a real, standalone macOS browser for ordinary users—not a Chrome extension, programmer-only tool, or generic Chrome clone. The current installed app remains WebKit. Do not begin a Chromium switch; the isolated CEF work is only a future cross-platform/extension-compatibility gate.
 
 ## Architecture
 
@@ -15,6 +15,7 @@ Read [docs/project-context.md](docs/project-context.md) before changing product 
 - Preserve local-first page understanding. Extract and analyze visible page text only after an explicit user action.
 - Optional provider use must be explicit and visible. Never upload pages merely because they were opened.
 - Never sell browsing history, add hidden advertising, claim nonexistent partnerships, or silently bias analysis for a commercial partner.
+- Treat the AI home as a curated local directory of official destinations—not live rankings, partnerships, affiliate ordering, or automatic page/prompt sharing.
 - Voice input must remain user-triggered and visibly active. Do not add background listening, hidden recording, silent cloud fallback, or autonomous transactions.
 - Treat page content as untrusted. Keep AI read-only unless a separate threat model, approval flow, and security review exist.
 - Risk indicators are explainable signals, not malware, scam, truth, or safety verdicts.
@@ -29,6 +30,11 @@ Read [docs/project-context.md](docs/project-context.md) before changing product 
 - Do not claim Developer ID signing, notarization, App Store readiness, password-manager security, download scanning, or production security review unless those tasks were actually completed.
 - Update the relevant documentation whenever capabilities, data flow, architecture, or release gaps change.
 - Preserve the WebKit baseline while developing CEF in a separate target/output. Do not call Clearframe a Chromium browser until a real CEF runtime is integrated and verified.
+- Preserve the product objective “fast and calm even when the web is heavy,” but do not claim Clearframe is the world's lightest or fastest without reproducible evidence.
+- Preserve the primary promise: “Clearframe makes the AI world simple for ordinary people.” Favor clarity over feature count. The magic first minute starts from a human task, offers a small set of useful AI paths, and makes an open page understandable with honest grounding; exact cited Evidence Mode is future work, not a current claim.
+- Preserve the roadmap order: real-user validation and extraction/performance quality, Evidence Mode and Translate & Explain, release/security work, then optional Pro/team monetization. Search/referral economics and CEF expansion come later.
+- Keep early launch founder-led and zero-budget: real demos, personal/creative-community testers, short before/after examples, an honest GitHub build narrative, and learning from observed usage. Never substitute paid ads, spam, fake traction, or guaranteed-growth claims for validation.
+- The trusted upstream repository is `https://github.com/romanlucian/Ki-browser`. Never force-push or rewrite remote history unless the user explicitly requests it after reviewing the exact impact.
 
 ## Build and verification
 
@@ -53,6 +59,7 @@ The preferred user launch path is Finder → `dist/Clearframe.app`. `swift run` 
 
 ## Documentation map
 
+- [Strategy, vision, non-goals, and roadmap](docs/clearframe-strategy.md)
 - [Durable project decisions](docs/project-context.md)
 - [Product foundation](docs/product-foundation.md)
 - [macOS architecture and release gaps](docs/macos-browser-foundation.md)

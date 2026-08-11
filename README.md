@@ -125,6 +125,7 @@ npm run validate
 
 ## Documentation index
 
+- [Clearframe strategy, vision, non-goals, and roadmap](docs/clearframe-strategy.md)
 - [Durable project context](docs/project-context.md)
 - [Product and technical foundation](docs/product-foundation.md)
 - [Native macOS architecture and limits](docs/macos-browser-foundation.md)

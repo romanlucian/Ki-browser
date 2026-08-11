@@ -299,17 +299,41 @@ final class BrowserSession: NSObject, ObservableObject {
     private static let extractionScript = #"""
     (() => {
       const clean = (value = '') => value.replace(/\s+/g, ' ').trim();
+      const excludedSelector = [
+        'script', 'style', 'noscript', 'svg', 'canvas', 'nav', 'footer', 'header', 'aside',
+        'form', 'dialog', 'button', 'input', 'select', 'textarea', 'video', 'audio', 'iframe',
+        '[hidden]', '[aria-hidden="true"]', '[aria-modal="true"]', '[role="button"]',
+        '[role="toolbar"]', '[role="menu"]', '[role="navigation"]', '[role="dialog"]',
+        '[role="alertdialog"]', '[class*="jwplayer"]', '[class*="jw-"]', '[class*="vjs-"]',
+        '[class*="plyr__"]', '[class*="video-player"]', '[class*="videoplayer"]',
+        '[class*="media-player"]', '[class*="mediaplayer"]', '[class*="player-control"]',
+        '[class*="cookie"]', '[id*="cookie"]', '[class*="consent"]', '[id*="consent"]'
+      ].join(',');
+      const isRendered = node => {
+        const style = getComputedStyle(node);
+        const rect = node.getBoundingClientRect();
+        const viewportWidth = document.documentElement.clientWidth || window.innerWidth;
+        return style.display !== 'none' && style.visibility !== 'hidden' && Number(style.opacity || 1) > 0 &&
+          rect.width > 0 && rect.height > 0 && rect.right > 0 && rect.left < viewportWidth;
+      };
       const preferred = [document.querySelector('article'), document.querySelector('main'), document.querySelector('[role="main"]')]
         .filter(node => (node?.innerText?.trim().length || 0) >= 400);
       const root = preferred[0] || document.body;
       const clone = root.cloneNode(true);
-      clone.querySelectorAll('script,style,noscript,svg,canvas,nav,footer,header,aside,form,dialog,[aria-hidden="true"]')
-        .forEach(node => node.remove());
-      const blocks = [...clone.querySelectorAll('p,li,blockquote')]
+      clone.querySelectorAll(excludedSelector).forEach(node => node.remove());
+      const seenBlocks = new Set();
+      const blocks = [...root.querySelectorAll('h2,h3,p,li,blockquote')]
+        .filter(node => !node.closest(excludedSelector) && isRendered(node))
         .map(node => clean(node.innerText))
-        .filter(text => text.length >= 45 && text.length <= 1800);
+        .filter(text => text.length >= 45 && text.length <= 1800)
+        .filter(text => {
+          const key = text.toLocaleLowerCase();
+          if (seenBlocks.has(key)) return false;
+          seenBlocks.add(key);
+          return true;
+        });
       const bodyText = clean(clone.innerText || '');
-      const text = clean(blocks.length >= 3 ? blocks.join('\n') : bodyText).slice(0, 48000);
+      const text = (blocks.length >= 2 ? blocks.join('\n') : bodyText).slice(0, 48000);
       const actions = [...document.forms].map(form => {
         try { return new URL(form.action || location.href, location.href).origin; } catch { return ''; }
       }).filter(Boolean);

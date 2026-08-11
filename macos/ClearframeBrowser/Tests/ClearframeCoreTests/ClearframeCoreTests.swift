@@ -22,6 +22,62 @@ final class ClearframeCoreTests: XCTestCase {
         XCTAssertTrue(result.claimsToCheck.contains { $0.contains("2025") })
     }
 
+    func testRomanianSummaryIgnoresRepeatedMediaControlBoilerplate() {
+        let repeatedPlayerText = Array(
+            repeating: "subtitles settings, opens subtitles settings dialog ",
+            count: 8
+        ).joined() + "Video Player is loading. Stream Type LIVE. Playback controls. "
+        let romanianText = """
+        Bursa de Valori București a deschis ședința de tranzacționare cu un nou maxim al indicelui principal. Investitorul Corneliu Manole a discutat despre evoluția pieței și companiile urmărite în portofoliu. România continuă să atragă centre de tehnologie și servicii ale unor grupuri internaționale. Companiile au anunțat zece proiecte majore în ultimul an, potrivit informațiilor publicate de Ziarul Financiar. Evoluția dobânzilor și rezultatele trimestriale rămân importante pentru investitori.
+        """
+        let page = PageSnapshot(
+            title: "Ziarul Financiar - știri economice",
+            url: "https://www.zf.ro/",
+            hostname: "www.zf.ro",
+            scheme: "https",
+            language: "ro",
+            text: repeatedPlayerText + romanianText,
+            wordCount: 126,
+            hasPasswordField: false,
+            formActions: []
+        )
+
+        let result = LocalAnalysisEngine.summarize(page: page)
+
+        XCTAssertGreaterThan(result.summary.count, 120)
+        XCTAssertTrue(result.summary.contains("Bursa de Valori București"))
+        let allAnalysisText = ([result.summary] + result.keyPoints + result.claimsToCheck)
+            .joined(separator: " ")
+        for pollutedPhrase in [
+            "subtitles settings",
+            "Video Player is loading",
+            "Stream Type LIVE",
+            "Playback controls"
+        ] {
+            XCTAssertFalse(
+                allAnalysisText.localizedCaseInsensitiveContains(pollutedPhrase),
+                "Media-player UI leaked into local analysis: \(pollutedPhrase)"
+            )
+        }
+    }
+
+    func testSingleMediaPhraseInLegitimateArticleTextIsPreserved() {
+        let page = PageSnapshot(
+            title: "Troubleshooting a training video",
+            url: "https://example.org/troubleshooting",
+            hostname: "example.org",
+            scheme: "https",
+            language: "en",
+            text: "The support guide explains why a video player is loading slowly on older computers. Readers should verify the connection before changing browser settings. The guide also recommends testing the same lesson on a second network. These steps preserve the original course progress and do not require sharing private information.",
+            wordCount: 48,
+            hasPasswordField: false,
+            formActions: []
+        )
+
+        let result = LocalAnalysisEngine.summarize(page: page)
+        XCTAssertTrue(result.summary.localizedCaseInsensitiveContains("video player is loading"))
+    }
+
     func testOrdinaryHTTPSArticleHasLowSignals() {
         let result = RiskAnalyzer.assess(page: article)
         XCTAssertEqual(result.level, .low)

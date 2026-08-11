@@ -17,12 +17,12 @@ The current version-1 release stage includes:
 - user-confirmed downloads with a macOS save dialog, visible destination and status, cancel, reveal in Finder, and clear-finished controls;
 - local bookmarks and a searchable local history with remove/clear controls and a setting to disable history;
 - user-triggered, on-device English dictation into the visible address field with review before submission and no background listening;
-- user-invoked visible-page extraction;
+- user-invoked visible-page extraction that prioritizes rendered reading blocks and filters navigation, consent, hidden, and embedded-media control UI;
 - local summary, key points, candidate claims, read time, Plain English, and explained risk signals;
 - a one-source save / second-source comparison flow;
 - an optional OpenAI provider and translation action;
 - API-key storage in macOS Keychain;
-- twelve tests for the reusable core logic, local AI-tool catalog, local onboarding completion, search endpoint construction, and safe session-record handling.
+- fourteen tests for the reusable core logic, Romanian/media-boilerplate handling, local AI-tool catalog, local onboarding completion, search endpoint construction, and safe session-record handling.
 
 DuckDuckGo is the changeable initial search default. Submitted search text goes to the selected provider’s ordinary HTTPS results URL; direct website addresses do not. Clearframe requests no search suggestions while the user types and claims no partnership, default-search contract, or revenue-share agreement.
 
