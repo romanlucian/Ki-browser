@@ -84,6 +84,9 @@ final class BrowserWorkspace: ObservableObject {
     @Published private(set) var tabs: [BrowserTab] = []
     @Published var selectedTabID: UUID?
     @Published var focusAddressRequest = 0
+    @Published private(set) var bookmarkLibraryRequest = 0
+    @Published private(set) var bookmarkFolderRequestID = UUID()
+    private(set) var requestedBookmarkFolderParentID: UUID?
 
     let downloads: DownloadCenter
     let dataStore: BrowserDataStore
@@ -209,6 +212,24 @@ final class BrowserWorkspace: ObservableObject {
     func toggleBookmarkForSelectedTab() {
         guard let tab = selectedTab else { return }
         dataStore.toggleBookmark(title: tab.session.pageTitle, url: tab.session.currentURLString)
+    }
+
+    func addSelectedPageBookmark(to folderID: UUID?) {
+        guard let tab = selectedTab else { return }
+        dataStore.addBookmark(
+            title: tab.session.pageTitle,
+            url: tab.session.currentURLString,
+            folderID: folderID
+        )
+    }
+
+    func requestBookmarkLibrary() {
+        bookmarkLibraryRequest += 1
+    }
+
+    func requestNewBookmarkFolder(parentID: UUID? = nil) {
+        requestedBookmarkFolderParentID = parentID
+        bookmarkFolderRequestID = UUID()
     }
 
     func requestAddressFocus() {

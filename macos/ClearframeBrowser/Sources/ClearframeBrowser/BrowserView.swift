@@ -257,10 +257,15 @@ private struct BrowserToolbar: View {
     @Binding var showsAssistant: Bool
     @Binding var showsLibrary: Bool
     @StateObject private var voiceInput = VoiceInputController()
+    @State private var folderEditorRequest: BookmarkFolderEditorRequest?
     @Environment(\.scenePhase) private var scenePhase
 
     private var isBookmarked: Bool {
         dataStore.isBookmarked(session.currentURLString)
+    }
+
+    private var currentBookmark: BookmarkRecord? {
+        dataStore.bookmark(for: session.currentURLString)
     }
 
     var body: some View {
@@ -427,7 +432,11 @@ private struct BrowserToolbar: View {
                 BookmarksBar(
                     store: dataStore,
                     showsLibrary: $showsLibrary,
-                    open: { workspace.open($0) }
+                    currentPageURL: session.currentURLString,
+                    currentBookmark: currentBookmark,
+                    open: { workspace.open($0) },
+                    addCurrentPage: { workspace.addSelectedPageBookmark(to: $0) },
+                    newFolder: { presentFolderEditor(parentID: $0) }
                 )
             }
 
@@ -461,7 +470,32 @@ private struct BrowserToolbar: View {
         .onChange(of: scenePhase) { _, phase in
             if phase != .active { voiceInput.stop() }
         }
+        .onChange(of: workspace.bookmarkLibraryRequest) { _, _ in
+            showsLibrary = true
+        }
+        .onChange(of: workspace.bookmarkFolderRequestID) { _, _ in
+            presentFolderEditor(parentID: workspace.requestedBookmarkFolderParentID)
+        }
+        .sheet(item: $folderEditorRequest) { request in
+            BookmarkFolderEditor(request: request) { title, emoji in
+                _ = dataStore.createBookmarkFolder(
+                    title: title,
+                    emoji: emoji,
+                    parentID: request.parentID
+                )
+                folderEditorRequest = nil
+            }
+        }
         .onDisappear { voiceInput.stop() }
+    }
+
+    private func presentFolderEditor(parentID: UUID?) {
+        folderEditorRequest = BookmarkFolderEditorRequest(
+            folderID: nil,
+            parentID: parentID,
+            title: "",
+            emoji: "📁"
+        )
     }
 
     @MainActor
@@ -499,7 +533,11 @@ private struct NavigationButton: View {
 private struct BookmarksBar: View {
     @ObservedObject var store: BrowserDataStore
     @Binding var showsLibrary: Bool
+    let currentPageURL: String
+    let currentBookmark: BookmarkRecord?
     let open: (String) -> Void
+    let addCurrentPage: (UUID?) -> Void
+    let newFolder: (UUID?) -> Void
 
     private var rootFolders: [BookmarkFolderRecord] {
         store.bookmarkFolders(in: nil)
@@ -511,6 +549,11 @@ private struct BookmarksBar: View {
 
     private var isEmpty: Bool {
         rootFolders.isEmpty && rootBookmarks.isEmpty
+    }
+
+    private var canBookmarkCurrentPage: Bool {
+        guard let url = URL(string: currentPageURL), let scheme = url.scheme?.lowercased() else { return false }
+        return ["http", "https"].contains(scheme)
     }
 
     var body: some View {
@@ -541,7 +584,17 @@ private struct BookmarksBar: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 4) {
                         ForEach(rootFolders) { folder in
-                            BookmarkFolderMenu(store: store, folder: folder, compact: true, open: open)
+                            BookmarkFolderMenu(
+                                store: store,
+                                folder: folder,
+                                compact: true,
+                                currentBookmark: currentBookmark,
+                                canBookmarkCurrentPage: canBookmarkCurrentPage,
+                                open: open,
+                                addCurrentPage: addCurrentPage,
+                                newFolder: newFolder,
+                                organize: { showsLibrary = true }
+                            )
                         }
                         ForEach(rootBookmarks) { bookmark in
                             BookmarkBarLink(bookmark: bookmark, open: open)
@@ -556,7 +609,17 @@ private struct BookmarksBar: View {
                     Text("No bookmarks yet")
                 } else {
                     ForEach(rootFolders) { folder in
-                        BookmarkFolderMenu(store: store, folder: folder, compact: false, open: open)
+                        BookmarkFolderMenu(
+                            store: store,
+                            folder: folder,
+                            compact: false,
+                            currentBookmark: currentBookmark,
+                            canBookmarkCurrentPage: canBookmarkCurrentPage,
+                            open: open,
+                            addCurrentPage: addCurrentPage,
+                            newFolder: newFolder,
+                            organize: { showsLibrary = true }
+                        )
                     }
                     if !rootFolders.isEmpty && !rootBookmarks.isEmpty {
                         Divider()
@@ -568,6 +631,22 @@ private struct BookmarksBar: View {
                     }
                 }
                 Divider()
+                if canBookmarkCurrentPage {
+                    if currentBookmark == nil {
+                        Button {
+                            addCurrentPage(nil)
+                        } label: {
+                            Label("Add Current Page to Bookmarks", systemImage: "bookmark.badge.plus")
+                        }
+                    } else {
+                        Text("Current page is bookmarked")
+                    }
+                }
+                Button {
+                    newFolder(nil)
+                } label: {
+                    Label("New Bookmark Folder…", systemImage: "folder.badge.plus")
+                }
                 Button {
                     showsLibrary = true
                 } label: {
@@ -596,6 +675,39 @@ private struct BookmarksBar: View {
         .padding(.horizontal, 11)
         .frame(height: 33)
         .background(Color.primary.opacity(0.018))
+        .contentShape(Rectangle())
+        .contextMenu {
+            if canBookmarkCurrentPage {
+                if currentBookmark == nil {
+                    Button {
+                        addCurrentPage(nil)
+                    } label: {
+                        Label("Add Current Page to Bookmarks", systemImage: "bookmark.badge.plus")
+                    }
+                } else {
+                    Button("Current Page Is Already Bookmarked") {}
+                        .disabled(true)
+                }
+                Divider()
+            }
+            Button {
+                newFolder(nil)
+            } label: {
+                Label("New Bookmark Folder…", systemImage: "folder.badge.plus")
+            }
+            Button {
+                showsLibrary = true
+            } label: {
+                Label("Organize Bookmarks…", systemImage: "books.vertical")
+            }
+            Divider()
+            Button {
+                store.showsBookmarksBar = false
+            } label: {
+                Label("Hide Bookmarks Bar", systemImage: "eye.slash")
+            }
+        }
+        .help("Secondary-click or Control-click for bookmark-bar actions")
     }
 }
 
@@ -630,38 +742,105 @@ private struct BookmarkFolderMenu: View {
     @ObservedObject var store: BrowserDataStore
     let folder: BookmarkFolderRecord
     let compact: Bool
+    let currentBookmark: BookmarkRecord?
+    let canBookmarkCurrentPage: Bool
     let open: (String) -> Void
+    let addCurrentPage: (UUID?) -> Void
+    let newFolder: (UUID?) -> Void
+    let organize: () -> Void
 
+    @ViewBuilder
     var body: some View {
-        Menu {
-            BookmarkFolderMenuContents(store: store, folder: folder, open: open)
-        } label: {
-            HStack(spacing: 5) {
-                Text(folder.emoji)
-                Text(folder.title)
-                    .lineLimit(1)
-                if compact {
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 7, weight: .bold))
-                        .foregroundStyle(.tertiary)
+        Group {
+            if compact {
+                Menu {
+                    menuContents
+                } label: {
+                    Color.clear
+                        .frame(width: 140, height: 24)
+                }
+                .menuStyle(.borderlessButton)
+                .menuIndicator(.hidden)
+                .overlay {
+                    HStack(spacing: 5) {
+                        Text(folder.barLabel)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                            .foregroundStyle(Color.primary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 7, weight: .bold))
+                            .foregroundStyle(.tertiary)
+                    }
+                    .font(.system(size: 11, weight: .semibold))
+                    .padding(.horizontal, 7)
+                    .frame(width: 140, height: 24)
+                    .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 6))
+                    .allowsHitTesting(false)
+                }
+                .frame(width: 140, height: 24)
+            } else {
+                Menu(folder.barLabel) {
+                    menuContents
                 }
             }
-            .font(.system(size: 11, weight: .semibold))
-            .padding(.horizontal, compact ? 7 : 0)
-            .frame(height: compact ? 24 : nil)
-            .background(compact ? Color.primary.opacity(0.05) : Color.clear, in: RoundedRectangle(cornerRadius: 6))
         }
-        .menuStyle(.borderlessButton)
-        .fixedSize(horizontal: true, vertical: false)
         .help("Open \(folder.title) folder")
         .accessibilityLabel("\(folder.title) bookmark folder")
+        .accessibilityHint("Opens this folder. Secondary-click or Control-click for folder actions.")
+        .contextMenu {
+            if canBookmarkCurrentPage {
+                if currentBookmark?.folderID == folder.id {
+                    Button("Current Page Is in This Folder") {}
+                        .disabled(true)
+                } else {
+                    Button {
+                        addCurrentPage(folder.id)
+                    } label: {
+                        Label(
+                            currentBookmark == nil ? "Add Current Page to This Folder" : "Move Current Page to This Folder",
+                            systemImage: "bookmark.badge.plus"
+                        )
+                    }
+                }
+                Divider()
+            }
+            Button {
+                newFolder(folder.id)
+            } label: {
+                Label("New Subfolder…", systemImage: "folder.badge.plus")
+            }
+            Button {
+                organize()
+            } label: {
+                Label("Organize Bookmarks…", systemImage: "books.vertical")
+            }
+        }
+    }
+
+    private var menuContents: some View {
+        BookmarkFolderMenuContents(
+            store: store,
+            folder: folder,
+            currentBookmark: currentBookmark,
+            canBookmarkCurrentPage: canBookmarkCurrentPage,
+            open: open,
+            addCurrentPage: addCurrentPage,
+            newFolder: newFolder,
+            organize: organize
+        )
     }
 }
 
 private struct BookmarkFolderMenuContents: View {
     @ObservedObject var store: BrowserDataStore
     let folder: BookmarkFolderRecord
+    let currentBookmark: BookmarkRecord?
+    let canBookmarkCurrentPage: Bool
     let open: (String) -> Void
+    let addCurrentPage: (UUID?) -> Void
+    let newFolder: (UUID?) -> Void
+    let organize: () -> Void
 
     private var childFolders: [BookmarkFolderRecord] {
         store.bookmarkFolders(in: folder.id)
@@ -676,7 +855,17 @@ private struct BookmarkFolderMenuContents: View {
             Text("Empty folder")
         } else {
             ForEach(childFolders) { child in
-                BookmarkFolderMenu(store: store, folder: child, compact: false, open: open)
+                BookmarkFolderMenu(
+                    store: store,
+                    folder: child,
+                    compact: false,
+                    currentBookmark: currentBookmark,
+                    canBookmarkCurrentPage: canBookmarkCurrentPage,
+                    open: open,
+                    addCurrentPage: addCurrentPage,
+                    newFolder: newFolder,
+                    organize: organize
+                )
             }
             if !childFolders.isEmpty && !bookmarks.isEmpty {
                 Divider()

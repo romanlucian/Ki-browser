@@ -72,19 +72,38 @@ final class BrowserDataStore: ObservableObject {
         bookmarks.contains { $0.url == url }
     }
 
+    func bookmark(for url: String) -> BookmarkRecord? {
+        bookmarks.first { $0.url == url }
+    }
+
+    @discardableResult
+    func addBookmark(title: String, url: String, folderID: UUID?) -> BookmarkRecord? {
+        guard Self.isWebURL(url) else { return nil }
+        var collection = bookmarkCollection
+        let existing = bookmarks.first { $0.url == url }
+        let bookmark = BookmarkRecord(
+            id: existing?.id ?? UUID(),
+            title: title.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty ?? existing?.title ?? url,
+            url: url,
+            createdAt: existing?.createdAt ?? Date(),
+            folderID: folderID
+        )
+        collection.addBookmark(bookmark)
+        apply(collection)
+        return bookmarks.first { $0.id == bookmark.id }
+    }
+
     func toggleBookmark(title: String, url: String) {
         guard Self.isWebURL(url) else { return }
         var collection = bookmarkCollection
         if let bookmark = bookmarks.first(where: { $0.url == url }) {
             collection.removeBookmark(id: bookmark.id)
         } else {
-            collection.addBookmark(
-                BookmarkRecord(
-                    title: title.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty ?? url,
-                    url: url,
-                    folderID: nil
-                )
-            )
+            collection.addBookmark(BookmarkRecord(
+                title: title.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty ?? url,
+                url: url,
+                folderID: nil
+            ))
         }
         apply(collection)
     }

@@ -292,17 +292,41 @@ struct BrowserE2ESmoke {
             )
             dataStore.moveBookmark(dataStore.bookmarks[0], to: swiftFolder.id)
             try require(dataStore.bookmarks(in: swiftFolder.id).count == 1, "bookmark did not move into a nested folder")
+            let contextualBookmark = dataStore.addBookmark(
+                title: "Context menu page",
+                url: "https://example.com/context-bookmark",
+                folderID: programmingFolder.id
+            )
+            try require(contextualBookmark?.folderID == programmingFolder.id, "folder context action did not file the current page")
+            let refiledContextualBookmark = dataStore.addBookmark(
+                title: "Context menu page updated",
+                url: "https://example.com/context-bookmark",
+                folderID: swiftFolder.id
+            )
+            try require(refiledContextualBookmark?.id == contextualBookmark?.id, "refiling an existing current-page bookmark changed its identity")
+            try require(dataStore.bookmarks.filter { $0.url == "https://example.com/context-bookmark" }.count == 1, "refiling created a duplicate bookmark")
+            try require(dataStore.bookmarks(in: swiftFolder.id).contains(where: { $0.id == contextualBookmark?.id }), "folder context action did not move the existing bookmark")
             try require(dataStore.bookmarkFolders(in: nil).map(\.id) == [programmingFolder.id], "bookmarks bar root included a nested folder")
             try require(dataStore.bookmarkFolders(in: programmingFolder.id).map(\.id) == [swiftFolder.id], "bookmarks bar folder hierarchy omitted a nested submenu")
             try require(dataStore.bookmarks(in: nil).isEmpty, "bookmarks bar root showed a filed bookmark as Unfiled")
+            let libraryRequest = workspace.bookmarkLibraryRequest
+            workspace.requestBookmarkLibrary()
+            try require(workspace.bookmarkLibraryRequest == libraryRequest + 1, "Page menu did not request the bookmark organizer")
+            let folderRequestID = workspace.bookmarkFolderRequestID
+            workspace.requestNewBookmarkFolder(parentID: swiftFolder.id)
+            try require(workspace.bookmarkFolderRequestID != folderRequestID, "Page menu did not request a folder editor")
+            try require(workspace.requestedBookmarkFolderParentID == swiftFolder.id, "subfolder request lost its selected parent")
             let restoredBookmarkStore = BrowserDataStore(defaults: defaults)
             try require(restoredBookmarkStore.bookmarkFolder(id: swiftFolder.id)?.parentID == programmingFolder.id, "nested folders did not persist locally")
-            try require(restoredBookmarkStore.bookmarks(in: swiftFolder.id).count == 1, "folder assignment did not persist locally")
+            try require(restoredBookmarkStore.bookmarks(in: swiftFolder.id).count == 2, "folder assignments did not persist locally")
             dataStore.deleteBookmarkFolderPreservingContents(programmingFolder)
-            try require(dataStore.bookmarks.count == 1, "deleting a parent folder discarded its bookmark")
+            try require(dataStore.bookmarks.count == 2, "deleting a parent folder discarded a bookmark")
             try require(dataStore.bookmarkFolder(id: swiftFolder.id)?.parentID == nil, "nested folder was not safely rehomed")
-            print("PASS bookmark organizer: nested folders, emoji metadata, moves, and safe parent deletion succeeded")
+            print("PASS bookmark organizer: nested emoji folders, context refiling, menu requests, and safe parent deletion succeeded")
             dataStore.toggleBookmark(title: "Local verification", url: localURL)
+            if let contextualBookmark = dataStore.bookmark(for: "https://example.com/context-bookmark") {
+                dataStore.removeBookmark(contextualBookmark)
+            }
             dataStore.clearHistory()
             try require(dataStore.bookmarks.isEmpty && dataStore.history.isEmpty, "library remove/clear controls failed")
             print("PASS library controls: bookmark add/remove and history add/clear succeeded")

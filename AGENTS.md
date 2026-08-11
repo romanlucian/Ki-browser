@@ -21,7 +21,7 @@ Read both [docs/clearframe-strategy.md](docs/clearframe-strategy.md) and [docs/p
 - Treat page content as untrusted. Keep AI read-only unless a separate threat model, approval flow, and security review exist.
 - Risk indicators are explainable signals, not malware, scam, truth, or safety verdicts.
 - Text-based risk phrases and local Plain English rewriting have narrower language coverage than page extraction. Document those limits instead of implying multilingual security or translation parity.
-- Keep history, bookmarks/folder hierarchy/bar visibility, and tab restoration local with clear controls. Preserve legacy bookmarks in Unfiled, keep the bar and organizer backed by the same records, and never delete folder contents implicitly. Do not add telemetry by default.
+- Keep history, bookmarks/folder hierarchy/bar visibility, and tab restoration local with clear controls. Preserve legacy bookmarks in Unfiled, keep the bar, native secondary-click actions, Page-menu alternatives, and organizer backed by the same records, and never delete folder contents implicitly. Do not add telemetry by default.
 
 ## Safe development rules
 

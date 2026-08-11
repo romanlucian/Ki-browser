@@ -44,8 +44,15 @@ struct ClearframeBrowserApp: App {
             CommandMenu("Page") {
                 Button("Focus Address Bar") { workspace.requestAddressFocus() }
                     .keyboardShortcut("l", modifiers: [.command])
-                Button("Toggle Bookmark") { workspace.toggleBookmarkForSelectedTab() }
+                Button("Add or Remove Bookmark") { workspace.toggleBookmarkForSelectedTab() }
                     .keyboardShortcut("d", modifiers: [.command])
+                Button("New Bookmark Folder…") {
+                    workspace.requestNewBookmarkFolder()
+                }
+                Button("Organize Bookmarks…") {
+                    workspace.requestBookmarkLibrary()
+                }
+                .keyboardShortcut("b", modifiers: [.command, .option])
                 Button("Toggle Bookmarks Bar") {
                     workspace.dataStore.showsBookmarksBar.toggle()
                 }

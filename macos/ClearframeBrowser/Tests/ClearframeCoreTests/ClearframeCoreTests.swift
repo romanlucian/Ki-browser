@@ -449,4 +449,31 @@ final class ClearframeCoreTests: XCTestCase {
         XCTAssertEqual(collection.folders(in: shopping.id).map(\.id), [gifts.id])
         XCTAssertEqual(collection.bookmarks(in: gifts.id).map(\.id), [nested.id])
     }
+
+    func testAddingAnExistingBookmarkURLRehomesItWithoutDuplication() throws {
+        var collection = BookmarkCollection()
+        let design = try XCTUnwrap(
+            collection.createFolder(title: "Web Design", emoji: "🎨", parentID: nil)
+        )
+        let original = BookmarkRecord(title: "Reference", url: "https://example.com/reference")
+        collection.addBookmark(original)
+
+        var refiled = original
+        refiled.title = "Updated Reference"
+        refiled.folderID = design.id
+        collection.addBookmark(refiled)
+
+        XCTAssertEqual(collection.bookmarks.count, 1)
+        XCTAssertEqual(collection.bookmarks(in: design.id).first?.id, original.id)
+        XCTAssertEqual(collection.bookmarks(in: design.id).first?.title, "Updated Reference")
+        XCTAssertTrue(collection.bookmarks(in: nil).isEmpty)
+    }
+
+    func testBookmarkFolderBarLabelAlwaysContainsEmojiAndVisibleName() {
+        let folder = BookmarkFolderRecord(title: "Photography References", emoji: "📷")
+
+        XCTAssertEqual(folder.barLabel, "📷 Photography References")
+        XCTAssertTrue(folder.barLabel.contains(folder.emoji))
+        XCTAssertTrue(folder.barLabel.contains(folder.title))
+    }
 }

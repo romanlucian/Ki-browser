@@ -100,6 +100,10 @@ public struct BookmarkFolderRecord: Codable, Equatable, Identifiable, Sendable {
         self.parentID = parentID
         self.createdAt = createdAt
     }
+
+    /// One indivisible bar label prevents compact native menus from collapsing
+    /// the folder title while retaining its visual emoji identifier.
+    public var barLabel: String { "\(emoji) \(title)" }
 }
 
 public struct BookmarkCollection: Codable, Equatable, Sendable {

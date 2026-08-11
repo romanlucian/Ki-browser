@@ -15,7 +15,7 @@ The current version-1 release stage includes:
 - AI-guide card activation that immediately shows the exact HTTPS destination in the address field and a provider-specific loading state; replacement navigation is tracked so cancellation of the underlying local start-page load cannot overwrite the new request;
 - opt-out session restoration of up to 12 recent tabs; inactive restored tabs load lazily, and only URL/title/activity metadata is saved;
 - user-confirmed downloads with a macOS save dialog and a dedicated toolbar popover containing a clear empty state, visible destination/status, cancel, Reveal in Finder, clear-finished, and Open Downloads Folder controls; WebKit's expected attachment-policy handoff no longer replaces the page with a false “Frame load interrupted” error;
-- a visible-by-default native bookmarks bar directly below navigation, showing compact top-level emoji folders and Unfiled bookmarks, recursive nested-folder menus, horizontal scrolling, a fixed More overflow menu, a clear empty state, and a locally persisted Settings/Page-menu show-hide control;
+- a visible-by-default native bookmarks bar directly below navigation, showing compact top-level emoji folders and Unfiled bookmarks, recursive nested-folder menus, horizontal scrolling, a fixed More overflow menu, a clear empty state, and a locally persisted Settings/Page-menu show-hide control; native secondary-click/Control-click actions can add the current page, file it into a folder, create a root folder or subfolder, open the organizer, or hide the bar, with equivalent More/Page-menu access and ⌘⌥B for keyboard users;
 - local bookmarks organized into titled, emoji-labeled folders and nested subfolders, including safe legacy migration to Unfiled, folder create/rename/delete, bookmark moves, and searchable local history with remove/clear controls and a setting to disable history;
 - user-triggered, on-device English dictation into the visible address field with review before submission and no background listening;
 - user-invoked visible-page extraction that prioritizes rendered reading blocks and filters navigation, consent, hidden, and embedded-media control UI;
@@ -23,7 +23,7 @@ The current version-1 release stage includes:
 - a one-source save / second-source comparison flow;
 - an optional OpenAI provider and translation action;
 - API-key storage in macOS Keychain;
-- twenty-three tests for the reusable core logic, English/Romanian/French/Simplified-Chinese extraction, media-boilerplate handling, bookmark-tree/bar queries, migration and safe deletion, local AI-tool catalog labels/recommendation ordering/release metadata, local onboarding completion, search endpoint construction, and safe session-record handling.
+- twenty-five tests for the reusable core logic, English/Romanian/French/Simplified-Chinese extraction, media-boilerplate handling, bookmark-tree/bar labels/queries, duplicate-safe context filing, migration and safe deletion, local AI-tool catalog labels/recommendation ordering/release metadata, local onboarding completion, search endpoint construction, and safe session-record handling.
 
 DuckDuckGo is the changeable initial search default. Submitted search text goes to the selected provider’s ordinary HTTPS results URL; direct website addresses do not. Clearframe requests no search suggestions while the user types and claims no partnership, default-search contract, or revenue-share agreement.
 
