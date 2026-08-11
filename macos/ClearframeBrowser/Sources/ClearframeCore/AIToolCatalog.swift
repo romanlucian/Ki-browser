@@ -24,6 +24,55 @@ public enum AIToolCategory: String, CaseIterable, Codable, Identifiable, Sendabl
     }
 }
 
+public enum AIToolAccessLabel: String, CaseIterable, Codable, Sendable {
+    case freeToTry = "Free to Try"
+    case paidPlan = "Paid Plan"
+    case providerTerms = "Provider Terms"
+}
+
+public enum AIToolRecommendationBadge: String, CaseIterable, Codable, Sendable {
+    case bestOverall = "Best Overall"
+    case bestValue = "Best Value"
+    case easiestToStart = "Easiest to Start"
+
+    fileprivate var sortPriority: Int {
+        switch self {
+        case .bestOverall: return 0
+        case .bestValue: return 1
+        case .easiestToStart: return 2
+        }
+    }
+}
+
+public struct AIToolRecommendation: Equatable, Sendable {
+    public let category: AIToolCategory
+    public let badge: AIToolRecommendationBadge
+    public let rationale: String
+    public let officialSourceURL: URL
+
+    public init(
+        category: AIToolCategory,
+        badge: AIToolRecommendationBadge,
+        rationale: String,
+        officialSourceURL: URL
+    ) {
+        self.category = category
+        self.badge = badge
+        self.rationale = rationale
+        self.officialSourceURL = officialSourceURL
+    }
+}
+
+public struct AIToolCatalogRelease: Equatable, Sendable {
+    public let version: String
+    public let lastChecked: Date
+
+    public init(version: String, lastChecked: Date) {
+        self.version = version
+        self.lastChecked = lastChecked
+    }
+}
+
 public struct AIToolListing: Identifiable, Equatable, Sendable {
     public let id: String
     public let name: String
@@ -31,9 +80,10 @@ public struct AIToolListing: Identifiable, Equatable, Sendable {
     public let monogram: String
     public let kind: String
     public let bestFor: String
-    public let accessHint: String
+    public let access: AIToolAccessLabel
     public let officialURL: URL
     public let categories: [AIToolCategory]
+    public let recommendations: [AIToolRecommendation]
 
     public init(
         id: String,
@@ -42,9 +92,10 @@ public struct AIToolListing: Identifiable, Equatable, Sendable {
         monogram: String,
         kind: String,
         bestFor: String,
-        accessHint: String,
+        access: AIToolAccessLabel,
         officialURL: URL,
-        categories: [AIToolCategory]
+        categories: [AIToolCategory],
+        recommendations: [AIToolRecommendation] = []
     ) {
         self.id = id
         self.name = name
@@ -52,130 +103,36 @@ public struct AIToolListing: Identifiable, Equatable, Sendable {
         self.monogram = monogram
         self.kind = kind
         self.bestFor = bestFor
-        self.accessHint = accessHint
+        self.access = access
         self.officialURL = officialURL
         self.categories = categories
+        self.recommendations = recommendations
+    }
+
+    public func recommendation(for category: AIToolCategory?) -> AIToolRecommendation? {
+        guard let category else { return nil }
+        return recommendations.first(where: { $0.category == category })
     }
 }
 
 public enum AIToolCatalog {
-    /// A small, static editorial catalog. Order is intentional but is not a
-    /// live ranking, performance benchmark, or commercial placement.
-    public static let tools: [AIToolListing] = [
-        tool(
-            "chatgpt", "ChatGPT", "OpenAI", "GPT", "General AI assistant",
-            "General questions, brainstorming, coding, and conversational image work.",
-            [.askAndLearn, .write, .research, .createImages, .code],
-            "https://chatgpt.com/"
-        ),
-        tool(
-            "claude", "Claude", "Anthropic", "CL", "Thoughtful AI assistant",
-            "Long documents, careful writing, structured reasoning, and code explanation.",
-            [.askAndLearn, .write, .code],
-            "https://claude.ai/"
-        ),
-        tool(
-            "gemini", "Gemini", "Google", "GE", "Multimodal AI assistant",
-            "Multimodal questions, research, coding, and Google image creation or editing with Nano Banana where available.",
-            [.askAndLearn, .research, .createImages, .code],
-            "https://gemini.google.com/"
-        ),
-        tool(
-            "mistral", "Le Chat", "Mistral AI", "MI", "Multilingual AI assistant",
-            "Fast multilingual chat, drafting, translation, and coding assistance.",
-            [.askAndLearn, .write, .translate],
-            "https://chat.mistral.ai/chat"
-        ),
-        tool(
-            "grok", "Grok", "xAI", "GR", "Conversational AI assistant",
-            "Conversational exploration with a more informal style; verify important claims.",
-            [.askAndLearn],
-            "https://grok.com/"
-        ),
-        tool(
-            "deepseek", "DeepSeek", "DeepSeek", "DS", "Reasoning and code assistant",
-            "Technical reasoning, research exploration, and code-oriented problem solving.",
-            [.research, .code],
-            "https://chat.deepseek.com/"
-        ),
-        tool(
-            "qwen", "Qwen", "Alibaba Cloud", "QW", "Multilingual creative assistant",
-            "Multilingual translation, coding, and image experimentation in one interface.",
-            [.createImages, .translate, .code],
-            "https://chat.qwen.ai/"
-        ),
-        tool(
-            "kimi", "Kimi", "Moonshot AI", "KI", "Knowledge-work assistant",
-            "Long reading, research organization, and knowledge-work drafts.",
-            [.write, .research],
-            "https://www.kimi.com/"
-        ),
-        tool(
-            "perplexity", "Perplexity", "Perplexity AI", "PX", "AI research search",
-            "Starting web research with visible source links; still check primary sources.",
-            [.research],
-            "https://www.perplexity.ai/"
-        ),
-        tool(
-            "firefly", "Adobe Firefly", "Adobe", "FF", "Creative AI studio",
-            "Design-oriented image and video generation within Adobe creative workflows.",
-            [.createImages, .createVideos],
-            "https://firefly.adobe.com/"
-        ),
-        tool(
-            "veo", "Veo", "Google DeepMind", "VE", "Video generation",
-            "Creating and refining video ideas in Google Flow; access and features depend on Google.",
-            [.createVideos],
-            "https://labs.google/fx/tools/flow",
-            access: "Availability controlled by Google"
-        ),
-        tool(
-            "midjourney", "Midjourney", "Midjourney", "MJ", "Visual creation studio",
-            "Visual style exploration and high-concept image ideation.",
-            [.createImages],
-            "https://www.midjourney.com/",
-            access: "Paid access may be required"
-        ),
-        tool(
-            "runway", "Runway", "Runway AI", "RW", "AI video studio",
-            "Generating and editing video with prompt-driven creative tools.",
-            [.createVideos],
-            "https://app.runwayml.com/"
-        ),
-        tool(
-            "seedance", "Seedance", "ByteDance Seed", "SE", "Video generation model",
-            "Text- or image-guided multi-shot video concepts from ByteDance Seed.",
-            [.createVideos],
-            "https://seed.bytedance.com/en/seedance",
-            access: "Availability controlled by ByteDance"
-        ),
-        tool(
-            "canva", "Canva", "Canva", "CA", "Visual design workspace",
-            "Template-led social graphics and approachable video creation and editing.",
-            [.createImages, .createVideos],
-            "https://www.canva.com/"
-        ),
-        tool(
-            "deepl", "DeepL", "DeepL", "DL", "Translation and writing",
-            "Focused text and document translation plus multilingual rewriting.",
-            [.translate],
-            "https://www.deepl.com/translator"
-        ),
-        tool(
-            "google-translate", "Google Translate", "Google", "GT", "Translation utility",
-            "Quick phrase, document, and broad-language translation.",
-            [.translate],
-            "https://translate.google.com/",
-            access: "Open web tool; terms may change"
-        )
-    ]
+    /// A small, bundled editorial catalog. Its checked date and configuration
+    /// are intentionally explicit; the app never fetches arbitrary remote data.
+    public static let release = AIToolCatalogRelease(
+        version: "2026.08.11.1",
+        lastChecked: Calendar(identifier: .gregorian).date(
+            from: DateComponents(timeZone: TimeZone(secondsFromGMT: 0), year: 2026, month: 8, day: 11)
+        )!
+    )
+
+    public static let tools: [AIToolListing] = AIToolCatalogData.tools
 
     public static func filtered(
         category: AIToolCategory?,
         query rawQuery: String
     ) -> [AIToolListing] {
         let query = rawQuery.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        return tools.filter { tool in
+        let matches = tools.enumerated().filter { _, tool in
             let isInCategory = category.map { tool.categories.contains($0) } ?? true
             guard isInCategory else { return false }
             guard !query.isEmpty else { return true }
@@ -184,33 +141,18 @@ public enum AIToolCatalog {
                 tool.maker,
                 tool.kind,
                 tool.bestFor,
+                tool.access.rawValue,
+                tool.recommendations.map(\.rationale).joined(separator: " "),
                 tool.categories.map(\.rawValue).joined(separator: " ")
             ].joined(separator: " ").lowercased()
             return query.split(whereSeparator: \.isWhitespace).allSatisfy { searchable.contains($0) }
         }
-    }
 
-    private static func tool(
-        _ id: String,
-        _ name: String,
-        _ maker: String,
-        _ monogram: String,
-        _ kind: String,
-        _ bestFor: String,
-        _ categories: [AIToolCategory],
-        _ url: String,
-        access: String = "Free access may be available"
-    ) -> AIToolListing {
-        AIToolListing(
-            id: id,
-            name: name,
-            maker: maker,
-            monogram: monogram,
-            kind: kind,
-            bestFor: bestFor,
-            accessHint: access,
-            officialURL: URL(string: url)!,
-            categories: categories
-        )
+        return matches.sorted { left, right in
+            let leftPriority = left.element.recommendation(for: category)?.badge.sortPriority ?? Int.max
+            let rightPriority = right.element.recommendation(for: category)?.badge.sortPriority ?? Int.max
+            if leftPriority == rightPriority { return left.offset < right.offset }
+            return leftPriority < rightPriority
+        }.map(\.element)
     }
 }

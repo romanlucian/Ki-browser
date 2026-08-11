@@ -45,6 +45,19 @@ struct AISettingsView: View {
                     .foregroundStyle(.secondary)
             }
 
+            Section("Bookmarks bar") {
+                Toggle(
+                    "Show bookmarks below the address bar",
+                    isOn: Binding(
+                        get: { workspace.dataStore.showsBookmarksBar },
+                        set: { workspace.dataStore.showsBookmarksBar = $0 }
+                    )
+                )
+                Text("Shows top-level folders and unfiled bookmarks in a compact local bar. Folder menus include nested subfolders. This preference and all bookmark data stay on this Mac.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
             Section("OpenAI prototype connection") {
                 SecureField("API key", text: $configuration.apiKey)
                     .disabled(!configuration.isEnabled)

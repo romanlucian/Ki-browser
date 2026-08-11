@@ -123,6 +123,12 @@ struct BrowserE2ESmoke {
                 downloads: DownloadCenter(),
                 searchSettings: searchSettings
             )
+            try require(dataStore.showsBookmarksBar, "bookmarks bar was not visibly enabled by default")
+            dataStore.showsBookmarksBar = false
+            try require(!BrowserDataStore(defaults: defaults).showsBookmarksBar, "hidden bookmarks-bar preference did not persist locally")
+            dataStore.showsBookmarksBar = true
+            try require(BrowserDataStore(defaults: defaults).showsBookmarksBar, "visible bookmarks-bar preference did not persist locally")
+            print("PASS bookmarks bar preference: visible by default and show/hide choice persisted locally")
             try require(workspace.downloads.items.isEmpty, "new download center was not empty")
             try require(!workspace.downloads.isPanelPresented, "downloads panel started open")
             workspace.downloads.togglePanel()
@@ -225,7 +231,11 @@ struct BrowserE2ESmoke {
             let videoTools = AIToolCatalog.filtered(category: .createVideos, query: "video")
             try require(videoTools.contains(where: { $0.id == "veo" }), "AI home video category did not expose Veo")
             try require(videoTools.contains(where: { $0.id == "seedance" }), "AI home video category did not expose Seedance")
-            print("PASS AI home: Seedance activation exposes the exact URL and visible loading state; local catalog filtering works")
+            try require(AIToolCatalog.filtered(category: .research, query: "").first?.id == "perplexity", "task recommendation did not lead research ordering")
+            try require(AIToolCatalog.tools.allSatisfy { AIToolAccessLabel.allCases.contains($0.access) }, "AI catalog contained a nonstandard access label")
+            try require(!AIToolCatalog.release.version.isEmpty, "AI catalog release version was missing")
+            try require(AIToolCatalog.release.lastChecked <= Date(), "AI catalog checked date was in the future")
+            print("PASS AI home: card navigation, local filtering, task ordering, access labels, and catalog release metadata work")
 
             searchSettings.selectedEngine = .duckDuckGo
 
@@ -282,6 +292,9 @@ struct BrowserE2ESmoke {
             )
             dataStore.moveBookmark(dataStore.bookmarks[0], to: swiftFolder.id)
             try require(dataStore.bookmarks(in: swiftFolder.id).count == 1, "bookmark did not move into a nested folder")
+            try require(dataStore.bookmarkFolders(in: nil).map(\.id) == [programmingFolder.id], "bookmarks bar root included a nested folder")
+            try require(dataStore.bookmarkFolders(in: programmingFolder.id).map(\.id) == [swiftFolder.id], "bookmarks bar folder hierarchy omitted a nested submenu")
+            try require(dataStore.bookmarks(in: nil).isEmpty, "bookmarks bar root showed a filed bookmark as Unfiled")
             let restoredBookmarkStore = BrowserDataStore(defaults: defaults)
             try require(restoredBookmarkStore.bookmarkFolder(id: swiftFolder.id)?.parentID == programmingFolder.id, "nested folders did not persist locally")
             try require(restoredBookmarkStore.bookmarks(in: swiftFolder.id).count == 1, "folder assignment did not persist locally")

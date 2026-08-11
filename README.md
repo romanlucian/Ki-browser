@@ -9,6 +9,7 @@ The native app provides:
 - multi-tab browsing with safe per-tab WebKit and assistant state;
 - local restoration of recent tabs, with lazy loading and an opt-out setting;
 - downloads with a user-selected destination plus an obvious toolbar panel for status, destination, cancel, reveal, and the Downloads folder;
+- a visible Clearframe bookmarks bar below navigation, with horizontally scrollable top-level links, nested emoji-folder menus, fixed overflow access, and a locally persisted show/hide setting;
 - searchable local bookmarks organized into emoji-labeled nested folders, plus local history with clear/disable controls;
 - explicit loading, offline, timeout, blocked-link, and general error states;
 - explicit on-device voice input that fills the visible address/search field for review without automatic submission;
@@ -65,13 +66,14 @@ Then:
 4. Browse with independent tabs; use `⌘T` for a new tab and the tab strip to switch or close tabs.
 5. Open **Assistant** and click **Analyze page**.
 6. Use local summary, claims, Plain English, visible risk signals, and source comparison.
-7. Use the star to save a page, then open Library to file it into local emoji-labeled folders or nested subfolders. Existing bookmarks remain available under **Unfiled**. Use the Downloads toolbar button to see a clear empty state or the current session’s download status, destination, and Reveal action; **Open Downloads Folder** remains available even when the list is empty. Attachment downloads keep the existing page visible instead of presenting WebKit's internal policy-handoff message as a page error.
-8. Click the provider name inside the address bar, or open **ClearframeBrowser → Settings…** (`⌘,`), to choose the search engine. After a toolbar choice, the address field is ready for typing.
-9. Optional AI, tab-restoration, and local-history settings are available in the same Settings window.
+7. The bookmarks bar directly below the address row shows top-level emoji folders and Unfiled bookmarks. Select a folder for its bookmarks and nested subfolders, scroll horizontally when needed, or use **More** for reliable overflow access. Use the star to save a page and Library to organize it. The bar is visible by default and can be hidden or restored from **Settings → Bookmarks bar** or the Page menu. Existing bookmarks remain available under **Unfiled**.
+8. Use the Downloads toolbar button to see a clear empty state or the current session’s download status, destination, and Reveal action; **Open Downloads Folder** remains available even when the list is empty. Attachment downloads keep the existing page visible instead of presenting WebKit's internal policy-handoff message as a page error.
+9. Click the provider name inside the address bar, or open **ClearframeBrowser → Settings…** (`⌘,`), to choose the search engine. After a toolbar choice, the address field is ready for typing.
+10. Optional AI, tab-restoration, bookmark-bar, and local-history settings are available in the same Settings window.
 
 DuckDuckGo is the initial search default, not Clearframe’s browser engine. Searches can instead use Google, Bing, Brave Search, or Startpage. The choice stays in local macOS preferences, direct website addresses bypass search, and Clearframe claims no partnership or revenue agreement with any listed provider.
 
-The AI guide is editorial information stored inside the app, not a live ranking or recommendation feed. A card opens its listed official website as ordinary navigation. Clearframe does not append page text or a prompt, track the click, receive affiliate payment, or claim a partnership. Each provider controls its own availability, accounts, plans, data practices, and terms.
+The AI guide is editorial information stored inside the app, not a live recommendation feed. When a task is selected, a few cards may receive a task-specific Best Overall, Best Value, or Easiest to Start badge with a short rationale and official source. The app visibly shows the catalog version and manually checked date. These are Clearframe editorial shortcuts—not universal rankings, product testing, exact prices, automatic updates, or commercial placements. A card opens its listed official website as ordinary navigation. Clearframe does not append page text or a prompt, track the click, receive affiliate payment, or claim a partnership. Each provider controls its own availability, accounts, plans, data practices, and terms. See the [AI catalog editorial and update policy](docs/ai-catalog-editorial.md).
 
 ## Verify the native code
 
@@ -81,7 +83,7 @@ swift test
 ./scripts/run-browser-smoke.sh
 ```
 
-The smoke test exercises a native SwiftUI window, launch/address focus, deterministic WebKit navigation, tabs, local search resolution, nested bookmark persistence/moves, download-panel state, history, session restore, and the local assistant. It requires a logged-in desktop session; restricted/headless environments can block WebKit services.
+The smoke test exercises a native SwiftUI window, launch/address focus, deterministic WebKit navigation, tabs, local search resolution, default/persisted bookmark-bar visibility, nested bookmark menu queries/persistence/moves, download-panel state, history, session restore, and the local assistant. It requires a logged-in desktop session; restricted/headless environments can block WebKit services.
 
 The Swift package separates the Foundation-only analysis/service contract (`ClearframeCore`) from the macOS-specific SwiftUI/WebKit interface (`ClearframeBrowser`). A future Windows app can reuse the language-neutral service contract and tests, but not the native SwiftUI/WebKit UI.
 
@@ -121,7 +123,7 @@ npm run validate
 - Risk signals are heuristic and do not prove that a page is safe or malicious.
 - Clearframe can save downloads but does not scan their contents or provide a reputation verdict. It also does not inspect certificate details, network traffic, reputation databases, or hidden page behavior.
 - The download list is session-only in this version; saved files remain at the destination the user selected, and the toolbar panel can always open the local Downloads folder.
-- Bookmark folders are local only. There is no drag-and-drop organizer, account, sync, or cloud backup in this phase. Deleting a non-empty folder requires confirmation and rehomes its direct contents instead of deleting saved pages.
+- The bookmarks bar and folder organizer are local only. There is no drag-and-drop organizer, account, sync, or cloud backup in this phase. Hiding the bar does not delete bookmarks. Deleting a non-empty folder requires confirmation and rehomes its direct contents instead of deleting saved pages.
 - Browser-internal pages, extension stores, PDF viewers, and some restricted pages cannot be analyzed.
 - The native browser is a single-window version-1 MVP with basic tabs; it is not yet a signed, notarized, independently security-reviewed consumer release.
 - WebKit does not provide Chrome extension compatibility and is not a drop-in substitute for a future Chromium product.
@@ -130,6 +132,7 @@ npm run validate
 
 - [Clearframe strategy, vision, non-goals, and roadmap](docs/clearframe-strategy.md)
 - [Durable project context](docs/project-context.md)
+- [AI catalog editorial and update policy](docs/ai-catalog-editorial.md)
 - [Product and technical foundation](docs/product-foundation.md)
 - [Native macOS architecture and limits](docs/macos-browser-foundation.md)
 - [Chromium/CEF migration foundation](docs/chromium-migration.md)

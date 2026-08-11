@@ -306,6 +306,43 @@ final class ClearframeCoreTests: XCTestCase {
         XCTAssertTrue(videoTools.contains(where: { $0.id == "seedance" && $0.officialURL.host == "seed.bytedance.com" }))
     }
 
+    func testAIToolCatalogReleaseHasVisibleVersionAndCheckedDate() {
+        XCTAssertEqual(AIToolCatalog.release.version, "2026.08.11.1")
+        let components = Calendar(identifier: .gregorian).dateComponents(
+            in: TimeZone(secondsFromGMT: 0)!,
+            from: AIToolCatalog.release.lastChecked
+        )
+        XCTAssertEqual(components.year, 2026)
+        XCTAssertEqual(components.month, 8)
+        XCTAssertEqual(components.day, 11)
+    }
+
+    func testAIToolCatalogUsesBroadAccessLabelsAndSourcedTaskRecommendations() {
+        XCTAssertEqual(Set(AIToolAccessLabel.allCases.map(\.rawValue)), Set(["Free to Try", "Paid Plan", "Provider Terms"]))
+        XCTAssertTrue(AIToolCatalog.tools.contains(where: { $0.access == .freeToTry }))
+        XCTAssertTrue(AIToolCatalog.tools.contains(where: { $0.access == .paidPlan }))
+
+        for tool in AIToolCatalog.tools {
+            XCTAssertEqual(Set(tool.recommendations.map(\.category)).count, tool.recommendations.count)
+            for recommendation in tool.recommendations {
+                XCTAssertTrue(tool.categories.contains(recommendation.category))
+                XCTAssertFalse(recommendation.rationale.isEmpty)
+                XCTAssertEqual(recommendation.officialSourceURL.scheme, "https")
+                XCTAssertNotNil(recommendation.officialSourceURL.host)
+                XCTAssertNil(URLComponents(url: recommendation.officialSourceURL, resolvingAgainstBaseURL: false)?.query)
+            }
+        }
+    }
+
+    func testAIToolCatalogRecommendationOrderingIsTaskSpecific() {
+        XCTAssertEqual(AIToolCatalog.filtered(category: .askAndLearn, query: "").first?.id, "chatgpt")
+        XCTAssertEqual(AIToolCatalog.filtered(category: .write, query: "").first?.id, "claude")
+        XCTAssertEqual(AIToolCatalog.filtered(category: .research, query: "").first?.id, "perplexity")
+        XCTAssertEqual(AIToolCatalog.filtered(category: .translate, query: "").first?.id, "deepl")
+        XCTAssertEqual(AIToolCatalog.filtered(category: .code, query: "").first?.id, "deepseek")
+        XCTAssertNil(AIToolCatalog.filtered(category: nil, query: "").first?.recommendation(for: nil))
+    }
+
     func testOnboardingCompletionPersistsLocallyAndCanReset() throws {
         let suiteName = "clearframe.onboarding.tests.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
@@ -392,5 +429,24 @@ final class ClearframeCoreTests: XCTestCase {
 
         XCTAssertNil(collection.bookmarks.first?.folderID)
         XCTAssertEqual(collection.bookmarks(in: nil).count, 1)
+    }
+
+    func testBookmarkBarQueriesSeparateTopLevelItemsFromNestedContents() throws {
+        var collection = BookmarkCollection()
+        let shopping = try XCTUnwrap(
+            collection.createFolder(title: "Shopping", emoji: "🛍️", parentID: nil)
+        )
+        let gifts = try XCTUnwrap(
+            collection.createFolder(title: "Gifts", emoji: "🎁", parentID: shopping.id)
+        )
+        let direct = BookmarkRecord(title: "Clearframe", url: "https://example.com/clearframe")
+        let nested = BookmarkRecord(title: "Gift guide", url: "https://example.com/gifts", folderID: gifts.id)
+        collection.addBookmark(direct)
+        collection.addBookmark(nested)
+
+        XCTAssertEqual(collection.folders(in: nil).map(\.id), [shopping.id])
+        XCTAssertEqual(collection.bookmarks(in: nil).map(\.id), [direct.id])
+        XCTAssertEqual(collection.folders(in: shopping.id).map(\.id), [gifts.id])
+        XCTAssertEqual(collection.bookmarks(in: gifts.id).map(\.id), [nested.id])
     }
 }

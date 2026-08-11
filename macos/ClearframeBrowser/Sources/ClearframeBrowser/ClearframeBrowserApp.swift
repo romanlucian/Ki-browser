@@ -46,6 +46,10 @@ struct ClearframeBrowserApp: App {
                     .keyboardShortcut("l", modifiers: [.command])
                 Button("Toggle Bookmark") { workspace.toggleBookmarkForSelectedTab() }
                     .keyboardShortcut("d", modifiers: [.command])
+                Button("Toggle Bookmarks Bar") {
+                    workspace.dataStore.showsBookmarksBar.toggle()
+                }
+                .keyboardShortcut("b", modifiers: [.command, .shift])
                 Button("Show Downloads") { workspace.downloads.isPanelPresented = true }
                     .keyboardShortcut("j", modifiers: [.command, .shift])
             }

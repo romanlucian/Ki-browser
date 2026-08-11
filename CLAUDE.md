@@ -9,7 +9,7 @@ Essential constraints:
 - The root browser extension is a retained validation artifact, not the primary deliverable.
 - Page assistance is local-first; optional provider use happens only after an explicit user action.
 - Analyze Page must preserve source-language text across languages. Local mode is private extractive structuring, currently tested in English, Romanian, French, and Simplified Chinese; optional configured AI may provide deeper multilingual synthesis. Never claim uniform semantic quality or multilingual risk-detection parity.
-- The AI home is a curated local directory of official links, not live rankings, partnerships, affiliate ordering, or automatic page/prompt sharing.
+- The AI home is a curated local directory of official links. Its sparse task badges, broad access labels, checked date, and source links follow [docs/ai-catalog-editorial.md](docs/ai-catalog-editorial.md); they are not universal/live rankings, Clearframe testing, partnerships, exact prices, affiliate ordering, or automatic page/prompt sharing.
 - Never sell browsing history, add hidden ads, invent partnerships, or market heuristic risk signals as security verdicts.
 - Prioritize extraction quality, measured calm performance, real-user clarity, Evidence Mode/Translate & Explain, and release security before broad feature expansion or monetization.
 - The primary promise is “Clearframe makes the AI world simple for ordinary people.” Optimize the first minute around a human task, a small set of useful AI paths, and understandable page analysis. Do not present future exact Evidence Mode as delivered.

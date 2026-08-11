@@ -3,9 +3,11 @@ import SwiftUI
 
 struct AIToolStartPage: View {
     let openTool: (AIToolListing) -> Void
+    let openSource: (AIToolListing, URL) -> Void
 
     @State private var selectedCategory: AIToolCategory?
     @State private var toolSearch = ""
+    @State private var showsRecommendationMethod = false
 
     private var visibleTools: [AIToolListing] {
         AIToolCatalog.filtered(category: selectedCategory, query: toolSearch)
@@ -27,6 +29,7 @@ struct AIToolStartPage: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
                     header
+                    catalogStatus
                     toolSearchField
                     categoryFilters
                     catalogGrid
@@ -39,6 +42,29 @@ struct AIToolStartPage: View {
             }
         }
         .accessibilityLabel("Clearframe AI tool guide")
+    }
+
+    private var catalogStatus: some View {
+        HStack(spacing: 8) {
+            Label("Catalog \(AIToolCatalog.release.version)", systemImage: "checkmark.seal")
+            Text("·")
+            Text("Last checked")
+            Text(
+                AIToolCatalog.release.lastChecked,
+                format: .dateTime.month(.abbreviated).day().year()
+            )
+            Spacer(minLength: 8)
+            Button("How recommendations work") {
+                withAnimation(.easeInOut(duration: 0.16)) {
+                    showsRecommendationMethod.toggle()
+                }
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(Color(red: 0.79, green: 0.92, blue: 0.52))
+        }
+        .font(.system(size: 10.5, weight: .medium))
+        .foregroundStyle(Color.white.opacity(0.56))
+        .padding(.horizontal, 4)
     }
 
     private var header: some View {
@@ -138,7 +164,12 @@ struct AIToolStartPage: View {
                 spacing: 14
             ) {
                 ForEach(visibleTools) { tool in
-                    AIToolCard(tool: tool, open: { openTool(tool) })
+                    AIToolCard(
+                        tool: tool,
+                        recommendation: tool.recommendation(for: selectedCategory),
+                        open: { openTool(tool) },
+                        openSource: { sourceURL in openSource(tool, sourceURL) }
+                    )
                 }
             }
         }
@@ -153,6 +184,24 @@ struct AIToolStartPage: View {
                 .font(.caption)
                 .foregroundStyle(Color.white.opacity(0.54))
                 .fixedSize(horizontal: false, vertical: true)
+
+            if showsRecommendationMethod {
+                Divider().overlay(Color.white.opacity(0.1))
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("How recommendations work")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(Color.white.opacity(0.82))
+                    Text("Badges apply only to the selected task and this small catalog. They are editor judgments based on a tool’s documented focus, breadth, and broad access path—not Clearframe testing, a universal winner, live price monitoring, or provider payment. The official source beside a badge shows the product page used for its rationale. Reviews are manual and ship with app updates.")
+                        .font(.caption)
+                        .foregroundStyle(Color.white.opacity(0.58))
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text("Free to Try and Paid Plan are broad orientation labels. Limits, accounts, features, regions, and terms can change at any time.")
+                        .font(.caption)
+                        .foregroundStyle(Color.white.opacity(0.58))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
         }
         .padding(16)
         .background(Color.black.opacity(0.16), in: RoundedRectangle(cornerRadius: 13))
@@ -182,7 +231,9 @@ private struct CategoryChip: View {
 
 private struct AIToolCard: View {
     let tool: AIToolListing
+    let recommendation: AIToolRecommendation?
     let open: () -> Void
+    let openSource: (URL) -> Void
 
     private var accent: Color {
         switch tool.id {
@@ -197,61 +248,109 @@ private struct AIToolCard: View {
     }
 
     var body: some View {
-        Button(action: open) {
-            VStack(alignment: .leading, spacing: 13) {
-                HStack(alignment: .top, spacing: 11) {
-                    Text(tool.monogram)
-                        .font(.system(size: 12, weight: .bold, design: .rounded))
-                        .foregroundStyle(Color.black.opacity(0.72))
-                        .frame(width: 40, height: 40)
-                        .background(accent, in: RoundedRectangle(cornerRadius: 12))
+        VStack(alignment: .leading, spacing: 0) {
+            Button(action: open) {
+                cardContent
+            }
+            .buttonStyle(.plain)
+            .focusable(true)
+            .help("Open \(tool.name) official website")
+            .accessibilityLabel("Open \(tool.name), best for \(tool.bestFor)")
+            .accessibilityHint("Opens the official website in the current Clearframe tab")
 
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(tool.name)
-                            .font(.system(size: 15, weight: .bold))
-                            .foregroundStyle(.white)
-                        Text("\(tool.maker) · \(tool.kind)")
-                            .font(.system(size: 10, weight: .medium))
-                            .foregroundStyle(Color.white.opacity(0.5))
-                            .lineLimit(1)
-                    }
+            Divider().overlay(Color.white.opacity(0.08))
 
-                    Spacer(minLength: 4)
-                    Image(systemName: "arrow.up.right")
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundStyle(Color.white.opacity(0.46))
-                }
-
-                VStack(alignment: .leading, spacing: 5) {
-                    Text("BEST FOR")
-                        .font(.system(size: 9, weight: .bold))
-                        .tracking(1.1)
-                        .foregroundStyle(accent.opacity(0.9))
-                    Text(tool.bestFor)
-                        .font(.system(size: 12))
-                        .foregroundStyle(Color.white.opacity(0.76))
-                        .lineLimit(3)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-
-                Text(tool.accessHint)
-                    .font(.system(size: 9.5, weight: .medium))
-                    .foregroundStyle(Color.white.opacity(0.47))
+            HStack(spacing: 8) {
+                Text(tool.access.rawValue)
+                    .font(.system(size: 9.5, weight: .semibold))
+                    .foregroundStyle(Color.white.opacity(0.56))
                     .padding(.horizontal, 8)
                     .frame(height: 23)
                     .background(Color.white.opacity(0.055), in: Capsule())
-                    .lineLimit(1)
+
+                Spacer(minLength: 4)
+
+                if let recommendation {
+                    Button {
+                        openSource(recommendation.officialSourceURL)
+                    } label: {
+                        Label("Official source", systemImage: "arrow.up.right")
+                            .font(.system(size: 9.5, weight: .semibold))
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(Color.white.opacity(0.58))
+                    .help("Open the official product source for this task recommendation")
+                } else {
+                    Button(action: open) {
+                        Label("Official site", systemImage: "arrow.up.right")
+                            .font(.system(size: 9.5, weight: .semibold))
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(Color.white.opacity(0.58))
+                }
             }
-            .padding(15)
-            .frame(maxWidth: .infinity, minHeight: 174, alignment: .topLeading)
-            .background(Color.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 16))
-            .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.white.opacity(0.1)))
-            .contentShape(RoundedRectangle(cornerRadius: 16))
+            .padding(.horizontal, 15)
+            .padding(.vertical, 10)
         }
-        .buttonStyle(.plain)
-        .focusable(true)
-        .help("Open \(tool.name) official website")
-        .accessibilityLabel("Open \(tool.name), best for \(tool.bestFor)")
-        .accessibilityHint("Opens the official website in the current Clearframe tab")
+        .frame(maxWidth: .infinity, minHeight: recommendation == nil ? 190 : 230, alignment: .topLeading)
+        .background(Color.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 16))
+        .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.white.opacity(0.1)))
+    }
+
+    private var cardContent: some View {
+        VStack(alignment: .leading, spacing: 13) {
+            if let recommendation {
+                HStack(spacing: 6) {
+                    Text(recommendation.badge.rawValue.uppercased())
+                        .font(.system(size: 8.5, weight: .bold))
+                        .tracking(0.65)
+                    Text("·")
+                    Text(recommendation.category.rawValue.uppercased())
+                        .font(.system(size: 8.5, weight: .semibold))
+                }
+                .foregroundStyle(Color.black.opacity(0.7))
+                .padding(.horizontal, 8)
+                .frame(height: 22)
+                .background(accent, in: Capsule())
+            }
+
+            HStack(alignment: .top, spacing: 11) {
+                Text(tool.monogram)
+                    .font(.system(size: 12, weight: .bold, design: .rounded))
+                    .foregroundStyle(Color.black.opacity(0.72))
+                    .frame(width: 40, height: 40)
+                    .background(accent, in: RoundedRectangle(cornerRadius: 12))
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(tool.name)
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundStyle(.white)
+                    Text("\(tool.maker) · \(tool.kind)")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(Color.white.opacity(0.5))
+                        .lineLimit(1)
+                }
+
+                Spacer(minLength: 4)
+                Image(systemName: "arrow.up.right")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(Color.white.opacity(0.46))
+            }
+
+            VStack(alignment: .leading, spacing: 5) {
+                Text(recommendation == nil ? "BEST FOR" : "WHY THIS TASK")
+                    .font(.system(size: 9, weight: .bold))
+                    .tracking(1.1)
+                    .foregroundStyle(accent.opacity(0.9))
+                Text(recommendation?.rationale ?? tool.bestFor)
+                    .font(.system(size: 12))
+                    .foregroundStyle(Color.white.opacity(0.76))
+                    .lineLimit(3)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(15)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .contentShape(Rectangle())
     }
 }

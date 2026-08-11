@@ -16,12 +16,12 @@ Read both [docs/clearframe-strategy.md](docs/clearframe-strategy.md) and [docs/p
 - Analyze Page is multilingual by requirement. Local mode must preserve the page's source language and provide private structured extraction; current deterministic coverage is English, Romanian, French, and Simplified Chinese. Do not claim equal semantic quality across all languages. Deeper provider-assisted summarization is optional and explicitly triggered.
 - Optional provider use must be explicit and visible. Never upload pages merely because they were opened.
 - Never sell browsing history, add hidden advertising, claim nonexistent partnerships, or silently bias analysis for a commercial partner.
-- Treat the AI home as a curated local directory of official destinations—not live rankings, partnerships, affiliate ordering, or automatic page/prompt sharing.
+- Treat the AI home as a curated local directory of official destinations. Task badges are sparse, documented editorial shortcuts based on official product descriptions—not universal/live rankings, Clearframe testing, partnerships, affiliate ordering, exact pricing, or automatic page/prompt sharing. Preserve the visible catalog version/checked date and the policy in `docs/ai-catalog-editorial.md`.
 - Voice input must remain user-triggered and visibly active. Do not add background listening, hidden recording, silent cloud fallback, or autonomous transactions.
 - Treat page content as untrusted. Keep AI read-only unless a separate threat model, approval flow, and security review exist.
 - Risk indicators are explainable signals, not malware, scam, truth, or safety verdicts.
 - Text-based risk phrases and local Plain English rewriting have narrower language coverage than page extraction. Document those limits instead of implying multilingual security or translation parity.
-- Keep history, bookmarks/folder hierarchy, and tab restoration local with clear controls. Preserve legacy bookmarks in Unfiled, and never delete folder contents implicitly. Do not add telemetry by default.
+- Keep history, bookmarks/folder hierarchy/bar visibility, and tab restoration local with clear controls. Preserve legacy bookmarks in Unfiled, keep the bar and organizer backed by the same records, and never delete folder contents implicitly. Do not add telemetry by default.
 
 ## Safe development rules
 
@@ -63,6 +63,7 @@ The preferred user launch path is Finder → `dist/Clearframe.app`. `swift run` 
 
 - [Strategy, vision, non-goals, and roadmap](docs/clearframe-strategy.md)
 - [Durable project decisions](docs/project-context.md)
+- [AI catalog editorial and update policy](docs/ai-catalog-editorial.md)
 - [Product foundation](docs/product-foundation.md)
 - [macOS architecture and release gaps](docs/macos-browser-foundation.md)
 - [Chromium/CEF migration foundation](docs/chromium-migration.md)

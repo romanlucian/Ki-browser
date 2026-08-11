@@ -209,11 +209,18 @@ private struct BrowserTabContent: View {
     private var stateOverlay: some View {
         switch session.loadState {
         case .startPage:
-            AIToolStartPage(openTool: { tool in
-                addressFocused = false
-                addressText = tool.officialURL.absoluteString
-                session.openAITool(tool)
-            })
+            AIToolStartPage(
+                openTool: { tool in
+                    addressFocused = false
+                    addressText = tool.officialURL.absoluteString
+                    session.openAITool(tool)
+                },
+                openSource: { tool, sourceURL in
+                    addressFocused = false
+                    addressText = sourceURL.absoluteString
+                    session.load(sourceURL, displayName: "\(tool.name) source")
+                }
+            )
         case .failed(let failure):
             BrowserErrorView(
                 failure: failure,
@@ -415,6 +422,15 @@ private struct BrowserToolbar: View {
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
 
+            if dataStore.showsBookmarksBar {
+                Divider()
+                BookmarksBar(
+                    store: dataStore,
+                    showsLibrary: $showsLibrary,
+                    open: { workspace.open($0) }
+                )
+            }
+
             if voiceInput.presentsStatus {
                 HStack(spacing: 8) {
                     Image(systemName: voiceInput.isListening ? "mic.fill" : "info.circle")
@@ -477,6 +493,200 @@ private struct NavigationButton: View {
         .disabled(!enabled)
         .foregroundStyle(enabled ? Color.primary : Color.secondary.opacity(0.45))
         .help(label)
+    }
+}
+
+private struct BookmarksBar: View {
+    @ObservedObject var store: BrowserDataStore
+    @Binding var showsLibrary: Bool
+    let open: (String) -> Void
+
+    private var rootFolders: [BookmarkFolderRecord] {
+        store.bookmarkFolders(in: nil)
+    }
+
+    private var rootBookmarks: [BookmarkRecord] {
+        store.bookmarks(in: nil)
+    }
+
+    private var isEmpty: Bool {
+        rootFolders.isEmpty && rootBookmarks.isEmpty
+    }
+
+    var body: some View {
+        HStack(spacing: 7) {
+            Image(systemName: "bookmark.fill")
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(Color(red: 0.18, green: 0.48, blue: 0.36))
+                .accessibilityHidden(true)
+
+            if isEmpty {
+                Button {
+                    showsLibrary = true
+                } label: {
+                    HStack(spacing: 5) {
+                        Text("Bookmarks bar is empty")
+                            .fontWeight(.semibold)
+                        Text("Save a page or create a folder")
+                            .foregroundStyle(.secondary)
+                    }
+                    .font(.system(size: 11))
+                    .lineLimit(1)
+                }
+                .buttonStyle(.plain)
+                .help("Open the bookmark organizer")
+                .accessibilityHint("Opens the Library where you can create folders and organize saved pages.")
+                Spacer(minLength: 0)
+            } else {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 4) {
+                        ForEach(rootFolders) { folder in
+                            BookmarkFolderMenu(store: store, folder: folder, compact: true, open: open)
+                        }
+                        ForEach(rootBookmarks) { bookmark in
+                            BookmarkBarLink(bookmark: bookmark, open: open)
+                        }
+                    }
+                }
+                .accessibilityLabel("Bookmarks bar")
+            }
+
+            Menu {
+                if isEmpty {
+                    Text("No bookmarks yet")
+                } else {
+                    ForEach(rootFolders) { folder in
+                        BookmarkFolderMenu(store: store, folder: folder, compact: false, open: open)
+                    }
+                    if !rootFolders.isEmpty && !rootBookmarks.isEmpty {
+                        Divider()
+                    }
+                    ForEach(rootBookmarks) { bookmark in
+                        Button { open(bookmark.url) } label: {
+                            Label(bookmark.title, systemImage: "bookmark")
+                        }
+                    }
+                }
+                Divider()
+                Button {
+                    showsLibrary = true
+                } label: {
+                    Label("Open Bookmark Organizer", systemImage: "books.vertical")
+                }
+                Button {
+                    store.showsBookmarksBar = false
+                } label: {
+                    Label("Hide Bookmarks Bar", systemImage: "eye.slash")
+                }
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "ellipsis")
+                    Text("More")
+                }
+                .font(.system(size: 10, weight: .semibold))
+                .padding(.horizontal, 7)
+                .frame(height: 24)
+                .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 6))
+            }
+            .menuStyle(.borderlessButton)
+            .fixedSize()
+            .help("All bookmarks and bar options")
+            .accessibilityLabel("More bookmarks")
+        }
+        .padding(.horizontal, 11)
+        .frame(height: 33)
+        .background(Color.primary.opacity(0.018))
+    }
+}
+
+private struct BookmarkBarLink: View {
+    let bookmark: BookmarkRecord
+    let open: (String) -> Void
+
+    var body: some View {
+        Button {
+            open(bookmark.url)
+        } label: {
+            HStack(spacing: 5) {
+                Image(systemName: "bookmark")
+                    .font(.system(size: 9, weight: .medium))
+                    .foregroundStyle(.secondary)
+                Text(bookmark.title)
+                    .lineLimit(1)
+            }
+            .font(.system(size: 11, weight: .medium))
+            .padding(.horizontal, 7)
+            .frame(height: 24)
+            .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 6))
+        }
+        .buttonStyle(.plain)
+        .frame(maxWidth: 180)
+        .help("Open \(bookmark.title) — \(bookmark.url)")
+        .accessibilityHint("Opens this bookmark in the current tab.")
+    }
+}
+
+private struct BookmarkFolderMenu: View {
+    @ObservedObject var store: BrowserDataStore
+    let folder: BookmarkFolderRecord
+    let compact: Bool
+    let open: (String) -> Void
+
+    var body: some View {
+        Menu {
+            BookmarkFolderMenuContents(store: store, folder: folder, open: open)
+        } label: {
+            HStack(spacing: 5) {
+                Text(folder.emoji)
+                Text(folder.title)
+                    .lineLimit(1)
+                if compact {
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 7, weight: .bold))
+                        .foregroundStyle(.tertiary)
+                }
+            }
+            .font(.system(size: 11, weight: .semibold))
+            .padding(.horizontal, compact ? 7 : 0)
+            .frame(height: compact ? 24 : nil)
+            .background(compact ? Color.primary.opacity(0.05) : Color.clear, in: RoundedRectangle(cornerRadius: 6))
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize(horizontal: true, vertical: false)
+        .help("Open \(folder.title) folder")
+        .accessibilityLabel("\(folder.title) bookmark folder")
+    }
+}
+
+private struct BookmarkFolderMenuContents: View {
+    @ObservedObject var store: BrowserDataStore
+    let folder: BookmarkFolderRecord
+    let open: (String) -> Void
+
+    private var childFolders: [BookmarkFolderRecord] {
+        store.bookmarkFolders(in: folder.id)
+    }
+
+    private var bookmarks: [BookmarkRecord] {
+        store.bookmarks(in: folder.id)
+    }
+
+    var body: some View {
+        if childFolders.isEmpty && bookmarks.isEmpty {
+            Text("Empty folder")
+        } else {
+            ForEach(childFolders) { child in
+                BookmarkFolderMenu(store: store, folder: child, compact: false, open: open)
+            }
+            if !childFolders.isEmpty && !bookmarks.isEmpty {
+                Divider()
+            }
+            ForEach(bookmarks) { bookmark in
+                Button { open(bookmark.url) } label: {
+                    Label(bookmark.title, systemImage: "bookmark")
+                }
+            }
+        }
     }
 }
 

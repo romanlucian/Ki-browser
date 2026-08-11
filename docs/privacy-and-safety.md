@@ -13,10 +13,10 @@ Clearframe is designed as an on-demand reading tool, not a browsing monitor. The
 - No form values, cookies, passwords, bookmarks, or history feed are included in the extraction result.
 - Local analysis runs in the app process.
 - A saved source comparison is kept only in memory in this foundation.
-- Bookmarks, their titled/emoji folder hierarchy, completed-visit history, and recent-tab URL/title metadata stay in the local Mac user profile. Legacy bookmarks without folder data remain visible as Unfiled. Users can remove bookmarks, clear or disable future history, and disable tab restoration; this phase has no bookmark account or sync service.
+- Bookmarks, their titled/emoji folder hierarchy, bookmarks-bar visibility, completed-visit history, and recent-tab URL/title metadata stay in the local Mac user profile. The bar reads the same local records and makes no network request of its own. Legacy bookmarks without folder data remain visible as Unfiled. Users can hide the bar without deleting data, remove bookmarks, clear or disable future history, and disable tab restoration; this phase has no bookmark account or sync service.
 - Download contents and chosen destinations are handled locally. The in-app list describes only the current session; saved files remain at the user-selected destination, and Clearframe does not upload them or claim to scan them.
 - The selected search provider stays in local macOS preferences. Clearframe sends search text only when the user submits it, to the selected provider’s normal HTTPS results page; it does not request remote suggestions while the user types. Direct website addresses bypass search.
-- The new-tab AI catalog and its text filter are defined and evaluated locally. Selecting a card performs ordinary navigation to the provider's listed official HTTPS website. Clearframe does not append the current page, a generated prompt, an affiliate identifier, or tracking parameters.
+- The new-tab AI catalog, task-specific editorial badges, and text filter are defined and evaluated locally. Its catalog version and checked date are bundled constants, not a remote-update claim. Selecting a card or official recommendation source performs ordinary HTTPS navigation. Clearframe does not append the current page, a generated prompt, an affiliate identifier, or tracking parameters.
 - The first-run introduction stores one local completion boolean and reuses the existing local search-provider preference. It has no account, analytics event, identifier, purchase state, or remote onboarding service. Reopening the introduction does not clear browser data.
 
 ### Extension local mode (validation artifact)
@@ -49,7 +49,7 @@ Risk detection uses visible text and simple page facts. It can miss malicious pa
 
 AI summaries and translations can omit context, flatten uncertainty, or hallucinate. Page content can also contain indirect prompt injection. The prototype keeps AI read-only and gives it no page actions, account access, file access, email, browsing history, or tools. This limits the harm of a bad output but does not eliminate it.
 
-The AI catalog is static editorial guidance, not a live ranking, endorsement, partnership, or guarantee of price or availability. Users leave Clearframe's local guide when they open a listed website; that provider then controls its own accounts, plans, service availability, data practices, and terms.
+The AI catalog is static editorial guidance. Sparse task badges are based on documented product focus and link to an official provider source; they are not universal/live rankings, comparative testing by Clearframe, endorsements, partnerships, paid placement, or guarantees of price or availability. Broad access labels are orientation only. Users leave Clearframe's local guide when they open a listed website; that provider then controls its own accounts, plans, service availability, data practices, and terms.
 
 ## Production requirements
 

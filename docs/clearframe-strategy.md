@@ -40,14 +40,14 @@ The installed local version currently includes:
 - multiple tabs with safe close/teardown, recent-tab restoration, and local session metadata;
 - address/search input plus a local choice of DuckDuckGo, Google, Bing, Brave Search, or Startpage;
 - loading, offline, timeout, blocked-link, and general error states;
-- bookmarks with local emoji-labeled nested folders, capped history, and user-confirmed downloads with a clear toolbar status/destination panel;
+- a visible native bookmarks bar with local top-level links and nested emoji-folder menus, the full local folder organizer, capped history, and user-confirmed downloads with a clear toolbar status/destination panel;
 - a native first-run introduction and a Settings action to revisit it;
 - a curated AI home organized around Ask & Learn, Write, Research, Create Images, Create Videos, Translate, and Code;
 - user-triggered Analyze Page with a local extractive gist, key points, candidate claims, reading time, explained risk signals, English-source Plain English simplification, and two-source comparison;
 - explicit on-device voice dictation into the visible address field for review;
 - an optional provider contract and user-owned prototype key stored in macOS Keychain.
 
-The AI home is a small catalog bundled with the app. It links directly to official provider destinations. It is not a live ranking, partnership, endorsement marketplace, affiliate feed, regional-availability promise, or automatic prompt router. Selecting a card does not attach the current page or a user prompt.
+The AI home is a small catalog bundled with the app. It links directly to official provider destinations. Within a selected task, a few sourced editorial badges can make the first choice simpler; they must remain sparse, dated, explained, and governed by [the AI catalog editorial policy](ai-catalog-editorial.md). They are not universal or live rankings, Clearframe product tests, partnerships, an endorsement marketplace, affiliate feed, exact-price tracker, regional-availability promise, or automatic prompt router. Selecting a card does not attach the current page or a user prompt.
 
 The installed app is an ad hoc local build. It is not Developer ID signed, notarized, distributed through TestFlight or the App Store, independently security reviewed, or ready to make production password-manager claims.
 
@@ -115,7 +115,7 @@ Do not buy paid ads before retention is understood. Do not spam communities, fab
 - A full Chromium source fork.
 - Building an independent search index in the browser MVP.
 - Replacing VS Code or turning Clearframe into a programmer-only product.
-- Live “best AI” rankings, claimed partnerships, auto-sharing prompts/pages, or precise provider-price promises.
+- Live or universal “best AI” rankings, unsourced badges, claimed partnerships, auto-sharing prompts/pages, or precise provider-price promises.
 - Autonomous transactions, silent page actions, or a generalized agent with broad browser permissions.
 - Password-manager, download-safety, security-verdict, signing, notarization, or App Store claims before the corresponding work and review exist.
 - Paywalling the first-minute experience.

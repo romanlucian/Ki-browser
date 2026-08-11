@@ -7,6 +7,9 @@ final class BrowserDataStore: ObservableObject {
     @Published private(set) var bookmarks: [BookmarkRecord]
     @Published private(set) var bookmarkFolders: [BookmarkFolderRecord]
     @Published private(set) var history: [HistoryRecord]
+    @Published var showsBookmarksBar: Bool {
+        didSet { defaults.set(showsBookmarksBar, forKey: showsBookmarksBarKey) }
+    }
 
     private let defaults: UserDefaults
     private let encoder = JSONEncoder()
@@ -17,6 +20,7 @@ final class BrowserDataStore: ObservableObject {
     private let workspaceKey = "clearframe.workspace.v1"
     private let restoreTabsKey = "clearframe.restoreTabs"
     private let saveHistoryKey = "clearframe.saveHistory"
+    private let showsBookmarksBarKey = "clearframe.showBookmarksBar"
     private let maximumHistoryItems = 500
 
     init(defaults: UserDefaults = .standard) {
@@ -27,12 +31,16 @@ final class BrowserDataStore: ObservableObject {
         if defaults.object(forKey: saveHistoryKey) == nil {
             defaults.set(true, forKey: saveHistoryKey)
         }
+        if defaults.object(forKey: showsBookmarksBarKey) == nil {
+            defaults.set(true, forKey: showsBookmarksBarKey)
+        }
         let savedBookmarks = Self.decode([BookmarkRecord].self, key: bookmarksKey, defaults: defaults) ?? []
         let savedFolders = Self.decode([BookmarkFolderRecord].self, key: bookmarkFoldersKey, defaults: defaults) ?? []
         let bookmarkCollection = BookmarkCollection(folders: savedFolders, bookmarks: savedBookmarks)
         bookmarks = bookmarkCollection.bookmarks
         bookmarkFolders = bookmarkCollection.folders
         history = Self.decode([HistoryRecord].self, key: historyKey, defaults: defaults) ?? []
+        showsBookmarksBar = defaults.bool(forKey: showsBookmarksBarKey)
         // Re-encode legacy flat bookmarks with an explicit nil folder reference. They
         // remain visible in Unfiled and no saved page is discarded during migration.
         save(bookmarks, key: bookmarksKey)
