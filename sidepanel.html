@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Clearframe</title>
+    <link rel="stylesheet" href="styles/sidepanel.css" />
+  </head>
+  <body>
+    <header class="app-header">
+      <div class="brand-mark" aria-hidden="true">C</div>
+      <div class="brand-copy">
+        <strong>Clearframe</strong>
+        <span>Understand what you’re reading</span>
+      </div>
+      <button class="icon-button" id="settingsButton" title="Settings" aria-label="Open settings">•••</button>
+    </header>
+
+    <main>
+      <section class="intro" id="introView">
+        <div class="intro-orbit" aria-hidden="true"><span>C</span></div>
+        <p class="eyebrow">PAGE INTELLIGENCE</p>
+        <h1>See the point.<br />Spot the pressure.</h1>
+        <p class="intro-copy">
+          Get a grounded summary, claims worth checking, and obvious risk signals—without leaving the page.
+        </p>
+        <button class="primary-button" id="analyzeButton">
+          <span>Analyze this page</span><span aria-hidden="true">→</span>
+        </button>
+        <p class="privacy-line"><span aria-hidden="true">●</span> Local by default. Nothing is sent unless you choose AI.</p>
+      </section>
+
+      <section class="loading-view hidden" id="loadingView" aria-live="polite">
+        <div class="loader"></div>
+        <p id="loadingLabel">Reading the page…</p>
+      </section>
+
+      <section class="results hidden" id="resultsView">
+        <div class="source-heading">
+          <div>
+            <p class="eyebrow" id="sourceHost">CURRENT PAGE</p>
+            <h1 id="pageTitle"></h1>
+            <p class="source-meta" id="sourceMeta"></p>
+          </div>
+          <button class="refresh-button" id="refreshButton" title="Analyze again" aria-label="Analyze page again">↻</button>
+        </div>
+
+        <section class="risk-card" id="riskCard">
+          <div class="risk-topline">
+            <div class="risk-label"><span class="risk-dot"></span><strong id="riskLevel">Low risk signals</strong></div>
+            <span class="risk-score" id="riskScore">0 / 100</span>
+          </div>
+          <p id="riskSummary"></p>
+          <div class="risk-signals hidden" id="riskSignals"></div>
+          <button class="text-button hidden" id="riskToggle">Show signals</button>
+        </section>
+
+        <section class="content-section">
+          <div class="section-title-row">
+            <div>
+              <p class="eyebrow">THE GIST</p>
+              <h2>What this page says</h2>
+            </div>
+            <span class="mode-badge" id="modeBadge">LOCAL</span>
+          </div>
+          <p class="summary-text" id="summaryText"></p>
+          <button class="ai-button" id="aiButton"><span>✦</span><span id="aiButtonLabel">Improve with AI</span></button>
+        </section>
+
+        <section class="content-section" id="pointsSection">
+          <p class="eyebrow">KEY POINTS</p>
+          <ul class="point-list" id="keyPoints"></ul>
+        </section>
+
+        <section class="content-section accent-section" id="claimsSection">
+          <p class="eyebrow">CLAIMS TO CHECK</p>
+          <ul class="claim-list" id="claimsList"></ul>
+          <p class="microcopy">These are claims from the page, not Clearframe’s conclusions.</p>
+        </section>
+
+        <section class="content-section translation-section">
+          <div class="section-title-row">
+            <div>
+              <p class="eyebrow">TRANSLATE</p>
+              <h2>Read it your way</h2>
+            </div>
+          </div>
+          <div class="translate-controls">
+            <select id="languageSelect" aria-label="Translation language">
+              <option value="plain-en">Plain English · local</option>
+              <option value="Spanish">Spanish</option>
+              <option value="French">French</option>
+              <option value="German">German</option>
+              <option value="Romanian">Romanian</option>
+              <option value="Portuguese">Portuguese</option>
+              <option value="Japanese">Japanese</option>
+            </select>
+            <button class="secondary-button" id="translateButton">Translate</button>
+          </div>
+          <div class="translation-output hidden" id="translationOutput"></div>
+        </section>
+
+        <section class="compare-card">
+          <div>
+            <p class="eyebrow">SOURCE CHECK</p>
+            <h2 id="compareTitle">Compare another page</h2>
+            <p id="compareDescription">Save this view, open a second source, then compare their themes and figures.</p>
+          </div>
+          <button class="secondary-button full-width" id="compareButton">Save as source one</button>
+          <button class="text-button danger hidden" id="clearCompareButton">Clear saved source</button>
+          <div class="comparison-output hidden" id="comparisonOutput"></div>
+        </section>
+
+        <div class="disclaimer">
+          <strong>Use judgment.</strong> Local summaries are extractive, AI can be wrong, and risk signals are not a security verdict.
+        </div>
+      </section>
+
+      <section class="error-view hidden" id="errorView" role="alert">
+        <div class="error-icon">!</div>
+        <h2>We couldn’t read this page</h2>
+        <p id="errorMessage"></p>
+        <button class="primary-button" id="retryButton">Try again</button>
+      </section>
+    </main>
+
+    <div class="toast hidden" id="toast" role="status"></div>
+    <script type="module" src="src/sidepanel.js"></script>
+  </body>
+</html>

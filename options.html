@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Clearframe Settings</title>
+    <link rel="stylesheet" href="styles/options.css" />
+  </head>
+  <body>
+    <main class="settings-shell">
+      <a class="brand" href="#"><span>C</span>Clearframe</a>
+      <p class="eyebrow">SETTINGS</p>
+      <h1>Local first.<br />AI when you choose.</h1>
+      <p class="lead">Clearframe works without an account or API key. Optional AI can improve summaries and translate them.</p>
+
+      <section class="settings-card">
+        <div class="option-row">
+          <div>
+            <h2>Optional AI</h2>
+            <p>Off by default. Page text is sent only when you click an AI or translation button.</p>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="aiEnabled" />
+            <span></span>
+          </label>
+        </div>
+
+        <div id="aiFields" class="ai-fields hidden">
+          <label>
+            <span>OpenAI API key</span>
+            <input id="apiKey" type="password" autocomplete="off" placeholder="sk-…" />
+          </label>
+          <label>
+            <span>Model</span>
+            <input id="model" type="text" value="gpt-5.6-luna" spellcheck="false" />
+          </label>
+          <div class="privacy-note">
+            <strong>Prototype security note</strong>
+            <p>Your key stays in this browser profile’s local extension storage and requests go directly to OpenAI. A production release should use a backend proxy and user authentication—never ship a shared key.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="principles">
+        <h2>What Clearframe does not do</h2>
+        <ul>
+          <li>It does not collect or sell your browsing history.</li>
+          <li>It does not run on every page in the background.</li>
+          <li>It does not insert ads or paid recommendations.</li>
+          <li>It does not claim that risk signals prove a page is safe or unsafe.</li>
+        </ul>
+      </section>
+
+      <div class="actions">
+        <button id="saveButton">Save settings</button>
+        <button id="clearKeyButton" class="text-button">Remove API key</button>
+      </div>
+      <p id="status" role="status"></p>
+    </main>
+    <script type="module" src="src/options.js"></script>
+  </body>
+</html>
