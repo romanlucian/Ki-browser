@@ -12,7 +12,7 @@ The selected migration path for a future Chromium-based Clearframe is the offici
 
 The focused promise is to help people understand unfamiliar pages quickly: summarize readable content, surface claims worth checking, simplify or translate content, compare two sources, and explain obvious visible risk signals. It is not a generic Chrome clone, a truth engine, or an antivirus product.
 
-The primary user promise is **“Clearframe makes the AI world simple for ordinary people.”** Clarity outranks feature count. The magic first minute should begin from a recognizable goal, show a small useful set of AI paths, and make an open page understandable with honest grounding. The current AI home and extractive Analyze Page are the foundation; exact supporting-sentence Evidence Mode remains future work.
+The primary user promise is **“Clearframe makes the AI world simple for ordinary people.”** Clarity outranks feature count. The magic first minute should begin from a recognizable goal, show a small useful set of AI paths, and make an open page understandable with honest grounding. The current AI home and extractive Analyze Page are the foundation. Local Evidence Mode lets a user reveal the extracted sentence behind a key point and attempts to highlight it in the live page; highlighting is best-effort because page DOMs can change.
 
 The quality objective is “fast and calm even when the web is heavy.” This is a measurable design goal, not permission to claim Clearframe is the world's lightest or fastest browser without evidence. Radical clarity, high craft, ordinary users, trust before monetization, and real-person testing are standing principles.
 

@@ -17,6 +17,8 @@ final class PageAssistantModel: ObservableObject {
     @Published var translatedSummary: String?
     @Published var savedSource: AnalyzedSource?
     @Published var comparison: SourceComparison?
+    @Published var revealedEvidence: String?
+    @Published var evidenceWasFoundOnPage = false
 
     private let localProvider = LocalPageIntelligenceProvider()
 
@@ -26,6 +28,8 @@ final class PageAssistantModel: ObservableObject {
         analysis = nil
         translatedSummary = nil
         comparison = nil
+        revealedEvidence = nil
+        evidenceWasFoundOnPage = false
     }
 
     func analyzeCurrentPage(session: BrowserSession) async {
@@ -42,10 +46,20 @@ final class PageAssistantModel: ObservableObject {
             )
             translatedSummary = nil
             comparison = nil
+            revealedEvidence = nil
+            evidenceWasFoundOnPage = false
             state = .ready
         } catch {
             state = .failed(error.localizedDescription)
         }
+    }
+
+    func revealEvidence(for point: String, session: BrowserSession) async {
+        // Local analysis is extractive, so this is an exact sentence from the
+        // text that was read. Provider-written summaries are not treated as proof.
+        guard analysis?.mode == .local else { return }
+        revealedEvidence = point
+        evidenceWasFoundOnPage = await session.revealEvidence(point)
     }
 
     func improveWithAI(configuration: OpenAIProviderConfiguration) async {

@@ -187,6 +187,43 @@ final class BrowserSession: NSObject, ObservableObject {
         return snapshot
     }
 
+    /// Reveal locally extracted evidence in the current document. This is deliberately
+    /// best-effort: pages own their DOM and can change it after analysis, so the
+    /// Assistant always keeps the extracted source text as the reliable fallback.
+    func revealEvidence(_ text: String) async -> Bool {
+        guard !text.isEmpty,
+              let data = try? JSONEncoder().encode(text),
+              let quoted = String(data: data, encoding: .utf8) else { return false }
+        let script = """
+        (() => {
+          const needle = \(quoted).replace(/\\s+/g, ' ').trim();
+          const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+          let node;
+          while ((node = walker.nextNode())) {
+            const value = (node.nodeValue || '').replace(/\\s+/g, ' ').trim();
+            if (value.includes(needle) || needle.includes(value)) {
+              const range = document.createRange(); range.selectNodeContents(node);
+              const selection = window.getSelection(); selection.removeAllRanges(); selection.addRange(range);
+              node.parentElement?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              return true;
+            }
+          }
+          return false;
+        })()
+        """
+        do {
+            let value: Any = try await withCheckedThrowingContinuation { continuation in
+                webView.evaluateJavaScript(script) { value, error in
+                    if let error { continuation.resume(throwing: error) }
+                    else { continuation.resume(returning: value as Any) }
+                }
+            }
+            return value as? Bool ?? false
+        } catch {
+            return false
+        }
+    }
+
     private func refreshState() {
         let activeURL = hasCommittedNavigation
             ? (webView.url ?? lastRequestedURL)

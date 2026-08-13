@@ -163,10 +163,34 @@ struct AssistantPanel: View {
                     assistantCard {
                         sectionLabel("KEY POINTS")
                         ForEach(Array(analysis.content.keyPoints.enumerated()), id: \.offset) { _, point in
-                            Label {
-                                Text(point).font(.callout).lineSpacing(3)
-                            } icon: {
-                                Image(systemName: "arrow.turn.down.right").foregroundStyle(.green)
+                            VStack(alignment: .leading, spacing: 7) {
+                                Label {
+                                    Text(point).font(.callout).lineSpacing(3)
+                                } icon: {
+                                    Image(systemName: "arrow.turn.down.right").foregroundStyle(.green)
+                                }
+                                if analysis.mode == .local {
+                                    Button {
+                                        Task { await model.revealEvidence(for: point, session: session) }
+                                    } label: {
+                                        Label("View evidence", systemImage: "text.magnifyingglass")
+                                    }
+                                    .buttonStyle(.borderless)
+                                    .font(.caption.weight(.semibold))
+                                    if model.revealedEvidence == point {
+                                        Text(point)
+                                            .font(.caption)
+                                            .lineSpacing(3)
+                                            .padding(8)
+                                            .frame(maxWidth: .infinity, alignment: .leading)
+                                            .background(Color.green.opacity(0.10), in: RoundedRectangle(cornerRadius: 7))
+                                        Text(model.evidenceWasFoundOnPage
+                                             ? "Highlighted in the page. This is extracted page text, not an AI citation."
+                                             : "Shown here from the extracted page text. The live page changed or could not be highlighted.")
+                                            .font(.caption2)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                }
                             }
                             Divider()
                         }

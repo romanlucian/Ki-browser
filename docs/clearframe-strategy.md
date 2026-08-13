@@ -30,7 +30,7 @@ The first minute is a product acceptance criterion, not a marketing slogan:
 2. Clearframe presents a small, useful set of AI paths with plain-language reasons for choosing each one.
 3. After the user opens a webpage, Analyze Page makes it easier to understand and shows why its output is grounded in that page.
 
-The current build partially delivers this: onboarding hands off to a task-category AI home, the catalog is deliberately small and locally defined, and Analyze Page produces an extractive local gist, key points, claims, and risk explanations. It does **not** yet attach exact supporting sentences to every point. That stronger reasons/evidence experience is the planned Evidence Mode and must not be advertised as already complete.
+The current build partially delivers this: onboarding hands off to a task-category AI home, the catalog is deliberately small and locally defined, and Analyze Page produces an extractive local gist, key points, claims, and risk explanations. Local key points now have Evidence Mode: users can reveal the exact extracted sentence and Clearframe attempts to highlight it in the live page. This is grounding, not a guarantee of page truth or a perfect citation system; provider-written summaries are not presented as automatic evidence.
 
 ## Current product state
 
