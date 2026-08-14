@@ -66,6 +66,8 @@ swiftc \
     "$PACKAGE_DIR/Sources/ClearframeBrowser/BrowserSession.swift" \
     "$PACKAGE_DIR/Sources/ClearframeBrowser/PageAssistantModel.swift" \
     "$PACKAGE_DIR/Sources/ClearframeBrowser/SearchSettingsStore.swift" \
+    "$PACKAGE_DIR/Sources/ClearframeBrowser/ContentBlockingSettingsStore.swift" \
+    "$PACKAGE_DIR/Sources/ClearframeBrowser/ContentRuleListProvider.swift" \
     "$PACKAGE_DIR/Sources/ClearframeBrowser/VoiceInputController.swift" \
     "$PACKAGE_DIR/Sources/ClearframeBrowser/BrowserWorkspace.swift" \
     "$PACKAGE_DIR/Sources/ClearframeBrowser/WebView.swift" \

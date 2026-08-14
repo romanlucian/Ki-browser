@@ -23,7 +23,8 @@ final class BrowserTab: ObservableObject, Identifiable {
         lastActivatedAt: Date = Date(),
         downloadCenter: DownloadCenter,
         searchSettings: SearchSettingsStore,
-        isPrivate: Bool = false
+        isPrivate: Bool = false,
+        contentBlocking: ContentRuleListProvider? = nil
     ) {
         self.id = id
         self.displayTitle = title
@@ -35,13 +36,15 @@ final class BrowserTab: ObservableObject, Identifiable {
                 downloadCenter: downloadCenter,
                 searchSettings: searchSettings,
                 initialURL: initialURL,
-                isPrivate: isPrivate
+                isPrivate: isPrivate,
+                contentBlocking: contentBlocking
             )
         } else {
             session = BrowserSession(
                 downloadCenter: downloadCenter,
                 searchSettings: searchSettings,
-                isPrivate: isPrivate
+                isPrivate: isPrivate,
+                contentBlocking: contentBlocking
             )
             pendingRestoreURL = initialURL
         }
@@ -101,27 +104,38 @@ final class BrowserWorkspace: ObservableObject {
     let downloads: DownloadCenter
     let dataStore: BrowserDataStore
     let searchSettings: SearchSettingsStore
+    let contentBlocking: ContentRuleListProvider
 
     private var tabSubscriptions: [UUID: AnyCancellable] = [:]
     private var downloadSubscription: AnyCancellable?
     private var dataStoreSubscription: AnyCancellable?
+    private var contentBlockingSubscription: AnyCancellable?
     private var persistenceTask: Task<Void, Never>?
 
     init(
         dataStore: BrowserDataStore? = nil,
         downloads: DownloadCenter? = nil,
-        searchSettings: SearchSettingsStore? = nil
+        searchSettings: SearchSettingsStore? = nil,
+        contentBlocking: ContentRuleListProvider? = nil
     ) {
         let resolvedDataStore = dataStore ?? BrowserDataStore()
         let resolvedDownloads = downloads ?? DownloadCenter()
         let resolvedSearchSettings = searchSettings ?? SearchSettingsStore()
+        // Created before any tab so every web view can register with it while
+        // the first rule-list compile is still running.
+        let resolvedContentBlocking = contentBlocking
+            ?? ContentRuleListProvider(settings: ContentBlockingSettingsStore())
         self.dataStore = resolvedDataStore
         self.downloads = resolvedDownloads
         self.searchSettings = resolvedSearchSettings
+        self.contentBlocking = resolvedContentBlocking
         downloadSubscription = resolvedDownloads.objectWillChange.sink { [weak self] _ in
             self?.objectWillChange.send()
         }
         dataStoreSubscription = resolvedDataStore.objectWillChange.sink { [weak self] _ in
+            self?.objectWillChange.send()
+        }
+        contentBlockingSubscription = resolvedContentBlocking.objectWillChange.sink { [weak self] _ in
             self?.objectWillChange.send()
         }
 
@@ -135,14 +149,16 @@ final class BrowserWorkspace: ObservableObject {
                     loadImmediately: record.id == selectedID,
                     lastActivatedAt: record.lastActivatedAt,
                     downloadCenter: resolvedDownloads,
-                    searchSettings: resolvedSearchSettings
+                    searchSettings: resolvedSearchSettings,
+                    contentBlocking: resolvedContentBlocking
                 )
             }
             selectedTabID = tabs.contains(where: { $0.id == selectedID }) ? selectedID : tabs.first?.id
         } else {
             let tab = BrowserTab(
                 downloadCenter: resolvedDownloads,
-                searchSettings: resolvedSearchSettings
+                searchSettings: resolvedSearchSettings,
+                contentBlocking: resolvedContentBlocking
             )
             tabs = [tab]
             selectedTabID = tab.id
@@ -167,7 +183,8 @@ final class BrowserWorkspace: ObservableObject {
             initialURL: url,
             downloadCenter: downloads,
             searchSettings: searchSettings,
-            isPrivate: isPrivate
+            isPrivate: isPrivate,
+            contentBlocking: contentBlocking
         )
         tabs.append(tab)
         configure(tab)
@@ -192,7 +209,8 @@ final class BrowserWorkspace: ObservableObject {
         if tabs.isEmpty {
             let replacement = BrowserTab(
                 downloadCenter: downloads,
-                searchSettings: searchSettings
+                searchSettings: searchSettings,
+                contentBlocking: contentBlocking
             )
             tabs = [replacement]
             configure(replacement)
@@ -315,9 +333,12 @@ final class BrowserWorkspace: ObservableObject {
             }
         }
 
+        await contentBlocking.clearSiteExceptions()
+
         let replacement = BrowserTab(
             downloadCenter: downloads,
-            searchSettings: searchSettings
+            searchSettings: searchSettings,
+            contentBlocking: contentBlocking
         )
         tabs = [replacement]
         selectedTabID = replacement.id
