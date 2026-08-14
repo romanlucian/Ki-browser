@@ -216,6 +216,12 @@ final class BrowserDataStore: ObservableObject {
         bookmarkCollection.containsItems(in: folder.id)
     }
 
+    /// Nested totals for every folder in one pass. Views that show many folders
+    /// call this once per render and look each folder up in the result.
+    func bookmarkDescendantCounts() -> [UUID: BookmarkDescendantCounts] {
+        bookmarkCollection.descendantCounts()
+    }
+
     func recordVisit(title: String, url: String, at date: Date = Date()) {
         guard defaults.bool(forKey: saveHistoryKey) else { return }
         guard BookmarkURLPolicy.validatedURL(url) != nil else { return }

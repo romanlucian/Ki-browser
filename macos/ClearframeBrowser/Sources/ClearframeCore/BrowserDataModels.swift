@@ -244,6 +244,83 @@ public struct BookmarkCollection: Codable, Equatable, Sendable {
     }
 }
 
+/// Nested totals for one bookmark folder. Both numbers describe everything
+/// *inside* the folder — the folder itself is never counted in its own
+/// `subfolderCount`.
+public struct BookmarkDescendantCounts: Equatable, Sendable {
+    public var bookmarkCount: Int
+    public var subfolderCount: Int
+
+    public init(bookmarkCount: Int = 0, subfolderCount: Int = 0) {
+        self.bookmarkCount = bookmarkCount
+        self.subfolderCount = subfolderCount
+    }
+}
+
+public extension BookmarkCollection {
+    /// Rolled-up counts for every folder, computed in a single pass so a view
+    /// showing many folder cards asks for them once per render instead of
+    /// walking the tree per card.
+    ///
+    /// The traversal is iterative post-order (no recursion, so a pathological
+    /// import cannot overflow the stack) and keeps a visited set purely as
+    /// defense: `init` already normalizes parent cycles, and any folder that
+    /// still ends up unreachable from a root falls back to its own direct
+    /// bookmarks rather than being dropped from the result.
+    func descendantCounts() -> [UUID: BookmarkDescendantCounts] {
+        var childIDs: [UUID: [UUID]] = [:]
+        var rootIDs: [UUID] = []
+        for folder in folders {
+            if let parentID = folder.parentID {
+                childIDs[parentID, default: []].append(folder.id)
+            } else {
+                rootIDs.append(folder.id)
+            }
+        }
+
+        var directBookmarkCounts: [UUID: Int] = [:]
+        for bookmark in bookmarks {
+            guard let folderID = bookmark.folderID else { continue }
+            directBookmarkCounts[folderID, default: 0] += 1
+        }
+
+        var counts: [UUID: BookmarkDescendantCounts] = [:]
+        counts.reserveCapacity(folders.count)
+        var visited: Set<UUID> = []
+        var stack: [(id: UUID, isRollUp: Bool)] = rootIDs.reversed().map { ($0, false) }
+
+        while let frame = stack.popLast() {
+            guard frame.isRollUp else {
+                guard visited.insert(frame.id).inserted else { continue }
+                stack.append((frame.id, true))
+                for childID in childIDs[frame.id] ?? [] {
+                    stack.append((childID, false))
+                }
+                continue
+            }
+            // Children were rolled up before this frame was popped again.
+            var total = BookmarkDescendantCounts(
+                bookmarkCount: directBookmarkCounts[frame.id] ?? 0,
+                subfolderCount: 0
+            )
+            for childID in childIDs[frame.id] ?? [] {
+                let child = counts[childID] ?? BookmarkDescendantCounts()
+                total.bookmarkCount += child.bookmarkCount
+                total.subfolderCount += child.subfolderCount + 1
+            }
+            counts[frame.id] = total
+        }
+
+        for folder in folders where counts[folder.id] == nil {
+            counts[folder.id] = BookmarkDescendantCounts(
+                bookmarkCount: directBookmarkCounts[folder.id] ?? 0,
+                subfolderCount: 0
+            )
+        }
+        return counts
+    }
+}
+
 public struct HistoryRecord: Codable, Equatable, Identifiable, Sendable {
     public let id: UUID
     public let title: String

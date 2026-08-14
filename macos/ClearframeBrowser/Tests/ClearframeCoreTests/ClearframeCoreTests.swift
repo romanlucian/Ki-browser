@@ -753,6 +753,103 @@ final class ClearframeCoreTests: XCTestCase {
         XCTAssertTrue(folder.barLabel.contains(folder.title))
     }
 
+    func testBookmarkDescendantCountsRollUpThroughADeepFolderChain() throws {
+        var collection = BookmarkCollection()
+        let top = try XCTUnwrap(collection.createFolder(title: "Top", emoji: "📁", parentID: nil))
+        let middle = try XCTUnwrap(collection.createFolder(title: "Middle", emoji: "📁", parentID: top.id))
+        let bottom = try XCTUnwrap(collection.createFolder(title: "Bottom", emoji: "📁", parentID: middle.id))
+        collection.addBookmark(BookmarkRecord(title: "Deep", url: "https://example.com/deep", folderID: bottom.id))
+
+        let counts = collection.descendantCounts()
+
+        XCTAssertEqual(counts[top.id], BookmarkDescendantCounts(bookmarkCount: 1, subfolderCount: 2))
+        XCTAssertEqual(counts[middle.id], BookmarkDescendantCounts(bookmarkCount: 1, subfolderCount: 1))
+        XCTAssertEqual(counts[bottom.id], BookmarkDescendantCounts(bookmarkCount: 1, subfolderCount: 0))
+    }
+
+    func testBookmarkDescendantCountsAggregateEveryBranchOfATree() throws {
+        var collection = BookmarkCollection()
+        let work = try XCTUnwrap(collection.createFolder(title: "Work", emoji: "💼", parentID: nil))
+        let design = try XCTUnwrap(collection.createFolder(title: "Design", emoji: "🎨", parentID: work.id))
+        let code = try XCTUnwrap(collection.createFolder(title: "Code", emoji: "💻", parentID: work.id))
+        let swift = try XCTUnwrap(collection.createFolder(title: "Swift", emoji: "🐦", parentID: code.id))
+        let personal = try XCTUnwrap(collection.createFolder(title: "Personal", emoji: "❤️", parentID: nil))
+        collection.addBookmark(BookmarkRecord(title: "Brief", url: "https://example.com/brief", folderID: work.id))
+        collection.addBookmark(BookmarkRecord(title: "Palette", url: "https://example.com/palette", folderID: design.id))
+        collection.addBookmark(BookmarkRecord(title: "Docs", url: "https://swift.org/documentation/", folderID: swift.id))
+        collection.addBookmark(BookmarkRecord(title: "Unfiled", url: "https://example.com/unfiled", folderID: nil))
+
+        let counts = collection.descendantCounts()
+
+        XCTAssertEqual(counts[work.id], BookmarkDescendantCounts(bookmarkCount: 3, subfolderCount: 3))
+        XCTAssertEqual(counts[design.id], BookmarkDescendantCounts(bookmarkCount: 1, subfolderCount: 0))
+        XCTAssertEqual(counts[code.id], BookmarkDescendantCounts(bookmarkCount: 1, subfolderCount: 1))
+        XCTAssertEqual(counts[swift.id], BookmarkDescendantCounts(bookmarkCount: 1, subfolderCount: 0))
+        XCTAssertEqual(counts[personal.id], BookmarkDescendantCounts(bookmarkCount: 0, subfolderCount: 0))
+        XCTAssertEqual(counts.count, 5, "every folder is present, and unfiled bookmarks belong to no folder")
+    }
+
+    func testBookmarkDescendantCountsReportZeroForAnEmptyFolder() throws {
+        var collection = BookmarkCollection()
+        let empty = try XCTUnwrap(collection.createFolder(title: "Empty", emoji: "📁", parentID: nil))
+        collection.addBookmark(BookmarkRecord(title: "Elsewhere", url: "https://example.com/elsewhere", folderID: nil))
+
+        XCTAssertEqual(collection.descendantCounts()[empty.id], BookmarkDescendantCounts())
+    }
+
+    func testBookmarkDescendantCountsCreditNestedBookmarksToEveryAncestor() throws {
+        var collection = BookmarkCollection()
+        let root = try XCTUnwrap(collection.createFolder(title: "Root", emoji: "📁", parentID: nil))
+        let child = try XCTUnwrap(collection.createFolder(title: "Child", emoji: "📁", parentID: root.id))
+        let grandchild = try XCTUnwrap(collection.createFolder(title: "Grandchild", emoji: "📁", parentID: child.id))
+        collection.addBookmark(BookmarkRecord(title: "Root page", url: "https://example.com/root", folderID: root.id))
+        collection.addBookmark(BookmarkRecord(title: "Child page", url: "https://example.com/child", folderID: child.id))
+        collection.addBookmark(BookmarkRecord(title: "Leaf one", url: "https://example.com/leaf-1", folderID: grandchild.id))
+        collection.addBookmark(BookmarkRecord(title: "Leaf two", url: "https://example.com/leaf-2", folderID: grandchild.id))
+
+        let counts = collection.descendantCounts()
+
+        XCTAssertEqual(counts[root.id]?.bookmarkCount, 4)
+        XCTAssertEqual(counts[child.id]?.bookmarkCount, 3)
+        XCTAssertEqual(counts[grandchild.id]?.bookmarkCount, 2)
+        XCTAssertEqual(collection.bookmarks(in: root.id).count, 1, "direct listings stay shallow")
+    }
+
+    func testBookmarkDescendantCountsTerminateForPreviouslyCyclicImportedFolders() {
+        let firstID = UUID()
+        let secondID = UUID()
+        let thirdID = UUID()
+        // A cycle the initializer breaks: first → second → third → first.
+        let collection = BookmarkCollection(
+            folders: [
+                BookmarkFolderRecord(id: firstID, title: "First", parentID: secondID),
+                BookmarkFolderRecord(id: secondID, title: "Second", parentID: thirdID),
+                BookmarkFolderRecord(id: thirdID, title: "Third", parentID: firstID)
+            ],
+            bookmarks: [
+                BookmarkRecord(title: "Imported", url: "https://example.com/imported", folderID: thirdID)
+            ]
+        )
+
+        let counts = collection.descendantCounts()
+
+        XCTAssertEqual(counts.count, 3, "no folder is lost when a cycle was normalized away")
+        let rootIDs = collection.folders(in: nil).map(\.id)
+        XCTAssertFalse(rootIDs.isEmpty, "breaking the cycle leaves at least one reachable root")
+        let foldersReachedFromRoots = rootIDs.reduce(0) { $0 + (counts[$1]?.subfolderCount ?? 0) + 1 }
+        XCTAssertEqual(
+            foldersReachedFromRoots,
+            collection.folders.count,
+            "every folder belongs to exactly one root subtree after normalization"
+        )
+        let bookmarksReachedFromRoots = rootIDs.reduce(0) { $0 + (counts[$1]?.bookmarkCount ?? 0) }
+        XCTAssertEqual(bookmarksReachedFromRoots, 1, "the single imported bookmark is counted exactly once")
+        XCTAssertTrue(
+            counts.values.allSatisfy { $0.bookmarkCount <= 1 && $0.subfolderCount <= 2 },
+            "no folder claims more descendants than the collection holds"
+        )
+    }
+
     func testSharedContractLanguageAwareTokenization() throws {
         for testCase in try localAnalysisContract().tokenCases {
             let tokens = LocalAnalysisEngine.tokens(testCase.text, language: testCase.language)
