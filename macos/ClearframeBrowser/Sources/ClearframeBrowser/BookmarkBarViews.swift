@@ -22,7 +22,7 @@ struct BookmarksBar: View {
         HStack(spacing: 7) {
             Image(systemName: "bookmark.fill")
                 .font(.system(size: 10, weight: .semibold))
-                .foregroundStyle(Color(red: 0.18, green: 0.48, blue: 0.36))
+                .foregroundStyle(ClearframeTheme.accent)
                 .accessibilityHidden(true)
 
             if isEmpty {
@@ -30,8 +30,11 @@ struct BookmarksBar: View {
                     showsLibrary = true
                 } label: {
                     HStack(spacing: 5) {
-                        Text("Bookmarks bar is empty").fontWeight(.semibold)
-                        Text("Save a page or create a folder").foregroundStyle(.secondary)
+                        Text("Bookmarks bar is empty")
+                            .fontWeight(.semibold)
+                            .foregroundStyle(ClearframeTheme.textSecondary)
+                        Text("Save a page or create a folder")
+                            .foregroundStyle(ClearframeTheme.textTertiary)
                     }
                     .font(.system(size: 11))
                     .lineLimit(1)
@@ -117,9 +120,10 @@ struct BookmarksBar: View {
                     Text("More")
                 }
                 .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(ClearframeTheme.textSecondary)
                 .padding(.horizontal, 7)
-                .frame(height: 24)
-                .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 6))
+                .frame(height: 22)
+                .background(ClearframeTheme.bg3, in: RoundedRectangle(cornerRadius: ClearframeTheme.radius6))
             }
             .menuStyle(.borderlessButton)
             .fixedSize()
@@ -129,21 +133,19 @@ struct BookmarksBar: View {
             if let dropConfirmation {
                 Label(dropConfirmation, systemImage: "checkmark.circle.fill")
                     .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(Color(red: 0.12, green: 0.47, blue: 0.33))
+                    .foregroundStyle(ClearframeTheme.accent)
                     .lineLimit(1)
                     .transition(.opacity.combined(with: .move(edge: .trailing)))
                     .accessibilityLabel(dropConfirmation)
             }
         }
         .padding(.horizontal, 11)
-        .frame(height: 33)
-        .background(
-            isRootDropTargeted ? Color.green.opacity(0.11) : Color.primary.opacity(0.018),
-            in: RoundedRectangle(cornerRadius: 7)
-        )
-        .overlay {
-            RoundedRectangle(cornerRadius: 7)
-                .stroke(isRootDropTargeted ? Color.green.opacity(0.75) : Color.clear, lineWidth: 1.5)
+        .frame(height: 26)
+        .background(isRootDropTargeted ? ClearframeTheme.accentDim : ClearframeTheme.bg1)
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(isRootDropTargeted ? ClearframeTheme.accent : ClearframeTheme.hairline1)
+                .frame(height: isRootDropTargeted ? 2 : 1)
         }
         .contentShape(Rectangle())
         .dropDestination(for: URL.self) { urls, _ in
@@ -195,6 +197,7 @@ struct BookmarksBar: View {
 private struct BookmarkBarLink: View {
     let bookmark: BookmarkRecord
     let open: (String) -> Void
+    @State private var isHovered = false
 
     @ViewBuilder
     var body: some View {
@@ -207,19 +210,22 @@ private struct BookmarkBarLink: View {
 
     private var linkButton: some View {
         Button { open(bookmark.url) } label: {
-            HStack(spacing: 5) {
-                Image(systemName: "bookmark")
-                    .font(.system(size: 9, weight: .medium))
-                    .foregroundStyle(.secondary)
-                Text(bookmark.title).lineLimit(1)
+            HStack(spacing: 6) {
+                Circle()
+                    .fill(IdentityColor.color(forHost: URL(string: bookmark.url)?.host ?? ""))
+                    .frame(width: 6, height: 6)
+                Text(bookmark.title)
+                    .foregroundStyle(ClearframeTheme.textPrimary)
+                    .lineLimit(1)
             }
             .font(.system(size: 11, weight: .medium))
-            .padding(.horizontal, 7)
-            .frame(height: 24)
-            .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 6))
+            .padding(.horizontal, 8)
+            .frame(height: 22)
+            .background(isHovered ? ClearframeTheme.bg3Hover : ClearframeTheme.bg3, in: Capsule())
         }
         .buttonStyle(.plain)
         .frame(maxWidth: 180)
+        .onHover { isHovered = $0 }
         .help("Open \(bookmark.title) — \(bookmark.url)")
         .accessibilityHint("Opens this bookmark in the current tab. Drag it onto a visible folder to move it.")
     }
@@ -238,12 +244,17 @@ private struct BookmarkFolderMenu: View {
     let newFolder: (UUID?) -> Void
     let organize: () -> Void
     @State private var isDropTargeted = false
+    // Real content is measured once via FolderChipWidthKey; 140 only ever
+    // shows for the first frame, before that measurement lands.
+    @State private var measuredWidth: CGFloat = 140
+
+    private var chipWidth: CGFloat { min(measuredWidth, 220) }
 
     @ViewBuilder
     var body: some View {
         Group {
             if compact {
-                Menu { menuContents } label: { Color.clear.frame(width: 140, height: 24) }
+                Menu { menuContents } label: { Color.clear.frame(width: chipWidth, height: 22) }
                     .menuStyle(.borderlessButton)
                     .menuIndicator(.hidden)
                     .overlay {
@@ -251,26 +262,28 @@ private struct BookmarkFolderMenu: View {
                             Text(folder.barLabel)
                                 .lineLimit(1)
                                 .truncationMode(.tail)
-                                .foregroundStyle(Color.primary)
+                                .foregroundStyle(ClearframeTheme.textPrimary)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                             Image(systemName: "chevron.down")
                                 .font(.system(size: 7, weight: .bold))
-                                .foregroundStyle(.tertiary)
+                                .foregroundStyle(ClearframeTheme.textTertiary)
                         }
                         .font(.system(size: 11, weight: .semibold))
                         .padding(.horizontal, 7)
-                        .frame(width: 140, height: 24)
+                        .frame(width: chipWidth, height: 22)
                         .background(
-                            isDropTargeted ? Color.green.opacity(0.17) : Color.primary.opacity(0.05),
-                            in: RoundedRectangle(cornerRadius: 6)
+                            isDropTargeted ? ClearframeTheme.accentDimStrong : ClearframeTheme.bg3,
+                            in: RoundedRectangle(cornerRadius: ClearframeTheme.radius6)
                         )
                         .overlay {
-                            RoundedRectangle(cornerRadius: 6)
-                                .stroke(isDropTargeted ? Color.green.opacity(0.9) : Color.clear, lineWidth: 1.5)
+                            RoundedRectangle(cornerRadius: ClearframeTheme.radius6)
+                                .stroke(isDropTargeted ? ClearframeTheme.accent : ClearframeTheme.hairline2, lineWidth: isDropTargeted ? 1.5 : 1)
                         }
                         .allowsHitTesting(false)
                     }
-                    .frame(width: 140, height: 24)
+                    .frame(width: chipWidth, height: 22)
+                    .background(widthReader)
+                    .onPreferenceChange(FolderChipWidthKey.self) { measuredWidth = $0 }
                     .dropDestination(for: URL.self) { urls, _ in
                         guard let url = urls.first, let result = fileDroppedURL(url, folder.id) else { return false }
                         reportDrop(result, folder.title)
@@ -317,6 +330,38 @@ private struct BookmarkFolderMenu: View {
             newFolder: newFolder,
             organize: organize
         )
+    }
+
+    /// Renders the same label at its natural, unconstrained size purely to
+    /// report that size via `FolderChipWidthKey` — `.fixedSize()` makes it
+    /// ignore whatever width the surrounding `.frame(width: chipWidth)`
+    /// proposes, and `.hidden()` means nothing here is ever drawn.
+    private var widthReader: some View {
+        HStack(spacing: 5) {
+            Text(folder.barLabel).lineLimit(1)
+            Image(systemName: "chevron.down").font(.system(size: 7, weight: .bold))
+        }
+        .font(.system(size: 11, weight: .semibold))
+        .padding(.horizontal, 7)
+        .fixedSize()
+        .hidden()
+        .accessibilityHidden(true)
+        .background(
+            GeometryReader { proxy in
+                Color.clear.preference(key: FolderChipWidthKey.self, value: proxy.size.width)
+            }
+        )
+    }
+}
+
+/// D12: replaces the old hardcoded-140pt bar folder chip. `reduce` keeps the
+/// most recent measurement — each `BookmarkFolderMenu` reads only its own
+/// `widthReader` contribution via a same-level `.onPreferenceChange`, so
+/// sibling folder chips never influence each other's width.
+private struct FolderChipWidthKey: PreferenceKey {
+    static var defaultValue: CGFloat = 140
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
     }
 }
 
