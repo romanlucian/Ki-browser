@@ -10,7 +10,8 @@ struct BrowserView: View {
     var body: some View {
         VStack(spacing: 0) {
             TabStrip(workspace: workspace)
-            Divider()
+            // No divider here: the active tab's rounded-top shape is filled
+            // the same bg2 as the toolbar below it so the two visually join.
             if let tab = workspace.selectedTab {
                 BrowserTabContent(tab: tab, workspace: workspace)
                     .id(tab.id)
@@ -22,7 +23,7 @@ struct BrowserView: View {
                 DownloadShelf(center: workspace.downloads)
             }
         }
-        .background(Color(nsColor: .windowBackgroundColor))
+        .background(ClearframeTheme.bg0)
         .onChange(of: scenePhase) { _, phase in
             if phase != .active { workspace.persistNow() }
         }
@@ -38,35 +39,63 @@ struct BrowserView: View {
 private struct TabStrip: View {
     @ObservedObject var workspace: BrowserWorkspace
 
+    private var tabCountLabel: String {
+        workspace.tabs.count == 1 ? "1 TAB" : "\(workspace.tabs.count) TABS"
+    }
+
+    private var tabCountAccessibilityLabel: String {
+        workspace.tabs.count == 1 ? "1 tab open" : "\(workspace.tabs.count) tabs open"
+    }
+
     var body: some View {
-        HStack(spacing: 8) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 5) {
-                    ForEach(workspace.tabs) { tab in
-                        TabChip(
-                            tab: tab,
-                            isSelected: tab.id == workspace.selectedTabID,
-                            select: { workspace.selectTab(tab.id) },
-                            close: { workspace.closeTab(tab.id) }
-                        )
+        ZStack {
+            // Sits behind everything below; SwiftUI routes clicks on the
+            // chips/button/pill in front of it before this ever sees them.
+            // Explicit fill: a representable with no intrinsic size should
+            // not be left to guess the strip's bounds.
+            WindowDragArea()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            HStack(spacing: 8) {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 5) {
+                        ForEach(workspace.tabs) { tab in
+                            TabChip(
+                                tab: tab,
+                                isSelected: tab.id == workspace.selectedTabID,
+                                select: { workspace.selectTab(tab.id) },
+                                close: { workspace.closeTab(tab.id) }
+                            )
+                        }
                     }
+                    .padding(.horizontal, 8)
                 }
-                .padding(.horizontal, 8)
+                Button {
+                    workspace.addTab()
+                } label: {
+                    Image(systemName: "plus")
+                        .font(.system(size: 12, weight: .semibold))
+                }
+                .buttonStyle(GhostButtonStyle(size: 26))
+                .help("New tab (⌘T)")
+
+                Text(tabCountLabel)
+                    .font(ClearframeTheme.metaFont)
+                    .tracking(ClearframeTheme.metaTracking)
+                    .foregroundStyle(ClearframeTheme.textSecondary)
+                    .padding(.horizontal, 8)
+                    .frame(height: 20)
+                    .background(ClearframeTheme.bg3, in: Capsule())
+                    .overlay(Capsule().stroke(ClearframeTheme.hairline2))
+                    .accessibilityLabel(tabCountAccessibilityLabel)
             }
-            Button {
-                workspace.addTab()
-            } label: {
-                Image(systemName: "plus")
-                    .font(.system(size: 12, weight: .semibold))
-                    .frame(width: 28, height: 28)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .help("New tab (⌘T)")
+            // 78pt clears the inline traffic lights that hiddenTitleBar
+            // leaves floating at the top-left of the window content.
+            .padding(.leading, 78)
             .padding(.trailing, 10)
         }
-        .frame(height: 39)
-        .background(Color(nsColor: .controlBackgroundColor).opacity(0.72))
+        .frame(height: 38)
+        .background(ClearframeTheme.bg1)
     }
 }
 
@@ -76,6 +105,7 @@ private struct TabChip: View {
     let isSelected: Bool
     let select: () -> Void
     let close: () -> Void
+    @State private var isHovered = false
 
     init(tab: BrowserTab, isSelected: Bool, select: @escaping () -> Void, close: @escaping () -> Void) {
         self.tab = tab
@@ -83,6 +113,10 @@ private struct TabChip: View {
         self.isSelected = isSelected
         self.select = select
         self.close = close
+    }
+
+    private var identityColor: Color {
+        IdentityColor.color(forHost: URL(string: session.currentURLString)?.host ?? "")
     }
 
     var body: some View {
@@ -97,13 +131,14 @@ private struct TabChip: View {
                             .foregroundStyle(.purple)
                             .frame(width: 12)
                     } else {
-                        Image(systemName: session.isSecure ? "lock.fill" : "globe")
-                            .font(.system(size: 9, weight: .semibold))
-                            .foregroundStyle(session.isSecure ? Color.green : Color.secondary)
+                        Circle()
+                            .fill(identityColor)
+                            .frame(width: 6, height: 6)
                             .frame(width: 12)
                     }
                     Text(tab.displayTitle)
                         .font(.system(size: 11, weight: isSelected ? .semibold : .regular))
+                        .foregroundStyle(isSelected ? ClearframeTheme.textPrimary : ClearframeTheme.textSecondary)
                         .lineLimit(1)
                         .frame(maxWidth: 145, alignment: .leading)
                 }
@@ -118,20 +153,17 @@ private struct TabChip: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .foregroundStyle(.secondary)
+            .foregroundStyle(ClearframeTheme.textTertiary)
             .help("Close tab")
         }
         .padding(.leading, 9)
         .padding(.trailing, 4)
         .frame(height: 30)
         .background(
-            isSelected ? Color(nsColor: .windowBackgroundColor) : Color.primary.opacity(0.035),
-            in: RoundedRectangle(cornerRadius: 8)
+            isSelected ? ClearframeTheme.bg2 : (isHovered ? Color.white.opacity(0.05) : Color.clear),
+            in: UnevenRoundedRectangle(topLeadingRadius: ClearframeTheme.radius8, topTrailingRadius: ClearframeTheme.radius8)
         )
-        .overlay(
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(isSelected ? Color.primary.opacity(0.12) : Color.clear)
-        )
+        .onHover { isHovered = $0 }
     }
 }
 
@@ -175,12 +207,15 @@ private struct BrowserTabContent: View {
                 .foregroundStyle(.purple)
                 .padding(.horizontal, 12)
                 .frame(maxWidth: .infinity, minHeight: 25, alignment: .leading)
-                .background(Color.purple.opacity(0.08))
+                // Purple wash over the toolbar surface rather than a bare
+                // translucent patch, so it reads correctly on near-black.
+                .background(Color.purple.opacity(0.14))
+                .background(ClearframeTheme.bg2)
             }
             if session.isLoading {
                 ProgressView(value: session.estimatedProgress)
                     .progressViewStyle(.linear)
-                    .tint(Color(red: 0.22, green: 0.49, blue: 0.36))
+                    .tint(ClearframeTheme.accent)
                     .frame(height: 2)
             }
             Divider()
@@ -290,169 +325,86 @@ private struct BrowserToolbar: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 8) {
-            HStack(spacing: 2) {
-                NavigationButton(symbol: "chevron.left", label: "Back", enabled: session.canGoBack) { session.goBack() }
-                NavigationButton(symbol: "chevron.right", label: "Forward", enabled: session.canGoForward) { session.goForward() }
-                NavigationButton(symbol: "house", label: "Start page", enabled: true) { session.showStartPage() }
-                NavigationButton(
-                    symbol: session.isLoading ? "xmark" : "arrow.clockwise",
-                    label: session.isLoading ? "Stop" : "Reload",
-                    enabled: true
-                ) { session.isLoading ? session.stopLoading() : session.reload() }
-            }
-
-            HStack(spacing: 8) {
-                ContentBlockingShieldButton(provider: workspace.contentBlocking, session: session)
-
-                Menu {
-                    ForEach(SearchEngine.allCases) { engine in
-                        Button {
-                            workspace.selectSearchEngine(engine)
-                        } label: {
-                            if engine == searchSettings.selectedEngine {
-                                Label(engine.displayName, systemImage: "checkmark")
-                            } else {
-                                Text(engine.displayName)
-                            }
-                        }
-                    }
-                    Divider()
-                    Text("Change this any time in Clearframe Settings.")
-                } label: {
-                    HStack(spacing: 5) {
-                        Image(systemName: "magnifyingglass")
-                        Text(searchSettings.selectedEngine.displayName)
-                            .lineLimit(1)
-                    }
-                    .font(.system(size: 11, weight: .medium))
+            HStack(spacing: 10) {
+                HStack(spacing: 2) {
+                    NavigationButton(symbol: "chevron.left", label: "Back", enabled: session.canGoBack) { session.goBack() }
+                    NavigationButton(symbol: "chevron.right", label: "Forward", enabled: session.canGoForward) { session.goForward() }
+                    NavigationButton(symbol: "house", label: "Start page", enabled: true) { session.showStartPage() }
+                    NavigationButton(
+                        symbol: session.isLoading ? "xmark" : "arrow.clockwise",
+                        label: session.isLoading ? "Stop" : "Reload",
+                        enabled: true
+                    ) { session.isLoading ? session.stopLoading() : session.reload() }
                 }
-                .menuStyle(.borderlessButton)
-                .fixedSize()
-                .help("Search engine: \(searchSettings.selectedEngine.displayName). Click to change.")
-                .accessibilityLabel("Search engine: \(searchSettings.selectedEngine.displayName)")
 
-                Divider()
-                    .frame(height: 17)
-
-                HStack(spacing: 8) {
-                    PageLinkDragHandle(
-                        urlString: session.currentURLString,
-                        title: session.pageTitle,
-                        isSecure: session.isSecure
-                    )
-                    TextField("Search \(searchSettings.selectedEngine.displayName) or enter a website", text: $addressText)
-                        .textFieldStyle(.plain)
-                        .focused(addressFocused)
-                        .frame(maxWidth: .infinity)
-                        .onSubmit { submitAddress() }
-                    if !addressText.isEmpty {
-                        Button { addressText = "" } label: {
-                            Image(systemName: "xmark.circle.fill").foregroundStyle(.tertiary)
-                        }
-                        .buttonStyle(.plain)
-                        .help("Clear address")
-                    }
-                }
-                .contentShape(Rectangle())
-                .simultaneousGesture(
-                    TapGesture().onEnded {
-                        addressFocused.wrappedValue = true
-                    }
-                )
-            }
-            .padding(.horizontal, 12)
-            .frame(height: 34)
-            .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 10))
-            .overlay(RoundedRectangle(cornerRadius: 10).stroke(addressFocused.wrappedValue ? Color.green.opacity(0.45) : Color.primary.opacity(0.08)))
-
-                Button { submitAddress() } label: {
-                Image(systemName: "arrow.right")
-                    .font(.system(size: 12, weight: .bold))
-                    .frame(width: 28, height: 28)
-                }
-                .buttonStyle(.borderless)
-                .help("Go")
+                addressPill
 
                 Button { voiceInput.toggle() } label: {
                     Image(systemName: voiceInput.isListening ? "waveform" : "mic")
-                        .foregroundStyle(voiceInput.isListening ? Color.red : Color.primary)
-                        .frame(width: 28, height: 28)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(GhostButtonStyle(tint: voiceInput.isListening ? Color.red : ClearframeTheme.textPrimary))
                 .help(voiceInput.isListening ? "Stop voice input" : "Start on-device voice input")
                 .accessibilityLabel(voiceInput.isListening ? "Stop voice input" : "Start voice input")
                 .accessibilityHint("Voice input fills the address field but does not submit automatically.")
 
-            Button { workspace.toggleBookmarkForSelectedTab() } label: {
-                Image(systemName: isBookmarked ? "star.fill" : "star")
-                    .foregroundStyle(isBookmarked ? Color.orange : Color.primary)
-                    .frame(width: 28, height: 28)
-            }
-            .buttonStyle(.plain)
-            .disabled(session.currentURLString.isEmpty)
-            .help(isBookmarked ? "Remove bookmark" : "Bookmark this page (⌘D)")
+                Button { workspace.toggleBookmarkForSelectedTab() } label: {
+                    Image(systemName: isBookmarked ? "star.fill" : "star")
+                }
+                .buttonStyle(GhostButtonStyle(tint: isBookmarked ? Color.orange : ClearframeTheme.textPrimary))
+                .disabled(session.currentURLString.isEmpty)
+                .help(isBookmarked ? "Remove bookmark" : "Bookmark this page (⌘D)")
 
-            Button { showsLibrary.toggle() } label: {
-                Image(systemName: "books.vertical")
-                    .frame(width: 28, height: 28)
-            }
-            .buttonStyle(.plain)
-            .help("Bookmarks and history")
-            .popover(isPresented: $showsLibrary, arrowEdge: .top) {
-                LibraryPopover(
-                    store: dataStore,
-                    open: { url, newTab in
-                        workspace.open(url, inNewTab: newTab)
-                        showsLibrary = false
-                    }
-                )
-            }
+                Button { showsLibrary.toggle() } label: {
+                    Image(systemName: "books.vertical")
+                }
+                .buttonStyle(GhostButtonStyle())
+                .help("Bookmarks and history")
+                .popover(isPresented: $showsLibrary, arrowEdge: .top) {
+                    LibraryPopover(
+                        store: dataStore,
+                        open: { url, newTab in
+                            workspace.open(url, inNewTab: newTab)
+                            showsLibrary = false
+                        }
+                    )
+                }
 
-            Button { downloads.togglePanel() } label: {
-                ZStack(alignment: .topTrailing) {
-                    Image(systemName: downloads.items.isEmpty ? "arrow.down.circle" : "arrow.down.circle.fill")
-                        .frame(width: 28, height: 28)
-                    if downloads.activeCount > 0 {
-                        Text("\(downloads.activeCount)")
-                            .font(.system(size: 8, weight: .bold))
-                            .foregroundStyle(.white)
-                            .padding(3)
-                            .background(Color.green, in: Circle())
-                            .offset(x: 3, y: -1)
+                Button { downloads.togglePanel() } label: {
+                    ZStack(alignment: .topTrailing) {
+                        Image(systemName: downloads.items.isEmpty ? "arrow.down.circle" : "arrow.down.circle.fill")
+                            .frame(width: 28, height: 28)
+                        if downloads.activeCount > 0 {
+                            Text("\(downloads.activeCount)")
+                                .font(.system(size: 8, weight: .bold))
+                                .foregroundStyle(ClearframeTheme.onAccent)
+                                .padding(3)
+                                .background(ClearframeTheme.accent, in: Circle())
+                                .offset(x: 3, y: -1)
+                        }
                     }
                 }
-            }
-            .buttonStyle(.plain)
-            .help("Show downloads")
-            .accessibilityLabel("Downloads")
-            .accessibilityHint("Shows downloaded files and their save locations.")
-            .popover(isPresented: $downloads.isPanelPresented, arrowEdge: .top) {
-                DownloadsPopover(center: downloads)
-            }
+                .buttonStyle(GhostButtonStyle())
+                .help("Show downloads")
+                .accessibilityLabel("Downloads")
+                .accessibilityHint("Shows downloaded files and their save locations.")
+                .popover(isPresented: $downloads.isPanelPresented, arrowEdge: .top) {
+                    DownloadsPopover(center: downloads)
+                }
 
-            Button { showsAssistant.toggle() } label: {
-                HStack(spacing: 6) {
+                Button { showsAssistant.toggle() } label: {
                     Image(systemName: "sparkles.rectangle.stack")
-                    Text("Assistant")
                 }
-                .font(.system(size: 12, weight: .semibold))
-                .padding(.horizontal, 10)
-                .frame(height: 32)
-                .background(
-                    showsAssistant ? Color(red: 0.09, green: 0.31, blue: 0.24) : Color.clear,
-                    in: RoundedRectangle(cornerRadius: 9)
-                )
-                .foregroundStyle(showsAssistant ? Color.white : Color.primary)
-            }
-            .buttonStyle(.plain)
-            .help("Show or hide the page assistant")
+                .buttonStyle(GhostButtonStyle(isActive: showsAssistant))
+                .help("Show or hide the page assistant")
+                .accessibilityLabel("Assistant")
             }
             .padding(.horizontal, 10)
-            .padding(.vertical, 8)
+            .frame(height: 42)
+            .background(ClearframeTheme.bg2)
 
             if dataStore.showsBookmarksBar {
-                Divider()
+                // No divider: BookmarksBar supplies its own hairline bottom
+                // edge, and the bg2→bg1 color change alone reads as a seam.
                 BookmarksBar(
                     store: dataStore,
                     showsLibrary: $showsLibrary,
@@ -468,27 +420,29 @@ private struct BrowserToolbar: View {
             if voiceInput.presentsStatus {
                 HStack(spacing: 8) {
                     Image(systemName: voiceInput.isListening ? "mic.fill" : "info.circle")
-                        .foregroundStyle(voiceInput.isListening ? Color.red : Color.secondary)
+                        .foregroundStyle(voiceInput.isListening ? Color.red : ClearframeTheme.textSecondary)
                     Text(voiceInput.statusMessage)
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(ClearframeTheme.textSecondary)
                         .accessibilityLabel(voiceInput.statusMessage)
                     Spacer()
                     if voiceInput.isListening {
                         Button("Stop") { voiceInput.stop() }
                             .buttonStyle(.plain)
                             .font(.caption.weight(.semibold))
+                            .foregroundStyle(ClearframeTheme.textPrimary)
                     } else {
                         Button("Dismiss") { voiceInput.dismissStatus() }
                             .buttonStyle(.plain)
                             .font(.caption)
+                            .foregroundStyle(ClearframeTheme.textSecondary)
                     }
                 }
                 .padding(.horizontal, 14)
-                .padding(.bottom, 7)
+                .padding(.vertical, 7)
+                .background(ClearframeTheme.bg2)
             }
         }
-        .background(.bar)
         .onChange(of: voiceInput.transcript) { _, transcript in
             addressText = transcript
         }
@@ -512,6 +466,136 @@ private struct BrowserToolbar: View {
             }
         }
         .onDisappear { voiceInput.stop() }
+    }
+
+    /// Shield + search-engine + drag handle | URL text (host emphasized when
+    /// unfocused) | clear/Go/⌘L hint — one rounded pill, per the Halo design.
+    private var addressPill: some View {
+        HStack(spacing: 8) {
+            ContentBlockingShieldButton(provider: workspace.contentBlocking, session: session)
+
+            Menu {
+                ForEach(SearchEngine.allCases) { engine in
+                    Button {
+                        workspace.selectSearchEngine(engine)
+                    } label: {
+                        if engine == searchSettings.selectedEngine {
+                            Label(engine.displayName, systemImage: "checkmark")
+                        } else {
+                            Text(engine.displayName)
+                        }
+                    }
+                }
+                Divider()
+                Text("Change this any time in Clearframe Settings.")
+            } label: {
+                HStack(spacing: 5) {
+                    Image(systemName: "magnifyingglass")
+                    Text(searchSettings.selectedEngine.displayName)
+                        .lineLimit(1)
+                }
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(ClearframeTheme.textSecondary)
+            }
+            .menuStyle(.borderlessButton)
+            .fixedSize()
+            .help("Search engine: \(searchSettings.selectedEngine.displayName). Click to change.")
+            .accessibilityLabel("Search engine: \(searchSettings.selectedEngine.displayName)")
+
+            Rectangle()
+                .fill(ClearframeTheme.hairline2)
+                .frame(width: 1, height: 16)
+
+            HStack(spacing: 8) {
+                PageLinkDragHandle(
+                    urlString: session.currentURLString,
+                    title: session.pageTitle,
+                    isSecure: session.isSecure
+                )
+                ZStack(alignment: .leading) {
+                    TextField("Search \(searchSettings.selectedEngine.displayName) or enter a website", text: $addressText)
+                        .textFieldStyle(.plain)
+                        .focused(addressFocused)
+                        .frame(maxWidth: .infinity)
+                        .onSubmit { submitAddress() }
+                        .foregroundStyle(ClearframeTheme.textPrimary)
+                        // D11: the field stays mounted and keeps receiving
+                        // focus/typed input at all times; emphasis only
+                        // hides its text by opacity, never its identity.
+                        .opacity(showsHostEmphasis ? 0 : 1)
+
+                    if showsHostEmphasis, let hostEmphasisText {
+                        hostEmphasisText
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                            .allowsHitTesting(false)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+                if !addressText.isEmpty {
+                    Button { addressText = "" } label: {
+                        Image(systemName: "xmark.circle.fill").foregroundStyle(ClearframeTheme.textTertiary)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Clear address")
+                }
+            }
+            .contentShape(Rectangle())
+            .simultaneousGesture(
+                TapGesture().onEnded {
+                    addressFocused.wrappedValue = true
+                }
+            )
+
+            Button { submitAddress() } label: {
+                Image(systemName: "arrow.right")
+                    .font(.system(size: 11, weight: .bold))
+                    .frame(width: 20, height: 20)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(ClearframeTheme.textSecondary)
+            .help("Go")
+
+            if !addressFocused.wrappedValue {
+                Text("⌘L")
+                    .font(ClearframeTheme.metaFont)
+                    .tracking(ClearframeTheme.metaTracking)
+                    .foregroundStyle(ClearframeTheme.textTertiary)
+                    .padding(.horizontal, 6)
+                    .frame(height: 18)
+                    .background(ClearframeTheme.bg3, in: RoundedRectangle(cornerRadius: ClearframeTheme.radius6))
+                    .accessibilityHidden(true)
+            }
+        }
+        .padding(.horizontal, 12)
+        .frame(height: 30)
+        .background(ClearframeTheme.bg1, in: RoundedRectangle(cornerRadius: ClearframeTheme.radius10))
+        .overlay(
+            RoundedRectangle(cornerRadius: ClearframeTheme.radius10)
+                .stroke(addressFocused.wrappedValue ? ClearframeTheme.accent : ClearframeTheme.hairline2, lineWidth: 1)
+        )
+    }
+
+    private var showsHostEmphasis: Bool {
+        !addressFocused.wrappedValue && hostEmphasisText != nil
+    }
+
+    /// Splits the address into scheme/path (textTertiary) and host
+    /// (textPrimary, semibold) so the host reads as the trustworthy part of
+    /// the address when the field isn't focused. Returns `nil` for anything
+    /// that isn't a parseable URL with a host, which simply leaves the plain
+    /// field visible instead.
+    private var hostEmphasisText: Text? {
+        guard !addressText.isEmpty,
+              let url = URL(string: addressText),
+              let host = url.host, !host.isEmpty,
+              let hostRange = addressText.range(of: host) else { return nil }
+        let prefix = String(addressText[addressText.startIndex..<hostRange.lowerBound])
+        let suffix = String(addressText[hostRange.upperBound...])
+        return Text(prefix).foregroundStyle(ClearframeTheme.textTertiary)
+            + Text(host).foregroundStyle(ClearframeTheme.textPrimary).fontWeight(.semibold)
+            + Text(suffix).foregroundStyle(ClearframeTheme.textTertiary)
     }
 
     private func presentFolderEditor(parentID: UUID?) {
@@ -545,12 +629,10 @@ private struct NavigationButton: View {
     var body: some View {
         Button(action: action) {
             Image(systemName: symbol)
-                .frame(width: 27, height: 27)
-                .contentShape(Rectangle())
+                .font(.system(size: 13, weight: .medium))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(GhostButtonStyle(tint: enabled ? ClearframeTheme.textPrimary : ClearframeTheme.textTertiary))
         .disabled(!enabled)
-        .foregroundStyle(enabled ? Color.primary : Color.secondary.opacity(0.45))
         .help(label)
     }
 }
