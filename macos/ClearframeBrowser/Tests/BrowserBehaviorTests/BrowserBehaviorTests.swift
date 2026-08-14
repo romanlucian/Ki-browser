@@ -392,6 +392,33 @@ final class BrowserBehaviorTests: XCTestCase {
         XCTAssertEqual(ShieldState.unavailable.symbolName, "shield.slash")
     }
 
+    func testIdentityColorIsDeterministicAcrossCalls() {
+        let first = IdentityColor.color(forHost: "example.com")
+        let second = IdentityColor.color(forHost: "example.com")
+        XCTAssertEqual(first, second)
+        // Different call, different host: still deterministic, and not the
+        // shared neutral fallback used for empty input.
+        XCTAssertEqual(IdentityColor.color(forHost: "example.com"), IdentityColor.color(forHost: "example.com"))
+        XCTAssertNotEqual(IdentityColor.color(forHost: "example.com"), IdentityColor.fallback)
+    }
+
+    func testIdentityColorTreatsWWWPrefixAsTheSameSite() {
+        XCTAssertEqual(
+            IdentityColor.color(forHost: "www.example.com"),
+            IdentityColor.color(forHost: "example.com")
+        )
+        XCTAssertEqual(
+            IdentityColor.color(forHost: "WWW.Example.COM"),
+            IdentityColor.color(forHost: "example.com"),
+            "case is normalized the same way host exceptions are"
+        )
+    }
+
+    func testIdentityColorFallsBackForEmptyOrInvalidHost() {
+        XCTAssertEqual(IdentityColor.color(forHost: ""), IdentityColor.fallback)
+        XCTAssertEqual(IdentityColor.color(forHost: "   "), IdentityColor.fallback)
+    }
+
     private static func makeTemporaryDirectory() -> URL {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("clearframe-content-blocking-\(UUID().uuidString)", isDirectory: true)
