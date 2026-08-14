@@ -196,7 +196,8 @@ private struct BrowserTabContent: View {
                 addressText: $addressText,
                 addressFocused: $addressFocused,
                 showsAssistant: $showsAssistant,
-                showsLibrary: $showsLibrary
+                showsLibrary: $showsLibrary,
+                goHome: { tab.goHome() }
             )
             if tab.isPrivate {
                 HStack(spacing: 7) {
@@ -264,23 +265,37 @@ private struct BrowserTabContent: View {
     private var stateOverlay: some View {
         switch session.loadState {
         case .startPage:
-            AIToolStartPage(
-                openTool: { tool in
-                    addressFocused = false
-                    addressText = tool.officialURL.absoluteString
-                    session.openAITool(tool)
-                },
-                openSource: { tool, sourceURL in
-                    addressFocused = false
-                    addressText = sourceURL.absoluteString
-                    session.load(sourceURL, displayName: "\(tool.name) source")
-                }
-            )
+            // D6: one load state, two surfaces. New and restored tabs stay on
+            // the AI guide; only an explicit bookmarks entry point flips this.
+            switch tab.startSurface {
+            case .aiHome:
+                AIToolStartPage(
+                    openTool: { tool in
+                        addressFocused = false
+                        addressText = tool.officialURL.absoluteString
+                        session.openAITool(tool)
+                    },
+                    openSource: { tool, sourceURL in
+                        addressFocused = false
+                        addressText = sourceURL.absoluteString
+                        session.load(sourceURL, displayName: "\(tool.name) source")
+                    }
+                )
+            case .bookmarksHome:
+                BookmarksHomePage(
+                    store: workspace.dataStore,
+                    open: { url, inNewTab in
+                        addressFocused = false
+                        if !inNewTab { addressText = url }
+                        workspace.open(url, inNewTab: inNewTab)
+                    }
+                )
+            }
         case .failed(let failure):
             BrowserErrorView(
                 failure: failure,
                 retry: { session.retry() },
-                goHome: { session.showStartPage() }
+                goHome: { tab.goHome() }
             )
         case .loading where !session.hasCommittedNavigation:
             VStack(spacing: 13) {
@@ -311,6 +326,9 @@ private struct BrowserToolbar: View {
     var addressFocused: FocusState<Bool>.Binding
     @Binding var showsAssistant: Bool
     @Binding var showsLibrary: Bool
+    /// Home always returns this tab to the AI guide surface, never to whatever
+    /// start surface it last showed (B6/D6).
+    let goHome: () -> Void
     @StateObject private var voiceInput = VoiceInputController()
     @State private var folderEditorRequest: BookmarkFolderEditorRequest?
     @Environment(\.scenePhase) private var scenePhase
@@ -329,7 +347,7 @@ private struct BrowserToolbar: View {
                 HStack(spacing: 2) {
                     NavigationButton(symbol: "chevron.left", label: "Back", enabled: session.canGoBack) { session.goBack() }
                     NavigationButton(symbol: "chevron.right", label: "Forward", enabled: session.canGoForward) { session.goForward() }
-                    NavigationButton(symbol: "house", label: "Start page", enabled: true) { session.showStartPage() }
+                    NavigationButton(symbol: "house", label: "Start page", enabled: true) { goHome() }
                     NavigationButton(
                         symbol: session.isLoading ? "xmark" : "arrow.clockwise",
                         label: session.isLoading ? "Stop" : "Reload",
@@ -407,13 +425,13 @@ private struct BrowserToolbar: View {
                 // edge, and the bg2→bg1 color change alone reads as a seam.
                 BookmarksBar(
                     store: dataStore,
-                    showsLibrary: $showsLibrary,
                     currentPageURL: session.currentURLString,
                     currentBookmark: currentBookmark,
                     open: { workspace.open($0) },
                     addCurrentPage: { workspace.addSelectedPageBookmark(to: $0) },
                     fileDroppedURL: { workspace.fileBookmarkFromDrop($0, to: $1) },
-                    newFolder: { presentFolderEditor(parentID: $0) }
+                    newFolder: { presentFolderEditor(parentID: $0) },
+                    openAllBookmarks: { workspace.openBookmarksHome() }
                 )
             }
 
@@ -449,9 +467,9 @@ private struct BrowserToolbar: View {
         .onChange(of: scenePhase) { _, phase in
             if phase != .active { voiceInput.stop() }
         }
-        .onChange(of: workspace.bookmarkLibraryRequest) { _, _ in
-            showsLibrary = true
-        }
+        // D7: a bookmark-library request now opens the full-page bookmarks
+        // home (BrowserWorkspace.requestBookmarkLibrary), so the toolbar no
+        // longer forces its quick popover open. The books button still owns it.
         .onChange(of: workspace.bookmarkFolderRequestID) { _, _ in
             presentFolderEditor(parentID: workspace.requestedBookmarkFolderParentID)
         }

@@ -3,6 +3,14 @@ import Combine
 import Foundation
 import WebKit
 
+/// Which full-page surface a tab shows while `BrowserSession.loadState` is
+/// `.startPage` (D6). Deliberately not persisted: a restored or brand-new tab
+/// always opens on the AI guide, which is the product's start-page promise.
+enum StartSurface {
+    case aiHome
+    case bookmarksHome
+}
+
 @MainActor
 final class BrowserTab: ObservableObject, Identifiable {
     let id: UUID
@@ -11,6 +19,7 @@ final class BrowserTab: ObservableObject, Identifiable {
     let isPrivate: Bool
     @Published private(set) var displayTitle: String
     @Published private(set) var lastActivatedAt: Date
+    @Published var startSurface: StartSurface = .aiHome
 
     private var pendingRestoreURL: URL?
     private var cancellables: Set<AnyCancellable> = []
@@ -83,6 +92,19 @@ final class BrowserTab: ObservableObject, Identifiable {
             self.pendingRestoreURL = nil
             session.load(pendingRestoreURL)
         }
+    }
+
+    /// The Home button and the error view's Start Page action. Home always
+    /// means the AI guide, whatever surface this tab happened to show last.
+    func goHome() {
+        startSurface = .aiHome
+        session.showStartPage()
+    }
+
+    /// Shows the full-page bookmarks home on this tab's start surface.
+    func showBookmarksHome() {
+        startSurface = .bookmarksHome
+        session.showStartPage()
     }
 
     func teardown() {
@@ -278,8 +300,23 @@ final class BrowserWorkspace: ObservableObject {
         return dataStore.fileBookmarkFromDrop(safeURL, title: sourceTitle, to: folderID)
     }
 
+    /// Opens the full-page bookmarks home on the selected tab, creating a tab
+    /// first if the workspace momentarily has none (during a data reset).
+    func openBookmarksHome() {
+        guard let tab = selectedTab else {
+            addTab()
+            selectedTab?.showBookmarksHome()
+            return
+        }
+        tab.showBookmarksHome()
+    }
+
+    /// D7: ⌘⌥B and the bookmarks-bar entry points open the full-page home. The
+    /// counter is kept — the smoke suite pins it — so any surface that still
+    /// listens for a library request keeps working.
     func requestBookmarkLibrary() {
         bookmarkLibraryRequest += 1
+        openBookmarksHome()
     }
 
     func requestNewBookmarkFolder(parentID: UUID? = nil) {

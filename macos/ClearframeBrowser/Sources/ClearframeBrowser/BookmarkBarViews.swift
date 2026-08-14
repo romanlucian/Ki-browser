@@ -3,13 +3,16 @@ import SwiftUI
 
 struct BookmarksBar: View {
     @ObservedObject var store: BrowserDataStore
-    @Binding var showsLibrary: Bool
     let currentPageURL: String
     let currentBookmark: BookmarkRecord?
     let open: (String) -> Void
     let addCurrentPage: (UUID?) -> Void
     let fileDroppedURL: (URL, UUID?) -> BookmarkDropResult?
     let newFolder: (UUID?) -> Void
+    /// Opens the full-page bookmarks home. Every "organize" entry point on the
+    /// bar leads here now (D7); the toolbar books button keeps its own quick
+    /// popover.
+    let openAllBookmarks: () -> Void
     @State private var isRootDropTargeted = false
     @State private var dropConfirmation: String?
 
@@ -27,7 +30,7 @@ struct BookmarksBar: View {
 
             if isEmpty {
                 Button {
-                    showsLibrary = true
+                    openAllBookmarks()
                 } label: {
                     HStack(spacing: 5) {
                         Text("Bookmarks bar is empty")
@@ -40,8 +43,8 @@ struct BookmarksBar: View {
                     .lineLimit(1)
                 }
                 .buttonStyle(.plain)
-                .help("Open the bookmark organizer")
-                .accessibilityHint("Opens the Library where you can create folders and organize saved pages.")
+                .help("Open all bookmarks")
+                .accessibilityHint("Opens the full bookmarks page where you can create folders and organize saved pages.")
                 Spacer(minLength: 0)
             } else {
                 ScrollView(.horizontal, showsIndicators: false) {
@@ -58,7 +61,7 @@ struct BookmarksBar: View {
                                 fileDroppedURL: fileDroppedURL,
                                 reportDrop: reportDrop,
                                 newFolder: newFolder,
-                                organize: { showsLibrary = true }
+                                organize: openAllBookmarks
                             )
                         }
                         ForEach(rootBookmarks) { bookmark in
@@ -68,6 +71,8 @@ struct BookmarksBar: View {
                 }
                 .accessibilityLabel("Bookmarks bar")
             }
+
+            BookmarksBarAllChip(action: openAllBookmarks)
 
             Menu {
                 if isEmpty {
@@ -85,7 +90,7 @@ struct BookmarksBar: View {
                             fileDroppedURL: fileDroppedURL,
                             reportDrop: reportDrop,
                             newFolder: newFolder,
-                            organize: { showsLibrary = true }
+                            organize: openAllBookmarks
                         )
                     }
                     if !rootFolders.isEmpty && !rootBookmarks.isEmpty { Divider() }
@@ -108,8 +113,8 @@ struct BookmarksBar: View {
                 Button { newFolder(nil) } label: {
                     Label("New Bookmark Folder…", systemImage: "folder.badge.plus")
                 }
-                Button { showsLibrary = true } label: {
-                    Label("Open Bookmark Organizer", systemImage: "books.vertical")
+                Button { openAllBookmarks() } label: {
+                    Label("Open All Bookmarks", systemImage: "books.vertical")
                 }
                 Button { store.showsBookmarksBar = false } label: {
                     Label("Hide Bookmarks Bar", systemImage: "eye.slash")
@@ -167,7 +172,7 @@ struct BookmarksBar: View {
             Button { newFolder(nil) } label: {
                 Label("New Bookmark Folder…", systemImage: "folder.badge.plus")
             }
-            Button { showsLibrary = true } label: {
+            Button { openAllBookmarks() } label: {
                 Label("Organize Bookmarks…", systemImage: "books.vertical")
             }
             Divider()
@@ -191,6 +196,42 @@ struct BookmarksBar: View {
             guard dropConfirmation == message else { return }
             withAnimation(.easeIn(duration: 0.16)) { dropConfirmation = nil }
         }
+    }
+}
+
+/// Trailing bar chip that opens the full-page bookmarks home. Same chip
+/// language as the link and folder chips beside it (B4): bg3 fill, hairline
+/// edge, 22pt tall.
+private struct BookmarksBarAllChip: View {
+    let action: () -> Void
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 5) {
+                Image(systemName: "square.grid.2x2")
+                    .font(.system(size: 9, weight: .semibold))
+                Text("All bookmarks")
+                    .lineLimit(1)
+            }
+            .font(.system(size: 11, weight: .semibold))
+            .foregroundStyle(isHovered ? ClearframeTheme.textPrimary : ClearframeTheme.textSecondary)
+            .padding(.horizontal, 8)
+            .frame(height: 22)
+            .background(
+                isHovered ? ClearframeTheme.bg3Hover : ClearframeTheme.bg3,
+                in: RoundedRectangle(cornerRadius: ClearframeTheme.radius6)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: ClearframeTheme.radius6)
+                    .stroke(ClearframeTheme.hairline2)
+            )
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
+        .help("Open all bookmarks (⌘⌥B)")
+        .accessibilityLabel("All bookmarks")
+        .accessibilityHint("Opens the full bookmarks page with every folder and saved page.")
     }
 }
 

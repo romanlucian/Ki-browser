@@ -77,6 +77,36 @@ struct BookmarkFolderDestination: Identifiable {
     let folderID: UUID?
     let label: String
     var id: String { folderID?.uuidString ?? "unfiled" }
+
+    /// "Unfiled" plus every folder as a "Parent › Child" path. One shared
+    /// builder so every accessible Move menu — organizer popover and the
+    /// full-page bookmarks home — offers exactly the same destinations in the
+    /// same order.
+    @MainActor
+    static func tree(in store: BrowserDataStore) -> [BookmarkFolderDestination] {
+        var childrenByParent: [UUID?: [BookmarkFolderRecord]] = [:]
+        for folder in store.bookmarkFolders {
+            childrenByParent[folder.parentID, default: []].append(folder)
+        }
+        for key in childrenByParent.keys {
+            childrenByParent[key]?.sort {
+                $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending
+            }
+        }
+
+        var result = [BookmarkFolderDestination(folderID: nil, label: "Unfiled")]
+        func appendChildren(of parentID: UUID?, prefix: String) {
+            for folder in childrenByParent[parentID] ?? [] {
+                let path = prefix.isEmpty
+                    ? "\(folder.emoji) \(folder.title)"
+                    : "\(prefix) › \(folder.emoji) \(folder.title)"
+                result.append(BookmarkFolderDestination(folderID: folder.id, label: path))
+                appendChildren(of: folder.id, prefix: path)
+            }
+        }
+        appendChildren(of: nil, prefix: "")
+        return result
+    }
 }
 
 struct BookmarkOrganizerView: View {
@@ -104,16 +134,7 @@ struct BookmarkOrganizerView: View {
     }
 
     private var destinations: [BookmarkFolderDestination] {
-        var result = [BookmarkFolderDestination(folderID: nil, label: "Unfiled")]
-        func appendChildren(of parentID: UUID?, prefix: String) {
-            for folder in store.bookmarkFolders(in: parentID) {
-                let path = prefix.isEmpty ? "\(folder.emoji) \(folder.title)" : "\(prefix) › \(folder.emoji) \(folder.title)"
-                result.append(BookmarkFolderDestination(folderID: folder.id, label: path))
-                appendChildren(of: folder.id, prefix: path)
-            }
-        }
-        appendChildren(of: nil, prefix: "")
-        return result
+        BookmarkFolderDestination.tree(in: store)
     }
 
     var body: some View {

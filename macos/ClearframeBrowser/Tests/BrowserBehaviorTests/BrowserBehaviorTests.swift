@@ -419,6 +419,137 @@ final class BrowserBehaviorTests: XCTestCase {
         XCTAssertEqual(IdentityColor.color(forHost: "   "), IdentityColor.fallback)
     }
 
+    func testTabsStartOnTheAIGuideSurfaceAndRestoredTabsStayThere() throws {
+        let suiteName = "clearframe.startSurface.default.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let store = BrowserDataStore(defaults: defaults)
+        let record = BrowserTabRecord(
+            id: UUID(),
+            url: "https://example.com/restored",
+            title: "Restored",
+            lastActivatedAt: Date()
+        )
+        store.saveWorkspace(BrowserWorkspaceSnapshot(tabs: [record], selectedTabID: record.id))
+        let blocking = try Self.makeTestContentBlocking(defaults: defaults)
+        defer { blocking.removeStore() }
+
+        let workspace = BrowserWorkspace(
+            dataStore: store,
+            downloads: DownloadCenter(),
+            searchSettings: SearchSettingsStore(defaults: defaults),
+            contentBlocking: blocking.provider
+        )
+
+        XCTAssertEqual(workspace.tabs.first?.startSurface, .aiHome, "a restored tab opens on the AI guide")
+        workspace.addTab()
+        XCTAssertEqual(workspace.selectedTab?.startSurface, .aiHome, "a new tab opens on the AI guide")
+        XCTAssertTrue(workspace.tabs.allSatisfy { $0.startSurface == .aiHome })
+    }
+
+    func testOpenBookmarksHomeShowsTheBookmarksSurfaceOnTheSelectedTab() throws {
+        let workspace = try makeSurfaceTestWorkspace()
+        let tab = try XCTUnwrap(workspace.selectedTab)
+        tab.session.navigate("https://example.com/page")
+        tab.session.stopLoading()
+        XCTAssertEqual(tab.session.loadState, .content)
+
+        workspace.openBookmarksHome()
+
+        XCTAssertEqual(tab.startSurface, .bookmarksHome)
+        XCTAssertEqual(tab.session.loadState, .startPage)
+        XCTAssertEqual(tab.session.currentURLString, "")
+        XCTAssertEqual(workspace.tabs.count, 1, "the bookmarks home reuses the selected tab")
+    }
+
+    func testRequestBookmarkLibraryKeepsItsCounterAndOpensTheBookmarksHome() throws {
+        let workspace = try makeSurfaceTestWorkspace()
+        let tab = try XCTUnwrap(workspace.selectedTab)
+        let requestsBefore = workspace.bookmarkLibraryRequest
+
+        workspace.requestBookmarkLibrary()
+
+        XCTAssertEqual(workspace.bookmarkLibraryRequest, requestsBefore + 1, "the library request counter is still published")
+        XCTAssertEqual(tab.startSurface, .bookmarksHome)
+        XCTAssertEqual(tab.session.loadState, .startPage)
+
+        workspace.requestBookmarkLibrary()
+        XCTAssertEqual(workspace.bookmarkLibraryRequest, requestsBefore + 2)
+    }
+
+    func testGoingHomeReturnsTheTabToTheAIGuideSurface() throws {
+        let workspace = try makeSurfaceTestWorkspace()
+        let tab = try XCTUnwrap(workspace.selectedTab)
+        workspace.openBookmarksHome()
+        XCTAssertEqual(tab.startSurface, .bookmarksHome)
+
+        tab.goHome()
+
+        XCTAssertEqual(tab.startSurface, .aiHome, "Home always means the AI guide")
+        XCTAssertEqual(tab.session.loadState, .startPage)
+    }
+
+    func testBookmarksHomeSearchMatchesFolderTitlesAndBookmarkTitlesOrAddresses() {
+        let folders = [
+            BookmarkFolderRecord(title: "Web Design", emoji: "🎨"),
+            BookmarkFolderRecord(title: "Programming", emoji: "💻"),
+            BookmarkFolderRecord(title: "Shopping", emoji: "🛍️")
+        ]
+        let bookmarks = [
+            BookmarkRecord(title: "Swift documentation", url: "https://swift.org/documentation/"),
+            BookmarkRecord(title: "Colour palettes", url: "https://example.com/palette")
+        ]
+
+        XCTAssertEqual(BookmarksHomeSearch.folders(folders, matching: "desi").map(\.title), ["Web Design"])
+        XCTAssertEqual(BookmarksHomeSearch.folders(folders, matching: "PROGRAM").map(\.title), ["Programming"])
+        XCTAssertTrue(BookmarksHomeSearch.folders(folders, matching: "photography").isEmpty)
+        XCTAssertEqual(
+            BookmarksHomeSearch.folders(folders, matching: "   ").count,
+            folders.count,
+            "a blank query filters nothing out"
+        )
+
+        XCTAssertEqual(BookmarksHomeSearch.bookmarks(bookmarks, matching: "SWIFT").map(\.title), ["Swift documentation"])
+        XCTAssertEqual(
+            BookmarksHomeSearch.bookmarks(bookmarks, matching: "example.com").map(\.title),
+            ["Colour palettes"],
+            "the web address matches as well as the title"
+        )
+        XCTAssertTrue(BookmarksHomeSearch.bookmarks(bookmarks, matching: "no such page").isEmpty)
+        XCTAssertEqual(BookmarksHomeSearch.bookmarks(bookmarks, matching: "").count, bookmarks.count)
+    }
+
+    func testDataStoreForwardsRolledUpFolderCountsForTheBookmarksHome() throws {
+        let suiteName = "clearframe.bookmarks.counts.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let store = BrowserDataStore(defaults: defaults)
+        let work = try XCTUnwrap(store.createBookmarkFolder(title: "Work", emoji: "💼", parentID: nil))
+        let code = try XCTUnwrap(store.createBookmarkFolder(title: "Code", emoji: "💻", parentID: work.id))
+        _ = store.addBookmark(title: "Brief", url: "https://example.com/brief", folderID: work.id)
+        _ = store.addBookmark(title: "Docs", url: "https://swift.org/documentation/", folderID: code.id)
+
+        let counts = store.bookmarkDescendantCounts()
+
+        XCTAssertEqual(counts[work.id], BookmarkDescendantCounts(bookmarkCount: 2, subfolderCount: 1))
+        XCTAssertEqual(counts[code.id], BookmarkDescendantCounts(bookmarkCount: 1, subfolderCount: 0))
+        XCTAssertEqual(store.bookmarks(in: work.id).count, 1, "the shallow listing is unchanged")
+    }
+
+    private func makeSurfaceTestWorkspace() throws -> BrowserWorkspace {
+        let suiteName = "clearframe.startSurface.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        addTeardownBlock { defaults.removePersistentDomain(forName: suiteName) }
+        let blocking = try Self.makeTestContentBlocking(defaults: defaults)
+        addTeardownBlock { blocking.removeStore() }
+        return BrowserWorkspace(
+            dataStore: BrowserDataStore(defaults: defaults),
+            downloads: DownloadCenter(),
+            searchSettings: SearchSettingsStore(defaults: defaults),
+            contentBlocking: blocking.provider
+        )
+    }
+
     private static func makeTemporaryDirectory() -> URL {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("clearframe-content-blocking-\(UUID().uuidString)", isDirectory: true)

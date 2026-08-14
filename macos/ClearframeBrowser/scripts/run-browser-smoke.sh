@@ -77,6 +77,7 @@ swiftc \
     "$PACKAGE_DIR/Sources/ClearframeBrowser/AssistantPanel.swift" \
     "$PACKAGE_DIR/Sources/ClearframeBrowser/BookmarkBarViews.swift" \
     "$PACKAGE_DIR/Sources/ClearframeBrowser/BookmarkLibraryViews.swift" \
+    "$PACKAGE_DIR/Sources/ClearframeBrowser/BookmarksHomePage.swift" \
     "$PACKAGE_DIR/Sources/ClearframeBrowser/DownloadViews.swift" \
     "$PACKAGE_DIR/Sources/ClearframeBrowser/ContentBlockingViews.swift" \
     "$PACKAGE_DIR/Sources/ClearframeBrowser/BrowserView.swift" \
