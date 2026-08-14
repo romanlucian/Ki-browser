@@ -6,10 +6,12 @@ The installed and `dist` builds still use WebKit. A future Chromium migration no
 
 The native app provides:
 
+- a single-row dark browser chrome with inline traffic lights in the tab strip, one unified toolbar and address pill, and per-site identity-color dots computed locally from each host (no favicon fetching);
 - multi-tab browsing with safe per-tab WebKit and assistant state, including ephemeral private tabs that are never restored or added to history;
 - local restoration of recent regular tabs, with lazy loading, corruption recovery, and an opt-out setting;
 - downloads with a user-selected destination plus an obvious toolbar panel for status, destination, cancel, reveal, and the Downloads folder;
 - a visible Clearframe bookmarks bar below navigation, with horizontally scrollable top-level links, nested emoji-folder menus, current-page and saved-bookmark drag filing, fixed overflow access, and a locally persisted show/hide setting;
+- a full-page bookmarks home (the bar's All Bookmarks chip or ⌘⌥B) with visual folder cards, search across bookmarks and folder titles, drill-down into subfolders, and a local history view—all local only;
 - searchable local bookmarks organized into emoji-labeled nested folders, plus local history with clear/disable controls;
 - explicit loading, offline, timeout, blocked-link, and general error states;
 - default-on tracker blocking against a small, first-party curated list of common advertising and tracking domains, with a per-site shield toggle in the address bar, a global switch in Settings, and state-only status text—Clearframe cannot see or count what WebKit blocks;
@@ -67,7 +69,7 @@ Then:
 4. Browse with independent tabs; use `⌘T` for a new tab, `⌘⇧N` for a private tab, and `⌘W` to close the current tab. Private tabs use an ephemeral WebKit data store and are not written to history or session restoration.
 5. Open **Assistant** and click **Analyze page**.
 6. Use local summary, claims, Plain English, visible risk signals, source comparison, and **View evidence** to reveal the extracted source sentence in the page when its DOM still matches.
-7. The bookmarks bar shows Unfiled links and emoji-labeled folders. Drag the address bar’s lock/globe page-link chip—or an existing bookmark—onto bar space or a visible folder to file it; dropping the same URL moves its single record instead of duplicating it. Secondary-click and the **More**, Library, and **Page** menus expose the same create, file, organize, and show/hide actions, with an accessible Move menu for keyboard use. **⌘⌥B** opens the organizer, and legacy bookmarks remain in **Unfiled**.
+7. The bookmarks bar shows Unfiled links and emoji-labeled folders. Drag the address bar’s lock/globe page-link chip—or an existing bookmark—onto bar space or a visible folder to file it; dropping the same URL moves its single record instead of duplicating it. Secondary-click and the **More** and **Page** menus expose the same create, file, organize, and show/hide actions, with an accessible Move menu for keyboard use. **⌘⌥B** and the bar’s All Bookmarks chip open the full-page bookmarks home; the toolbar’s Library button keeps a separate quick popover for fast lookups. Legacy bookmarks remain in **Unfiled**.
 8. Use the Downloads toolbar button to see a clear empty state or the current session’s download status, destination, and Reveal action; **Open Downloads Folder** remains available even when the list is empty. Attachment downloads keep the existing page visible instead of presenting WebKit's internal policy-handoff message as a page error.
 9. Click the provider name inside the address bar, or open **ClearframeBrowser → Settings…** (`⌘,`), to choose the search engine. After a toolbar choice, the address field is ready for typing.
 10. Optional AI, tab-restoration, bookmark-bar, and local-history settings are available in the same Settings window. **Clear local browsing data** removes regular/private tabs, history, bookmarks, the in-app download list, cookies, caches, website storage, session records, and recovery backups; it does not delete downloaded files, general preferences, or the Optional AI key.

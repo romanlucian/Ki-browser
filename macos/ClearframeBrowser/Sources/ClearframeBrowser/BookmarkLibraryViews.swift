@@ -222,7 +222,7 @@ struct BookmarkOrganizerView: View {
                 Text(dropConfirmation ?? "Folders and bookmarks stay in this Mac user profile.")
             }
             .font(.caption2)
-            .foregroundStyle(dropConfirmation == nil ? Color.secondary : Color.green)
+            .foregroundStyle(dropConfirmation == nil ? Color.secondary : ClearframeTheme.accent)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .sheet(item: $editorRequest) { request in
@@ -322,12 +322,12 @@ struct BookmarkFolderRow: View {
         }
         .padding(9)
         .background(
-            isDropTargeted ? Color.green.opacity(0.14) : Color.primary.opacity(0.045),
+            isDropTargeted ? ClearframeTheme.accentDim : Color.primary.opacity(0.045),
             in: RoundedRectangle(cornerRadius: 9)
         )
         .overlay {
             RoundedRectangle(cornerRadius: 9)
-                .stroke(isDropTargeted ? Color.green.opacity(0.85) : Color.clear, lineWidth: 1.5)
+                .stroke(isDropTargeted ? ClearframeTheme.accent : Color.clear, lineWidth: 1.5)
         }
         .dropDestination(for: URL.self) { urls, _ in
             guard let url = urls.first else { return false }

@@ -450,14 +450,14 @@ final class BrowserSession: NSObject, ObservableObject {
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <style>
           :root { color-scheme: light dark; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
-          body { align-items:center; background:#f5f5ef; color:#17231f; display:flex; min-height:100vh; margin:0; }
+          body { align-items:center; background:#f5f5f7; color:#141417; display:flex; min-height:100vh; margin:0; }
           main { margin:auto; max-width:620px; padding:48px; text-align:center; }
-          .mark { align-items:center; background:#174f3e; border-radius:28px 8px 28px 8px; color:#d4f379; display:flex; font:700 56px Georgia,serif; height:110px; justify-content:center; margin:0 auto 34px; width:110px; }
-          .eyebrow { color:#174f3e; font-size:11px; font-weight:800; letter-spacing:.15em; }
+          .mark { align-items:center; background:#123c2e; border-radius:28px 8px 28px 8px; color:#66db7d; display:flex; font:700 56px Georgia,serif; height:110px; justify-content:center; margin:0 auto 34px; width:110px; }
+          .eyebrow { color:#1f6e4f; font-size:11px; font-weight:800; letter-spacing:.15em; }
           h1 { font:700 clamp(38px,6vw,64px)/.98 Georgia,serif; letter-spacing:-.045em; margin:12px 0 20px; }
-          p { color:#64716c; font-size:17px; line-height:1.6; }
-          .hint { background:#fff; border:1px solid #dfe4dc; border-radius:14px; box-shadow:0 12px 40px rgba(29,54,45,.08); font-size:14px; margin-top:30px; padding:16px; }
-          @media (prefers-color-scheme: dark) { body { background:#111814; color:#edf5ef; } .eyebrow{color:#d4f379}.hint{background:#19231e;border-color:#33443a} }
+          p { color:#5c6360; font-size:17px; line-height:1.6; }
+          .hint { background:#fff; border:1px solid #e2e3e1; border-radius:14px; box-shadow:0 12px 40px rgba(10,14,12,.07); font-size:14px; margin-top:30px; padding:16px; }
+          @media (prefers-color-scheme: dark) { body { background:#0b0b0e; color:#f4f4f2; } .eyebrow{color:#66db7d}.hint{background:#15151a;border-color:rgba(255,255,255,.08)} }
         </style>
       </head>
       <body>

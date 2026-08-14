@@ -10,17 +10,18 @@ struct OnboardingView: View {
     @FocusState private var primaryActionFocused: Bool
     @State private var keyMonitor: Any?
 
-    private let accent = Color(red: 0.79, green: 0.94, blue: 0.39)
-    private let deepGreen = Color(red: 0.035, green: 0.20, blue: 0.145)
+    // Halo tokens (B7): both constants used to be one-off literals — accent
+    // was a hardcoded lime, deepGreen its dark badge backdrop. Sourcing them
+    // from ClearframeTheme keeps this intro visually in step with the rest
+    // of the redesigned chrome without threading the theme through every
+    // call site below (they all already read `accent`/`deepGreen`).
+    private let accent = ClearframeTheme.accent
+    private let deepGreen = ClearframeTheme.accentDimStrong
 
     var body: some View {
         ZStack {
             LinearGradient(
-                colors: [
-                    Color(red: 0.025, green: 0.105, blue: 0.075),
-                    Color(red: 0.045, green: 0.07, blue: 0.06),
-                    Color(nsColor: .windowBackgroundColor)
-                ],
+                colors: [ClearframeTheme.bg0, ClearframeTheme.bg1],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
@@ -199,7 +200,7 @@ struct OnboardingView: View {
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
             .tint(accent)
-            .foregroundStyle(Color(red: 0.04, green: 0.12, blue: 0.085))
+            .foregroundStyle(ClearframeTheme.onAccent)
             .focused($primaryActionFocused)
         }
         .frame(maxWidth: 920)
@@ -267,7 +268,7 @@ private struct PromiseCard: View {
         VStack(alignment: .leading, spacing: 11) {
             Image(systemName: symbol)
                 .font(.system(size: 18, weight: .semibold))
-                .foregroundStyle(Color(red: 0.79, green: 0.94, blue: 0.39))
+                .foregroundStyle(ClearframeTheme.accent)
             Text(title).font(.headline).foregroundStyle(.white)
             Text(detail)
                 .font(.caption)
@@ -325,7 +326,7 @@ private struct PrivacyLine: View {
         HStack(alignment: .top, spacing: 13) {
             Image(systemName: symbol)
                 .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(Color(red: 0.79, green: 0.94, blue: 0.39))
+                .foregroundStyle(ClearframeTheme.accent)
                 .frame(width: 30, height: 30)
                 .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 9))
             VStack(alignment: .leading, spacing: 3) {
@@ -348,9 +349,9 @@ private struct OnboardingInstruction: View {
         HStack(spacing: 11) {
             Text(number)
                 .font(.system(size: 11, weight: .bold))
-                .foregroundStyle(Color(red: 0.04, green: 0.12, blue: 0.085))
+                .foregroundStyle(ClearframeTheme.onAccent)
                 .frame(width: 25, height: 25)
-                .background(Color(red: 0.79, green: 0.94, blue: 0.39), in: Circle())
+                .background(ClearframeTheme.accent, in: Circle())
             Text(text).font(.system(size: 13, weight: .medium)).foregroundStyle(Color.white.opacity(0.82))
         }
     }
@@ -370,7 +371,7 @@ private struct AnalyzePreview: View {
                     .font(.system(size: 10, weight: .semibold))
                     .padding(.horizontal, 9)
                     .frame(height: 25)
-                    .background(Color(red: 0.06, green: 0.36, blue: 0.27), in: RoundedRectangle(cornerRadius: 8))
+                    .background(ClearframeTheme.accentDimStrong, in: RoundedRectangle(cornerRadius: 8))
             }
             .padding(12)
             .background(Color.black.opacity(0.28))
@@ -380,7 +381,7 @@ private struct AnalyzePreview: View {
                     .font(.system(size: 28, weight: .bold, design: .serif))
                     .foregroundStyle(accent)
                     .frame(width: 56, height: 56)
-                    .background(Color(red: 0.05, green: 0.30, blue: 0.22), in: RoundedRectangle(cornerRadius: 17))
+                    .background(ClearframeTheme.accentDimStrong, in: RoundedRectangle(cornerRadius: 17))
                 Text("Understand this page")
                     .font(.system(size: 23, weight: .bold, design: .serif))
                     .foregroundStyle(.white)
@@ -390,10 +391,10 @@ private struct AnalyzePreview: View {
                     .multilineTextAlignment(.center)
                 Label("Analyze page", systemImage: "sparkles")
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(ClearframeTheme.onAccent)
                     .frame(maxWidth: .infinity)
                     .frame(height: 42)
-                    .background(Color(red: 0.06, green: 0.38, blue: 0.28), in: RoundedRectangle(cornerRadius: 9))
+                    .background(ClearframeTheme.accent, in: RoundedRectangle(cornerRadius: 9))
                 Text("Local by default · runs only when you click")
                     .font(.system(size: 10))
                     .foregroundStyle(Color.white.opacity(0.4))
@@ -402,7 +403,7 @@ private struct AnalyzePreview: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .frame(height: 390)
-        .background(Color(red: 0.075, green: 0.09, blue: 0.08), in: RoundedRectangle(cornerRadius: 19))
+        .background(ClearframeTheme.bg1, in: RoundedRectangle(cornerRadius: 19))
         .clipShape(RoundedRectangle(cornerRadius: 19))
         .overlay(RoundedRectangle(cornerRadius: 19).stroke(Color.white.opacity(0.1)))
         .shadow(color: .black.opacity(0.28), radius: 30, y: 16)

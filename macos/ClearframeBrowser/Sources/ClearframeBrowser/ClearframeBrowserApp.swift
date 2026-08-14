@@ -61,7 +61,7 @@ struct ClearframeBrowserApp: App {
                 Button("New Bookmark Folder…") {
                     workspace.requestNewBookmarkFolder()
                 }
-                Button("Organize Bookmarks…") {
+                Button("All Bookmarks…") {
                     workspace.requestBookmarkLibrary()
                 }
                 .keyboardShortcut("b", modifiers: [.command, .option])

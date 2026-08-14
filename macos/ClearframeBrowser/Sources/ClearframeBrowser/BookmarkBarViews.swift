@@ -173,7 +173,7 @@ struct BookmarksBar: View {
                 Label("New Bookmark Folder…", systemImage: "folder.badge.plus")
             }
             Button { openAllBookmarks() } label: {
-                Label("Organize Bookmarks…", systemImage: "books.vertical")
+                Label("All Bookmarks…", systemImage: "books.vertical")
             }
             Divider()
             Button { store.showsBookmarksBar = false } label: {
@@ -354,7 +354,7 @@ private struct BookmarkFolderMenu: View {
             Button { newFolder(folder.id) } label: {
                 Label("New Subfolder…", systemImage: "folder.badge.plus")
             }
-            Button(action: organize) { Label("Organize Bookmarks…", systemImage: "books.vertical") }
+            Button(action: organize) { Label("All Bookmarks…", systemImage: "books.vertical") }
         }
     }
 
