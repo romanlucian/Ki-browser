@@ -40,16 +40,16 @@ struct AssistantPanel: View {
             ZStack {
                 Circle().stroke(Color.primary.opacity(0.14), lineWidth: 1).frame(width: 92, height: 92)
                 RoundedRectangle(cornerRadius: 22)
-                    .fill(Color(red: 0.09, green: 0.31, blue: 0.24))
+                    .fill(ClearframeTheme.accentDimStrong)
                     .frame(width: 64, height: 64)
                 Text("C")
                     .font(.system(size: 32, weight: .bold, design: .serif))
-                    .foregroundStyle(Color(red: 0.83, green: 0.95, blue: 0.47))
+                    .foregroundStyle(ClearframeTheme.accent)
             }
             Text("PAGE INTELLIGENCE")
                 .font(.system(size: 10, weight: .bold))
                 .tracking(1.4)
-                .foregroundStyle(Color(red: 0.09, green: 0.31, blue: 0.24))
+                .foregroundStyle(ClearframeTheme.accent)
             Text("Understand this page")
                 .font(.system(size: 27, weight: .bold, design: .serif))
             Text("Create a local summary, surface claims worth checking, and notice obvious visible risk signals.")
@@ -67,7 +67,8 @@ struct AssistantPanel: View {
                     .padding(.vertical, 10)
             }
             .buttonStyle(.borderedProminent)
-            .tint(Color(red: 0.09, green: 0.31, blue: 0.24))
+            .tint(ClearframeTheme.accent)
+            .foregroundStyle(ClearframeTheme.onAccent)
             .frame(maxWidth: 300)
             Text("Local by default · runs only when you click")
                 .font(.caption2)
@@ -91,7 +92,7 @@ struct AssistantPanel: View {
         VStack(spacing: 16) {
             Image(systemName: "rectangle.stack")
                 .font(.system(size: 36))
-                .foregroundStyle(Color(red: 0.09, green: 0.31, blue: 0.24))
+                .foregroundStyle(ClearframeTheme.accent)
             Text("This looks like a section page")
                 .font(.title3.bold())
             Text("It lists many different articles rather than one text to summarize. Open one of its articles for a grounded analysis.")
@@ -102,7 +103,8 @@ struct AssistantPanel: View {
                 Task { await model.analyzeDespiteStructure(session: session) }
             }
             .buttonStyle(.borderedProminent)
-            .tint(Color(red: 0.09, green: 0.31, blue: 0.24))
+            .tint(ClearframeTheme.accent)
+            .foregroundStyle(ClearframeTheme.onAccent)
         }
         .padding(28)
     }
@@ -122,7 +124,8 @@ struct AssistantPanel: View {
                 Task { await model.analyzeCurrentPage(session: session) }
             }
             .buttonStyle(.borderedProminent)
-            .tint(Color(red: 0.09, green: 0.31, blue: 0.24))
+            .tint(ClearframeTheme.accent)
+            .foregroundStyle(ClearframeTheme.onAccent)
         }
         .padding(28)
     }
@@ -155,7 +158,7 @@ struct AssistantPanel: View {
                     Text(snapshot.hostname.uppercased())
                         .font(.system(size: 10, weight: .bold))
                         .tracking(1.2)
-                        .foregroundStyle(Color(red: 0.09, green: 0.31, blue: 0.24))
+                        .foregroundStyle(ClearframeTheme.accent)
                     Text(snapshot.title)
                         .font(.system(size: 22, weight: .bold, design: .serif))
                         .lineLimit(3)
@@ -323,7 +326,7 @@ struct AssistantPanel: View {
         Text(value)
             .font(.system(size: 10, weight: .bold))
             .tracking(1.1)
-            .foregroundStyle(Color(red: 0.09, green: 0.31, blue: 0.24))
+            .foregroundStyle(ClearframeTheme.accent)
     }
 }
 
@@ -375,7 +378,7 @@ private struct SourceComparisonCard: View {
             Text("SOURCE CHECK")
                 .font(.system(size: 10, weight: .bold))
                 .tracking(1.1)
-                .foregroundStyle(Color(red: 0.83, green: 0.95, blue: 0.47))
+                .foregroundStyle(ClearframeTheme.accent)
             if let saved = model.savedSource {
                 Text(saved.url == currentURL ? "Source one is saved" : "Ready to compare")
                     .font(.system(size: 18, weight: .bold, design: .serif))
@@ -394,13 +397,13 @@ private struct SourceComparisonCard: View {
             }
             .buttonStyle(.borderedProminent)
             .tint(.white)
-            .foregroundStyle(Color(red: 0.09, green: 0.31, blue: 0.24))
+            .foregroundStyle(ClearframeTheme.onAccent)
             .disabled(model.savedSource?.url == currentURL)
 
             if let comparison = model.comparison {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("\(comparison.overlapPercent)% topical overlap").font(.callout.bold())
-                    ProgressView(value: Double(comparison.overlapPercent), total: 100).tint(Color(red: 0.83, green: 0.95, blue: 0.47))
+                    ProgressView(value: Double(comparison.overlapPercent), total: 100).tint(ClearframeTheme.accent)
                     Text(comparison.sharedThemes.isEmpty ? "No strong shared themes extracted." : comparison.sharedThemes.joined(separator: " · "))
                     if !comparison.firstNumbers.isEmpty || !comparison.secondNumbers.isEmpty {
                         Text("Figures: \(comparison.firstNumbers.joined(separator: ", ")) ↔ \(comparison.secondNumbers.joined(separator: ", "))")
@@ -420,6 +423,6 @@ private struct SourceComparisonCard: View {
         }
         .padding(15)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(red: 0.09, green: 0.31, blue: 0.24), in: RoundedRectangle(cornerRadius: 13))
+        .background(ClearframeTheme.accentDimStrong, in: RoundedRectangle(cornerRadius: 13))
     }
 }

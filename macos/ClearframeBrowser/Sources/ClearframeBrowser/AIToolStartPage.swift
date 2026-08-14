@@ -20,11 +20,7 @@ struct AIToolStartPage: View {
     var body: some View {
         ZStack {
             LinearGradient(
-                colors: [
-                    Color(red: 0.035, green: 0.095, blue: 0.072),
-                    Color(red: 0.055, green: 0.075, blue: 0.065),
-                    Color(nsColor: .windowBackgroundColor)
-                ],
+                colors: [ClearframeTheme.bg0, ClearframeTheme.bg1],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
@@ -64,7 +60,7 @@ struct AIToolStartPage: View {
                 }
             }
             .buttonStyle(.plain)
-            .foregroundStyle(Color(red: 0.79, green: 0.92, blue: 0.52))
+            .foregroundStyle(ClearframeTheme.accent)
         }
         .font(.system(size: 10.5, weight: .medium))
         .foregroundStyle(Color.white.opacity(0.56))
@@ -76,15 +72,15 @@ struct AIToolStartPage: View {
             HStack(alignment: .top, spacing: 16) {
                 Text("C")
                     .font(.system(size: 30, weight: .bold, design: .serif))
-                    .foregroundStyle(Color(red: 0.83, green: 0.96, blue: 0.46))
+                    .foregroundStyle(ClearframeTheme.accent)
                     .frame(width: 58, height: 58)
-                    .background(Color(red: 0.07, green: 0.32, blue: 0.24), in: RoundedRectangle(cornerRadius: 17))
+                    .background(ClearframeTheme.accentDimStrong, in: RoundedRectangle(cornerRadius: 17))
 
                 VStack(alignment: .leading, spacing: 7) {
                     Text("CLEARFRAME GUIDE")
                         .font(.system(size: 10, weight: .bold))
                         .tracking(1.8)
-                        .foregroundStyle(Color(red: 0.65, green: 0.82, blue: 0.71))
+                        .foregroundStyle(ClearframeTheme.textSecondary)
                     Text("Choose the right AI\nfor the job.")
                         .font(.system(size: 38, weight: .bold, design: .serif))
                         .tracking(-1.2)
@@ -99,11 +95,11 @@ struct AIToolStartPage: View {
 
             Label("Local guide · official links", systemImage: "checkmark.shield")
                 .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(Color(red: 0.78, green: 0.90, blue: 0.82))
+                .foregroundStyle(ClearframeTheme.accent)
                 .padding(.horizontal, 12)
                 .frame(height: 32)
-                .background(Color.white.opacity(0.075), in: Capsule())
-                .overlay(Capsule().stroke(Color.white.opacity(0.1)))
+                .background(ClearframeTheme.accentDim, in: Capsule())
+                .overlay(Capsule().stroke(ClearframeTheme.accent.opacity(0.3)))
         }
     }
 
@@ -165,12 +161,12 @@ struct AIToolStartPage: View {
                     .font(.system(size: 18, weight: .bold, design: .serif))
                 Text("Choose one task above. Clearframe will show a small set of useful paths and explain why each may fit.")
                     .font(.callout)
-                    .foregroundStyle(Color.white.opacity(0.68))
+                    .foregroundStyle(ClearframeTheme.textSecondary)
             }
             .padding(20)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 16))
-            .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.white.opacity(0.10)))
+            .background(ClearframeTheme.bg2, in: RoundedRectangle(cornerRadius: 16))
+            .overlay(RoundedRectangle(cornerRadius: 16).stroke(ClearframeTheme.hairline2))
         } else if visibleTools.isEmpty {
             ContentUnavailableView(
                 "No matching tools",
@@ -201,33 +197,33 @@ struct AIToolStartPage: View {
         VStack(alignment: .leading, spacing: 7) {
             Text("Before you open a tool")
                 .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(Color.white.opacity(0.8))
+                .foregroundStyle(ClearframeTheme.textPrimary)
             Text("Clearframe does not rank these services live, share your current page or prompt, or receive payment when you open a card. Each provider controls accounts, plans, country availability, data use, and terms; check its official site before relying on a feature or access hint.")
                 .font(.caption)
-                .foregroundStyle(Color.white.opacity(0.54))
+                .foregroundStyle(ClearframeTheme.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
 
             if showsRecommendationMethod {
-                Divider().overlay(Color.white.opacity(0.1))
+                Divider().overlay(ClearframeTheme.hairline2)
                 VStack(alignment: .leading, spacing: 6) {
                     Text("How recommendations work")
                         .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(Color.white.opacity(0.82))
+                        .foregroundStyle(ClearframeTheme.textPrimary)
                     Text("Badges apply only to the selected task and this small catalog. They are editor judgments based on a tool’s documented focus, breadth, and broad access path—not Clearframe testing, a universal winner, live price monitoring, or provider payment. The official source beside a badge shows the product page used for its rationale. Reviews are manual and ship with app updates.")
                         .font(.caption)
-                        .foregroundStyle(Color.white.opacity(0.58))
+                        .foregroundStyle(ClearframeTheme.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                     Text("Free to Try and Paid Plan are broad orientation labels. Limits, accounts, features, regions, and terms can change at any time.")
                         .font(.caption)
-                        .foregroundStyle(Color.white.opacity(0.58))
+                        .foregroundStyle(ClearframeTheme.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
         .padding(16)
-        .background(Color.black.opacity(0.16), in: RoundedRectangle(cornerRadius: 13))
-        .overlay(RoundedRectangle(cornerRadius: 13).stroke(Color.white.opacity(0.07)))
+        .background(ClearframeTheme.bg2, in: RoundedRectangle(cornerRadius: 13))
+        .overlay(RoundedRectangle(cornerRadius: 13).stroke(ClearframeTheme.hairline1))
     }
 }
 
@@ -243,8 +239,8 @@ private struct CategoryChip: View {
                 .font(.system(size: 11, weight: .semibold))
                 .padding(.horizontal, 12)
                 .frame(height: 34)
-                .background(selected ? Color(red: 0.76, green: 0.91, blue: 0.42) : Color.white.opacity(0.065), in: Capsule())
-                .foregroundStyle(selected ? Color(red: 0.045, green: 0.13, blue: 0.095) : Color.white.opacity(0.75))
+                .background(selected ? ClearframeTheme.accent : Color.white.opacity(0.065), in: Capsule())
+                .foregroundStyle(selected ? ClearframeTheme.onAccent : Color.white.opacity(0.75))
                 .overlay(Capsule().stroke(selected ? Color.clear : Color.white.opacity(0.09)))
         }
         .buttonStyle(.plain)
@@ -257,15 +253,19 @@ private struct AIToolCard: View {
     let open: () -> Void
     let openSource: (URL) -> Void
 
+    // Retuned for the Halo palette (B7): the default bucket now matches
+    // ClearframeTheme.accent — the old lime literal it used to hardcode —
+    // and the ChatGPT/DeepSeek/Runway teal shifted further toward cyan so it
+    // stays visually distinct from that mint default instead of echoing it.
     private var accent: Color {
         switch tool.id {
-        case "chatgpt", "deepseek", "runway": return Color(red: 0.31, green: 0.78, blue: 0.63)
+        case "chatgpt", "deepseek", "runway": return Color(red: 0.24, green: 0.75, blue: 0.78)
         case "claude", "mistral", "firefly": return Color(red: 0.95, green: 0.58, blue: 0.38)
         case "gemini", "qwen", "google-translate", "veo": return Color(red: 0.42, green: 0.64, blue: 0.98)
         case "grok", "midjourney": return Color(red: 0.76, green: 0.78, blue: 0.82)
         case "kimi", "perplexity": return Color(red: 0.60, green: 0.82, blue: 0.95)
         case "canva", "deepl", "seedance": return Color(red: 0.73, green: 0.55, blue: 0.98)
-        default: return Color(red: 0.76, green: 0.91, blue: 0.42)
+        default: return ClearframeTheme.accent
         }
     }
 

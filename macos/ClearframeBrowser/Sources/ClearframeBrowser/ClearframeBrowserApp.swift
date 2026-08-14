@@ -27,12 +27,18 @@ struct ClearframeBrowserApp: App {
             .environmentObject(onboarding)
             .frame(minWidth: 920, minHeight: 620)
             .animation(.easeInOut(duration: 0.22), value: onboarding.isPresented)
+            // Halo chrome is near-black by design; only the browser window
+            // content is forced dark — Settings below stays native.
+            .preferredColorScheme(.dark)
             .onOpenURL { url in
                 workspace.openExternalURL(url)
                 BrowserApplicationActivation.bringBrowserToFront()
             }
         }
         .defaultSize(width: 1280, height: 820)
+        // Traffic lights move inline into the tab strip (see WindowDragArea
+        // in WindowChromeSupport.swift); there is no separate title bar row.
+        .windowStyle(.hiddenTitleBar)
         .commands {
             CommandMenu("Tabs") {
                 Button("New Tab") { workspace.addTab() }
@@ -55,7 +61,7 @@ struct ClearframeBrowserApp: App {
                 Button("New Bookmark Folder…") {
                     workspace.requestNewBookmarkFolder()
                 }
-                Button("Organize Bookmarks…") {
+                Button("All Bookmarks…") {
                     workspace.requestBookmarkLibrary()
                 }
                 .keyboardShortcut("b", modifiers: [.command, .option])

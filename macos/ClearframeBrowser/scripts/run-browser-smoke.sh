@@ -61,6 +61,9 @@ swiftc \
     "$PACKAGE_DIR/Sources/ClearframeBrowser/AIToolStartPage.swift" \
     "$PACKAGE_DIR/Sources/ClearframeBrowser/BrowserApplicationLifecycle.swift" \
     "$PACKAGE_DIR/Sources/ClearframeBrowser/BrowserDataStore.swift" \
+    "$PACKAGE_DIR/Sources/ClearframeBrowser/ClearframeTheme.swift" \
+    "$PACKAGE_DIR/Sources/ClearframeBrowser/IdentityColor.swift" \
+    "$PACKAGE_DIR/Sources/ClearframeBrowser/WindowChromeSupport.swift" \
     "$PACKAGE_DIR/Sources/ClearframeBrowser/DownloadCenter.swift" \
     "$PACKAGE_DIR/Sources/ClearframeBrowser/OnboardingController.swift" \
     "$PACKAGE_DIR/Sources/ClearframeBrowser/BrowserSession.swift" \
@@ -74,6 +77,7 @@ swiftc \
     "$PACKAGE_DIR/Sources/ClearframeBrowser/AssistantPanel.swift" \
     "$PACKAGE_DIR/Sources/ClearframeBrowser/BookmarkBarViews.swift" \
     "$PACKAGE_DIR/Sources/ClearframeBrowser/BookmarkLibraryViews.swift" \
+    "$PACKAGE_DIR/Sources/ClearframeBrowser/BookmarksHomePage.swift" \
     "$PACKAGE_DIR/Sources/ClearframeBrowser/DownloadViews.swift" \
     "$PACKAGE_DIR/Sources/ClearframeBrowser/ContentBlockingViews.swift" \
     "$PACKAGE_DIR/Sources/ClearframeBrowser/BrowserView.swift" \
