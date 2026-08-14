@@ -10,6 +10,7 @@ The current version-1 release stage includes:
 - a concise, keyboard-accessible first-run introduction with locally persisted completion, existing search-provider selection, privacy explanation, Analyze page teaching, Start browsing handoff, Skip/Back controls, and a Settings revisit action;
 - explicit AppKit startup activation plus reliable address-field focus/selection on launch, new/start tabs, search-provider selection, and start-page reactivation; ordinary tab changes do not issue a global focus request, navigation releases focus back to WebKit, and reactivation does not steal focus from loaded page content;
 - back, forward, home, reload, stop, real WebKit loading progress, HTTPS indication, and same-document URL/title synchronization per tab;
+- default-on tracker blocking against a small, first-party curated domain list, enforced locally through WebKit's `WKContentRuleList` engine, with an address-bar shield control, a Settings switch and exceptions list, and state-only status text with no per-page or running block counts (see [Tracker blocking](content-blocking.md));
 - a visible address-bar and Settings chooser for DuckDuckGo, Google, Bing, Brave Search, and Startpage, persisted only in local preferences;
 - a native local AI-guide start page with seven task categories (including Create Images and Create Videos), local filtering, concise informational cards, transparent task-specific editorial badges/ordering, broad access labels, a visible manual checked date/version, official rationale sources, and direct official-site navigation, plus dedicated loading, offline, timeout, missing-host, unsupported-link, and general error states;
 - AI-guide card activation that immediately shows the exact HTTPS destination in the address field and a provider-specific loading state; replacement navigation is tracked so cancellation of the underlying local start-page load cannot overwrite the new request;
@@ -43,6 +44,7 @@ The current app remains the WebKit baseline. A future Chromium/Blink implementat
 - `PageIntelligenceProviding` protocol;
 - optional Responses API provider.
 - static AI-tool catalog models, maintainable local configuration, release metadata, task-specific editorial ordering, and local filtering.
+- a first-party curated tracker-domain catalog and a deterministic WebKit content-rule-list generator.
 
 `ClearframeBrowser` is macOS-specific:
 
@@ -52,6 +54,7 @@ The current app remains the WebKit baseline. A future Chromium/Blink implementat
 - macOS Keychain settings.
 - local search-provider preferences and address/search resolution.
 - native AI-guide start-page presentation.
+- local tracker-blocking settings/provider and the address-bar shield/Settings UI.
 
 A future Windows app should implement the same page-intelligence contract with a Windows-native UI and likely WebView2 or another chosen engine. SwiftUI and WebKit code will not transfer directly.
 
@@ -94,7 +97,7 @@ WebKit is a pragmatic macOS-first engine, but this foundation is not equivalent 
 - **Basic tabs, not Chrome-scale tab management.** This release is single-window and has no tab reordering, pinned tabs, tab groups, multiple profiles, separate private windows, or cross-device sync. Private tabs are clearly marked, use an ephemeral WebKit data store, and avoid local history/restoration, but do not provide network anonymity. Restoration reloads the current URL; it does not preserve back/forward stacks, form state, or page content.
 - **Basic downloads, not a production download service.** Downloads use a user-selected destination and remain visible in a dedicated toolbar panel while the app runs. The panel explains an empty session and can open the Downloads folder, but there is no byte-level progress, persisted download list, pause/resume UI, background transfer service, quarantine scanner, or reputation verdict.
 - **Local bookmark bar and organization, not sync.** Bar visibility, folder titles, emoji, hierarchy, and bookmark placement remain in the current Mac user profile. A native URL drag can create a bookmark in Unfiled or a visible folder, and dragging an existing bookmark moves that one record. It does not drag folders, reorder items, expose closed nested-menu rows as targets, or replace the accessible Move menu. Hiding the bar does not delete anything. Legacy flat records become Unfiled; deleting a non-empty folder rehomes its direct bookmarks/subfolders after confirmation. There is no account, cloud backup, conflict resolution, or cross-device sync.
-- **Incomplete browser services.** There is no password/import system, certificate-detail UI, comprehensive site-permission center, content blocker, granular per-site data manager, crash reporter/relaunch recovery, updater, or enterprise policy. The delivered reset removes all Clearframe browsing records and WebKit website data at once.
+- **Incomplete browser services.** There is no password/import system, certificate-detail UI, comprehensive site-permission center, granular per-site data manager beyond tracker-blocking exceptions, crash reporter/relaunch recovery, updater, or enterprise policy. Tracker blocking (see [Tracker blocking](content-blocking.md)) is a small first-party curated domain list, not a comprehensive ad blocker. The delivered reset removes all Clearframe browsing records, per-site tracker-blocking exceptions, and WebKit website data at once.
 - **Distribution is unfinished.** A hardened-runtime local `.app` bundle and CI checks are generated, and the source license is settled (AGPL-3.0, `LICENSE`), but a public release still needs a maintained Xcode archive/release target, Developer ID credentials/signing, notarization, entitlement review, update delivery, accessibility QA, and release engineering.
 - **Default-browser registration is only a prerequisite.** The app declares HTTP/HTTPS handling and safely opens incoming web URLs, but Clearframe does not silently change the user's default browser. Finder/System Settings registration and default selection still need release QA after a Developer ID-signed installation.
 - **Security claims are narrow.** WebKit provides a modern rendering process, but Clearframe has not completed an independent browser security review. Its risk scanner reads only visible text and page-level facts.
