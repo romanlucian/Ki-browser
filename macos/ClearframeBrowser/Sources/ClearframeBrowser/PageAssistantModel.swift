@@ -18,6 +18,7 @@ final class PageAssistantModel: ObservableObject {
         case idle
         case loading(String)
         case ready
+        case structureNotice
         case failed(String)
     }
 
@@ -37,6 +38,7 @@ final class PageAssistantModel: ObservableObject {
     private var activeTask: Task<Void, Never>?
     private var operationGeneration = 0
     private var snapshotNavigationVersion: Int?
+    private var hasOverriddenStructureNotice = false
 
     init(
         localProvider: any PageIntelligenceProviding = LocalPageIntelligenceProvider(),
@@ -60,6 +62,7 @@ final class PageAssistantModel: ObservableObject {
         operationMessage = nil
         operationError = nil
         snapshotNavigationVersion = nil
+        hasOverriddenStructureNotice = false
     }
 
     func teardown() {
@@ -75,6 +78,7 @@ final class PageAssistantModel: ObservableObject {
         operationMessage = nil
         operationError = nil
         snapshotNavigationVersion = nil
+        hasOverriddenStructureNotice = false
     }
 
     func analyzeCurrentPage(session: any PageAssistantSession) async {
@@ -92,12 +96,63 @@ final class PageAssistantModel: ObservableObject {
                       session.navigationVersion == expectedNavigationVersion,
                       self.snapshotStillMatches(page, session: session) else { return }
 
+                if LocalAnalysisEngine.assessStructure(page: page) == .listing, !self.hasOverriddenStructureNotice {
+                    self.snapshot = page
+                    self.snapshotNavigationVersion = expectedNavigationVersion
+                    self.state = .structureNotice
+                    return
+                }
+
                 let content = try await self.localProvider.analyze(page: page)
                 try Task.checkCancellation()
                 guard self.isCurrent(generation), session.navigationVersion == expectedNavigationVersion else { return }
 
                 self.snapshot = page
                 self.snapshotNavigationVersion = expectedNavigationVersion
+                self.analysis = PageAnalysis(
+                    content: content,
+                    risk: RiskAnalyzer.assess(page: page),
+                    readingTimeMinutes: LocalAnalysisEngine.readingTime(wordCount: page.wordCount),
+                    mode: .local
+                )
+                self.translatedSummary = nil
+                self.comparison = nil
+                self.revealedEvidence = nil
+                self.evidenceWasFoundOnPage = false
+                self.state = .ready
+            } catch is CancellationError {
+                // Navigation or a newer explicit action superseded this work.
+            } catch {
+                guard self.isCurrent(generation) else { return }
+                self.state = .failed(error.localizedDescription)
+            }
+        }
+        activeTask = task
+        await task.value
+        finishOperation(generation)
+    }
+
+    /// Runs the same local summarize/risk pipeline as `analyzeCurrentPage`, but on the
+    /// snapshot already stored while showing `.structureNotice` — the page was already
+    /// read once for the structure check, so this proceeds without extracting it again.
+    func analyzeDespiteStructure(session: any PageAssistantSession) async {
+        guard state == .structureNotice,
+              let page = snapshot,
+              let expectedNavigationVersion = snapshotNavigationVersion,
+              expectedNavigationVersion == session.navigationVersion else { return }
+
+        hasOverriddenStructureNotice = true
+        let generation = beginOperation()
+        state = .loading("Analyzing anyway…")
+
+        let task = Task { @MainActor [weak self, weak session] in
+            guard let self, let session else { return }
+            do {
+                try Task.checkCancellation()
+                let content = try await self.localProvider.analyze(page: page)
+                try Task.checkCancellation()
+                guard self.isCurrent(generation), session.navigationVersion == expectedNavigationVersion else { return }
+
                 self.analysis = PageAnalysis(
                     content: content,
                     risk: RiskAnalyzer.assess(page: page),

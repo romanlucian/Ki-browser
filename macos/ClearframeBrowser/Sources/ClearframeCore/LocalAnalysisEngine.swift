@@ -28,6 +28,16 @@ public enum LocalAnalysisEngine {
         "picture-in-picture"
     ]
 
+    /// Structure thresholds calibrated on live English and Romanian section fronts and
+    /// articles. Simplified Chinese has no listing measurement yet; only the shorter CJK
+    /// block length follows the engine's existing CJK-aware precedent.
+    private static let minimumListingBlocks = 12
+    private static let listingEndPunctuationPercent = 60
+    private static let listingProseMassPercent = 10
+    private static let longBlockCharacters = 220
+    private static let longCJKBlockCharacters = 100
+    private static let blockEndings: Set<Character> = [".", "!", "?", "…", "。", "！", "？", ":", ";"]
+
     private static let plainReplacements: [(String, String)] = [
         ("approximately", "about"),
         ("additional", "more"),
@@ -72,9 +82,13 @@ public enum LocalAnalysisEngine {
             "selon", "rapport", "étude", "recherche", "sondage", "million", "milliard", "pour cent",
             "报告", "研究", "调查", "百万", "十亿", "百分之", "保证", "最佳", "首次"
         ]
+        // A claim repeated from the gist or a key point gives the reader nothing new to
+        // check, so keep claims to sentences the rest of the result did not already show.
+        let presentedSentences = summarySet.union(keyPoints)
         let claims = scored
             .filter { entry in
-                entry.sentence.rangeOfCharacter(from: .decimalDigits) != nil ||
+                guard !presentedSentences.contains(entry.sentence) else { return false }
+                return entry.sentence.rangeOfCharacter(from: .decimalDigits) != nil ||
                 claimTerms.contains { containsClaimTerm($0, in: entry.sentence) }
             }
             .sorted { $0.score > $1.score }
@@ -86,6 +100,36 @@ public enum LocalAnalysisEngine {
             keyPoints: Array(keyPoints),
             claimsToCheck: Array(claims)
         )
+    }
+
+    /// A section or index page stitches unrelated headlines into a confident-looking
+    /// summary, so the interface has to know what kind of page it is looking at. Read
+    /// the extractor's reading blocks: many blocks, few sentence endings, and almost no
+    /// long punctuated prose describe a list of links rather than a text to summarize.
+    /// Article stays the safe default — including the single-block extractor fallback —
+    /// because hiding a real summary costs the reader more than summarizing a list.
+    public static func assessStructure(page: PageSnapshot) -> PageStructure {
+        let blocks = page.text.components(separatedBy: .newlines)
+            .map(normalize)
+            .filter { !$0.isEmpty }
+        guard blocks.count >= minimumListingBlocks else { return .article }
+
+        var punctuatedBlocks = 0
+        var totalCharacters = 0
+        var longPunctuatedCharacters = 0
+        for block in blocks {
+            let characters = block.count
+            let isPunctuated = block.last.map(blockEndings.contains) ?? false
+            let longBlock = block.contains(where: isCJK) ? longCJKBlockCharacters : longBlockCharacters
+            totalCharacters += characters
+            if isPunctuated { punctuatedBlocks += 1 }
+            if isPunctuated && characters >= longBlock { longPunctuatedCharacters += characters }
+        }
+
+        // Compare the two shares as integers so both runtimes agree on the boundaries.
+        let mostlyUnpunctuated = punctuatedBlocks * 100 < blocks.count * listingEndPunctuationPercent
+        let littleProseMass = longPunctuatedCharacters * 100 < totalCharacters * listingProseMassPercent
+        return mostlyUnpunctuated && littleProseMass ? .listing : .article
     }
 
     public static func simplifyEnglish(_ value: String) -> String {

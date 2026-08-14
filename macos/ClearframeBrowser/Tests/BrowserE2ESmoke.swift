@@ -55,10 +55,14 @@ private func evaluateValue(_ script: String, in session: BrowserSession) async t
 }
 
 @MainActor
-private func loadDeterministicPage(in session: BrowserSession, localURL: URL) async throws {
+private func loadDeterministicPage(
+    in session: BrowserSession,
+    localURL: URL,
+    expectedTitle: String = "Clearframe Local Verification"
+) async throws {
     session.navigate(localURL.absoluteString)
     let loaded = await waitUntil(condition: {
-        session.loadState == .content && session.pageTitle == "Clearframe Local Verification"
+        session.loadState == .content && session.pageTitle == expectedTitle
     })
     try require(loaded, "deterministic page did not render from the verified local fixture server")
 }
@@ -382,8 +386,8 @@ struct BrowserE2ESmoke {
                 hostname: "127.0.0.1",
                 scheme: "http",
                 language: "en",
-                text: "Cities are adding shaded public spaces as summer temperatures rise. A 2025 survey covering forty cities found that tree cover can make busy streets more comfortable. Planners say shade structures can be installed quickly, while mature trees provide broader environmental benefits. The report recommends measuring street temperature before and after each project. Residents also asked for drinking fountains near transit stops and published maintenance schedules.",
-                wordCount: 64,
+                text: "Cities are adding shaded public spaces as summer temperatures rise. A 2025 survey covering forty cities found that tree cover can make busy streets more comfortable. Planners say shade structures can be installed quickly, while mature trees provide broader environmental benefits. The report recommends measuring street temperature before and after each project. Residents also asked for drinking fountains near transit stops and published maintenance schedules. Maintenance crews water young trees twice a week through the first summer. The city budget sets aside money for replacing damaged shade fabric each year. Volunteers mapped every bench in the market district last autumn. Officials plan to publish the temperature readings on an open data page. An earlier pilot in 2019 covered only three streets, according to the appendix.",
+                wordCount: 125,
                 hasPasswordField: false,
                 formActions: []
             )
@@ -464,6 +468,30 @@ struct BrowserE2ESmoke {
             let evidenceFixtureRestored = await waitUntil { session.currentURLString == localURL }
             try require(evidenceFixtureRestored, "fixture URL did not restore after stale-analysis check")
             print("PASS assistant lifecycle: same-document navigation cleared stale analysis")
+
+            let listingFixtureURL = fixtureURL.appendingPathComponent("listing.html")
+            try await loadDeterministicPage(
+                in: session,
+                localURL: listingFixtureURL,
+                expectedTitle: "Clearframe Local News Digest"
+            )
+            await assistant.analyzeCurrentPage(session: session)
+            try require(assistant.state == .structureNotice, "a section-page fixture with many unrelated headlines did not produce a structure notice")
+            try require(assistant.analysis == nil, "a structure notice unexpectedly produced an analysis before the reader chose to proceed")
+            try require(assistant.snapshot?.title == "Clearframe Local News Digest", "the structure notice did not retain the listing snapshot")
+            print("PASS structure notice: a section-page fixture with many unrelated headlines stopped at a notice instead of summarizing it")
+
+            await assistant.analyzeDespiteStructure(session: session)
+            try require(assistant.state == .ready, "Analyze anyway did not reach a ready state from the structure notice")
+            try require(assistant.analysis?.mode == .local, "Analyze anyway unexpectedly used a remote provider")
+            try require((assistant.analysis?.content.summary.count ?? 0) > 80, "Analyze anyway produced an unexpectedly short summary")
+            print("PASS structure override: Analyze anyway summarized the already-extracted listing snapshot without reading the page again")
+
+            try await loadDeterministicPage(in: session, localURL: fixtureURL)
+            await assistant.analyzeCurrentPage(session: session)
+            try require(assistant.state == .ready, "the ordinary article fixture no longer analyzes straight to a ready summary")
+            try require((assistant.analysis?.content.summary.count ?? 0) > 80, "the ordinary article fixture produced an unexpectedly short summary")
+            print("PASS structure default: the article fixture still analyzes straight to ready without a listing notice")
 
             workspace.toggleBookmarkForSelectedTab()
             try require(dataStore.bookmarks.count == 1, "bookmark was not saved")

@@ -1,13 +1,14 @@
-import { analyzePage, canSimplifyToPlainEnglish, simplifyEnglish } from "./core/analyzer.js";
+import { analyzePage, assessStructure, canSimplifyToPlainEnglish, simplifyEnglish } from "./core/analyzer.js";
 import { compareSources } from "./core/compare.js";
 import { extractPage } from "./content/extract-page.js";
 import { createAiAnalysis, DEFAULT_AI_SETTINGS, translateText } from "./providers/openai.js";
 
 const $ = (selector) => document.querySelector(selector);
-const views = [$("#introView"), $("#loadingView"), $("#resultsView"), $("#errorView")];
+const views = [$("#introView"), $("#loadingView"), $("#resultsView"), $("#noticeView"), $("#errorView")];
 let currentPage = null;
 let currentAnalysis = null;
 let originalSummary = "";
+let structureOverridden = false;
 let savedSource = null;
 let settings = { ...DEFAULT_AI_SETTINGS };
 let toastTimer = null;
@@ -151,13 +152,30 @@ async function analyzeActivePage() {
     }
     if (generation !== operationGeneration) return;
     currentPage = result.result;
-    currentAnalysis = analyzePage(currentPage);
-    originalSummary = currentAnalysis.summary;
-    renderAnalysis();
+    structureOverridden = false;
+    if (assessStructure(currentPage) === "listing") {
+      showView($("#noticeView"));
+      return;
+    }
+    finishAnalysis();
   } catch (error) {
     if (generation !== operationGeneration) return;
     showError(error.message || "The browser blocked access to this page.");
   }
+}
+
+function finishAnalysis() {
+  currentAnalysis = analyzePage(currentPage);
+  originalSummary = currentAnalysis.summary;
+  renderAnalysis();
+}
+
+// The page was already extracted for the structure check, so trust the reader's
+// judgment and summarize the same page object instead of reading it again.
+function analyzeDespiteStructure() {
+  if (!currentPage) return;
+  structureOverridden = true;
+  finishAnalysis();
 }
 
 async function improveWithAi() {
@@ -292,6 +310,7 @@ $("#aiButton").addEventListener("click", improveWithAi);
 $("#translateButton").addEventListener("click", translateSummary);
 $("#compareButton").addEventListener("click", handleCompare);
 $("#clearCompareButton").addEventListener("click", clearComparison);
+$("#analyzeAnywayButton").addEventListener("click", analyzeDespiteStructure);
 $("#riskToggle").addEventListener("click", () => {
   const signals = $("#riskSignals");
   signals.classList.toggle("hidden");
@@ -307,6 +326,7 @@ function invalidateCurrentPage(message) {
   currentPage = null;
   currentAnalysis = null;
   originalSummary = "";
+  structureOverridden = false;
   $("#aiButton").disabled = false;
   $("#aiButtonLabel").textContent = "Improve with AI";
   $("#translateButton").disabled = false;

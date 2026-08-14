@@ -26,6 +26,16 @@ const MEDIA_INTERFACE_PHRASES = [
 
 const CJK_PATTERN = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u;
 
+// Structure thresholds calibrated on live English and Romanian section fronts and
+// articles. Simplified Chinese has no listing measurement yet; only the shorter CJK
+// block length follows the analyzer's existing CJK-aware precedent.
+const BLOCK_ENDING_PATTERN = /[.!?…。！？:;]$/u;
+const MINIMUM_LISTING_BLOCKS = 12;
+const LISTING_END_PUNCTUATION_PERCENT = 60;
+const LISTING_PROSE_MASS_PERCENT = 10;
+const LONG_BLOCK_CHARACTERS = 220;
+const LONG_CJK_BLOCK_CHARACTERS = 100;
+
 const PLAIN_REPLACEMENTS = new Map([
   ["approximately", "about"],
   ["additional", "more"],
@@ -158,8 +168,11 @@ export function summarizeLocally(page) {
 
   const claimPattern =
     /\b(according|report|study|research|survey|million|billion|percent|guarantee|always|never|only|best|worst|first|potrivit|raport|studiu|cercetare|sondaj|milioane|miliarde|procent|selon|rapport|étude|recherche|sondage|milliard|pour cent)\b|报告|研究|调查|百万|十亿|百分之|保证|最佳|首次|\d[%\d,.:/-]*/iu;
+  // A claim repeated from the gist or a key point gives the reader nothing new to
+  // check, so keep claims to sentences the rest of the result did not already show.
+  const presentedSentences = new Set([...summarySentences, ...keyPoints]);
   const claimsToCheck = scored
-    .filter((entry) => claimPattern.test(entry.sentence))
+    .filter((entry) => !presentedSentences.has(entry.sentence) && claimPattern.test(entry.sentence))
     .sort((a, b) => b.score - a.score)
     .slice(0, 3)
     .map((entry) => entry.sentence);
@@ -169,6 +182,33 @@ export function summarizeLocally(page) {
     keyPoints,
     claimsToCheck
   };
+}
+
+// A section or index page stitches unrelated headlines into a confident-looking
+// summary, so the interface has to know what kind of page it is looking at. Read the
+// extractor's reading blocks: many blocks, few sentence endings, and almost no long
+// punctuated prose describe a list of links rather than a text to summarize. Article
+// stays the safe default — including the single-block extractor fallback — because
+// hiding a real summary costs the reader more than summarizing a list.
+export function assessStructure(page) {
+  const blocks = (page.text || "").split(/\r?\n/).map(normalizeText).filter(Boolean);
+  if (blocks.length < MINIMUM_LISTING_BLOCKS) return "article";
+
+  let punctuatedBlocks = 0;
+  let totalCharacters = 0;
+  let longPunctuatedCharacters = 0;
+  for (const block of blocks) {
+    const isPunctuated = BLOCK_ENDING_PATTERN.test(block);
+    const longBlock = CJK_PATTERN.test(block) ? LONG_CJK_BLOCK_CHARACTERS : LONG_BLOCK_CHARACTERS;
+    totalCharacters += block.length;
+    if (isPunctuated) punctuatedBlocks += 1;
+    if (isPunctuated && block.length >= longBlock) longPunctuatedCharacters += block.length;
+  }
+
+  // Compare the two shares as integers so both runtimes agree on the boundaries.
+  const mostlyUnpunctuated = punctuatedBlocks * 100 < blocks.length * LISTING_END_PUNCTUATION_PERCENT;
+  const littleProseMass = longPunctuatedCharacters * 100 < totalCharacters * LISTING_PROSE_MASS_PERCENT;
+  return mostlyUnpunctuated && littleProseMass ? "listing" : "article";
 }
 
 export function assessRisk(page) {

@@ -148,7 +148,7 @@ h1, h2 { font-family: Georgia, "Times New Roman", serif; }
 .privacy-line { color: var(--muted); font-size: 10px; margin: 14px 0 0; }
 .privacy-line span { color: #4b9d75; font-size: 8px; margin-right: 4px; }
 
-.loading-view, .error-view { padding: 82px 10px; text-align: center; }
+.loading-view, .error-view, .notice-view { padding: 82px 10px; text-align: center; }
 .loader {
   animation: rotate 1s linear infinite;
   border: 3px solid var(--green-soft);
@@ -239,8 +239,9 @@ select { background: white; border: 1px solid var(--line); border-radius: 10px; 
 .disclaimer strong { color: var(--ink); }
 
 .error-icon { align-items: center; background: var(--red-soft); border-radius: 50%; color: var(--red); display: flex; font-size: 22px; font-weight: 800; height: 54px; justify-content: center; margin: 0 auto 16px; width: 54px; }
-.error-view h2 { font-size: 22px; margin: 0 0 8px; }
-.error-view p { color: var(--muted); line-height: 1.5; margin: 0 0 20px; }
+.notice-icon { align-items: center; background: var(--green-soft); border-radius: 50%; color: var(--green); display: flex; font-size: 22px; font-weight: 800; height: 54px; justify-content: center; margin: 0 auto 16px; width: 54px; }
+.error-view h2, .notice-view h2 { font-size: 22px; margin: 0 0 8px; }
+.error-view p, .notice-view p { color: var(--muted); line-height: 1.5; margin: 0 0 20px; }
 
 .toast {
   background: var(--ink);

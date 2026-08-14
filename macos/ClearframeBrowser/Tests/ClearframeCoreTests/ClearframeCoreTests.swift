@@ -9,8 +9,8 @@ final class ClearframeCoreTests: XCTestCase {
         hostname: "example.org",
         scheme: "https",
         language: "en",
-        text: "Cities are adding shaded public spaces as summer temperatures rise. A 2025 survey of 40 cities found that tree cover can make busy streets more comfortable. Planners say shade structures are faster to install, while mature trees provide broader environmental benefits. The report recommends measuring street temperature before and after each project. Residents also asked for more drinking fountains near transit stops.",
-        wordCount: 61,
+        text: "Cities are adding shaded public spaces as summer temperatures rise. A 2025 survey of 40 cities found that tree cover can make busy streets more comfortable. Planners say shade structures are faster to install, while mature trees provide broader environmental benefits. The report recommends measuring street temperature before and after each project. Residents also asked for more drinking fountains near transit stops. Maintenance crews water young trees twice a week through the first summer. The city budget sets aside money for replacing damaged shade fabric each year. Volunteers mapped every bench in the market district last autumn. Officials plan to publish the temperature readings on an open data page. An earlier pilot in 2019 covered only three streets, according to the appendix.",
+        wordCount: 122,
         hasPasswordField: false,
         formActions: []
     )
@@ -19,7 +19,16 @@ final class ClearframeCoreTests: XCTestCase {
         let result = LocalAnalysisEngine.summarize(page: article)
         XCTAssertGreaterThan(result.summary.count, 80)
         XCTAssertFalse(result.keyPoints.isEmpty)
-        XCTAssertTrue(result.claimsToCheck.contains { $0.contains("2025") })
+        XCTAssertTrue(result.claimsToCheck.contains { $0.contains("report") })
+    }
+
+    func testClaimsNeverRepeatTheSummaryOrKeyPoints() {
+        let result = LocalAnalysisEngine.summarize(page: article)
+        XCTAssertFalse(result.claimsToCheck.isEmpty)
+        for claim in result.claimsToCheck {
+            XCTAssertFalse(result.summary.contains(claim), "claim repeated the gist: \(claim)")
+            XCTAssertFalse(result.keyPoints.contains(claim), "claim repeated a key point: \(claim)")
+        }
     }
 
     func testEnglishTopicWordsAreNotRemovedByOtherLanguageStopWords() {
@@ -610,6 +619,16 @@ final class ClearframeCoreTests: XCTestCase {
         }
     }
 
+    func testSharedContractPageStructure() throws {
+        for testCase in try localAnalysisContract().structureCases {
+            XCTAssertEqual(
+                LocalAnalysisEngine.assessStructure(page: testCase.page),
+                testCase.expected,
+                testCase.id
+            )
+        }
+    }
+
     func testSharedContractRiskSignals() throws {
         for testCase in try localAnalysisContract().riskCases {
             let risk = RiskAnalyzer.assess(page: testCase.page)
@@ -643,6 +662,7 @@ final class ClearframeCoreTests: XCTestCase {
 private struct LocalAnalysisContract: Decodable {
     let tokenCases: [TokenContractCase]
     let summaryCases: [SummaryContractCase]
+    let structureCases: [StructureContractCase]
     let riskCases: [RiskContractCase]
     let plainEnglishCases: [PlainEnglishContractCase]
     let readingTimeCases: [ReadingTimeContractCase]
@@ -660,6 +680,12 @@ private struct SummaryContractCase: Decodable {
     let id: String
     let page: PageSnapshot
     let expected: PageAnalysisContent
+}
+
+private struct StructureContractCase: Decodable {
+    let id: String
+    let page: PageSnapshot
+    let expected: PageStructure
 }
 
 private struct RiskContractCase: Decodable {

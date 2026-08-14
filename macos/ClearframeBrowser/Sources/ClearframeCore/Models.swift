@@ -80,6 +80,11 @@ public struct RiskAssessment: Codable, Equatable, Sendable {
     }
 }
 
+public enum PageStructure: String, Codable, Sendable {
+    case article
+    case listing
+}
+
 public enum AnalysisMode: String, Codable, Sendable {
     case local = "Local"
     case remoteAI = "AI"

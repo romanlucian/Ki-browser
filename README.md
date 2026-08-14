@@ -119,6 +119,7 @@ npm run validate
 
 - A local summary selects representative sentences; it is not a fact check.
 - Local multilingual analysis preserves the page language but is extractive. Plain English rewriting is local only for English sources, and text-based risk phrases do not have equal language coverage.
+- Analyze page detects section and listing pages with many unrelated headlines and offers Analyze anyway instead of silently summarizing them as one article; this structure check is calibrated for the tested languages (see [docs/page-intelligence-contract.md](docs/page-intelligence-contract.md)).
 - AI output can omit context or be wrong.
 - Risk signals are heuristic and do not prove that a page is safe or malicious.
 - Clearframe can save downloads but does not scan their contents or provide a reputation verdict. It also does not inspect certificate details, network traffic, reputation databases, or hidden page behavior.

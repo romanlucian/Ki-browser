@@ -13,8 +13,8 @@ import { compareSources } from "../src/core/compare.js";
 const article = {
   title: "Cities expand shaded public spaces",
   description: "",
-  text: "Cities are adding shaded public spaces as summer temperatures rise. A 2025 survey of 40 cities found that tree cover can make busy streets more comfortable. Planners say shade structures are faster to install, while mature trees provide broader environmental benefits. The report recommends measuring street temperature before and after each project. Residents also asked for more drinking fountains near transit stops.",
-  wordCount: 61,
+  text: "Cities are adding shaded public spaces as summer temperatures rise. A 2025 survey of 40 cities found that tree cover can make busy streets more comfortable. Planners say shade structures are faster to install, while mature trees provide broader environmental benefits. The report recommends measuring street temperature before and after each project. Residents also asked for more drinking fountains near transit stops. Maintenance crews water young trees twice a week through the first summer. The city budget sets aside money for replacing damaged shade fabric each year. Volunteers mapped every bench in the market district last autumn. Officials plan to publish the temperature readings on an open data page. An earlier pilot in 2019 covered only three streets, according to the appendix.",
+  wordCount: 122,
   hostname: "example.org",
   url: "https://example.org/cities",
   liveUrl: "https://example.org/cities",
@@ -27,7 +27,16 @@ test("local summary returns grounded sentences and claims", () => {
   const result = summarizeLocally(article);
   assert.ok(result.summary.length > 80);
   assert.ok(result.keyPoints.length >= 1);
-  assert.ok(result.claimsToCheck.some((claim) => claim.includes("2025")));
+  assert.ok(result.claimsToCheck.some((claim) => claim.includes("report")));
+});
+
+test("claims never repeat the summary or key points", () => {
+  const result = summarizeLocally(article);
+  assert.ok(result.claimsToCheck.length >= 1);
+  for (const claim of result.claimsToCheck) {
+    assert.ok(!result.summary.includes(claim), `claim repeated the gist: ${claim}`);
+    assert.ok(!result.keyPoints.includes(claim), `claim repeated a key point: ${claim}`);
+  }
 });
 
 test("English topic words are not removed by other-language stopwords", () => {
@@ -47,7 +56,7 @@ test("local summary preserves short Simplified Chinese sentences and claims", ()
     ...article,
     title: "城市遮阴计划",
     language: "zh-CN",
-    text: "多个城市正在增加公共遮阴空间。2025年的调查覆盖了四十个城市。成熟树木可以提供更广泛的环境效益。报告建议在项目实施前后测量街道温度。居民还要求在交通站点附近增加饮水设施。"
+    text: "多个城市正在增加公共遮阴空间。2025年的调查覆盖了四十个城市。成熟树木可以提供更广泛的环境效益。报告建议在项目实施前后测量街道温度。居民还要求在交通站点附近增加饮水设施。养护人员在第一个夏天每周浇水两次。市政预算每年安排更换损坏的遮阳布。志愿者去年秋天记录了市场区的每一张长椅。官员计划在公开数据页面发布温度记录。附录提到2019年的试点只覆盖了三条街道。"
   });
 
   assert.match(result.summary, /城市|调查|报告/u);
@@ -64,12 +73,19 @@ test("local summary treats rendered blocks as boundaries and removes repeated pl
       "Un sondaj din 2025 a inclus patruzeci de orașe și recomandă măsurători locale",
       "Locuitorii cer fântâni de apă aproape de stațiile de transport public",
       "Planificatorii vor publica programul de întreținere pentru fiecare proiect",
+      "Copacii maturi oferă umbră densă pe străzile aglomerate din centrul orașului",
+      "Zonele umbrite din piață vor fi extinse și în cartierele mărginașe ale orașului",
+      "Orașul va planta copaci noi lângă stațiile de transport aglomerate",
+      "Echipele de întreținere udă copacii tineri de două ori pe săptămână vara",
+      "Voluntarii au cartografiat băncile umbrite din piață în toamna trecută",
+      "Un proiect pilot din 2019 a acoperit doar trei străzi, potrivit anexei",
       "Video Player is loading Stream Type LIVE Playback controls"
     ].join("\n")
   });
 
   assert.ok(result.summary.length > 80);
-  assert.ok(result.claimsToCheck.some((claim) => /sondaj|2025/i.test(claim)));
+  assert.ok(result.claimsToCheck.some((claim) => /2019|potrivit/i.test(claim)));
+  assert.ok(!result.claimsToCheck.some((claim) => result.summary.includes(claim)));
   assert.doesNotMatch(`${result.summary} ${result.keyPoints.join(" ")}`, /video player|stream type|playback controls/i);
 });
 

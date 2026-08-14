@@ -41,10 +41,7 @@
           "Researchers will measure whether children receive faster support next year.",
           "Officials said the final guidance will appear online in September 2026."
         ],
-        "claimsToCheck": [
-          "The report says families can compare four care plans before enrollment.",
-          "Officials said the final guidance will appear online in September 2026."
-        ]
+        "claimsToCheck": []
       }
     },
     {
@@ -66,10 +63,7 @@
           "Primăria va publica rezultatele proiectului pilot după șase luni.",
           "Locuitorii pot trimite observații prin formularul public al bibliotecii."
         ],
-        "claimsToCheck": [
-          "Un sondaj din 2026 va măsura participarea și nevoile vizitatorilor.",
-          "Copiii vor primi spații liniștite pentru studiu și activități ghidate."
-        ]
+        "claimsToCheck": []
       }
     },
     {
@@ -91,9 +85,7 @@
           "La ville publiera les résultats du projet pilote après six mois.",
           "Les habitants pourront envoyer leurs commentaires avec un formulaire public."
         ],
-        "claimsToCheck": [
-          "Une étude menée en 2026 mesurera la fréquentation et les besoins des visiteurs."
-        ]
+        "claimsToCheck": []
       }
     },
     {
@@ -115,10 +107,111 @@
           "2026年的调查将记录到访人数和家庭需求。",
           "市政府将在六个月后公布试点项目结果。"
         ],
+        "claimsToCheck": []
+      }
+    },
+    {
+      "id": "english-transit-report-claim-overlap",
+      "page": {
+        "title": "Transit report reviews weekend bus service",
+        "url": "https://example.org/transit-report",
+        "hostname": "example.org",
+        "scheme": "https",
+        "language": "en-US",
+        "text": "The city transit report says weekend bus service will expand on four routes next spring. Weekend ridership grew 18 percent last year, and the report expects a similar rise in 2027. Planners will add a Saturday evening bus between the harbour and the university district. The transit agency will publish a full weekend timetable before the change begins. Drivers asked for longer breaks at the depot, and the agency agreed to review the rosters. Residents of the eastern suburbs told the agency that Sunday service is still too thin. The report recommends measuring waiting times at ten stops before and after the change. A shorter school route will keep its current timetable until the summer holidays end. Bicycle racks will be fitted to buses so riders can combine cycling and public transit. Only the night route will lose a departure, according to a footnote in the same document.",
+        "wordCount": 148,
+        "hasPasswordField": false,
+        "formActions": []
+      },
+      "expected": {
+        "summary": "The city transit report says weekend bus service will expand on four routes next spring. Weekend ridership grew 18 percent last year, and the report expects a similar rise in 2027. The transit agency will publish a full weekend timetable before the change begins.",
+        "keyPoints": [
+          "Planners will add a Saturday evening bus between the harbour and the university district.",
+          "Residents of the eastern suburbs told the agency that Sunday service is still too thin.",
+          "The report recommends measuring waiting times at ten stops before and after the change.",
+          "Bicycle racks will be fitted to buses so riders can combine cycling and public transit."
+        ],
         "claimsToCheck": [
-          "2026年的调查将记录到访人数和家庭需求。"
+          "Only the night route will lose a departure, according to a footnote in the same document."
         ]
       }
+    }
+  ],
+  "structureCases": [
+    {
+      "id": "romanian-news-section-listing",
+      "page": {
+        "title": "Știri locale din Valea Verde",
+        "url": "https://example.org/stiri/eveniment",
+        "hostname": "example.org",
+        "scheme": "https",
+        "language": "ro",
+        "text": "Primăria din Valea Verde anunță lucrări de modernizare pe podul vechi din centrul orașului\nFermierii din câmpia de sud testează un sistem de irigații alimentat cu panouri solare\nElevii unui liceu tehnic construiesc o mașină electrică pentru un concurs studențesc\nSpitalul județean deschide un program de consultații pentru pacienții din satele izolate\nUn festival de film independent aduce zece regizori tineri în orașul de la munte\nPrețurile locuințelor din zona de nord au crescut din nou în ultimele trei luni\nCompania de transport public testează autobuze electrice pe traseul dintre gară și port\nBibliotecile din regiune primesc fonduri pentru echipamente digitale și cursuri gratuite\nMeteorologii anunță o săptămână ploioasă în jumătatea de est a țării\nAntreprenorii locali cer proceduri mai simple pentru autorizațiile de construcție\nUn muzeu mic din apropierea râului își digitalizează colecția de fotografii vechi\nClubul sportiv al orașului caută voluntari pentru turneul de vară al juniorilor\nRețeaua de piețe agricole se extinde cu două locații în cartierele noi ale orașului\nUniversitatea locală lansează un program de burse pentru studenții din mediul rural\nAutoritățile verifică calitatea apei din fântânile publice după sezonul secetos\nUn grup de arhitecți propune transformarea fostei fabrici într-un centru cultural",
+        "wordCount": 196,
+        "hasPasswordField": false,
+        "formActions": []
+      },
+      "expected": "listing"
+    },
+    {
+      "id": "english-teaser-listing-with-periods",
+      "page": {
+        "title": "Local news index",
+        "url": "https://example.org/news",
+        "hostname": "example.org",
+        "scheme": "https",
+        "language": "en",
+        "text": "Coastal towns rebuild their boardwalks after a long stormy winter season\nWhy the revised bus timetable confuses commuters in the harbour district.\nFive short walks that show how the river valley changed in twenty years\nThe small bakery chain that trains apprentices instead of hiring managers.\nWeather warning: heavy rain expected across the northern hills this weekend\nA quiet library becomes the busiest meeting room in a growing suburb.\nFerry operators say the new timetable will be published later this month\nHow one school turned an unused courtyard into a shared vegetable garden.\nMuseum reopens its photography wing after eighteen months of quiet repairs\nReaders describe the neighbourhood shops they would most like to save.\nCycling routes across the old industrial belt attract weekend visitors again\nWhat the harbour redevelopment means for the families living beside it.",
+        "wordCount": 137,
+        "hasPasswordField": false,
+        "formActions": []
+      },
+      "expected": "listing"
+    },
+    {
+      "id": "english-article-with-subheadings",
+      "page": {
+        "title": "Shaded streets and the slow work of cooling a crowded city",
+        "url": "https://example.org/news/shaded-streets",
+        "hostname": "example.org",
+        "scheme": "https",
+        "language": "en",
+        "text": "Shaded streets and the slow work of cooling a crowded city\nThe council has spent four years testing whether narrow shade structures can make a crowded market street usable through the hottest part of the afternoon. Early measurements suggest the difference is smaller than residents hoped, but steady enough that the programme will continue into a third summer.\nEngineers began with a single block near the transit interchange, where surface temperatures had been recorded above forty degrees on ordinary working days. They installed light fabric canopies, replaced dark paving with a paler mix, and left the neighbouring block untouched so the two could be compared.\nWhat two summers of temperature readings actually showed\nAcross two summers the shaded block stayed cooler than its neighbour on almost every recorded afternoon, though the gap narrowed sharply on windless days. Researchers noted that the canopies helped pedestrians most between noon and four, which is also when the market is busiest.\nMature trees performed better than any of the temporary structures, but they were slower to establish and needed watering through the first three summers. Planners now describe the canopies as a bridge measure rather than a replacement for planting along the wider avenues.\nWhy residents noticed the benches before the canopies\nInterviews with market traders and regular shoppers produced a result the engineers had not expected. People described the new shaded benches as the most useful change, because they made it possible to wait for a bus or rest between errands without standing in direct sun.\nThat feedback pushed the council to add seating to every future shading project, even where the temperature benefit was modest. Officials say the lesson was that comfort is judged by whether a street can be used, not by the numbers recorded on an instrument.\nThe cost question nobody wanted to answer first\nEach canopy costs less than a mature tree to install but more to maintain, because the fabric has to be replaced after several seasons of sun and wind. Over a twenty year horizon the planting programme is cheaper, provided enough of the young trees survive their first summers.\nThe finance committee asked for a maintenance reserve before approving the next phase, arguing that abandoned street furniture damages public support for later projects. That reserve is now written into the programme budget and reviewed at the end of each summer.\nWhat happens to the shading programme next summer\nTwo more market streets will be shaded before June, and the council intends to publish its temperature readings so residents can check the claims themselves. The planting programme continues in parallel, with the first avenue trees expected to provide useful shade near the end of the decade.\nMarket traders resting under the new fabric canopies at noon\nVolunteers watering the young avenue trees during a dry week",
+        "wordCount": 469,
+        "hasPasswordField": false,
+        "formActions": []
+      },
+      "expected": "article"
+    },
+    {
+      "id": "listing-shape-below-block-threshold",
+      "page": {
+        "title": "Neighbourhood briefs",
+        "url": "https://example.org/briefs",
+        "hostname": "example.org",
+        "scheme": "https",
+        "language": "en",
+        "text": "Harbour repairs will close the eastern footbridge for most of the spring\nA neighbourhood cinema reopens under new management after two quiet years\nAllotment holders report the earliest planting season in over a decade\nThe regional orchestra announces a free concert series for local schools\nBus operators trial a simpler fare structure on three suburban routes\nA disused railway shed becomes a workshop for furniture restorers\nLocal historians map the vanished streams beneath the market district\nWeekend flooding leaves several riverside footpaths temporarily closed\nThe hospital garden project seeks volunteers for its summer programme\nA new pedestrian crossing is promised outside the primary school\nRecycling collections move to a fortnightly schedule from next month",
+        "wordCount": 114,
+        "hasPasswordField": false,
+        "formActions": []
+      },
+      "expected": "article"
+    },
+    {
+      "id": "single-block-extractor-fallback",
+      "page": {
+        "title": "Local news index",
+        "url": "https://example.org/news/fallback",
+        "hostname": "example.org",
+        "scheme": "https",
+        "language": "en",
+        "text": "Latest news Business Culture Sport Weather More sections Harbour repairs will close the eastern footbridge Allotment holders report an early planting season The regional orchestra announces a free concert series Bus operators trial a simpler fare structure A disused railway shed becomes a furniture workshop Local historians map the vanished streams beneath the market district Weekend flooding leaves riverside footpaths closed The hospital garden project seeks volunteers A new pedestrian crossing is promised outside the primary school Recycling collections move to a fortnightly schedule Subscribe Sign in Contact us About this site Accessibility help Terms of use Privacy policy Cookies Do not share my information Newsletters Advertise with us Careers",
+        "wordCount": 110,
+        "hasPasswordField": false,
+        "formActions": []
+      },
+      "expected": "article"
     }
   ],
   "riskCases": [

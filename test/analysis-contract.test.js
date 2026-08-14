@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import {
   assessRisk,
+  assessStructure,
   simplifyEnglish,
   summarizeLocally,
   tokenize
@@ -41,6 +42,12 @@ test("shared contract: language-aware tokenization", () => {
 test("shared contract: deterministic local summaries", () => {
   for (const testCase of contract.summaryCases) {
     assert.deepEqual(summarizeLocally(extensionPage(testCase.page)), testCase.expected, testCase.id);
+  }
+});
+
+test("shared contract: page structure assessment", () => {
+  for (const testCase of contract.structureCases) {
+    assert.equal(assessStructure(extensionPage(testCase.page)), testCase.expected, testCase.id);
   }
 });
 

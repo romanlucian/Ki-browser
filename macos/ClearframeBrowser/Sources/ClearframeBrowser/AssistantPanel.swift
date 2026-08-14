@@ -20,6 +20,8 @@ struct AssistantPanel: View {
                 emptyState
             case .loading(let message):
                 loadingState(message)
+            case .structureNotice:
+                structureNoticeState
             case .failed(let message):
                 errorState(message)
             case .ready:
@@ -83,6 +85,26 @@ struct AssistantPanel: View {
                 .font(.callout)
                 .foregroundStyle(.secondary)
         }
+    }
+
+    private var structureNoticeState: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "rectangle.stack")
+                .font(.system(size: 36))
+                .foregroundStyle(Color(red: 0.09, green: 0.31, blue: 0.24))
+            Text("This looks like a section page")
+                .font(.title3.bold())
+            Text("It lists many different articles rather than one text to summarize. Open one of its articles for a grounded analysis.")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+            Button("Analyze anyway") {
+                Task { await model.analyzeDespiteStructure(session: session) }
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(Color(red: 0.09, green: 0.31, blue: 0.24))
+        }
+        .padding(28)
     }
 
     private func errorState(_ message: String) -> some View {

@@ -46,6 +46,18 @@ Rules:
 
 The risk object is deterministic application output, not an LLM verdict. A remote model may improve the summary, key points, or candidate claims; it must not silently decide safety.
 
+`claimsToCheck` contains only sentences that the summary and key points did not already show, because a claim repeated from the gist gives the reader nothing new to verify. On short pages, where the gist and key points already cover every extracted sentence, the list is legitimately empty.
+
+## Page structure
+
+```text
+assessStructure(pageSnapshot) -> "article" | "listing"
+```
+
+Section fronts and index pages expose many short link blocks instead of prose, and summarizing them stitches unrelated headlines into a confident-looking gist. The deterministic classifier reads the extractor's reading blocks — one per nonempty line of `visibleText` — and reports `listing` only when all three conditions hold: at least 12 blocks, fewer than 60 percent of blocks ending in sentence punctuation (`. ! ? … 。 ！ ？ : ;`), and blocks that are both long and punctuated carrying less than 10 percent of the total characters. A block counts as long at 220 characters, or at 100 when it contains CJK text, mirroring the engine's other CJK-aware thresholds.
+
+Those thresholds were calibrated on live English and Romanian section fronts and articles; Simplified Chinese listings are not measured yet. `article` is the deliberate default for everything else, including the extractor's no-newline whole-body fallback, because a wrong `listing` label hides a real summary while a wrong `article` label only preserves existing behavior.
+
 ## Language behavior
 
 - Preserve the source language in local output. Local mode is structured extractive analysis, not an implicit translation service.
@@ -73,4 +85,4 @@ For the current optional OpenAI prototype, the remote analysis envelope contains
 - Add a contract version before deploying a backend.
 - Keep additive fields optional.
 - Return explicit capability flags for local, remote, and enterprise providers.
-- Keep `macos/ClearframeBrowser/Tests/ClearframeCoreTests/Fixtures/local-analysis-contract.json` as the platform-neutral behavior gate. The Swift and retained JavaScript suites both execute it for language-aware tokens, exact deterministic summaries, risk signals, Plain English, and reading time; a later Windows implementation should consume the same cases.
+- Keep `macos/ClearframeBrowser/Tests/ClearframeCoreTests/Fixtures/local-analysis-contract.json` as the platform-neutral behavior gate. The Swift and retained JavaScript suites both execute it for language-aware tokens, exact deterministic summaries, page-structure classification, risk signals, Plain English, and reading time; a later Windows implementation should consume the same cases.
