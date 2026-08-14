@@ -2,6 +2,7 @@ import AppKit
 import ClearframeCore
 import Foundation
 import SwiftUI
+@preconcurrency import WebKit
 
 private enum SmokeFailure: LocalizedError {
     case check(String)
@@ -412,6 +413,109 @@ struct BrowserE2ESmoke {
             try require(session.currentURLString == localURL, "address state did not track local navigation")
             try require(!(window.firstResponder is NSTextView), "navigation unexpectedly stole focus back from web content")
             print("PASS navigation: deterministic page rendered from a verified local HTTP server")
+
+            // Content blocking: (1) a control session with no provider proves the
+            // fixture itself is valid — both its inline and external-script markers
+            // load; (2) a provider scoped to a test-only list blocks the tracker
+            // script while the page's own inline script still runs; (3) a per-site
+            // exception lets it load again, and removing the exception blocks it
+            // once more. The shipped catalog list is never used here.
+            let blockingFixtureURL = fixtureURL.appendingPathComponent("blocking.html")
+            let noProviderSession = BrowserSession(
+                downloadCenter: DownloadCenter(),
+                searchSettings: SearchSettingsStore(defaults: defaults)
+            )
+            try await loadDeterministicPage(
+                in: noProviderSession,
+                localURL: blockingFixtureURL,
+                expectedTitle: "Clearframe Blocking Fixture"
+            )
+            let controlInlineMarker = try await evaluateValue(
+                "window.__clearframeInlineMarker === true", in: noProviderSession
+            ) as? Bool
+            let controlTrackerMarker = try await evaluateValue(
+                "window.__clearframeTrackerFixtureLoaded === true", in: noProviderSession
+            ) as? Bool
+            try require(
+                controlInlineMarker == true && controlTrackerMarker == true,
+                "the blocking fixture did not load both its inline and tracker-fixture markers with no content-blocking provider attached"
+            )
+            noProviderSession.teardown()
+            print("PASS content blocking fixture: blocking.html loads its inline marker and tracker-fixture.js with no provider attached")
+
+            let contentBlockingSuiteName = "clearframe.browser.e2e.contentBlocking.\(UUID().uuidString)"
+            guard let contentBlockingDefaults = UserDefaults(suiteName: contentBlockingSuiteName) else {
+                throw SmokeFailure.check("could not create isolated content-blocking defaults")
+            }
+            defer { UserDefaults.standard.removePersistentDomain(forName: contentBlockingSuiteName) }
+            let ruleStoreDirectory = FileManager.default.temporaryDirectory
+                .appendingPathComponent("clearframe-smoke-content-blocking-\(UUID().uuidString)", isDirectory: true)
+            try FileManager.default.createDirectory(at: ruleStoreDirectory, withIntermediateDirectories: true)
+            defer { try? FileManager.default.removeItem(at: ruleStoreDirectory) }
+            let ruleStore = try requireValue(
+                WKContentRuleListStore(url: ruleStoreDirectory),
+                "smoke harness could not open a temporary content-rule-list store"
+            )
+            // A test-only list scoped to the fixture server's own loopback host, and a
+            // temp rule store, so this check never touches the shipped catalog or the
+            // user's default WebKit rule store. thirdPartyOnly is false because the
+            // fixture's "tracker" script is same-origin with the page that loads it.
+            let blockingProvider = ContentRuleListProvider(
+                settings: ContentBlockingSettingsStore(defaults: contentBlockingDefaults),
+                blockList: TrackerBlockList(
+                    release: TrackerBlockListRelease(version: "smoke-test.1", lastChecked: Date()),
+                    domains: ["127.0.0.1"]
+                ),
+                ruleStore: ruleStore,
+                thirdPartyOnly: false,
+                resourceTypes: ["script"]
+            )
+            let blockedSession = BrowserSession(
+                downloadCenter: DownloadCenter(),
+                searchSettings: SearchSettingsStore(defaults: defaults),
+                contentBlocking: blockingProvider
+            )
+            await blockingProvider.refresh()
+            try await loadDeterministicPage(
+                in: blockedSession,
+                localURL: blockingFixtureURL,
+                expectedTitle: "Clearframe Blocking Fixture"
+            )
+            let blockedInlineMarker = try await evaluateValue(
+                "window.__clearframeInlineMarker === true", in: blockedSession
+            ) as? Bool
+            try require(blockedInlineMarker == true, "the page's own inline script did not run while its tracker script was blocked")
+            let blockedTrackerMarkerType = try await evaluateValue(
+                "typeof window.__clearframeTrackerFixtureLoaded", in: blockedSession
+            ) as? String
+            try require(blockedTrackerMarkerType == "undefined", "the compiled rule list did not block the tracker-fixture script")
+            print("PASS content blocking: the compiled rule list blocked tracker-fixture.js while the page's own inline script still ran")
+
+            let navigationVersionBeforeException = blockedSession.navigationVersion
+            await blockingProvider.setSiteDisabled(true, forHost: "127.0.0.1")
+            blockedSession.reload()
+            let reloadedWithException = await waitUntil {
+                blockedSession.navigationVersion > navigationVersionBeforeException && blockedSession.loadState == .content
+            }
+            try require(reloadedWithException, "the fixture page did not finish reloading after a per-site exception was set")
+            let exceptedTrackerMarker = try await evaluateValue(
+                "window.__clearframeTrackerFixtureLoaded === true", in: blockedSession
+            ) as? Bool
+            try require(exceptedTrackerMarker == true, "a per-site exception did not let the tracker-fixture script load")
+
+            let navigationVersionBeforeReEnable = blockedSession.navigationVersion
+            await blockingProvider.setSiteDisabled(false, forHost: "127.0.0.1")
+            blockedSession.reload()
+            let reloadedAfterReEnable = await waitUntil {
+                blockedSession.navigationVersion > navigationVersionBeforeReEnable && blockedSession.loadState == .content
+            }
+            try require(reloadedAfterReEnable, "the fixture page did not finish reloading after the per-site exception was removed")
+            let reblockedTrackerMarkerType = try await evaluateValue(
+                "typeof window.__clearframeTrackerFixtureLoaded", in: blockedSession
+            ) as? String
+            try require(reblockedTrackerMarkerType == "undefined", "removing the per-site exception did not resume blocking the tracker-fixture script")
+            blockedSession.teardown()
+            print("PASS content blocking exception: a per-site exception let the tracker script load, and removing it resumed blocking")
 
             let spaURL = fixtureURL.appendingPathComponent("spa-state").absoluteString
             try await evaluate("history.pushState({}, '', '/spa-state'); document.title = 'Clearframe SPA State'", in: session)

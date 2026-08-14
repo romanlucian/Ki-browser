@@ -12,6 +12,7 @@ The native app provides:
 - a visible Clearframe bookmarks bar below navigation, with horizontally scrollable top-level links, nested emoji-folder menus, current-page and saved-bookmark drag filing, fixed overflow access, and a locally persisted show/hide setting;
 - searchable local bookmarks organized into emoji-labeled nested folders, plus local history with clear/disable controls;
 - explicit loading, offline, timeout, blocked-link, and general error states;
+- default-on tracker blocking against a small, first-party curated list of common advertising and tracking domains, with a per-site shield toggle in the address bar, a global switch in Settings, and state-only status text—Clearframe cannot see or count what WebKit blocks;
 - explicit on-device voice input that fills the visible address/search field for review without automatic submission;
 - a visible, locally persisted search-engine chooser for DuckDuckGo, Google, Bing, Brave Search, and Startpage;
 - a native new-tab AI guide with a small, locally defined catalog organized by everyday tasks;
@@ -122,6 +123,7 @@ npm run validate
 - Analyze page detects section and listing pages with many unrelated headlines and offers Analyze anyway instead of silently summarizing them as one article; this structure check is calibrated for the tested languages (see [docs/page-intelligence-contract.md](docs/page-intelligence-contract.md)).
 - AI output can omit context or be wrong.
 - Risk signals are heuristic and do not prove that a page is safe or malicious.
+- Tracker blocking uses a small, first-party curated list of common advertising and tracking domains—not a complete ad blocker. It does not stop first-party analytics, cookie-based tracking, browser fingerprinting, or CNAME-cloaked trackers, and WebKit never reports back which requests it blocked, so no per-page or running count exists anywhere in the UI. See [docs/content-blocking.md](docs/content-blocking.md).
 - Clearframe can save downloads but does not scan their contents or provide a reputation verdict. It also does not inspect certificate details, network traffic, reputation databases, or hidden page behavior.
 - The download list is session-only in this version; saved files remain at the destination the user selected, and the toolbar panel can always open the local Downloads folder.
 - The bookmarks bar and folder organizer are local only. Native URL drag-and-drop creates or moves bookmarks into Unfiled or visible folders; it does not reorder items or move folders, and the existing Move menu remains the keyboard alternative. The organizer supports drops onto the folders currently visible in it, not closed submenu rows. There is no account, sync, or cloud backup. Hiding the bar does not delete bookmarks. Deleting a non-empty folder requires confirmation and rehomes its direct contents instead of deleting saved pages.
@@ -140,6 +142,7 @@ npm run validate
 - [Product and technical foundation](docs/product-foundation.md)
 - [Native macOS architecture and limits](docs/macos-browser-foundation.md)
 - [Chromium/CEF migration foundation](docs/chromium-migration.md)
+- [Tracker blocking](docs/content-blocking.md)
 - [Privacy and safety notes](docs/privacy-and-safety.md)
 - [2026 market research](docs/market-research.md)
 - [Cross-platform page-intelligence contract](docs/page-intelligence-contract.md)

@@ -303,6 +303,8 @@ private struct BrowserToolbar: View {
             }
 
             HStack(spacing: 8) {
+                ContentBlockingShieldButton(provider: workspace.contentBlocking, session: session)
+
                 Menu {
                     ForEach(SearchEngine.allCases) { engine in
                         Button {

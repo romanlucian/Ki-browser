@@ -54,21 +54,27 @@ final class BrowserSession: NSObject, ObservableObject {
     private var lastObservedWebURLString: String?
     private var lastVersionedStandardNavigationURLString: String?
     private var webViewSubscriptions: Set<AnyCancellable> = []
+    private let contentBlocking: ContentRuleListProvider?
 
     init(
         downloadCenter: DownloadCenter,
         searchSettings: SearchSettingsStore,
         initialURL: URL? = nil,
-        isPrivate: Bool = false
+        isPrivate: Bool = false,
+        contentBlocking: ContentRuleListProvider? = nil
     ) {
         self.downloadCenter = downloadCenter
         self.searchSettings = searchSettings
         self.isPrivate = isPrivate
+        self.contentBlocking = contentBlocking
         let configuration = WKWebViewConfiguration()
         configuration.websiteDataStore = isPrivate ? .nonPersistent() : .default()
         configuration.preferences.isElementFullscreenEnabled = true
         webView = WKWebView(frame: .zero, configuration: configuration)
         super.init()
+        // Registered before the first load so tracker rules apply from the
+        // first request, including in private tabs.
+        contentBlocking?.register(webView)
         webView.navigationDelegate = self
         webView.uiDelegate = self
         webView.allowsMagnification = true
@@ -172,6 +178,7 @@ final class BrowserSession: NSObject, ObservableObject {
         onCompletedVisit = nil
         webView.navigationDelegate = nil
         webView.uiDelegate = nil
+        contentBlocking?.unregister(webView)
         webViewSubscriptions.removeAll()
     }
 

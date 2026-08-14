@@ -64,7 +64,7 @@ struct AISettingsView: View {
                 .disabled(isResettingBrowserData || workspace.downloads.activeCount > 0)
                 Text(workspace.downloads.activeCount > 0
                      ? "Cancel or finish active downloads before clearing browser data. Saved files are never deleted."
-                     : "Clears tabs, history, bookmarks, the in-app download list, cookies, caches, local website storage, and recovery backups. Saved files, search choice, onboarding state, and the Optional AI key are kept.")
+                     : "Clears tabs, history, bookmarks, the in-app download list, cookies, caches, local website storage, per-site tracker-blocking exceptions, and recovery backups. Saved files, search choice, onboarding state, and the Optional AI key are kept.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 if isResettingBrowserData {
@@ -76,6 +76,8 @@ struct AISettingsView: View {
                         .foregroundStyle(.secondary)
                 }
             }
+
+            ContentBlockingSettingsSection(provider: workspace.contentBlocking)
 
             Section("Bookmarks bar") {
                 Toggle(
@@ -169,6 +171,67 @@ private struct SearchEngineSettingsSection: View {
             Text("Only text submitted as a search is sent to \(settings.selectedEngine.displayName). Website addresses open directly. Clearframe does not request suggestions while you type and has no claimed partnership with any listed provider.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
+        }
+    }
+}
+
+private struct ContentBlockingSettingsSection: View {
+    @ObservedObject var provider: ContentRuleListProvider
+
+    var body: some View {
+        Section("Tracker blocking") {
+            Toggle(
+                "Block trackers on visited sites",
+                isOn: Binding(
+                    get: { provider.settings.isEnabled },
+                    set: { newValue in
+                        Task { @MainActor in
+                            await provider.setEnabled(newValue)
+                        }
+                    }
+                )
+            )
+            Text("Blocks third-party requests to a curated list of common advertising and tracking domains — not a complete ad blocker. It does not stop first-party analytics, cookie-based tracking, or browser fingerprinting, and Clearframe cannot see or report how many requests were blocked on any page. The list changes only when Clearframe itself updates.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            if case .unavailable(let reason) = provider.status {
+                Label("Filter unavailable: \(reason)", systemImage: "exclamationmark.triangle")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+            }
+
+            HStack(spacing: 6) {
+                Label("List \(provider.blockList.release.version)", systemImage: "checkmark.seal")
+                Text("·")
+                Text("Checked")
+                Text(provider.blockList.release.lastChecked, format: .dateTime.month(.abbreviated).day().year())
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+
+            if provider.settings.disabledHosts.isEmpty {
+                Text("No sites are excluded from tracker blocking.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else {
+                ForEach(provider.settings.disabledHosts, id: \.self) { host in
+                    HStack {
+                        Text(host)
+                        Spacer()
+                        Button("Remove") {
+                            Task { @MainActor in
+                                await provider.setSiteDisabled(false, forHost: host)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                        .font(.caption)
+                    }
+                }
+                Text("Trackers stay blocked everywhere else. An exception for a site also covers its www. address, but not other subdomains.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
         }
     }
 }

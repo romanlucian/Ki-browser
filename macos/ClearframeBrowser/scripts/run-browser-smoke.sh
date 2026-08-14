@@ -66,6 +66,8 @@ swiftc \
     "$PACKAGE_DIR/Sources/ClearframeBrowser/BrowserSession.swift" \
     "$PACKAGE_DIR/Sources/ClearframeBrowser/PageAssistantModel.swift" \
     "$PACKAGE_DIR/Sources/ClearframeBrowser/SearchSettingsStore.swift" \
+    "$PACKAGE_DIR/Sources/ClearframeBrowser/ContentBlockingSettingsStore.swift" \
+    "$PACKAGE_DIR/Sources/ClearframeBrowser/ContentRuleListProvider.swift" \
     "$PACKAGE_DIR/Sources/ClearframeBrowser/VoiceInputController.swift" \
     "$PACKAGE_DIR/Sources/ClearframeBrowser/BrowserWorkspace.swift" \
     "$PACKAGE_DIR/Sources/ClearframeBrowser/WebView.swift" \
@@ -73,6 +75,7 @@ swiftc \
     "$PACKAGE_DIR/Sources/ClearframeBrowser/BookmarkBarViews.swift" \
     "$PACKAGE_DIR/Sources/ClearframeBrowser/BookmarkLibraryViews.swift" \
     "$PACKAGE_DIR/Sources/ClearframeBrowser/DownloadViews.swift" \
+    "$PACKAGE_DIR/Sources/ClearframeBrowser/ContentBlockingViews.swift" \
     "$PACKAGE_DIR/Sources/ClearframeBrowser/BrowserView.swift" \
     "$PACKAGE_DIR/Tests/BrowserE2ESmoke.swift" \
     "$BUILD_DIR"/ClearframeCore.build/*.swift.o \

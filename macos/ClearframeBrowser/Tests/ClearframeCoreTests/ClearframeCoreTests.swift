@@ -445,6 +445,166 @@ final class ClearframeCoreTests: XCTestCase {
         XCTAssertNil(AIToolCatalog.filtered(category: nil, query: "").first?.recommendation(for: nil))
     }
 
+    func testTrackerBlockListStaysCuratedLowercasedDeduplicatedAndSorted() {
+        let domains = TrackerBlockerCatalog.current.domains
+        XCTAssertGreaterThanOrEqual(domains.count, 200)
+        XCTAssertLessThanOrEqual(domains.count, 300)
+        XCTAssertEqual(Set(domains).count, domains.count, "the list must not repeat a domain")
+        XCTAssertEqual(domains, domains.sorted(), "the list must stay sorted for byte-stable output")
+
+        let allowed = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyz0123456789.-")
+        for domain in domains {
+            XCTAssertEqual(domain, domain.lowercased(), "\(domain) should be lowercase")
+            XCTAssertTrue(
+                CharacterSet(charactersIn: domain).isSubset(of: allowed),
+                "\(domain) should use plain ASCII host characters"
+            )
+            XCTAssertTrue(domain.contains("."), "\(domain) should be a registrable domain")
+            XCTAssertFalse(domain.hasPrefix("."), "\(domain) should not start with a separator")
+            XCTAssertFalse(domain.hasSuffix("."), "\(domain) should not end with a separator")
+            XCTAssertFalse(domain.hasPrefix("www."), "\(domain) should be stored without a www prefix")
+        }
+
+        for excluded in ["googletagmanager.com", "connect.facebook.net"] {
+            XCTAssertFalse(
+                domains.contains(excluded),
+                "\(excluded) is a tag or login endpoint, not an advertising or measurement endpoint"
+            )
+        }
+        for included in ["doubleclick.net", "criteo.com", "scorecardresearch.com", "hotjar.com"] {
+            XCTAssertTrue(domains.contains(included))
+        }
+    }
+
+    func testTrackerBlockListReleaseHasVisibleVersionAndCheckedDate() {
+        XCTAssertEqual(TrackerBlockerCatalog.release.version, "2026.08.14.1")
+        XCTAssertEqual(TrackerBlockerCatalog.current.release, TrackerBlockerCatalog.release)
+        let components = Calendar(identifier: .gregorian).dateComponents(
+            in: TimeZone(secondsFromGMT: 0)!,
+            from: TrackerBlockerCatalog.release.lastChecked
+        )
+        XCTAssertEqual(components.year, 2026)
+        XCTAssertEqual(components.month, 8)
+        XCTAssertEqual(components.day, 14)
+    }
+
+    func testContentRuleListSourceEmitsOneCompilableBlockRulePerDomain() throws {
+        let source = ContentRuleListSource.make(domains: TrackerBlockerCatalog.current.domains)
+        let rules = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: Data(source.utf8)) as? [[String: Any]]
+        )
+        XCTAssertEqual(rules.count, TrackerBlockerCatalog.current.domains.count)
+
+        for rule in rules {
+            let action = try XCTUnwrap(rule["action"] as? [String: Any])
+            XCTAssertEqual(action["type"] as? String, "block", "the shipped list only blocks")
+            let trigger = try XCTUnwrap(rule["trigger"] as? [String: Any])
+            XCTAssertEqual(trigger["load-type"] as? [String], ["third-party"])
+            XCTAssertEqual(trigger["resource-type"] as? [String], TrackerBlockerCatalog.resourceTypes)
+            XCTAssertNil(trigger["unless-top-url"])
+            let filter = try XCTUnwrap(trigger["url-filter"] as? String)
+            XCTAssertNoThrow(
+                try NSRegularExpression(pattern: filter),
+                "url-filter should be a valid expression: \(filter)"
+            )
+        }
+
+        let doubleclickRule = try XCTUnwrap(rules.first { rule in
+            let trigger = rule["trigger"] as? [String: Any]
+            return (trigger?["url-filter"] as? String)?.contains("doubleclick") == true
+        })
+        let doubleclickTrigger = try XCTUnwrap(doubleclickRule["trigger"] as? [String: Any])
+        let expression = try NSRegularExpression(
+            pattern: try XCTUnwrap(doubleclickTrigger["url-filter"] as? String)
+        )
+        for matching in [
+            "https://doubleclick.net/pixel",
+            "http://ad.doubleclick.net/tag.js",
+            "https://stats.g.doubleclick.net:443/collect"
+        ] {
+            XCTAssertEqual(expression.numberOfMatches(in: matching, range: NSRange(matching.startIndex..., in: matching)), 1, matching)
+        }
+        for other in ["https://notdoubleclick.net/pixel", "https://doubleclick.net.example.com/pixel"] {
+            XCTAssertEqual(expression.numberOfMatches(in: other, range: NSRange(other.startIndex..., in: other)), 0, other)
+        }
+    }
+
+    func testContentRuleListSourceOmitsLoadTypeWhenFirstPartyRequestsAreIncluded() throws {
+        let source = ContentRuleListSource.make(
+            domains: ["127.0.0.1"],
+            resourceTypes: ["script"],
+            thirdPartyOnly: false
+        )
+        let rules = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: Data(source.utf8)) as? [[String: Any]]
+        )
+        let trigger = try XCTUnwrap(rules.first?["trigger"] as? [String: Any])
+        XCTAssertNil(trigger["load-type"])
+        XCTAssertEqual(trigger["resource-type"] as? [String], ["script"])
+        XCTAssertEqual(trigger["url-filter"] as? String, "^https?://([^/:]+\\.)?127\\.0\\.0\\.1[:/]")
+    }
+
+    func testContentRuleListSourceAddsTopURLExceptionsOnlyForDisabledSites() throws {
+        let source = ContentRuleListSource.make(
+            domains: ["doubleclick.net"],
+            exceptionHosts: ["news.example.co.uk", "example.com"]
+        )
+        let rules = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: Data(source.utf8)) as? [[String: Any]]
+        )
+        let trigger = try XCTUnwrap(rules.first?["trigger"] as? [String: Any])
+        XCTAssertEqual(
+            trigger["unless-top-url"] as? [String],
+            [
+                "^https?://(www\\.)?example\\.com[:/]",
+                "^https?://(www\\.)?news\\.example\\.co\\.uk[:/]"
+            ]
+        )
+
+        let exception = try NSRegularExpression(
+            pattern: try XCTUnwrap((trigger["unless-top-url"] as? [String])?.first)
+        )
+        for topURL in ["https://example.com/article", "https://www.example.com/article"] {
+            XCTAssertEqual(
+                exception.numberOfMatches(in: topURL, range: NSRange(topURL.startIndex..., in: topURL)),
+                1,
+                topURL
+            )
+        }
+    }
+
+    func testContentRuleListSourceIsByteIdenticalForEquivalentConfigurations() {
+        let first = ContentRuleListSource.make(
+            domains: ["criteo.com", "doubleclick.net", "adnxs.com"],
+            exceptionHosts: ["example.com", "news.example.org"]
+        )
+        let second = ContentRuleListSource.make(
+            domains: ["adnxs.com", "criteo.com", "doubleclick.net", "criteo.com"],
+            exceptionHosts: ["news.example.org", "example.com", "example.com"]
+        )
+        XCTAssertEqual(first, second)
+        XCTAssertNotEqual(
+            first,
+            ContentRuleListSource.make(
+                domains: ["criteo.com", "doubleclick.net", "adnxs.com"],
+                exceptionHosts: ["example.com"]
+            )
+        )
+        XCTAssertEqual(
+            ContentRuleListSource.make(domains: TrackerBlockerCatalog.current.domains),
+            ContentRuleListSource.make(domains: TrackerBlockerCatalog.current.domains.reversed())
+        )
+    }
+
+    func testStableHashMatchesPublishedFNV1a64Vectors() {
+        XCTAssertEqual(StableHash.fnv1a64(""), 0xcbf2_9ce4_8422_2325)
+        XCTAssertEqual(StableHash.fnv1a64("a"), 0xaf63_dc4c_8601_ec8c)
+        XCTAssertEqual(StableHash.fnv1a64("foobar"), 0x8594_4171_f739_67e8)
+        XCTAssertEqual(StableHash.fnv1a64Hex("foobar"), "85944171f73967e8")
+        XCTAssertEqual(StableHash.fnv1a64Hex("").count, 16)
+        XCTAssertNotEqual(StableHash.fnv1a64("example.com"), StableHash.fnv1a64("example.org"))
+    }
+
     func testOnboardingCompletionPersistsLocallyAndCanReset() throws {
         let suiteName = "clearframe.onboarding.tests.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
