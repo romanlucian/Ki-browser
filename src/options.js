@@ -1,4 +1,4 @@
-import { DEFAULT_AI_SETTINGS } from "./providers/openai.js";
+import { DEFAULT_AI_SETTINGS, resolveStoredAISettings } from "./providers/openai.js";
 
 const enabled = document.querySelector("#aiEnabled");
 const fields = document.querySelector("#aiFields");
@@ -12,7 +12,7 @@ function renderEnabledState() {
 
 async function load() {
   const stored = await chrome.storage.local.get("aiSettings");
-  const settings = { ...DEFAULT_AI_SETTINGS, ...(stored.aiSettings || {}) };
+  const settings = resolveStoredAISettings(stored.aiSettings);
   enabled.checked = settings.enabled;
   apiKey.value = settings.apiKey;
   model.value = settings.model;
@@ -38,7 +38,8 @@ async function save() {
     aiSettings: {
       enabled: enabled.checked,
       apiKey: apiKey.value.trim(),
-      model: model.value.trim() || DEFAULT_AI_SETTINGS.model
+      model: model.value.trim() || DEFAULT_AI_SETTINGS.model,
+      modelCustomized: Boolean(model.value.trim() && model.value.trim() !== DEFAULT_AI_SETTINGS.model)
     }
   });
   if (!enabled.checked) {

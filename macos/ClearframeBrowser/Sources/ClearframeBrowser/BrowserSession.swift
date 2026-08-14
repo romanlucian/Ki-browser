@@ -1,4 +1,5 @@
 import ClearframeCore
+import AppKit
 import Combine
 import Foundation
 @preconcurrency import WebKit
@@ -30,6 +31,7 @@ final class BrowserSession: NSObject, ObservableObject {
     let webView: WKWebView
     let downloadCenter: DownloadCenter
     let searchSettings: SearchSettingsStore
+    let isPrivate: Bool
 
     @Published private(set) var currentURLString = ""
     @Published private(set) var pageTitle = "New Page"
@@ -49,22 +51,28 @@ final class BrowserSession: NSObject, ObservableObject {
     private var lastCommittedWebURL: URL?
     private var navigationDisplayName: String?
     private var activeNavigation: WKNavigation?
+    private var lastObservedWebURLString: String?
+    private var lastVersionedStandardNavigationURLString: String?
+    private var webViewSubscriptions: Set<AnyCancellable> = []
 
     init(
         downloadCenter: DownloadCenter,
         searchSettings: SearchSettingsStore,
-        initialURL: URL? = nil
+        initialURL: URL? = nil,
+        isPrivate: Bool = false
     ) {
         self.downloadCenter = downloadCenter
         self.searchSettings = searchSettings
+        self.isPrivate = isPrivate
         let configuration = WKWebViewConfiguration()
-        configuration.websiteDataStore = .default()
+        configuration.websiteDataStore = isPrivate ? .nonPersistent() : .default()
         configuration.preferences.isElementFullscreenEnabled = true
         webView = WKWebView(frame: .zero, configuration: configuration)
         super.init()
         webView.navigationDelegate = self
         webView.uiDelegate = self
         webView.allowsMagnification = true
+        observeWebViewState()
         if let initialURL {
             load(initialURL)
         } else {
@@ -98,7 +106,7 @@ final class BrowserSession: NSObject, ObservableObject {
     }
 
     func load(_ url: URL, displayName: String? = nil) {
-        guard let scheme = url.scheme?.lowercased(), ["http", "https"].contains(scheme) else {
+        guard let safeURL = WebURLPolicy.validatedURL(url) else {
             loadState = .failed(
                 BrowserFailure(
                     kind: .blocked,
@@ -110,15 +118,15 @@ final class BrowserSession: NSObject, ObservableObject {
             return
         }
         isShowingStartPage = false
-        lastRequestedURL = url
+        lastRequestedURL = safeURL
         navigationDisplayName = displayName
-        currentURLString = url.absoluteString
+        currentURLString = safeURL.absoluteString
         pageTitle = displayName.map { "Opening \($0)…" } ?? "Loading…"
         hasCommittedNavigation = false
         isLoading = true
         estimatedProgress = 0.05
         loadState = .loading
-        activeNavigation = webView.load(URLRequest(url: url))
+        activeNavigation = webView.load(URLRequest(url: safeURL))
     }
 
     func openAITool(_ tool: AIToolListing) {
@@ -164,6 +172,7 @@ final class BrowserSession: NSObject, ObservableObject {
         onCompletedVisit = nil
         webView.navigationDelegate = nil
         webView.uiDelegate = nil
+        webViewSubscriptions.removeAll()
     }
 
     func extractPage() async throws -> PageSnapshot {
@@ -190,25 +199,82 @@ final class BrowserSession: NSObject, ObservableObject {
     /// Reveal locally extracted evidence in the current document. This is deliberately
     /// best-effort: pages own their DOM and can change it after analysis, so the
     /// Assistant always keeps the extracted source text as the reliable fallback.
-    func revealEvidence(_ text: String) async -> Bool {
+    func revealEvidence(_ text: String, expectedNavigationVersion: Int? = nil) async -> Bool {
+        if let expectedNavigationVersion, expectedNavigationVersion != navigationVersion { return false }
         guard !text.isEmpty,
               let data = try? JSONEncoder().encode(text),
               let quoted = String(data: data, encoding: .utf8) else { return false }
         let script = """
         (() => {
           const needle = \(quoted).replace(/\\s+/g, ' ').trim();
-          const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
-          let node;
-          while ((node = walker.nextNode())) {
-            const value = (node.nodeValue || '').replace(/\\s+/g, ' ').trim();
-            if (value.includes(needle) || needle.includes(value)) {
-              const range = document.createRange(); range.selectNodeContents(node);
-              const selection = window.getSelection(); selection.removeAllRanges(); selection.addRange(range);
-              node.parentElement?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-              return true;
+          if (!needle || !document.body) return false;
+          const clean = value => (value || '').replace(/\\s+/g, ' ').trim();
+          const visible = element => {
+            const style = getComputedStyle(element);
+            const rect = element.getBoundingClientRect();
+            return style.display !== 'none' && style.visibility !== 'hidden' &&
+              Number(style.opacity || 1) > 0 && rect.width > 0 && rect.height > 0;
+          };
+          const roots = [document];
+          document.querySelectorAll('*').forEach(element => { if (element.shadowRoot) roots.push(element.shadowRoot); });
+          roots.forEach(root => root.querySelectorAll('[data-clearframe-evidence]').forEach(element => {
+            element.removeAttribute('data-clearframe-evidence');
+          }));
+          const matches = roots.flatMap(root => [...root.querySelectorAll('h1,h2,h3,p,li,blockquote')])
+            .filter(visible)
+            .map(element => ({ element, value: clean(element.innerText || element.textContent) }))
+            .filter(candidate => candidate.value.length > 0 && candidate.value.includes(needle))
+            .sort((left, right) => left.value.length - right.value.length);
+          const match = matches[0];
+          if (!match) return false;
+          const root = match.element.getRootNode();
+          const styleHost = root === document ? (document.head || document.documentElement) : root;
+          if (!root.querySelector('#clearframe-evidence-style')) {
+            const style = document.createElement('style');
+            style.id = 'clearframe-evidence-style';
+            style.textContent = '[data-clearframe-evidence]{background:rgba(132,204,22,.20)!important;outline:2px solid rgba(77,124,15,.75)!important;outline-offset:3px!important;}';
+            styleHost.appendChild(style);
+          }
+          match.element.setAttribute('data-clearframe-evidence', 'true');
+
+          const range = document.createRange();
+          const walker = document.createTreeWalker(match.element, NodeFilter.SHOW_TEXT);
+          const positions = [];
+          let normalized = '';
+          let pendingWhitespace = null;
+          while (walker.nextNode()) {
+            const node = walker.currentNode;
+            const value = node.textContent || '';
+            for (let index = 0; index < value.length; index += 1) {
+              if (/\\s/.test(value[index])) {
+                if (normalized && !pendingWhitespace) pendingWhitespace = { node, offset: index };
+                continue;
+              }
+              if (pendingWhitespace && normalized && !normalized.endsWith(' ')) {
+                normalized += ' ';
+                positions.push(pendingWhitespace);
+              }
+              pendingWhitespace = null;
+              normalized += value[index];
+              positions.push({ node, offset: index });
             }
           }
-          return false;
+          const start = normalized.indexOf(needle);
+          if (start >= 0 && positions[start] && positions[start + needle.length - 1]) {
+            const first = positions[start];
+            const last = positions[start + needle.length - 1];
+            range.setStart(first.node, first.offset);
+            range.setEnd(last.node, last.offset + 1);
+          } else {
+            range.selectNodeContents(match.element);
+          }
+          const selection = typeof root.getSelection === 'function' ? root.getSelection() : window.getSelection();
+          if (selection) {
+            selection.removeAllRanges();
+            selection.addRange(range);
+          }
+          match.element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          return true;
         })()
         """
         do {
@@ -218,10 +284,56 @@ final class BrowserSession: NSObject, ObservableObject {
                     else { continuation.resume(returning: value as Any) }
                 }
             }
+            guard expectedNavigationVersion == nil || expectedNavigationVersion == navigationVersion else {
+                return false
+            }
             return value as? Bool ?? false
         } catch {
             return false
         }
+    }
+
+    private func observeWebViewState() {
+        webView.publisher(for: \.estimatedProgress)
+            .receive(on: RunLoop.main)
+            .sink { [weak self] progress in
+                guard let self, self.isLoading else { return }
+                self.estimatedProgress = progress
+            }
+            .store(in: &webViewSubscriptions)
+
+        webView.publisher(for: \.title)
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in self?.refreshState() }
+            .store(in: &webViewSubscriptions)
+
+        webView.publisher(for: \.url)
+            .receive(on: RunLoop.main)
+            .sink { [weak self] url in self?.observeURLChange(url) }
+            .store(in: &webViewSubscriptions)
+    }
+
+    private func observeURLChange(_ url: URL?) {
+        let safeURL = url.flatMap(WebURLPolicy.validatedURL)
+        let nextValue = safeURL?.absoluteString
+        defer {
+            lastObservedWebURLString = nextValue
+            refreshState()
+        }
+
+        guard !isShowingStartPage,
+              activeNavigation == nil,
+              hasCommittedNavigation,
+              let previous = lastObservedWebURLString,
+              let nextValue,
+              previous != nextValue,
+              nextValue != lastVersionedStandardNavigationURLString else { return }
+
+        // History API/hash changes do not run the ordinary provisional-navigation
+        // callbacks, but they still change the page identity used by the assistant.
+        navigationVersion += 1
+        lastRequestedURL = safeURL
+        lastCommittedWebURL = safeURL
     }
 
     private func refreshState() {
@@ -312,14 +424,12 @@ final class BrowserSession: NSObject, ObservableObject {
         let input = rawInput.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !input.isEmpty else { return nil }
 
-        if let explicit = URL(string: input),
-           let scheme = explicit.scheme?.lowercased(),
-           ["http", "https"].contains(scheme) {
-            return explicit
+        if input.contains("://") {
+            return WebURLPolicy.validatedURL(input)
         }
 
         if !input.contains(" ") && (input.contains(".") || input.hasPrefix("localhost")) {
-            return URL(string: "https://\(input)")
+            return WebURLPolicy.validatedURL("https://\(input)")
         }
 
         return searchSettings.searchURL(for: input)
@@ -380,8 +490,13 @@ final class BrowserSession: NSObject, ObservableObject {
       const root = preferred[0] || document.body;
       const clone = root.cloneNode(true);
       clone.querySelectorAll(excludedSelector).forEach(node => node.remove());
+      const shadowRoots = [];
+      document.querySelectorAll('*').forEach(node => {
+        if (node.shadowRoot && (root === document.body || root.contains(node))) shadowRoots.push(node.shadowRoot);
+      });
+      const readingNodes = selector => [root, ...shadowRoots].flatMap(scope => [...scope.querySelectorAll(selector)]);
       const seenBlocks = new Set();
-      const blocks = [...root.querySelectorAll('h2,h3,p,li,blockquote')]
+      const blocks = readingNodes('h1,h2,h3,p,li,blockquote')
         .filter(node => !node.closest(excludedSelector) && isRendered(node))
         .map(node => clean(node.innerText))
         .filter(text => text.length >= 45 && text.length <= 1800)
@@ -403,7 +518,7 @@ final class BrowserSession: NSObject, ObservableObject {
         url: location.href,
         hostname: location.hostname,
         scheme: location.protocol.replace(':', ''),
-        language: document.documentElement.lang || navigator.language || '',
+        language: document.documentElement.lang || meta('meta[http-equiv="content-language"]') || '',
         text,
         wordCount: readingUnits.length,
         hasPasswordField: Boolean(document.querySelector('input[type="password"]')),
@@ -418,21 +533,21 @@ extension BrowserSession: WKNavigationDelegate {
         if let activeNavigation, navigation !== activeNavigation { return }
         activeNavigation = navigation
         isLoading = true
-        estimatedProgress = 0.25
         hasCommittedNavigation = false
         navigationVersion += 1
+        lastVersionedStandardNavigationURLString = lastRequestedURL?.absoluteString
         if !isShowingStartPage { loadState = .loading }
         refreshState()
     }
 
     func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
         if let activeNavigation, navigation !== activeNavigation { return }
-        estimatedProgress = 0.65
         hasCommittedNavigation = true
         if let url = webView.url,
            let scheme = url.scheme?.lowercased(),
            ["http", "https"].contains(scheme) {
             lastCommittedWebURL = url
+            lastVersionedStandardNavigationURLString = url.absoluteString
         }
         navigationDisplayName = nil
         refreshState()
@@ -445,6 +560,9 @@ extension BrowserSession: WKNavigationDelegate {
         estimatedProgress = 1
         hasCommittedNavigation = true
         navigationDisplayName = nil
+        if let url = webView.url.flatMap(WebURLPolicy.validatedURL) {
+            lastVersionedStandardNavigationURLString = url.absoluteString
+        }
         refreshState()
         if isShowingStartPage {
             loadState = .startPage
@@ -458,6 +576,20 @@ extension BrowserSession: WKNavigationDelegate {
 
     func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
         handleFailure(error, navigation: navigation)
+    }
+
+    func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+        activeNavigation = nil
+        isLoading = false
+        hasCommittedNavigation = false
+        loadState = .failed(
+            BrowserFailure(
+                kind: .other,
+                title: "This page stopped responding",
+                message: "WebKit ended the page process. Reload to open the page again.",
+                retryable: true
+            )
+        )
     }
 
     func webView(
@@ -474,8 +606,8 @@ extension BrowserSession: WKNavigationDelegate {
         decisionHandler: @escaping (WKNavigationActionPolicy) -> Void
     ) {
         if navigationAction.targetFrame == nil, let url = navigationAction.request.url {
-            if let scheme = url.scheme?.lowercased(), ["http", "https"].contains(scheme) {
-                onRequestNewTab?(url)
+            if let safeURL = WebURLPolicy.validatedURL(url) {
+                onRequestNewTab?(safeURL)
             } else {
                 loadState = .failed(
                     BrowserFailure(
@@ -490,8 +622,10 @@ extension BrowserSession: WKNavigationDelegate {
             return
         }
         if navigationAction.targetFrame?.isMainFrame == true,
-           let scheme = navigationAction.request.url?.scheme?.lowercased(),
-           !["http", "https", "about", "data"].contains(scheme) {
+           let url = navigationAction.request.url,
+           WebURLPolicy.validatedURL(url) == nil,
+           !(isShowingStartPage && url.absoluteString == "about:blank") {
+            let scheme = url.scheme?.lowercased() ?? "unknown"
             loadState = .failed(
                 BrowserFailure(
                     kind: .blocked,
@@ -505,9 +639,9 @@ extension BrowserSession: WKNavigationDelegate {
         }
         if navigationAction.targetFrame?.isMainFrame == true,
            let url = navigationAction.request.url,
-           ["http", "https"].contains(url.scheme?.lowercased() ?? "") {
+           let safeURL = WebURLPolicy.validatedURL(url) {
             isShowingStartPage = false
-            lastRequestedURL = url
+            lastRequestedURL = safeURL
         }
         if navigationAction.shouldPerformDownload {
             decisionHandler(.download)
@@ -541,7 +675,80 @@ extension BrowserSession: WKNavigationDelegate {
     }
 }
 
-extension BrowserSession: WKUIDelegate {}
+extension BrowserSession: WKUIDelegate {
+    func webView(
+        _ webView: WKWebView,
+        createWebViewWith configuration: WKWebViewConfiguration,
+        for navigationAction: WKNavigationAction,
+        windowFeatures: WKWindowFeatures
+    ) -> WKWebView? {
+        if let url = navigationAction.request.url,
+           let safeURL = WebURLPolicy.validatedURL(url) {
+            onRequestNewTab?(safeURL)
+        }
+        return nil
+    }
+
+    func webView(
+        _ webView: WKWebView,
+        runJavaScriptAlertPanelWithMessage message: String,
+        initiatedByFrame frame: WKFrameInfo,
+        completionHandler: @escaping () -> Void
+    ) {
+        let alert = pageAlert(message: message)
+        alert.addButton(withTitle: "OK")
+        alert.runModal()
+        completionHandler()
+    }
+
+    func webView(
+        _ webView: WKWebView,
+        runJavaScriptConfirmPanelWithMessage message: String,
+        initiatedByFrame frame: WKFrameInfo,
+        completionHandler: @escaping (Bool) -> Void
+    ) {
+        let alert = pageAlert(message: message)
+        alert.addButton(withTitle: "OK")
+        alert.addButton(withTitle: "Cancel")
+        completionHandler(alert.runModal() == .alertFirstButtonReturn)
+    }
+
+    func webView(
+        _ webView: WKWebView,
+        runJavaScriptTextInputPanelWithPrompt prompt: String,
+        defaultText: String?,
+        initiatedByFrame frame: WKFrameInfo,
+        completionHandler: @escaping (String?) -> Void
+    ) {
+        let alert = pageAlert(message: prompt)
+        let field = NSTextField(string: defaultText ?? "")
+        field.frame = NSRect(x: 0, y: 0, width: 320, height: 24)
+        alert.accessoryView = field
+        alert.addButton(withTitle: "OK")
+        alert.addButton(withTitle: "Cancel")
+        completionHandler(alert.runModal() == .alertFirstButtonReturn ? field.stringValue : nil)
+    }
+
+    func webView(
+        _ webView: WKWebView,
+        requestMediaCapturePermissionFor origin: WKSecurityOrigin,
+        initiatedByFrame frame: WKFrameInfo,
+        type: WKMediaCaptureType,
+        decisionHandler: @escaping (WKPermissionDecision) -> Void
+    ) {
+        // WebKit owns the visible per-request prompt. Clearframe never remembers or
+        // silently grants camera/microphone access from page content.
+        decisionHandler(.prompt)
+    }
+
+    private func pageAlert(message: String) -> NSAlert {
+        let alert = NSAlert()
+        alert.messageText = webView.url?.host.map { "Message from \($0)" } ?? "Message from this page"
+        alert.informativeText = String(message.prefix(4_000))
+        alert.alertStyle = .informational
+        return alert
+    }
+}
 
 private extension String {
     var nilIfEmpty: String? { isEmpty ? nil : self }

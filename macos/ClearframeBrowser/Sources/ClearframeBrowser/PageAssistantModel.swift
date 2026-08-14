@@ -3,6 +3,16 @@ import Combine
 import Foundation
 
 @MainActor
+protocol PageAssistantSession: AnyObject {
+    var navigationVersion: Int { get }
+    var currentURLString: String { get }
+    func extractPage() async throws -> PageSnapshot
+    func revealEvidence(_ text: String, expectedNavigationVersion: Int?) async -> Bool
+}
+
+extension BrowserSession: PageAssistantSession {}
+
+@MainActor
 final class PageAssistantModel: ObservableObject {
     enum State: Equatable {
         case idle
@@ -19,10 +29,27 @@ final class PageAssistantModel: ObservableObject {
     @Published var comparison: SourceComparison?
     @Published var revealedEvidence: String?
     @Published var evidenceWasFoundOnPage = false
+    @Published var operationMessage: String?
+    @Published var operationError: String?
 
-    private let localProvider = LocalPageIntelligenceProvider()
+    private let localProvider: any PageIntelligenceProviding
+    private let remoteProviderFactory: (OpenAIProviderConfiguration) -> any PageIntelligenceProviding
+    private var activeTask: Task<Void, Never>?
+    private var operationGeneration = 0
+    private var snapshotNavigationVersion: Int?
+
+    init(
+        localProvider: any PageIntelligenceProviding = LocalPageIntelligenceProvider(),
+        remoteProviderFactory: @escaping (OpenAIProviderConfiguration) -> any PageIntelligenceProviding = {
+            OpenAIPageIntelligenceProvider(configuration: $0)
+        }
+    ) {
+        self.localProvider = localProvider
+        self.remoteProviderFactory = remoteProviderFactory
+    }
 
     func clearForNavigation() {
+        cancelActiveOperation()
         state = .idle
         snapshot = nil
         analysis = nil
@@ -30,82 +57,167 @@ final class PageAssistantModel: ObservableObject {
         comparison = nil
         revealedEvidence = nil
         evidenceWasFoundOnPage = false
+        operationMessage = nil
+        operationError = nil
+        snapshotNavigationVersion = nil
     }
 
-    func analyzeCurrentPage(session: BrowserSession) async {
+    func teardown() {
+        cancelActiveOperation()
+        state = .idle
+        snapshot = nil
+        analysis = nil
+        translatedSummary = nil
+        savedSource = nil
+        comparison = nil
+        revealedEvidence = nil
+        evidenceWasFoundOnPage = false
+        operationMessage = nil
+        operationError = nil
+        snapshotNavigationVersion = nil
+    }
+
+    func analyzeCurrentPage(session: any PageAssistantSession) async {
+        let generation = beginOperation()
+        let expectedNavigationVersion = session.navigationVersion
         state = .loading("Reading the visible page…")
-        do {
-            let page = try await session.extractPage()
-            let content = try await localProvider.analyze(page: page)
-            snapshot = page
-            analysis = PageAnalysis(
-                content: content,
-                risk: RiskAnalyzer.assess(page: page),
-                readingTimeMinutes: LocalAnalysisEngine.readingTime(wordCount: page.wordCount),
-                mode: .local
-            )
-            translatedSummary = nil
-            comparison = nil
-            revealedEvidence = nil
-            evidenceWasFoundOnPage = false
-            state = .ready
-        } catch {
-            state = .failed(error.localizedDescription)
+
+        let task = Task { @MainActor [weak self, weak session] in
+            guard let self, let session else { return }
+            do {
+                try Task.checkCancellation()
+                let page = try await session.extractPage()
+                try Task.checkCancellation()
+                guard self.isCurrent(generation),
+                      session.navigationVersion == expectedNavigationVersion,
+                      self.snapshotStillMatches(page, session: session) else { return }
+
+                let content = try await self.localProvider.analyze(page: page)
+                try Task.checkCancellation()
+                guard self.isCurrent(generation), session.navigationVersion == expectedNavigationVersion else { return }
+
+                self.snapshot = page
+                self.snapshotNavigationVersion = expectedNavigationVersion
+                self.analysis = PageAnalysis(
+                    content: content,
+                    risk: RiskAnalyzer.assess(page: page),
+                    readingTimeMinutes: LocalAnalysisEngine.readingTime(wordCount: page.wordCount),
+                    mode: .local
+                )
+                self.translatedSummary = nil
+                self.comparison = nil
+                self.revealedEvidence = nil
+                self.evidenceWasFoundOnPage = false
+                self.state = .ready
+            } catch is CancellationError {
+                // Navigation or a newer explicit action superseded this work.
+            } catch {
+                guard self.isCurrent(generation) else { return }
+                self.state = .failed(error.localizedDescription)
+            }
         }
+        activeTask = task
+        await task.value
+        finishOperation(generation)
     }
 
-    func revealEvidence(for point: String, session: BrowserSession) async {
-        // Local analysis is extractive, so this is an exact sentence from the
-        // text that was read. Provider-written summaries are not treated as proof.
-        guard analysis?.mode == .local else { return }
-        revealedEvidence = point
-        evidenceWasFoundOnPage = await session.revealEvidence(point)
+    func revealEvidence(for point: String, session: any PageAssistantSession) async {
+        guard analysis?.mode == .local,
+              let expectedNavigationVersion = snapshotNavigationVersion,
+              expectedNavigationVersion == session.navigationVersion else { return }
+
+        let generation = beginOperation()
+        let task = Task { @MainActor [weak self, weak session] in
+            guard let self, let session else { return }
+            self.revealedEvidence = point
+            let found = await session.revealEvidence(
+                point,
+                expectedNavigationVersion: expectedNavigationVersion
+            )
+            guard !Task.isCancelled,
+                  self.isCurrent(generation),
+                  session.navigationVersion == expectedNavigationVersion else { return }
+            self.evidenceWasFoundOnPage = found
+        }
+        activeTask = task
+        await task.value
+        finishOperation(generation)
     }
 
     func improveWithAI(configuration: OpenAIProviderConfiguration) async {
         guard let page = snapshot, let current = analysis else { return }
-        state = .loading("Building a richer, source-grounded summary…")
-        do {
-            let provider = OpenAIPageIntelligenceProvider(configuration: configuration)
-            let content = try await provider.analyze(page: page)
-            analysis = PageAnalysis(
-                content: content,
-                risk: current.risk,
-                readingTimeMinutes: current.readingTimeMinutes,
-                mode: .remoteAI
-            )
-            translatedSummary = nil
-            state = .ready
-        } catch {
-            state = .failed(error.localizedDescription)
+        let generation = beginOperation()
+        operationMessage = "Building a richer, source-grounded summary…"
+
+        let task = Task { @MainActor [weak self] in
+            guard let self else { return }
+            do {
+                let provider = self.remoteProviderFactory(configuration)
+                let content = try await provider.analyze(page: page)
+                try Task.checkCancellation()
+                guard self.isCurrent(generation) else { return }
+                self.analysis = PageAnalysis(
+                    content: content,
+                    risk: current.risk,
+                    readingTimeMinutes: current.readingTimeMinutes,
+                    mode: .remoteAI
+                )
+                self.translatedSummary = nil
+                self.state = .ready
+            } catch is CancellationError {
+                // A navigation or newer action intentionally cancelled the request.
+            } catch {
+                guard self.isCurrent(generation) else { return }
+                self.operationError = error.localizedDescription
+                self.state = .ready
+            }
         }
+        activeTask = task
+        await task.value
+        finishOperation(generation)
     }
 
     func translateSummary(targetLanguage: String, configuration: OpenAIProviderConfiguration?) async {
         guard let current = analysis, let page = snapshot else { return }
         let canSimplifyLocally = targetLanguage == "Plain English" &&
             LocalAnalysisEngine.canSimplifyToPlainEnglish(sourceLanguage: page.language)
-        state = .loading(canSimplifyLocally ? "Simplifying locally…" : "Translating…")
-        do {
-            if canSimplifyLocally {
-                translatedSummary = try await localProvider.translate(
-                    text: current.content.summary,
-                    sourceLanguage: page.language,
-                    targetLanguage: targetLanguage
-                )
-            } else {
-                guard let configuration else { throw PageIntelligenceError.localTranslationUnavailable }
-                let provider = OpenAIPageIntelligenceProvider(configuration: configuration)
-                translatedSummary = try await provider.translate(
-                    text: current.content.summary,
-                    sourceLanguage: page.language,
-                    targetLanguage: targetLanguage
-                )
+        let generation = beginOperation()
+        operationMessage = canSimplifyLocally ? "Simplifying locally…" : "Translating…"
+
+        let task = Task { @MainActor [weak self] in
+            guard let self else { return }
+            do {
+                let translated: String
+                if canSimplifyLocally {
+                    translated = try await self.localProvider.translate(
+                        text: current.content.summary,
+                        sourceLanguage: page.language,
+                        targetLanguage: targetLanguage
+                    )
+                } else {
+                    guard let configuration else { throw PageIntelligenceError.localTranslationUnavailable }
+                    let provider = self.remoteProviderFactory(configuration)
+                    translated = try await provider.translate(
+                        text: current.content.summary,
+                        sourceLanguage: page.language,
+                        targetLanguage: targetLanguage
+                    )
+                }
+                try Task.checkCancellation()
+                guard self.isCurrent(generation) else { return }
+                self.translatedSummary = translated
+                self.state = .ready
+            } catch is CancellationError {
+                // A navigation or newer action intentionally cancelled the request.
+            } catch {
+                guard self.isCurrent(generation) else { return }
+                self.operationError = error.localizedDescription
+                self.state = .ready
             }
-            state = .ready
-        } catch {
-            state = .failed(error.localizedDescription)
         }
+        activeTask = task
+        await task.value
+        finishOperation(generation)
     }
 
     func saveOrCompare() {
@@ -122,5 +234,35 @@ final class PageAssistantModel: ObservableObject {
     func clearSavedSource() {
         savedSource = nil
         comparison = nil
+    }
+
+    private func beginOperation() -> Int {
+        activeTask?.cancel()
+        operationGeneration &+= 1
+        operationMessage = nil
+        operationError = nil
+        return operationGeneration
+    }
+
+    private func finishOperation(_ generation: Int) {
+        guard generation == operationGeneration else { return }
+        activeTask = nil
+        operationMessage = nil
+    }
+
+    private func cancelActiveOperation() {
+        activeTask?.cancel()
+        activeTask = nil
+        operationGeneration &+= 1
+    }
+
+    private func isCurrent(_ generation: Int) -> Bool {
+        generation == operationGeneration && !Task.isCancelled
+    }
+
+    private func snapshotStillMatches(_ page: PageSnapshot, session: any PageAssistantSession) -> Bool {
+        guard let pageURL = WebURLPolicy.validatedURL(page.url),
+              let sessionURL = WebURLPolicy.validatedURL(session.currentURLString) else { return false }
+        return pageURL.absoluteString == sessionURL.absoluteString
     }
 }

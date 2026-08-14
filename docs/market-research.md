@@ -5,9 +5,11 @@
 
 **Implementation decision after this research:** proceed macOS-first with a minimal native SwiftUI + WebKit standalone browser. Keep the extension as validation work. This does not change the warning against an early Chromium fork or a generic AI-sidebar strategy.
 
+**Current strategy note (August 13, 2026):** the broad reading segment below remains a useful problem hypothesis, but it is no longer the first acquisition wedge. The focused [go-to-market plan](go-to-market.md) now recruits photographers, designers, video creators, and creative freelancers first because their AI-choice and reference-page workflows are easier to demonstrate and reach with a zero-budget founder-led launch. Measured behavior, not the old segment label or an arbitrary extension-user threshold, governs later expansion.
+
 ## Executive conclusion
 
-Do **not** start by forking Chromium or pitching a general “AI browser.” In 2026, generic page chat, summaries, tab comparison, and agentic browsing are already offered by companies with massive distribution and model budgets. The defensible first move is a focused page-understanding experience for a specific audience: international knowledge workers and advanced students who regularly need to understand long or foreign-language sources, compare claims, and assess unfamiliar pages. The project is now testing that experience in a native macOS/WebKit shell, with its earlier extension retained as a lower-friction validation artifact.
+Do **not** start by forking Chromium or pitching a general “AI browser.” In 2026, generic page chat, summaries, tab comparison, and agentic browsing are already offered by companies with massive distribution and model budgets. The defensible first move is a focused page-understanding and AI-choice experience tested first with creative professionals, while keeping long/foreign-language reading and source comparison available to the broader product audience. The project is testing that experience in a native macOS/WebKit shell, with its earlier extension retained as a lower-friction validation artifact.
 
 The free product should deliver useful local analysis before incurring AI cost. Charge later for heavy AI usage and professional workflows. Search revenue sharing can become meaningful only after substantial recurring search volume; it is not credible seed-stage unit economics. Business plans can monetize earlier than search, but only after the product earns trust and adds admin/security controls. Any partner recommendations must be explicit, intent-driven, and separated from summaries and risk results.
 
@@ -83,15 +85,15 @@ AI cost must be metered from day one. As one current reference point, OpenAI lis
 
 ## 5. Recommended audience and MVP
 
-### Target audience
+### Original problem segment and current recruiting wedge
 
-Recruit international researchers, analysts, freelancers, and graduate students who:
+The original research segment was international researchers, analysts, freelancers, and graduate students who read many unfamiliar or non-English sources. Keep those workflows in the product corpus, but recruit the current creator wedge first. Look for photographers, designers, video creators, and creative freelancers who:
 
-- work primarily in English;
-- read at least ten long or unfamiliar pages per week;
-- regularly encounter non-English sources or vendors;
-- already copy text into AI tools or translation services;
-- sometimes compare two or more sources before deciding what to believe or do.
+- repeatedly choose among unfamiliar AI tools or interpret client/reference pages;
+- can demonstrate a real image, video, design, research, or translation workflow;
+- already copy content into AI or translation services;
+- sometimes compare providers or sources before deciding what to use;
+- will opt into direct observation and a seven-day follow-up without paid acquisition.
 
 Avoid starting with vulnerable scam victims, children, regulated medical/legal decisions, or enterprise security teams. Those groups raise assurance requirements beyond a first heuristic prototype.
 
@@ -99,7 +101,7 @@ Avoid starting with vulnerable scam victims, children, regulated medical/legal d
 
 > Open any page. In one click, see its gist, key claims, translation, comparison context, and obvious risk signals—with local analysis first and no passive history collection.
 
-The native foundation correctly limits scope to one WebKit browsing surface, on-demand extraction, a local summary, candidate claims, Plain English mode, optional AI translation, a two-source comparison, and explained risk signals. The next high-value feature is not autonomous browsing; it is **evidence linking** from each summary point back to the exact page sentence.
+The native foundation correctly limits scope to a WebKit browsing surface, on-demand extraction, local summaries and candidate claims, English-source Plain English mode, optional AI translation, a two-source comparison, and explained risk signals. An initial local Evidence Mode now reveals and highlights exact extracted key-point text. The next high-value step is citation-grade evidence across gist, claims, translation, and provider-assisted output—not autonomous browsing.
 
 ## 6. Material risks
 
@@ -143,9 +145,9 @@ Mitigation: hard separation between analysis and commercial modules, conspicuous
 
 ### Phase 0 — problem validation (weeks 0–4)
 
-- Recruit 20–30 target users through university research groups, analyst/freelancer communities, multilingual professional groups, and direct outreach.
+- Recruit 20–30 opt-in photographers, designers, video creators, and creative freelancers through the founder's personal network and relevant creative communities.
 - Watch them analyze real pages; do not rely only on surveys.
-- Test five page types: news, technical documentation, product/vendor pages, policy/research reports, and foreign-language articles.
+- Test concrete creator workflows while retaining a quality corpus spanning news, documentation, product/vendor pages, research reports, and foreign-language references.
 - Success gate: 40% analyze at least three pages in week one; at least 60% of completed sessions rate the summary useful; collect every consequential omission.
 
 ### Phase 1 — focused macOS beta (months 2–3)
@@ -153,7 +155,7 @@ Mitigation: hard separation between analysis and commercial modules, conspicuous
 - Package, sign, and notarize the macOS app with a plain privacy policy and an honest “beta” label; keep the extension as an optional validation surface.
 - Position around “understand unfamiliar pages,” not “replace your browser.”
 - Build shareable, privacy-safe before/after examples and short educational content about source checking.
-- Add evidence highlighting, feedback controls, and an extraction quality corpus.
+- Extend the delivered local evidence highlighting, add feedback controls, and grow the extraction quality corpus.
 - Success gate: 25% week-four return among activated users and at least two analyses per returning active day.
 
 ### Phase 2 — repeatable workflow (months 4–6)
@@ -175,12 +177,12 @@ Mitigation: hard separation between analysis and commercial modules, conspicuous
 
 Replace or supplement the WebKit foundation with a maintained Chromium-based browser only if all three conditions hold:
 
-1. at least 50,000 weekly active extension users with strong retention;
-2. repeated evidence that extension constraints block core value (multi-tab context, new-tab search, profiles, or enterprise deployment);
+1. a meaningfully retained native-browser audience repeatedly demonstrates demand that WebKit cannot serve;
+2. measured evidence shows engine or extension-compatibility constraints block the core workflow rather than merely appearing on a feature wish list;
 3. enough funding and engineering depth to maintain security updates and platform builds without starving the differentiated reading product.
 
 If those conditions do not hold, keep the native WebKit app focused and optionally maintain the extension across compatible browsers. A profitable focused tool is better than an undifferentiated Chromium browser with high maintenance cost.
 
 ## Bottom line
 
-The opportunity is not “AI browser” as a label. It is a trusted, repeated reading workflow for people who cross sources and languages. Start local and read-only, prove retention inside existing browsers, monetize heavy use before chasing default-search economics, and treat privacy and commercial neutrality as product features that must survive implementation—not marketing claims.
+The opportunity is not “AI browser” as a label. It is a trusted, repeated workflow for choosing useful AI paths and understanding unfamiliar pages. Start local and read-only, prove retention in the native WebKit product with the extension only as optional validation, monetize heavy use before chasing default-search economics, and treat privacy and commercial neutrality as product features that must survive implementation—not marketing claims.

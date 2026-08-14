@@ -108,6 +108,27 @@ struct AssistantPanel: View {
     private func results(snapshot: PageSnapshot, analysis: PageAnalysis) -> some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 12) {
+                if let message = model.operationMessage {
+                    HStack(spacing: 9) {
+                        ProgressView().controlSize(.small)
+                        Text(message)
+                    }
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .padding(10)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color.blue.opacity(0.08), in: RoundedRectangle(cornerRadius: 9))
+                }
+
+                if let message = model.operationError {
+                    Label(message, systemImage: "exclamationmark.triangle.fill")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                        .padding(10)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color.orange.opacity(0.09), in: RoundedRectangle(cornerRadius: 9))
+                }
+
                 VStack(alignment: .leading, spacing: 6) {
                     Text(snapshot.hostname.uppercased())
                         .font(.system(size: 10, weight: .bold))
@@ -157,6 +178,7 @@ struct AssistantPanel: View {
                         .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.bordered)
+                    .disabled(model.operationMessage != nil)
                 }
 
                 if !analysis.content.keyPoints.isEmpty {
@@ -177,6 +199,7 @@ struct AssistantPanel: View {
                                     }
                                     .buttonStyle(.borderless)
                                     .font(.caption.weight(.semibold))
+                                    .disabled(model.operationMessage != nil)
                                     if model.revealedEvidence == point {
                                         Text(point)
                                             .font(.caption)
@@ -235,6 +258,7 @@ struct AssistantPanel: View {
                         }
                     }
                     .buttonStyle(.bordered)
+                    .disabled(model.operationMessage != nil)
                     if let translated = model.translatedSummary {
                         Text(translated)
                             .font(.callout)

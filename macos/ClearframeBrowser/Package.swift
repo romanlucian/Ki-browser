@@ -24,7 +24,12 @@ let package = Package(
         ),
         .testTarget(
             name: "ClearframeCoreTests",
-            dependencies: ["ClearframeCore"]
+            dependencies: ["ClearframeCore"],
+            resources: [.process("Fixtures")]
+        ),
+        .testTarget(
+            name: "BrowserBehaviorTests",
+            dependencies: ["ClearframeBrowser", "ClearframeCore"]
         )
     ],
     swiftLanguageModes: [.v5]

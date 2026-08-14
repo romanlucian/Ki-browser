@@ -38,7 +38,12 @@ private func waitUntil(
 
 @MainActor
 private func evaluate(_ script: String, in session: BrowserSession) async throws {
-    _ = try await withCheckedThrowingContinuation { continuation in
+    _ = try await evaluateValue(script, in: session)
+}
+
+@MainActor
+private func evaluateValue(_ script: String, in session: BrowserSession) async throws -> Any {
+    try await withCheckedThrowingContinuation { continuation in
         session.webView.evaluateJavaScript(script) { value, error in
             if let error {
                 continuation.resume(throwing: error)
@@ -50,25 +55,20 @@ private func evaluate(_ script: String, in session: BrowserSession) async throws
 }
 
 @MainActor
-private func loadDeterministicPage(in session: BrowserSession) async throws -> String {
-    let localURL = URL(string: "http://127.0.0.1:8765/")!
+private func loadDeterministicPage(in session: BrowserSession, localURL: URL) async throws {
     session.navigate(localURL.absoluteString)
-    if await waitUntil(timeout: 2, condition: {
+    let loaded = await waitUntil(condition: {
         session.loadState == .content && session.pageTitle == "Clearframe Local Verification"
-    }) {
-        return "local HTTP"
-    }
+    })
+    try require(loaded, "deterministic page did not render from the verified local fixture server")
+}
 
-    let fixtureURL = URL(fileURLWithPath: #filePath)
-        .deletingLastPathComponent()
-        .appendingPathComponent("Fixtures/index.html")
-    let fixture = try String(contentsOf: fixtureURL, encoding: .utf8)
-    session.webView.loadHTMLString(fixture, baseURL: localURL)
-    let loaded = await waitUntil {
-        session.loadState == .content && session.pageTitle == "Clearframe Local Verification"
+private func configuredFixtureURL() throws -> URL {
+    guard let value = ProcessInfo.processInfo.environment["CLEARFRAME_SMOKE_BASE_URL"],
+          let url = WebURLPolicy.validatedURL(value) else {
+        throw SmokeFailure.check("CLEARFRAME_SMOKE_BASE_URL was not supplied by the smoke harness")
     }
-    try require(loaded, "deterministic page did not render in WebKit")
-    return "in-process HTML fallback"
+    return url
 }
 
 private func reflectedRequestedURL(_ session: BrowserSession) -> URL? {
@@ -179,12 +179,12 @@ struct BrowserE2ESmoke {
             let focusRequestBeforeTab = workspace.focusAddressRequest
             workspace.addTab()
             try require(workspace.tabs.count == 2, "workspace did not create a second tab")
-            try require(workspace.focusAddressRequest > focusRequestBeforeTab, "tab selection did not request address focus")
+            try require(workspace.focusAddressRequest == focusRequestBeforeTab, "tab selection issued an unnecessary global address-focus request")
             workspace.closeSelectedTab()
             try require(workspace.tabs.count == 1, "workspace did not close the selected tab")
             let addressRefocused = await waitUntil { window.firstResponder is NSTextView }
             try require(addressRefocused, "address field did not regain focus after the tab change")
-            print("PASS tab controls: create/select/close lifecycle requested and restored address focus")
+            print("PASS tab controls: a new start tab focused its address without a tab-wide focus request")
 
             try require(window.makeFirstResponder(session.webView), "web content could not take focus before provider selection")
             let focusRequestBeforeProvider = workspace.focusAddressRequest
@@ -277,7 +277,8 @@ struct BrowserE2ESmoke {
 
             searchSettings.selectedEngine = .duckDuckGo
 
-            let localURL = "http://127.0.0.1:8765/"
+            let fixtureURL = try configuredFixtureURL()
+            let localURL = fixtureURL.absoluteString
             dataStore.toggleBookmark(title: "Local verification", url: localURL)
             dataStore.recordVisit(title: "Local verification", url: localURL)
             try require(dataStore.bookmarks.count == 1, "bookmark control did not persist a local record")
@@ -403,37 +404,85 @@ struct BrowserE2ESmoke {
             print("PASS session storage: recent-tab metadata saved and restored locally")
 
             try require(window.makeFirstResponder(session.webView), "WebKit could not accept normal content focus")
-            let navigationMode = try await loadDeterministicPage(in: session)
-            try require(session.currentURLString == "http://127.0.0.1:8765/", "address state did not track local navigation")
+            try await loadDeterministicPage(in: session, localURL: fixtureURL)
+            try require(session.currentURLString == localURL, "address state did not track local navigation")
             try require(!(window.firstResponder is NSTextView), "navigation unexpectedly stole focus back from web content")
-            print("PASS navigation: deterministic page rendered with title and address state (\(navigationMode))")
+            print("PASS navigation: deterministic page rendered from a verified local HTTP server")
+
+            let spaURL = fixtureURL.appendingPathComponent("spa-state").absoluteString
+            try await evaluate("history.pushState({}, '', '/spa-state'); document.title = 'Clearframe SPA State'", in: session)
+            let spaStateObserved = await waitUntil {
+                session.currentURLString == spaURL && session.pageTitle == "Clearframe SPA State"
+            }
+            try require(spaStateObserved, "same-document URL/title changes were not reflected in browser chrome")
+            try await evaluate("history.replaceState({}, '', '/'); document.title = 'Clearframe Local Verification'", in: session)
+            let fixtureStateRestored = await waitUntil {
+                session.currentURLString == localURL && session.pageTitle == "Clearframe Local Verification"
+            }
+            try require(fixtureStateRestored, "same-document fixture state did not restore")
+            print("PASS SPA state: history API URL and document-title changes stayed synchronized")
 
             await assistant.analyzeCurrentPage(session: session)
             try require(assistant.state == .ready, "local assistant did not reach ready state")
             try require(assistant.analysis?.mode == .local, "assistant unexpectedly used a remote provider")
             try require((assistant.analysis?.content.summary.count ?? 0) > 80, "local summary was unexpectedly short")
             try require(assistant.snapshot?.title == "Clearframe Local Verification", "assistant did not retain source identity")
+            try require(assistant.snapshot?.text.contains("Open shadow content") == true, "open Shadow DOM reading text was omitted")
+            try require(assistant.snapshot?.text.contains("HIDDEN CONTROL POLLUTION") == false, "hidden text polluted extraction")
+            try require(assistant.snapshot?.text.contains("Video Player is loading") == false, "media controls polluted extraction")
             print("PASS assistant: visible text extracted and summarized locally")
+
+            let evidencePoint = try requireValue(
+                assistant.analysis?.content.keyPoints.first,
+                "local assistant did not produce evidence-test key points"
+            )
+            await assistant.revealEvidence(for: evidencePoint, session: session)
+            try require(assistant.evidenceWasFoundOnPage, "Evidence Mode did not find the exact extracted sentence")
+            let highlightedEvidence = try await evaluateValue(
+                """
+                (() => {
+                  const roots = [document];
+                  document.querySelectorAll('*').forEach(element => { if (element.shadowRoot) roots.push(element.shadowRoot); });
+                  const element = roots.map(root => root.querySelector('[data-clearframe-evidence]')).find(Boolean);
+                  return (element?.innerText || element?.textContent || '').replace(/\\s+/g, ' ').trim();
+                })()
+                """,
+                in: session
+            ) as? String
+            try require(
+                highlightedEvidence?.contains(evidencePoint) == true,
+                "Evidence Mode highlighted a different or empty DOM node"
+            )
+            print("PASS evidence: exact extracted text was selected and visibly highlighted")
+
+            try await evaluate("history.pushState({}, '', '/changed-after-analysis')", in: session)
+            let staleAnalysisCleared = await waitUntil {
+                session.currentURLString.hasSuffix("/changed-after-analysis") && assistant.state == .idle
+            }
+            try require(staleAnalysisCleared, "same-document navigation left stale assistant results attached")
+            try await evaluate("history.replaceState({}, '', '/')", in: session)
+            let evidenceFixtureRestored = await waitUntil { session.currentURLString == localURL }
+            try require(evidenceFixtureRestored, "fixture URL did not restore after stale-analysis check")
+            print("PASS assistant lifecycle: same-document navigation cleared stale analysis")
 
             workspace.toggleBookmarkForSelectedTab()
             try require(dataStore.bookmarks.count == 1, "bookmark was not saved")
-            try require(dataStore.history.contains(where: { $0.url == "http://127.0.0.1:8765/" }), "completed visit was not recorded")
+            try require(dataStore.history.contains(where: { $0.url == localURL }), "completed visit was not recorded")
             print("PASS library: bookmark and local history entry created")
 
             try await evaluate("document.querySelector('a[target=_blank]').click()", in: session)
             let newTabOpened = await waitUntil { workspace.tabs.count == 2 }
             try require(newTabOpened, "target-blank link did not create a tab")
             try require(workspace.selectedTabID == workspace.tabs.last?.id, "new tab was not selected")
+            let focusRequestBeforeClosingPopup = workspace.focusAddressRequest
             workspace.closeSelectedTab()
             try require(workspace.tabs.count == 1, "tab did not close cleanly")
             try require(workspace.selectedTab?.session === session, "closing the new tab did not return to the original tab")
-            let originalAddressRefocused = await waitUntil {
-                guard let editor = window.firstResponder as? NSTextView else { return false }
-                let expectedLength = editor.string.utf16.count
-                return editor.string == "http://127.0.0.1:8765/" && editor.selectedRange().length == expectedLength
-            }
-            try require(originalAddressRefocused, "selected tab did not focus and select its address")
-            print("PASS tabs/focus: new web tab opened and closed; selected tab address was focused and selected")
+            try require(
+                workspace.focusAddressRequest == focusRequestBeforeClosingPopup,
+                "closing a content tab issued an unnecessary address-focus request"
+            )
+            print("PASS tabs/focus: popup tab opened and closed without stealing focus into the address field")
 
             session.navigate("clearframe deterministic smoke query")
             let searchURL = reflectedRequestedURL(session)
@@ -442,7 +491,7 @@ struct BrowserE2ESmoke {
             session.stopLoading()
             print("PASS search: plain text resolved to DuckDuckGo with the expected query")
 
-            _ = try await loadDeterministicPage(in: session)
+            try await loadDeterministicPage(in: session, localURL: fixtureURL)
             workspace.persistNow()
             let restored = BrowserWorkspace(
                 dataStore: BrowserDataStore(defaults: defaults),
@@ -450,7 +499,7 @@ struct BrowserE2ESmoke {
                 searchSettings: SearchSettingsStore(defaults: defaults)
             )
             try require(restored.tabs.count == 1, "saved tab session did not restore")
-            try require(restored.selectedTab?.persistenceRecord.url == "http://127.0.0.1:8765/", "restored tab URL was incorrect")
+            try require(restored.selectedTab?.persistenceRecord.url == localURL, "restored tab URL was incorrect")
             print("PASS session: current tab restored from isolated local storage")
 
             workspace.toggleBookmarkForSelectedTab()

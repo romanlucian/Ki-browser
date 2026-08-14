@@ -104,6 +104,17 @@ final class DownloadCenter: NSObject, ObservableObject {
         if items.isEmpty { isShelfVisible = false }
     }
 
+    /// Clears in-app download metadata without deleting files the user chose to save.
+    /// The Settings reset is disabled while a transfer or save panel is active.
+    func clearAllRecords() {
+        guard activeCount == 0 else { return }
+        items.removeAll()
+        itemIDByDownload.removeAll()
+        downloadsByItemID.removeAll()
+        isShelfVisible = false
+        isPanelPresented = false
+    }
+
     private func update(_ id: UUID, change: (inout DownloadItem) -> Void) {
         guard let index = items.firstIndex(where: { $0.id == id }) else { return }
         change(&items[index])

@@ -19,7 +19,15 @@ for (const file of required) {
 
 if (manifest.manifest_version !== 3) throw new Error("Expected Manifest V3.");
 if (manifest.permissions.includes("tabs")) throw new Error("Avoid persistent tabs permission.");
-if ((manifest.host_permissions || []).includes("<all_urls>")) {
+const pageMatchPatterns = [
+  ...(manifest.host_permissions || []),
+  ...(manifest.optional_host_permissions || []),
+  ...(manifest.content_scripts || []).flatMap((script) => script.matches || [])
+];
+const broadPagePattern = pageMatchPatterns.find((pattern) =>
+  pattern === "<all_urls>" || /^(?:\*|https?|wss?):\/\/\*\/\*$/i.test(pattern)
+);
+if (broadPagePattern) {
   throw new Error("Avoid broad persistent page access.");
 }
 if (!manifest.permissions.includes("activeTab")) throw new Error("Expected activeTab privacy boundary.");

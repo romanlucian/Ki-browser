@@ -1,12 +1,14 @@
 import ClearframeCore
 import Combine
 import Foundation
+import WebKit
 
 @MainActor
 final class BrowserTab: ObservableObject, Identifiable {
     let id: UUID
     let session: BrowserSession
     let assistant: PageAssistantModel
+    let isPrivate: Bool
     @Published private(set) var displayTitle: String
     @Published private(set) var lastActivatedAt: Date
 
@@ -20,20 +22,27 @@ final class BrowserTab: ObservableObject, Identifiable {
         loadImmediately: Bool = true,
         lastActivatedAt: Date = Date(),
         downloadCenter: DownloadCenter,
-        searchSettings: SearchSettingsStore
+        searchSettings: SearchSettingsStore,
+        isPrivate: Bool = false
     ) {
         self.id = id
         self.displayTitle = title
         self.lastActivatedAt = lastActivatedAt
+        self.isPrivate = isPrivate
         assistant = PageAssistantModel()
         if loadImmediately {
             session = BrowserSession(
                 downloadCenter: downloadCenter,
                 searchSettings: searchSettings,
-                initialURL: initialURL
+                initialURL: initialURL,
+                isPrivate: isPrivate
             )
         } else {
-            session = BrowserSession(downloadCenter: downloadCenter, searchSettings: searchSettings)
+            session = BrowserSession(
+                downloadCenter: downloadCenter,
+                searchSettings: searchSettings,
+                isPrivate: isPrivate
+            )
             pendingRestoreURL = initialURL
         }
 
@@ -75,6 +84,7 @@ final class BrowserTab: ObservableObject, Identifiable {
 
     func teardown() {
         cancellables.removeAll()
+        assistant.teardown()
         session.teardown()
     }
 }
@@ -93,6 +103,8 @@ final class BrowserWorkspace: ObservableObject {
     let searchSettings: SearchSettingsStore
 
     private var tabSubscriptions: [UUID: AnyCancellable] = [:]
+    private var downloadSubscription: AnyCancellable?
+    private var dataStoreSubscription: AnyCancellable?
     private var persistenceTask: Task<Void, Never>?
 
     init(
@@ -106,6 +118,12 @@ final class BrowserWorkspace: ObservableObject {
         self.dataStore = resolvedDataStore
         self.downloads = resolvedDownloads
         self.searchSettings = resolvedSearchSettings
+        downloadSubscription = resolvedDownloads.objectWillChange.sink { [weak self] _ in
+            self?.objectWillChange.send()
+        }
+        dataStoreSubscription = resolvedDataStore.objectWillChange.sink { [weak self] _ in
+            self?.objectWillChange.send()
+        }
 
         if let restored = resolvedDataStore.loadWorkspace(), !restored.tabs.isEmpty {
             let selectedID = restored.selectedTabID ?? restored.tabs.first?.id
@@ -144,11 +162,12 @@ final class BrowserWorkspace: ObservableObject {
 
     var canCloseTab: Bool { !tabs.isEmpty }
 
-    func addTab(url: URL? = nil, select: Bool = true) {
+    func addTab(url: URL? = nil, select: Bool = true, isPrivate: Bool = false) {
         let tab = BrowserTab(
             initialURL: url,
             downloadCenter: downloads,
-            searchSettings: searchSettings
+            searchSettings: searchSettings,
+            isPrivate: isPrivate
         )
         tabs.append(tab)
         configure(tab)
@@ -160,7 +179,6 @@ final class BrowserWorkspace: ObservableObject {
         guard tabs.contains(where: { $0.id == id }) else { return }
         selectedTabID = id
         selectedTab?.activate()
-        requestAddressFocus()
         schedulePersistence()
     }
 
@@ -201,12 +219,17 @@ final class BrowserWorkspace: ObservableObject {
     }
 
     func open(_ urlString: String, inNewTab: Bool = false) {
-        guard let url = URL(string: urlString), ["http", "https"].contains(url.scheme?.lowercased() ?? "") else { return }
+        guard let url = WebURLPolicy.validatedURL(urlString) else { return }
         if inNewTab || selectedTab == nil {
-            addTab(url: url)
+            addTab(url: url, isPrivate: selectedTab?.isPrivate ?? false)
         } else {
             selectedTab?.session.load(url)
         }
+    }
+
+    func openExternalURL(_ url: URL) {
+        guard let safeURL = WebURLPolicy.validatedURL(url) else { return }
+        addTab(url: safeURL, isPrivate: false)
     }
 
     func toggleBookmarkForSelectedTab() {
@@ -261,17 +284,55 @@ final class BrowserWorkspace: ObservableObject {
     }
 
     func persistNow() {
+        let persistentTabs = tabs.filter { !$0.isPrivate }
+        let persistentSelection = persistentTabs.contains(where: { $0.id == selectedTabID })
+            ? selectedTabID
+            : persistentTabs.first?.id
         let snapshot = BrowserWorkspaceSnapshot(
-            tabs: tabs.map(\.persistenceRecord),
-            selectedTabID: selectedTabID
+            tabs: persistentTabs.map(\.persistenceRecord),
+            selectedTabID: persistentSelection
         )
         dataStore.saveWorkspace(snapshot)
     }
 
+    func resetLocalBrowsingData() async {
+        persistenceTask?.cancel()
+        persistenceTask = nil
+        tabs.forEach { $0.teardown() }
+        tabSubscriptions.removeAll()
+        tabs = []
+        selectedTabID = nil
+        dataStore.clearAllBrowserRecords()
+        downloads.clearAllRecords()
+
+        let dataStore = WKWebsiteDataStore.default()
+        await withCheckedContinuation { continuation in
+            dataStore.removeData(
+                ofTypes: WKWebsiteDataStore.allWebsiteDataTypes(),
+                modifiedSince: .distantPast
+            ) {
+                continuation.resume()
+            }
+        }
+
+        let replacement = BrowserTab(
+            downloadCenter: downloads,
+            searchSettings: searchSettings
+        )
+        tabs = [replacement]
+        selectedTabID = replacement.id
+        configure(replacement)
+        requestAddressFocus()
+    }
+
     private func configure(_ tab: BrowserTab) {
-        tab.session.onRequestNewTab = { [weak self] url in self?.addTab(url: url) }
+        let isPrivate = tab.isPrivate
+        tab.session.onRequestNewTab = { [weak self] url in
+            self?.addTab(url: url, isPrivate: isPrivate)
+        }
         tab.session.onCompletedVisit = { [weak self] title, url in
             guard let self else { return }
+            guard !isPrivate else { return }
             self.dataStore.recordVisit(title: title, url: url)
             self.schedulePersistence()
         }

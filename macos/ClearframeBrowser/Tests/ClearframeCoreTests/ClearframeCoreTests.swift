@@ -22,6 +22,18 @@ final class ClearframeCoreTests: XCTestCase {
         XCTAssertTrue(result.claimsToCheck.contains { $0.contains("2025") })
     }
 
+    func testEnglishTopicWordsAreNotRemovedByOtherLanguageStopWords() {
+        let tokens = LocalAnalysisEngine.tokens(
+            "The new health care law will care for children and their care needs. A son and his father discussed care options.",
+            language: "en-US"
+        )
+
+        XCTAssertEqual(tokens.filter { $0 == "care" }.count, 4)
+        XCTAssertTrue(tokens.contains("son"))
+        XCTAssertFalse(tokens.contains("the"))
+        XCTAssertFalse(LocalAnalysisEngine.tokens("son sont avec", language: "fr").contains("son"))
+    }
+
     func testRomanianSummaryIgnoresRepeatedMediaControlBoilerplate() {
         let repeatedPlayerText = Array(
             repeating: "subtitles settings, opens subtitles settings dialog ",
@@ -177,6 +189,66 @@ final class ClearframeCoreTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(result.score, 80)
     }
 
+    func testRiskIPAddressAndOriginNormalizationAvoidFalsePositives() {
+        let invalidIPv4 = PageSnapshot(
+            title: article.title,
+            url: "https://999.999.999.999/article",
+            hostname: "999.999.999.999",
+            scheme: "https",
+            language: "en",
+            text: article.text,
+            wordCount: article.wordCount,
+            hasPasswordField: false,
+            formActions: []
+        )
+        XCTAssertFalse(RiskAnalyzer.assess(page: invalidIPv4).signals.contains { $0.title.contains("raw IP") })
+
+        let invalidIPv6 = PageSnapshot(
+            title: article.title,
+            url: "https://example.org/article",
+            hostname: "::::",
+            scheme: "https",
+            language: "en",
+            text: article.text,
+            wordCount: article.wordCount,
+            hasPasswordField: false,
+            formActions: []
+        )
+        XCTAssertFalse(RiskAnalyzer.assess(page: invalidIPv6).signals.contains { $0.title.contains("raw IP") })
+
+        let ipv6 = PageSnapshot(
+            title: article.title,
+            url: "http://[2001:db8::1]/article",
+            hostname: "[2001:db8::1]",
+            scheme: "http",
+            language: "en",
+            text: article.text,
+            wordCount: article.wordCount,
+            hasPasswordField: false,
+            formActions: []
+        )
+        XCTAssertTrue(RiskAnalyzer.assess(page: ipv6).signals.contains { $0.title.contains("raw IP") })
+
+        let defaultPort = PageSnapshot(
+            title: article.title,
+            url: "https://Example.org/article",
+            hostname: "Example.org",
+            scheme: "https",
+            language: "en",
+            text: article.text,
+            wordCount: article.wordCount,
+            hasPasswordField: false,
+            formActions: ["https://example.org:443"]
+        )
+        XCTAssertFalse(RiskAnalyzer.assess(page: defaultPort).signals.contains { $0.title.contains("another site") })
+    }
+
+    func testReadingTimeRoundsPartialMinutesUp() {
+        XCTAssertEqual(LocalAnalysisEngine.readingTime(wordCount: 1), 1)
+        XCTAssertEqual(LocalAnalysisEngine.readingTime(wordCount: 220), 1)
+        XCTAssertEqual(LocalAnalysisEngine.readingTime(wordCount: 221), 2)
+    }
+
     func testPlainEnglishRewritesFormalWords() {
         XCTAssertEqual(LocalAnalysisEngine.simplifyEnglish("Individuals utilize numerous tools."), "people use many tools.")
     }
@@ -236,6 +308,27 @@ final class ClearframeCoreTests: XCTestCase {
         )
 
         XCTAssertNil(record.restorableURL)
+    }
+
+    func testSessionRestoreUsesTheCredentialFreeWebURLPolicy() {
+        let invalidValues = [
+            "https://user:password@example.com/private",
+            "https:///missing-host",
+            "https:relative-path",
+            "data:text/html,private",
+            "about:blank"
+        ]
+
+        for value in invalidValues {
+            let record = BrowserTabRecord(
+                id: UUID(),
+                url: value,
+                title: "Unsafe restore",
+                lastActivatedAt: Date()
+            )
+            XCTAssertNil(record.restorableURL, "Restored an unsafe URL: \(value)")
+            XCTAssertNil(WebURLPolicy.validatedURL(value), "Validated an unsafe URL: \(value)")
+        }
     }
 
     func testSessionRestoreCapsTabsAndKeepsAValidSelection() {
@@ -490,4 +583,103 @@ final class ClearframeCoreTests: XCTestCase {
         XCTAssertTrue(folder.barLabel.contains(folder.emoji))
         XCTAssertTrue(folder.barLabel.contains(folder.title))
     }
+
+    func testSharedContractLanguageAwareTokenization() throws {
+        for testCase in try localAnalysisContract().tokenCases {
+            let tokens = LocalAnalysisEngine.tokens(testCase.text, language: testCase.language)
+            for (token, expectedCount) in testCase.requiredCounts {
+                XCTAssertEqual(
+                    tokens.filter { $0 == token }.count,
+                    expectedCount,
+                    "\(testCase.id): \(token)"
+                )
+            }
+            for excluded in testCase.excluded {
+                XCTAssertFalse(tokens.contains(excluded), "\(testCase.id): retained \(excluded)")
+            }
+        }
+    }
+
+    func testSharedContractDeterministicSummaries() throws {
+        for testCase in try localAnalysisContract().summaryCases {
+            XCTAssertEqual(
+                LocalAnalysisEngine.summarize(page: testCase.page),
+                testCase.expected,
+                testCase.id
+            )
+        }
+    }
+
+    func testSharedContractRiskSignals() throws {
+        for testCase in try localAnalysisContract().riskCases {
+            let risk = RiskAnalyzer.assess(page: testCase.page)
+            XCTAssertEqual(risk.score, testCase.expected.score, "\(testCase.id): score")
+            XCTAssertEqual(risk.level, testCase.expected.level, "\(testCase.id): level")
+            XCTAssertEqual(risk.signals.map(\.title), testCase.expected.signalTitles, testCase.id)
+        }
+    }
+
+    func testSharedContractPlainEnglishAndReadingTime() throws {
+        let contract = try localAnalysisContract()
+        for testCase in contract.plainEnglishCases {
+            XCTAssertEqual(LocalAnalysisEngine.simplifyEnglish(testCase.input), testCase.expected)
+        }
+        for testCase in contract.readingTimeCases {
+            XCTAssertEqual(
+                LocalAnalysisEngine.readingTime(wordCount: testCase.wordCount),
+                testCase.expectedMinutes
+            )
+        }
+    }
+
+    private func localAnalysisContract() throws -> LocalAnalysisContract {
+        let url = try XCTUnwrap(
+            Bundle.module.url(forResource: "local-analysis-contract", withExtension: "json")
+        )
+        return try JSONDecoder().decode(LocalAnalysisContract.self, from: Data(contentsOf: url))
+    }
+}
+
+private struct LocalAnalysisContract: Decodable {
+    let tokenCases: [TokenContractCase]
+    let summaryCases: [SummaryContractCase]
+    let riskCases: [RiskContractCase]
+    let plainEnglishCases: [PlainEnglishContractCase]
+    let readingTimeCases: [ReadingTimeContractCase]
+}
+
+private struct TokenContractCase: Decodable {
+    let id: String
+    let language: String
+    let text: String
+    let requiredCounts: [String: Int]
+    let excluded: [String]
+}
+
+private struct SummaryContractCase: Decodable {
+    let id: String
+    let page: PageSnapshot
+    let expected: PageAnalysisContent
+}
+
+private struct RiskContractCase: Decodable {
+    let id: String
+    let page: PageSnapshot
+    let expected: RiskContractExpectation
+}
+
+private struct RiskContractExpectation: Decodable {
+    let score: Int
+    let level: RiskLevel
+    let signalTitles: [String]
+}
+
+private struct PlainEnglishContractCase: Decodable {
+    let input: String
+    let expected: String
+}
+
+private struct ReadingTimeContractCase: Decodable {
+    let wordCount: Int
+    let expectedMinutes: Int
 }

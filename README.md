@@ -6,8 +6,8 @@ The installed and `dist` builds still use WebKit. A future Chromium migration no
 
 The native app provides:
 
-- multi-tab browsing with safe per-tab WebKit and assistant state;
-- local restoration of recent tabs, with lazy loading and an opt-out setting;
+- multi-tab browsing with safe per-tab WebKit and assistant state, including ephemeral private tabs that are never restored or added to history;
+- local restoration of recent regular tabs, with lazy loading, corruption recovery, and an opt-out setting;
 - downloads with a user-selected destination plus an obvious toolbar panel for status, destination, cancel, reveal, and the Downloads folder;
 - a visible Clearframe bookmarks bar below navigation, with horizontally scrollable top-level links, nested emoji-folder menus, current-page and saved-bookmark drag filing, fixed overflow access, and a locally persisted show/hide setting;
 - searchable local bookmarks organized into emoji-labeled nested folders, plus local history with clear/disable controls;
@@ -17,8 +17,8 @@ The native app provides:
 - a native new-tab AI guide with a small, locally defined catalog organized by everyday tasks;
 - a concise three-step first-run introduction covering Clearframe's promise, search choice, privacy boundary, AI home, and Analyze page workflow;
 - a source-language extractive page summary that works without an account or API key;
-- key points and page claims worth checking;
-- visible risk signals such as unencrypted password forms, encoded domains, urgent payment language, wallet-secret requests, and remote-access prompts;
+- key points and page claims worth checking, with best-effort highlighting of the exact extracted evidence on the live page;
+- visible risk signals such as unencrypted password forms, encoded domains, urgent payment language, wallet-secret requests, and contextual remote-access requests;
 - a Plain English mode plus optional AI translation;
 - a two-source comparison that highlights shared themes and extracted figures without pretending to decide which source is true.
 
@@ -39,7 +39,7 @@ cd macos/ClearframeBrowser
 ./scripts/build-macos-app.sh
 ```
 
-The output is `dist/Clearframe.app` at the repository root. It opens as an ordinary macOS application rather than using Terminal as its keyboard target.
+The output is `dist/Clearframe.app` at the repository root. The script embeds the app icon and privacy manifest, enables the hardened runtime, and applies an ad hoc signature for local development. This is still not a Developer ID signature or notarization. The bundle opens as an ordinary macOS application rather than using Terminal as its keyboard target.
 
 For source-level development only, you can still use:
 
@@ -61,15 +61,15 @@ swift run --disable-sandbox ClearframeBrowser
 Then:
 
 1. On the first launch, complete or skip the short introduction. It stores only a local completion flag and your selected search engine. Reopen it later from **Settings → Clearframe introduction**.
-2. A new tab opens Clearframe’s local AI guide. Filter by task, or select a card to open that service’s official website.
+2. A new tab opens Clearframe’s local AI guide. Choose a human task, search the catalog, or explicitly reveal all tools; then select a card to open that service’s official website.
 3. Enter a URL or search in the address bar.
-4. Browse with independent tabs; use `⌘T` for a new tab and the tab strip to switch or close tabs.
+4. Browse with independent tabs; use `⌘T` for a new tab, `⌘⇧N` for a private tab, and `⌘W` to close the current tab. Private tabs use an ephemeral WebKit data store and are not written to history or session restoration.
 5. Open **Assistant** and click **Analyze page**.
-6. Use local summary, claims, Plain English, visible risk signals, and source comparison.
-7. The bookmarks bar directly below the address row shows every top-level folder as its emoji plus a visible text name; long names truncate instead of collapsing to an icon. It also shows Unfiled bookmarks. Drag the lock/globe page-link chip at the left edge of the address text onto bar space to save the current page in **Unfiled**, or onto a visible emoji folder to file it there. Existing bar or organizer bookmarks are also draggable onto visible folders; dropping the same URL moves its one saved record rather than duplicating it. Select a folder for its bookmarks and nested subfolders, scroll horizontally when needed, or use **More** for reliable overflow access. Secondary-click (right-click) or Control-click the bar to add the current page, create a folder, open the organizer, or hide the bar; secondary-click a folder to add/move the current page there or create a nested subfolder. The same actions remain accessible from **More**, the Library, and the native **Page** menu; **⌘⌥B** opens the organizer. Use the star to add or remove the current page. The bar is visible by default and can be hidden or restored from **Settings → Bookmarks bar** or the Page menu. Existing bookmarks remain available under **Unfiled**.
+6. Use local summary, claims, Plain English, visible risk signals, source comparison, and **View evidence** to reveal the extracted source sentence in the page when its DOM still matches.
+7. The bookmarks bar shows Unfiled links and emoji-labeled folders. Drag the address bar’s lock/globe page-link chip—or an existing bookmark—onto bar space or a visible folder to file it; dropping the same URL moves its single record instead of duplicating it. Secondary-click and the **More**, Library, and **Page** menus expose the same create, file, organize, and show/hide actions, with an accessible Move menu for keyboard use. **⌘⌥B** opens the organizer, and legacy bookmarks remain in **Unfiled**.
 8. Use the Downloads toolbar button to see a clear empty state or the current session’s download status, destination, and Reveal action; **Open Downloads Folder** remains available even when the list is empty. Attachment downloads keep the existing page visible instead of presenting WebKit's internal policy-handoff message as a page error.
 9. Click the provider name inside the address bar, or open **ClearframeBrowser → Settings…** (`⌘,`), to choose the search engine. After a toolbar choice, the address field is ready for typing.
-10. Optional AI, tab-restoration, bookmark-bar, and local-history settings are available in the same Settings window.
+10. Optional AI, tab-restoration, bookmark-bar, and local-history settings are available in the same Settings window. **Clear local browsing data** removes regular/private tabs, history, bookmarks, the in-app download list, cookies, caches, website storage, session records, and recovery backups; it does not delete downloaded files, general preferences, or the Optional AI key.
 
 DuckDuckGo is the initial search default, not Clearframe’s browser engine. Searches can instead use Google, Bing, Brave Search, or Startpage. The choice stays in local macOS preferences, direct website addresses bypass search, and Clearframe claims no partnership or revenue agreement with any listed provider.
 
@@ -83,9 +83,9 @@ swift test
 ./scripts/run-browser-smoke.sh
 ```
 
-The smoke test exercises a native SwiftUI window, launch/address focus, deterministic WebKit navigation, tabs, local search resolution, default/persisted bookmark-bar visibility, nested bookmark menu queries/persistence, duplicate-safe URL-drop filing/moves, download-panel state, history, session restore, and the local assistant. It requires a logged-in desktop session; restricted/headless environments can block WebKit services.
+The smoke test uses a kernel-selected local fixture port and exercises a native SwiftUI window, launch/content focus, WebKit navigation, same-document SPA URL/title changes, popups, tabs, local search resolution, bookmark persistence and safe drag filing, download-panel state, history, session restore, visible-content filtering, open Shadow DOM extraction, local analysis, and exact evidence highlighting. It requires a logged-in desktop session; restricted/headless environments can block WebKit services.
 
-The Swift package separates the Foundation-only analysis/service contract (`ClearframeCore`) from the macOS-specific SwiftUI/WebKit interface (`ClearframeBrowser`). A future Windows app can reuse the language-neutral service contract and tests, but not the native SwiftUI/WebKit UI.
+The Swift package separates the Foundation-only analysis/service contract (`ClearframeCore`) from the macOS-specific SwiftUI/WebKit interface (`ClearframeBrowser`). A shared JSON contract fixture is executed by both the Swift and JavaScript suites so language scoring, summaries, risk signals, Plain English, and reading-time behavior cannot drift silently. A future Windows app can reuse the language-neutral service contract and tests, but not the native SwiftUI/WebKit UI.
 
 ## Earlier extension validation artifact
 
@@ -102,7 +102,7 @@ The extension uses the temporary `activeTab` permission. When you navigate to a 
 
 ## Optional AI in either prototype
 
-The local summary is the default. It privately selects and structures source-language sentences; deterministic coverage currently includes English, Romanian, French, and Simplified Chinese. This is useful extraction, not proof of equal semantic quality in every language. A configured optional provider may produce deeper multilingual summarization or translation after an explicit AI action. The native app stores a user-owned prototype key in macOS Keychain; the extension stores it in local extension storage. Both request `store: false`.
+The local summary is the default. It privately selects and structures source-language sentences; deterministic coverage currently includes English, Romanian, French, and Simplified Chinese. Scoring selects stopwords from the page’s primary language tag so French or Romanian words do not suppress English topic terms. This is useful extraction, not proof of equal semantic quality in every language. A configured optional provider may produce deeper multilingual summarization or translation after an explicit AI action. For analysis, the request contains the page title, hostname, declared language, and up to 18,000 characters of extracted visible text; it omits the full URL, query, fragment, cookies, form values, and browsing history. Translation sends only the displayed summary and source/target language names. The native app stores a user-owned prototype key in macOS Keychain; the extension stores it in local extension storage. Both use structured Responses API output for analysis, request `store: false`, retain the local result if a provider request fails, and direct unavailable-model errors to Settings.
 
 A production version must put paid API access behind an authenticated backend proxy and must never ship a shared key in an app or extension.
 
@@ -125,8 +125,10 @@ npm run validate
 - The download list is session-only in this version; saved files remain at the destination the user selected, and the toolbar panel can always open the local Downloads folder.
 - The bookmarks bar and folder organizer are local only. Native URL drag-and-drop creates or moves bookmarks into Unfiled or visible folders; it does not reorder items or move folders, and the existing Move menu remains the keyboard alternative. The organizer supports drops onto the folders currently visible in it, not closed submenu rows. There is no account, sync, or cloud backup. Hiding the bar does not delete bookmarks. Deleting a non-empty folder requires confirmation and rehomes its direct contents instead of deleting saved pages.
 - Browser-internal pages, extension stores, PDF viewers, and some restricted pages cannot be analyzed.
-- The native browser is a single-window version-1 MVP with basic tabs; it is not yet a signed, notarized, independently security-reviewed consumer release.
+- Private tabs isolate website storage for that tab and avoid history/restoration, but they do not provide network anonymity, hide activity from websites or the network, or erase files the user downloads.
+- The native browser is a single-window version-1 MVP with basic tabs; its local bundle is ad hoc signed with the hardened runtime, but it is not Developer ID signed, notarized, or independently security reviewed for consumer distribution.
 - WebKit does not provide Chrome extension compatibility and is not a drop-in substitute for a future Chromium product.
+- The repository is published under the [GNU Affero General Public License v3.0](LICENSE). Source may be read, modified, and redistributed under those terms; modified versions offered to users over a network must also offer their corresponding source. Clearframe holds the copyright and may additionally offer separate commercial terms.
 
 ## Documentation index
 

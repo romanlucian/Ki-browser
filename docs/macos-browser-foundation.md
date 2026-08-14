@@ -6,24 +6,25 @@ The primary prototype is a native SwiftUI application under `macos/ClearframeBro
 
 The current version-1 release stage includes:
 
-- multiple independent tabs with a clear tab strip, new/close/next/previous shortcuts, safe teardown, and web popups routed into new tabs;
+- multiple independent tabs with a clear tab strip, `⌘T` new-tab, `⌘⇧N` private-tab, `⌘W` current-tab close, next/previous shortcuts, safe teardown, and credential-free HTTP/HTTPS popups routed into same-privacy-mode tabs;
 - a concise, keyboard-accessible first-run introduction with locally persisted completion, existing search-provider selection, privacy explanation, Analyze page teaching, Start browsing handoff, Skip/Back controls, and a Settings revisit action;
-- explicit AppKit startup activation plus reliable address-field focus/selection on launch, tab changes, search-provider selection, and start-page reactivation; navigation releases focus back to WebKit, and reactivation does not steal focus from loaded page content;
-- back, forward, home, reload, stop, loading progress, and an HTTPS indicator per tab;
+- explicit AppKit startup activation plus reliable address-field focus/selection on launch, new/start tabs, search-provider selection, and start-page reactivation; ordinary tab changes do not issue a global focus request, navigation releases focus back to WebKit, and reactivation does not steal focus from loaded page content;
+- back, forward, home, reload, stop, real WebKit loading progress, HTTPS indication, and same-document URL/title synchronization per tab;
 - a visible address-bar and Settings chooser for DuckDuckGo, Google, Bing, Brave Search, and Startpage, persisted only in local preferences;
 - a native local AI-guide start page with seven task categories (including Create Images and Create Videos), local filtering, concise informational cards, transparent task-specific editorial badges/ordering, broad access labels, a visible manual checked date/version, official rationale sources, and direct official-site navigation, plus dedicated loading, offline, timeout, missing-host, unsupported-link, and general error states;
 - AI-guide card activation that immediately shows the exact HTTPS destination in the address field and a provider-specific loading state; replacement navigation is tracked so cancellation of the underlying local start-page load cannot overwrite the new request;
-- opt-out session restoration of up to 12 recent tabs; inactive restored tabs load lazily, and only URL/title/activity metadata is saved;
+- opt-out session restoration of up to 12 recent regular tabs; inactive restored tabs load lazily, only validated URL/title/activity metadata is saved, private tabs are excluded, and corrupt records are quarantined/recovered from a last-known-good copy where available;
 - user-confirmed downloads with a macOS save dialog and a dedicated toolbar popover containing a clear empty state, visible destination/status, cancel, Reveal in Finder, clear-finished, and Open Downloads Folder controls; WebKit's expected attachment-policy handoff no longer replaces the page with a false “Frame load interrupted” error;
 - a visible-by-default native bookmarks bar directly below navigation, showing compact top-level emoji folders and Unfiled bookmarks, recursive nested-folder menus, horizontal scrolling, a fixed More overflow menu, a clear empty state, and a locally persisted Settings/Page-menu show-hide control; the address field's lock/globe chip is a native URL drag source, bar space and visible emoji folders are highlighted drop targets, and saved bar/organizer bookmarks can be moved by URL drag without duplication; native secondary-click/Control-click actions can add the current page, file it into a folder, create a root folder or subfolder, open the organizer, or hide the bar, with equivalent More/Page-menu access and ⌘⌥B for keyboard users;
 - local bookmarks organized into titled, emoji-labeled folders and nested subfolders, including safe legacy migration to Unfiled, folder create/rename/delete, bookmark moves, and searchable local history with remove/clear controls and a setting to disable history;
 - user-triggered, on-device English dictation into the visible address field with review before submission and no background listening;
-- user-invoked visible-page extraction that prioritizes rendered reading blocks and filters navigation, consent, hidden, and embedded-media control UI;
-- source-language local gist, key points, candidate claims, read time, English-only local Plain English simplification, and explained risk signals;
+- user-invoked visible-page extraction that prioritizes rendered reading blocks, includes open Shadow DOM reading content, and filters navigation, consent, hidden, and embedded-media control UI;
+- source-language local gist, key points, candidate claims, read time, exact-text Evidence Mode with best-effort live-page highlighting, English-only local Plain English simplification, and explained risk signals;
 - a one-source save / second-source comparison flow;
-- an optional OpenAI provider and translation action;
+- an optional OpenAI provider and translation action with minimized disclosed payloads, strict analysis output, cancellation/stale-navigation guards, timeouts, and local-result preservation on remote failure;
 - API-key storage in macOS Keychain;
-- twenty-six tests for the reusable core logic, English/Romanian/French/Simplified-Chinese extraction, media-boilerplate handling, bookmark-tree/bar labels/queries, credential-free web-URL drag validation, duplicate-safe filing, migration and safe deletion, local AI-tool catalog labels/recommendation ordering/release metadata, local onboarding completion, search endpoint construction, and safe session-record handling.
+- non-persistent private-tab website storage, no private history/restoration, a user-confirmed all-browser-data reset, external HTTP/HTTPS event handling, visible JavaScript/media-permission prompts, and a renderer-termination error state;
+- Swift unit/integration suites plus a deterministic desktop smoke covering reusable core behavior, provider contracts/failures, persistence recovery, navigation policy, private tabs, multilingual extraction, media/hidden-content filtering, open Shadow DOM, SPA chrome synchronization, evidence highlighting, popup teardown, bookmarks, history, search, and session restoration.
 
 DuckDuckGo is the changeable initial search default. Submitted search text goes to the selected provider’s ordinary HTTPS results URL; direct website addresses do not. Clearframe requests no search suggestions while the user types and claims no partnership, default-search contract, or revenue-share agreement.
 
@@ -63,7 +64,7 @@ cd macos/ClearframeBrowser
 ./scripts/build-macos-app.sh
 ```
 
-Open `dist/Clearframe.app` from Finder at the repository root. This bundle is ad hoc signed for local execution only; it is not Developer ID signed or notarized.
+Open `dist/Clearframe.app` from Finder at the repository root. The script generates the app icon, embeds `PrivacyInfo.xcprivacy`, validates bundle metadata, enables the hardened runtime with narrow camera/microphone entitlements, and ad hoc signs/verifies the bundle for local execution. `CLEARFRAME_SIGNING_IDENTITY` can select an available signing identity, but notarization is a separate credentialed release step. The checked-in result is not Developer ID signed or notarized.
 
 For development and verification:
 
@@ -90,11 +91,12 @@ WebKit is a pragmatic macOS-first engine, but this foundation is not equivalent 
 - **No Chrome extension ecosystem.** `WKWebView` cannot install ordinary Chrome Web Store extensions.
 - **Engine differences.** Sites are rendered by Apple WebKit, so behavior and debugging can differ from Chromium/Blink.
 - **Provider-page performance varies.** Clearframe uses WebKit's default persistent website data store and does not proxy, prefetch, or rewrite third-party media. Media-heavy pages such as ByteDance Seed may load images or video incrementally as the user scrolls. Compare the exact URL in Safari on the same connection, once cold and once after caching; a repeatable Clearframe-only slowdown needs a separate WebKit/network trace.
-- **Basic tabs, not Chrome-scale tab management.** This release is single-window and has no tab reordering, pinned tabs, tab groups, multiple profiles, private windows, or cross-device sync. Restoration reloads the current URL; it does not preserve back/forward stacks, form state, or page content.
+- **Basic tabs, not Chrome-scale tab management.** This release is single-window and has no tab reordering, pinned tabs, tab groups, multiple profiles, separate private windows, or cross-device sync. Private tabs are clearly marked, use an ephemeral WebKit data store, and avoid local history/restoration, but do not provide network anonymity. Restoration reloads the current URL; it does not preserve back/forward stacks, form state, or page content.
 - **Basic downloads, not a production download service.** Downloads use a user-selected destination and remain visible in a dedicated toolbar panel while the app runs. The panel explains an empty session and can open the Downloads folder, but there is no byte-level progress, persisted download list, pause/resume UI, background transfer service, quarantine scanner, or reputation verdict.
 - **Local bookmark bar and organization, not sync.** Bar visibility, folder titles, emoji, hierarchy, and bookmark placement remain in the current Mac user profile. A native URL drag can create a bookmark in Unfiled or a visible folder, and dragging an existing bookmark moves that one record. It does not drag folders, reorder items, expose closed nested-menu rows as targets, or replace the accessible Move menu. Hiding the bar does not delete anything. Legacy flat records become Unfiled; deleting a non-empty folder rehomes its direct bookmarks/subfolders after confirmation. There is no account, cloud backup, conflict resolution, or cross-device sync.
-- **Incomplete browser services.** There is no password/import system, certificate-detail UI, comprehensive site-permission center, content blocker, full browsing-data manager, crash reporter, updater, or enterprise policy.
-- **Distribution is unfinished.** A local `.app` bundle is generated in `dist`, but a public release still needs a maintained Xcode release target, Developer ID signing, notarization, hardened-runtime/entitlement review, update delivery, accessibility QA, and release engineering.
+- **Incomplete browser services.** There is no password/import system, certificate-detail UI, comprehensive site-permission center, content blocker, granular per-site data manager, crash reporter/relaunch recovery, updater, or enterprise policy. The delivered reset removes all Clearframe browsing records and WebKit website data at once.
+- **Distribution is unfinished.** A hardened-runtime local `.app` bundle and CI checks are generated, and the source license is settled (AGPL-3.0, `LICENSE`), but a public release still needs a maintained Xcode archive/release target, Developer ID credentials/signing, notarization, entitlement review, update delivery, accessibility QA, and release engineering.
+- **Default-browser registration is only a prerequisite.** The app declares HTTP/HTTPS handling and safely opens incoming web URLs, but Clearframe does not silently change the user's default browser. Finder/System Settings registration and default selection still need release QA after a Developer ID-signed installation.
 - **Security claims are narrow.** WebKit provides a modern rendering process, but Clearframe has not completed an independent browser security review. Its risk scanner reads only visible text and page-level facts.
 - **Platform-specific UI.** SwiftUI is appropriate for macOS but does not create a Windows/Linux interface for free.
 
@@ -102,10 +104,10 @@ These are acceptable limits for validating the source-aware assistant. They beco
 
 ## Remaining release stages
 
-1. Add navigation/download integration tests, hostile-page fixtures, crash-recovery testing, and manual QA across supported macOS hardware.
-2. Link every summary point to highlighted page evidence and add sensitive-identifier redaction before cloud analysis.
-3. Add a permission center, clearer certificate/site-information UI, private browsing, and complete browsing-data deletion controls.
+1. Expand navigation/download integration tests, hostile-page fixtures, renderer/relaunch-recovery testing, and manual QA across supported macOS hardware.
+2. Extend current local key-point evidence into citation-grade grounding for every output and add sensitive-identifier redaction before cloud analysis.
+3. Add a permission center, clearer certificate/site-information UI, multiple profiles, separate private-window UX, and granular per-site data controls.
 4. Replace direct prototype API access with an authenticated, metered backend and abuse controls.
-5. Convert the local bundle workflow into a maintained Xcode release target, then complete accessibility QA, hardened-runtime configuration, Apple signing, notarization, updater/distribution work, and an independent security review.
+5. Convert the local bundle workflow into a maintained Xcode archive/release target, then complete accessibility QA, entitlement review, Apple signing, notarization, updater/distribution work, and an independent security review. The source license is already settled (AGPL-3.0); a contribution-terms policy is not.
 
 Signing, notarization, App Store distribution, password-manager security, and production security review are not complete in this repository.

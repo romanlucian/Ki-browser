@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  extension:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run validate
+
+  macos-browser:
+    runs-on: macos-15
+    defaults:
+      run:
+        working-directory: macos/ClearframeBrowser
+    steps:
+      - uses: actions/checkout@v4
+      - run: swift test
+      - run: swift build -c release
+      - run: ./scripts/build-macos-app.sh
+      - run: codesign --verify --deep --strict ../../dist/Clearframe.app
+      - run: plutil -lint ../../dist/Clearframe.app/Contents/Resources/PrivacyInfo.xcprivacy
+
+  cef-contract:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure the isolated CEF contract only
+        run: >-
+          cmake -S chromium/cef-spike
+          -B "$RUNNER_TEMP/clearframe-cef-contract"
+          -G Xcode
+          -DCLEARFRAME_CEF_VALIDATE_ONLY=ON
+          -DPROJECT_ARCH="$(uname -m)"
+      - name: Compile-check the Objective-C bridge boundary
+        run: >-
+          xcrun clang -fsyntax-only -x objective-c -fobjc-arc
+          -isysroot "$(xcrun --sdk macosx --show-sdk-path)"
+          chromium/cef-spike/include/ClearframeChromiumBridge.h
+      - name: Explain configure-only result
+        run: echo "CEF remains isolated; CI validates its boundary without downloading or integrating a runtime."

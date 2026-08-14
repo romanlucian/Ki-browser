@@ -24,7 +24,7 @@ Voice is an additional primary interface, not a replacement for visual search or
 - Local Analyze Page preserves the source language and provides private extractive gist/key points. Current deterministic coverage includes English, Romanian, French, and Simplified Chinese; it does not imply equal semantic quality or multilingual risk-phrase coverage.
 - A configured optional provider may provide deeper multilingual summarization or translation only after a separate explicit action. Opening or locally analyzing a page never triggers that upload.
 - Visible page text is extracted only when the user requests analysis.
-- Optional provider use is separately triggered and disclosed. Prototype credentials are user-owned and stored in macOS Keychain.
+- Optional provider use is separately triggered and disclosed. Analysis sends the source title, hostname, declared language, and truncated extracted visible text; it omits the full URL/query/fragment, cookies, form values, and history. Prototype credentials are user-owned and stored in macOS Keychain.
 - Browsing history is never sold. Current bookmarks and nested emoji-labeled folders, capped history, and recent-tab metadata stay in the local Mac user profile and have user controls. Legacy flat bookmarks migrate to the Unfiled location without being discarded.
 - Page content is untrusted. The assistant remains read-only and receives no cookies, form values, passwords, unrelated tabs, or browsing-history feed.
 - The new-tab AI guide is a static catalog bundled with the app. Filtering is local, cards use direct official HTTPS destinations, and Clearframe does not attach page content, prompts, affiliate tags, or tracking parameters.
@@ -34,7 +34,9 @@ Voice is an additional primary interface, not a replacement for visual search or
 
 The intended sequence is a free useful browser, optional AI Pro for heavy usage, business plans with administration and approved model routing, and search revenue sharing only after meaningful scale exists. Transparent intent-based partner recommendations may be explored later, but they must be clearly labeled and must never alter summaries or risk signals invisibly.
 
-Product sequencing is validation and quality first, then Evidence Mode and Translate & Explain, then release/security work, optional Pro, team plans, and only later search/referral economics. This is a direction, not a revenue guarantee.
+Product sequencing is validation and extraction/performance quality first, then citation-grade expansion of the delivered local Evidence Mode and Translate & Explain, then release/security work, optional Pro, team plans, and only later search/referral economics. This is a direction, not a revenue guarantee.
+
+As of August 14, 2026, the repository contains automated quality evidence but no completed observed-user-session record. Do not imply activation, retention, referral, or usability validation until consented sessions are actually run and aggregate evidence is recorded. Recruitment counts and decision thresholds have one owner: [go-to-market.md](go-to-market.md).
 
 The initial launch approach is intentionally lean and zero-budget. Clearframe is globally positioned and English-first, while the first acquisition/validation wedge is creators overwhelmed by AI: photographers, designers, video creators, and creative freelancers. Use the founder's authentic visual/photography practice for clear workflow demonstrations, not borrowed authority or generic crowded tool-list videos. Prioritize YouTube workflow case studies, derived Shorts/TikTok, personal-network and creative-community testers, direct observation, honest GitHub build notes, and learning from activation, seven-day return, and voluntary referrals. Do not use fake claims, spam, implied partnerships, premature paid advertising, or guaranteed-growth language. The practical 30/60/90-day plan and stop rules are in [go-to-market.md](go-to-market.md).
 
@@ -52,8 +54,8 @@ Do not switch rendering engines now. CEF remains a future gated path for demonst
 
 - Standalone native window with startup activation and address-field focus.
 - Explicit on-device voice-input shell with visible status and review-before-submit behavior.
-- Independent tabs, safe close/teardown, new-tab links, and tab keyboard commands.
-- Local restoration of up to 12 recent tab URLs/titles with lazy loading and an opt-out.
+- Independent tabs, safe close/teardown, safe popup routing, external HTTP/HTTPS opening, tab keyboard commands, and ephemeral private tabs.
+- Local restoration of up to 12 recent regular-tab URLs/titles with lazy loading, corruption recovery, and an opt-out; private tabs are excluded.
 - Back, forward, home, reload, stop, address/search, progress, HTTPS indication, and clear loading/offline/error states.
 - A visible search-provider chooser with a locally persisted selection; direct website addresses bypass search.
 - A polished native new-tab AI guide organized around Ask & Learn, Write, Research, Create Images, Create Videos, Translate, and Code, with a local filter, transparent task-specific editorial badges, a visible catalog checked date/version, broad access labels, recommendation source links, and direct official-site cards. Gemini's image guidance and the separate Veo and Seedance video cards use cautious, provider-controlled availability language. Activating a card navigates the current tab, exposes the exact destination immediately, and shows provider-specific loading feedback.
@@ -61,9 +63,11 @@ Do not switch rendering engines now. CEF remains a future gated path for demonst
 - User-confirmed downloads with an obvious toolbar panel, empty state, destination/status, cancel, reveal, clear-finished, and Open Downloads Folder controls.
 - A visible-by-default native bookmarks bar below navigation with top-level folders that always render one emoji-plus-name label (long names truncate rather than becoming icon-only), Unfiled links, recursive folder menus, horizontal scrolling, fixed overflow access, and a locally persisted show/hide control. The address field's lock/globe chip exports the current safe web URL; dropping it on bar space saves to Unfiled and dropping it on a visible folder files it there. Existing bookmarks can be dragged to visible folders, with one-record move/no-duplicate semantics and the Move menu retained for keyboard access. Standard macOS secondary-click/Control-click menus add the current page, create root folders or nested subfolders, and open the organizer; the More and Page menus provide accessible alternatives, including ⌘⌥B for the organizer.
 - Local bookmark organization with emoji-labeled nested folders, safe legacy migration, move/rename/delete controls, and searchable capped history with remove, clear, and disable controls.
-- User-triggered source-language local gist, key points, candidate claims, reading time, English-only local Plain English simplification, visible risk signals, and two-source comparison.
-- Optional OpenAI provider through a reusable protocol and macOS Keychain-backed prototype settings.
-- A locally built app bundle at `dist/Clearframe.app`; it uses only an ad hoc local signature and is not Developer ID signed or notarized.
+- User-triggered source-language local gist, key points, candidate claims, reading time, initial exact-text Evidence Mode, English-only local Plain English simplification, visible risk signals, and two-source comparison.
+- Optional OpenAI provider through a reusable protocol and macOS Keychain-backed prototype settings. Requests use constrained Responses API output, omit the full page URL, and preserve the local result on provider failure.
+- User-confirmed removal of tabs, history, bookmarks, in-app download metadata, WebKit cookies/caches/website storage, workspace records, and recovery backups without deleting saved download files or general preferences.
+- Visible page dialogs and media permission prompts, WebKit renderer-termination state, same-document URL/title synchronization, and local last-known-good persistence recovery.
+- A locally built app bundle at `dist/Clearframe.app`; it includes an icon and privacy manifest and uses the hardened runtime with an ad hoc local signature. It is not Developer ID signed or notarized.
 
 ## Extraction quality regression gate
 
@@ -71,4 +75,8 @@ Complex news pages can expose embedded media-player controls and accessibility b
 
 ## Remaining release gaps
 
-This is a practical MVP, not a Chrome/Safari-scale production browser. Remaining work includes broader navigation and hostile-page QA, private browsing, multiple profiles, tab reordering/groups, bookmark/folder reordering and sync, comprehensive site permissions and certificate UI, a security-reviewed password/import system, complete browsing-data deletion, persisted/resumable download history and scanning, crash reporting, updater infrastructure, accessibility QA, a production AI backend, independent security review, Developer ID signing, notarization, and public distribution work.
+This is a practical MVP, not a Chrome/Safari-scale production browser. Remaining work includes broader navigation and hostile-page QA, multiple profiles, tab reordering/groups, bookmark/folder reordering and sync, granular per-site data controls, comprehensive site permissions and certificate UI, a security-reviewed password/import system, persisted/resumable download history and scanning, crash reporting and relaunch recovery beyond the delivered WebKit-process error state, updater infrastructure, accessibility QA, sensitive-identifier redaction and a production AI backend, independent security review, Developer ID signing, notarization, default-browser registration QA after signed installation, and public distribution work.
+
+## Source license
+
+The repository is licensed under the GNU Affero General Public License v3.0 (`LICENSE`, verbatim upstream text). This was a deliberate maintainer decision on August 14, 2026, not an inferred default. It keeps the build-in-public narrative workable while requiring that a network-deployed modified version also offer its corresponding source. The maintainer retains copyright and may issue separate commercial terms. Do not relicense, add per-file headers, or accept outside contributions without deciding a contribution-terms policy first.

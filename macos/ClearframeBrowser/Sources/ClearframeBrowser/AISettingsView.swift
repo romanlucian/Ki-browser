@@ -8,6 +8,9 @@ struct AISettingsView: View {
     @EnvironmentObject private var onboarding: OnboardingController
     @AppStorage("clearframe.restoreTabs") private var restoresTabs = true
     @AppStorage("clearframe.saveHistory") private var savesHistory = true
+    @State private var showsResetConfirmation = false
+    @State private var isResettingBrowserData = false
+    @State private var browserDataStatus = ""
 
     var body: some View {
         Form {
@@ -43,6 +46,35 @@ struct AISettingsView: View {
                 Text("History stays in this Mac user profile, is never included in AI requests, and can be cleared from the Library.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                if let notice = workspace.dataStore.recoveryNotice {
+                    VStack(alignment: .leading, spacing: 7) {
+                        Label("Local data recovery", systemImage: "externaldrive.badge.checkmark")
+                            .font(.callout.weight(.semibold))
+                        Text(notice)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Button("Dismiss") { workspace.dataStore.dismissRecoveryNotice() }
+                            .font(.caption)
+                    }
+                    .padding(.vertical, 4)
+                }
+                Button("Clear local browsing data…", role: .destructive) {
+                    showsResetConfirmation = true
+                }
+                .disabled(isResettingBrowserData || workspace.downloads.activeCount > 0)
+                Text(workspace.downloads.activeCount > 0
+                     ? "Cancel or finish active downloads before clearing browser data. Saved files are never deleted."
+                     : "Clears tabs, history, bookmarks, the in-app download list, cookies, caches, local website storage, and recovery backups. Saved files, search choice, onboarding state, and the Optional AI key are kept.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                if isResettingBrowserData {
+                    ProgressView("Clearing local browser data…")
+                        .font(.caption)
+                } else if !browserDataStatus.isEmpty {
+                    Text(browserDataStatus)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
 
             Section("Bookmarks bar") {
@@ -63,7 +95,7 @@ struct AISettingsView: View {
                     .disabled(!configuration.isEnabled)
                 TextField("Model", text: $configuration.model)
                     .disabled(!configuration.isEnabled)
-                Text("The key is stored in macOS Keychain. Page text is sent only when you click an AI or non-local translation action. Requests use `store: false`.")
+                Text("The key is stored in macOS Keychain. Improve with AI sends the page title, hostname, declared language, and up to 18,000 characters of extracted text only after you click. The full URL, query, fragment, cookies, form values, and history are not sent. Translation sends only the displayed summary and language names. Requests use `store: false`.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -97,6 +129,24 @@ struct AISettingsView: View {
         }
         .onChange(of: savesHistory) { _, enabled in
             if !enabled { workspace.dataStore.clearHistory() }
+        }
+        .confirmationDialog(
+            "Clear local browsing data?",
+            isPresented: $showsResetConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Clear browsing data", role: .destructive) {
+                isResettingBrowserData = true
+                browserDataStatus = ""
+                Task { @MainActor in
+                    await workspace.resetLocalBrowsingData()
+                    isResettingBrowserData = false
+                    browserDataStatus = "Local browsing data cleared."
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This cannot be undone. Your Optional AI key and general preferences will remain.")
         }
     }
 }

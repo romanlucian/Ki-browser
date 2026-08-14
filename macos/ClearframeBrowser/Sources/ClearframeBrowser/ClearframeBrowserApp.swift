@@ -27,14 +27,20 @@ struct ClearframeBrowserApp: App {
             .environmentObject(onboarding)
             .frame(minWidth: 920, minHeight: 620)
             .animation(.easeInOut(duration: 0.22), value: onboarding.isPresented)
+            .onOpenURL { url in
+                workspace.openExternalURL(url)
+                BrowserApplicationActivation.bringBrowserToFront()
+            }
         }
         .defaultSize(width: 1280, height: 820)
         .commands {
             CommandMenu("Tabs") {
                 Button("New Tab") { workspace.addTab() }
                     .keyboardShortcut("t", modifiers: [.command])
+                Button("New Private Tab") { workspace.addTab(isPrivate: true) }
+                    .keyboardShortcut("n", modifiers: [.command, .shift])
                 Button("Close Current Tab") { workspace.closeSelectedTab() }
-                    .keyboardShortcut("w", modifiers: [.command, .option])
+                    .keyboardShortcut("w", modifiers: [.command])
                 Divider()
                 Button("Next Tab") { workspace.selectNextTab() }
                     .keyboardShortcut("]", modifiers: [.command, .shift])

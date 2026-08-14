@@ -13,12 +13,19 @@ final class AIConfigurationStore: ObservableObject {
     private let defaults: UserDefaults
     private let keychain: KeychainStore
     private let safetyIdentifierKey = "clearframe.safetyIdentifier"
+    private let modelKey = "clearframe.openAIModel"
+    private let modelCustomizedKey = "clearframe.openAIModelCustomized"
 
     init(defaults: UserDefaults = .standard, keychain: KeychainStore = KeychainStore()) {
         self.defaults = defaults
         self.keychain = keychain
         isEnabled = defaults.bool(forKey: "clearframe.remoteAIEnabled")
-        model = defaults.string(forKey: "clearframe.openAIModel") ?? "gpt-5.6-luna"
+        let storedModel = defaults.string(forKey: modelKey)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .flatMap { $0.isEmpty ? nil : $0 }
+        let storedCustomization = defaults.object(forKey: modelCustomizedKey) as? Bool
+        let isCustomized = storedCustomization ?? (storedModel?.isEmpty == false && storedModel != OpenAIProviderDefaults.model)
+        model = isCustomized ? (storedModel ?? OpenAIProviderDefaults.model) : OpenAIProviderDefaults.model
         apiKey = keychain.read() ?? ""
 
         if defaults.string(forKey: safetyIdentifierKey) == nil {
@@ -34,7 +41,9 @@ final class AIConfigurationStore: ObservableObject {
         guard canUseRemoteAI else { return nil }
         return OpenAIProviderConfiguration(
             apiKey: apiKey.trimmingCharacters(in: .whitespacesAndNewlines),
-            model: model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "gpt-5.6-luna" : model,
+            model: model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                ? OpenAIProviderDefaults.model
+                : model.trimmingCharacters(in: .whitespacesAndNewlines),
             safetyIdentifier: defaults.string(forKey: safetyIdentifierKey) ?? "clearframe_local"
         )
     }
@@ -47,8 +56,11 @@ final class AIConfigurationStore: ObservableObject {
                 return
             }
             try keychain.write(cleanKey)
+            let cleanModel = model.trimmingCharacters(in: .whitespacesAndNewlines)
+            model = cleanModel.isEmpty ? OpenAIProviderDefaults.model : cleanModel
             defaults.set(isEnabled, forKey: "clearframe.remoteAIEnabled")
-            defaults.set(model, forKey: "clearframe.openAIModel")
+            defaults.set(model, forKey: modelKey)
+            defaults.set(model != OpenAIProviderDefaults.model, forKey: modelCustomizedKey)
             statusMessage = "Settings saved."
         } catch {
             statusMessage = "The API key could not be saved to Keychain."
@@ -69,8 +81,16 @@ final class AIConfigurationStore: ObservableObject {
 }
 
 struct KeychainStore {
-    private let service = "com.clearframe.browser.prototype"
-    private let account = "openai-api-key"
+    private let service: String
+    private let account: String
+
+    init(
+        service: String = "com.clearframe.browser.prototype",
+        account: String = "openai-api-key"
+    ) {
+        self.service = service
+        self.account = account
+    }
 
     func read() -> String? {
         let query: [String: Any] = [

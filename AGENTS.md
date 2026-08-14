@@ -23,9 +23,23 @@ Read both [docs/clearframe-strategy.md](docs/clearframe-strategy.md) and [docs/p
 - Text-based risk phrases and local Plain English rewriting have narrower language coverage than page extraction. Document those limits instead of implying multilingual security or translation parity.
 - Keep history, bookmarks/folder hierarchy/bar visibility, and tab restoration local with clear controls. Preserve legacy bookmarks in Unfiled, the address page-link drag handle, duplicate-safe drops onto bar/visible folders, the accessible Move menu, native secondary-click actions, Page-menu alternatives, and organizer backed by the same records. Accept only safe web URLs and never delete folder contents implicitly. Do not add telemetry by default.
 
+## Shared analysis contract
+
+The Swift (`ClearframeCore`) and JavaScript (`src/core`) local-analysis implementations are intentionally separate — one serves the native app, one the retained extension — but they must stay behaviorally equivalent. Both read the same fixtures:
+
+- `macos/ClearframeBrowser/Tests/ClearframeCoreTests/Fixtures/local-analysis-contract.json` — tokenization, summary, risk, Plain English, and reading-time cases with expected output;
+- `macos/ClearframeBrowser/Tests/ClearframeCoreTests/Fixtures/provider-contract.json` — the shared default provider model.
+
+Swift loads them through `Bundle.module`; Node loads the same files by relative path. Change intended behavior in the contract first, then make both runtimes satisfy it. Never edit one implementation alone, and never fork the fixtures per runtime.
+
 ## Safe development rules
 
 - Inspect existing files before editing and preserve unrelated work.
+- Select local-analysis stopwords by the page's declared language. Do not reintroduce a single merged multilingual stopword set; it silently suppresses ordinary English content words such as “care” and “son” and degrades English extraction quality.
+- Match claim terms on whole words for non-CJK languages and by substring only for CJK, which has no word boundaries. Bare substring matching wrongly fires “only” inside “commonly.”
+- Keep risk heuristics context-aware. A bare mention of remote-desktop software is ordinary technical writing; require nearby action language plus pressure, support, account, security, or payment context before raising a signal.
+- Keep the default provider model in one constant per runtime, pinned by `provider-contract.json`. Preserve a user's customized model, migrate untouched defaults automatically, and route unavailable-model errors to Settings while keeping the local result visible.
+- The repository is licensed under AGPL-3.0 (`LICENSE`, verbatim upstream text). Do not relicense, add per-file license headers, or change the `package.json` SPDX identifier without explicit user direction. Contribution terms (CLA or DCO) remain undecided.
 - Keep each `WKWebView` and assistant lifecycle scoped to its tab; tear delegates down when closing tabs.
 - Validate restored/navigation URLs and default to `http`/`https` only.
 - Do not ship shared API keys. Prototype user keys belong in macOS Keychain; a public service requires an authenticated, metered backend.

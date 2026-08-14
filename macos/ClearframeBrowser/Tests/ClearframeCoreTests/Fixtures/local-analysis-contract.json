@@ -1,0 +1,175 @@
+{
+  "tokenCases": [
+    {
+      "id": "english-cross-language-collisions",
+      "language": "en-US",
+      "text": "The new health care law will care for children and their care needs. A son and his father discussed care options.",
+      "requiredCounts": {
+        "care": 4,
+        "son": 1
+      },
+      "excluded": ["the", "and", "will"]
+    },
+    {
+      "id": "french-language-filtering",
+      "language": "fr-FR",
+      "text": "Son rapport présente une bibliothèque locale avec des activités utiles.",
+      "requiredCounts": {
+        "rapport": 1,
+        "bibliothèque": 1
+      },
+      "excluded": ["son", "une", "avec", "des"]
+    }
+  ],
+  "summaryCases": [
+    {
+      "id": "english-healthcare",
+      "page": {
+        "title": "Care law options for families",
+        "url": "https://example.org/care",
+        "hostname": "example.org",
+        "scheme": "https",
+        "language": "en-US",
+        "text": "The new health care law will care for children and their care needs. A son and his father discussed care options with local health advisers. The report says families can compare four care plans before enrollment. Researchers will measure whether children receive faster support next year. Officials said the final guidance will appear online in September 2026.",
+        "wordCount": 58,
+        "hasPasswordField": false,
+        "formActions": []
+      },
+      "expected": {
+        "summary": "The new health care law will care for children and their care needs. A son and his father discussed care options with local health advisers. The report says families can compare four care plans before enrollment.",
+        "keyPoints": [
+          "Researchers will measure whether children receive faster support next year.",
+          "Officials said the final guidance will appear online in September 2026."
+        ],
+        "claimsToCheck": [
+          "The report says families can compare four care plans before enrollment.",
+          "Officials said the final guidance will appear online in September 2026."
+        ]
+      }
+    },
+    {
+      "id": "romanian-library",
+      "page": {
+        "title": "Program de bibliotecă pentru familii",
+        "url": "https://example.org/biblioteca",
+        "hostname": "example.org",
+        "scheme": "https",
+        "language": "ro",
+        "text": "Biblioteca municipală va prelungi programul în trei seri pentru familiile care lucrează. Un sondaj din 2026 va măsura participarea și nevoile vizitatorilor. Copiii vor primi spații liniștite pentru studiu și activități ghidate. Primăria va publica rezultatele proiectului pilot după șase luni. Locuitorii pot trimite observații prin formularul public al bibliotecii.",
+        "wordCount": 61,
+        "hasPasswordField": false,
+        "formActions": []
+      },
+      "expected": {
+        "summary": "Biblioteca municipală va prelungi programul în trei seri pentru familiile care lucrează. Un sondaj din 2026 va măsura participarea și nevoile vizitatorilor. Copiii vor primi spații liniștite pentru studiu și activități ghidate.",
+        "keyPoints": [
+          "Primăria va publica rezultatele proiectului pilot după șase luni.",
+          "Locuitorii pot trimite observații prin formularul public al bibliotecii."
+        ],
+        "claimsToCheck": [
+          "Un sondaj din 2026 va măsura participarea și nevoile vizitatorilor.",
+          "Copiii vor primi spații liniștite pentru studiu și activități ghidate."
+        ]
+      }
+    },
+    {
+      "id": "french-library",
+      "page": {
+        "title": "Horaires élargis de la bibliothèque",
+        "url": "https://example.org/bibliotheque",
+        "hostname": "example.org",
+        "scheme": "https",
+        "language": "fr-FR",
+        "text": "La bibliothèque municipale ouvrira plus tard trois soirs par semaine pour les familles. Une étude menée en 2026 mesurera la fréquentation et les besoins des visiteurs. Les enfants disposeront de salles calmes pour étudier et participer aux activités. La ville publiera les résultats du projet pilote après six mois. Les habitants pourront envoyer leurs commentaires avec un formulaire public.",
+        "wordCount": 62,
+        "hasPasswordField": false,
+        "formActions": []
+      },
+      "expected": {
+        "summary": "La bibliothèque municipale ouvrira plus tard trois soirs par semaine pour les familles. Une étude menée en 2026 mesurera la fréquentation et les besoins des visiteurs. Les enfants disposeront de salles calmes pour étudier et participer aux activités.",
+        "keyPoints": [
+          "La ville publiera les résultats du projet pilote après six mois.",
+          "Les habitants pourront envoyer leurs commentaires avec un formulaire public."
+        ],
+        "claimsToCheck": [
+          "Une étude menée en 2026 mesurera la fréquentation et les besoins des visiteurs."
+        ]
+      }
+    },
+    {
+      "id": "simplified-chinese-library",
+      "page": {
+        "title": "城市图书馆晚间计划",
+        "url": "https://example.org/library",
+        "hostname": "example.org",
+        "scheme": "https",
+        "language": "zh-Hans",
+        "text": "城市图书馆每周增加三个晚间开放时段。2026年的调查将记录到访人数和家庭需求。儿童可以使用安静的学习空间和活动区域。市政府将在六个月后公布试点项目结果。居民可以通过公开表格提交意见和建议。",
+        "wordCount": 83,
+        "hasPasswordField": false,
+        "formActions": []
+      },
+      "expected": {
+        "summary": "城市图书馆每周增加三个晚间开放时段。 儿童可以使用安静的学习空间和活动区域。 居民可以通过公开表格提交意见和建议。",
+        "keyPoints": [
+          "2026年的调查将记录到访人数和家庭需求。",
+          "市政府将在六个月后公布试点项目结果。"
+        ],
+        "claimsToCheck": [
+          "2026年的调查将记录到访人数和家庭需求。"
+        ]
+      }
+    }
+  ],
+  "riskCases": [
+    {
+      "id": "ordinary-remote-desktop-article",
+      "page": {
+        "title": "Remote desktop software comparison",
+        "url": "https://example.org/remote-desktop",
+        "hostname": "example.org",
+        "scheme": "https",
+        "language": "en",
+        "text": "This article compares TeamViewer, AnyDesk, and other remote access software for IT administrators.",
+        "wordCount": 13,
+        "hasPasswordField": false,
+        "formActions": []
+      },
+      "expected": {
+        "score": 0,
+        "level": "Low",
+        "signalTitles": []
+      }
+    },
+    {
+      "id": "contextual-remote-access-request",
+      "page": {
+        "title": "Refund support",
+        "url": "https://example.org/refund",
+        "hostname": "example.org",
+        "scheme": "https",
+        "language": "en",
+        "text": "A support caller says your refund is urgent and tells you to install AnyDesk immediately to grant remote access.",
+        "wordCount": 19,
+        "hasPasswordField": false,
+        "formActions": []
+      },
+      "expected": {
+        "score": 20,
+        "level": "Caution",
+        "signalTitles": ["Remote-access request"]
+      }
+    }
+  ],
+  "plainEnglishCases": [
+    {
+      "input": "Individuals subsequently utilize numerous additional tools.",
+      "expected": "people later use many more tools."
+    }
+  ],
+  "readingTimeCases": [
+    { "wordCount": 1, "expectedMinutes": 1 },
+    { "wordCount": 220, "expectedMinutes": 1 },
+    { "wordCount": 221, "expectedMinutes": 2 }
+  ]
+}

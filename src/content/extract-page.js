@@ -10,26 +10,59 @@ export function extractPage() {
 
   const root = focusedCandidates[0] || document.body;
 
-  const clone = root.cloneNode(true);
-  clone
-    .querySelectorAll(
-      "script, style, noscript, svg, canvas, nav, footer, header, aside, form, dialog, [aria-hidden='true']"
-    )
-    .forEach((node) => node.remove());
+  const excludedSelector = [
+    "script", "style", "noscript", "svg", "canvas", "nav", "footer", "header", "aside",
+    "form", "dialog", "button", "input", "select", "textarea", "video", "audio", "iframe",
+    "[hidden]", "[aria-hidden='true']", "[aria-modal='true']", "[role='button']",
+    "[role='toolbar']", "[role='menu']", "[role='navigation']", "[role='dialog']",
+    "[role='alertdialog']", "[class*='jwplayer']", "[class*='jw-']", "[class*='vjs-']",
+    "[class*='plyr__']", "[class*='video-player']", "[class*='videoplayer']",
+    "[class*='media-player']", "[class*='mediaplayer']", "[class*='player-control']",
+    "[class*='cookie']", "[id*='cookie']", "[class*='consent']", "[id*='consent']"
+  ].join(",");
+  const isRendered = (node) => {
+    const style = getComputedStyle(node);
+    const rect = node.getBoundingClientRect();
+    const viewportWidth = document.documentElement.clientWidth || window.innerWidth;
+    return style.display !== "none" && style.visibility !== "hidden" && Number(style.opacity || 1) > 0 &&
+      rect.width > 0 && rect.height > 0 && rect.right > 0 && rect.left < viewportWidth;
+  };
 
-  const paragraphs = [...clone.querySelectorAll("p, li, blockquote")]
+  const clone = root.cloneNode(true);
+  clone.querySelectorAll(excludedSelector).forEach((node) => node.remove());
+
+  const shadowRoots = [];
+  document.querySelectorAll("*").forEach((node) => {
+    if (node.shadowRoot && (root === document.body || root.contains(node))) shadowRoots.push(node.shadowRoot);
+  });
+  const readingNodes = (selector) => [root, ...shadowRoots].flatMap(
+    (scope) => [...scope.querySelectorAll(selector)]
+  );
+  const seenBlocks = new Set();
+  const paragraphs = readingNodes("h1, h2, h3, p, li, blockquote")
+    .filter((node) => !node.closest(excludedSelector) && isRendered(node))
     .map((node) => clean(node.innerText))
-    .filter((text) => text.length >= 45 && text.length <= 1800);
+    .filter((text) => text.length >= 45 && text.length <= 1800)
+    .filter((text) => {
+      const key = text.toLocaleLowerCase();
+      if (seenBlocks.has(key)) return false;
+      seenBlocks.add(key);
+      return true;
+    });
 
   const fallbackText = clean(clone.innerText || "");
-  const text = clean(paragraphs.length >= 3 ? paragraphs.join("\n") : fallbackText).slice(
-    0,
-    48000
-  );
+  const text = (paragraphs.length >= 2 ? paragraphs.join("\n") : fallbackText).slice(0, 48000);
 
-  const canonicalHref = document.querySelector('link[rel="canonical"]')?.href;
-  const canonicalUrl = canonicalHref || location.href;
   const pageUrl = new URL(location.href);
+  let canonicalUrl = location.href;
+  try {
+    const candidate = new URL(document.querySelector('link[rel="canonical"]')?.href || location.href);
+    if (/^https?:$/.test(candidate.protocol) && candidate.origin === pageUrl.origin) {
+      canonicalUrl = candidate.href;
+    }
+  } catch {
+    canonicalUrl = location.href;
+  }
   const forms = [...document.forms];
   const formActions = forms.map((form) => {
     try {
@@ -67,13 +100,13 @@ export function extractPage() {
     liveUrl: location.href,
     hostname: pageUrl.hostname,
     protocol: pageUrl.protocol,
-    language: document.documentElement.lang || navigator.language || "",
+    language: document.documentElement.lang || meta('meta[http-equiv="content-language"]') || "",
     headings: [...clone.querySelectorAll("h1, h2, h3")]
       .map((node) => clean(node.innerText))
       .filter(Boolean)
       .slice(0, 16),
     text,
-    wordCount: text ? text.split(/\s+/).length : 0,
+    wordCount: (text.match(/[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]|[\p{L}\p{M}\p{N}]+/gu) || []).length,
     hasPasswordField: Boolean(document.querySelector('input[type="password"]')),
     formActions,
     externalLinkRatio: links.length

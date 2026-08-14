@@ -1,7 +1,7 @@
 import { tokenize } from "./analyzer.js";
 
 const GENERIC = new Set(
-  "page source article says said also more most information people new use using about into than then there these this those with would could should".split(
+  "page source article says said also more most information people new use using about into than then there these this those with would could should pagina sursa articol spune spus informatii informații oameni despre pentru avec cette pour dans les des une un et de la le".split(
     " "
   )
 );
@@ -15,7 +15,7 @@ function uniqueWords(source) {
 }
 
 function importantNumbers(source) {
-  return [...new Set(`${source.summary || ""} ${(source.keyPoints || []).join(" ")}`.match(/\b\d[\d,.]*(?:%|\s?(?:million|billion|thousand))?\b/gi) || [])].slice(
+  return [...new Set(`${source.summary || ""} ${(source.keyPoints || []).join(" ")}`.match(/\b\d[\d,.]*(?:%|\s?(?:million|billion|thousand|milliard|mille|milion|miliard|mie|mii|万|亿))?\b/giu) || [])].slice(
     0,
     6
   );

@@ -7,10 +7,14 @@ struct AIToolStartPage: View {
 
     @State private var selectedCategory: AIToolCategory?
     @State private var toolSearch = ""
+    @State private var showsAllTools = false
     @State private var showsRecommendationMethod = false
 
     private var visibleTools: [AIToolListing] {
-        AIToolCatalog.filtered(category: selectedCategory, query: toolSearch)
+        guard selectedCategory != nil || showsAllTools || !toolSearch.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return []
+        }
+        return AIToolCatalog.filtered(category: selectedCategory, query: toolSearch)
     }
 
     var body: some View {
@@ -129,27 +133,45 @@ struct AIToolStartPage: View {
     private var categoryFilters: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
-                CategoryChip(
-                    title: "All Tools",
-                    symbol: "square.grid.2x2",
-                    selected: selectedCategory == nil,
-                    action: { selectedCategory = nil }
-                )
                 ForEach(AIToolCategory.allCases) { category in
                     CategoryChip(
                         title: category.rawValue,
                         symbol: category.symbolName,
                         selected: selectedCategory == category,
-                        action: { selectedCategory = category }
+                        action: {
+                            selectedCategory = category
+                            showsAllTools = false
+                        }
                     )
                 }
+                CategoryChip(
+                    title: "All Tools",
+                    symbol: "square.grid.2x2",
+                    selected: selectedCategory == nil && showsAllTools,
+                    action: {
+                        selectedCategory = nil
+                        showsAllTools = true
+                    }
+                )
             }
         }
     }
 
     @ViewBuilder
     private var catalogGrid: some View {
-        if visibleTools.isEmpty {
+        if selectedCategory == nil && !showsAllTools && toolSearch.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                Label("Start with what you want to do", systemImage: "arrow.up.circle.fill")
+                    .font(.system(size: 18, weight: .bold, design: .serif))
+                Text("Choose one task above. Clearframe will show a small set of useful paths and explain why each may fit.")
+                    .font(.callout)
+                    .foregroundStyle(Color.white.opacity(0.68))
+            }
+            .padding(20)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 16))
+            .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.white.opacity(0.10)))
+        } else if visibleTools.isEmpty {
             ContentUnavailableView(
                 "No matching tools",
                 systemImage: "magnifyingglass",

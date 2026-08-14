@@ -10,6 +10,8 @@
     <string>ClearframeBrowser</string>
     <key>CFBundleIdentifier</key>
     <string>com.clearframe.browser</string>
+    <key>CFBundleIconFile</key>
+    <string>Clearframe</string>
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
     <key>CFBundleName</key>
@@ -22,6 +24,20 @@
     <string>????</string>
     <key>CFBundleVersion</key>
     <string>1</string>
+    <key>CFBundleURLTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleTypeRole</key>
+            <string>Viewer</string>
+            <key>CFBundleURLName</key>
+            <string>com.clearframe.browser.web</string>
+            <key>CFBundleURLSchemes</key>
+            <array>
+                <string>http</string>
+                <string>https</string>
+            </array>
+        </dict>
+    </array>
     <key>LSApplicationCategoryType</key>
     <string>public.app-category.productivity</string>
     <key>LSMinimumSystemVersion</key>
@@ -37,6 +53,8 @@
     <string>Clearframe local development build</string>
     <key>NSMicrophoneUsageDescription</key>
     <string>Clearframe uses the microphone only after you click the voice button to fill the visible address and search field.</string>
+    <key>NSCameraUsageDescription</key>
+    <string>Clearframe allows a website to request camera access through a visible WebKit permission prompt. Access is never granted silently.</string>
     <key>NSSpeechRecognitionUsageDescription</key>
     <string>Clearframe uses on-device speech recognition only after you click the voice button. The transcript is shown for review before search.</string>
     <key>NSSupportsAutomaticGraphicsSwitching</key>

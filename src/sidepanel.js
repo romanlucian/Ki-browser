@@ -1,4 +1,4 @@
-import { analyzePage, simplifyEnglish } from "./core/analyzer.js";
+import { analyzePage, canSimplifyToPlainEnglish, simplifyEnglish } from "./core/analyzer.js";
 import { compareSources } from "./core/compare.js";
 import { extractPage } from "./content/extract-page.js";
 import { createAiAnalysis, DEFAULT_AI_SETTINGS, translateText } from "./providers/openai.js";
@@ -11,6 +11,9 @@ let originalSummary = "";
 let savedSource = null;
 let settings = { ...DEFAULT_AI_SETTINGS };
 let toastTimer = null;
+let currentTabId = null;
+let operationGeneration = 0;
+let activeRemoteController = null;
 
 function showView(view) {
   views.forEach((entry) => entry.classList.toggle("hidden", entry !== view));
@@ -95,7 +98,10 @@ function renderAnalysis() {
   renderRisk(currentAnalysis.risk);
   renderCompareState();
   $("#translationOutput").classList.add("hidden");
+  $("#aiButton").disabled = false;
   $("#aiButtonLabel").textContent = settings.enabled && settings.apiKey ? "Improve with AI" : "Add AI for a richer summary";
+  $("#translateButton").disabled = false;
+  $("#translateButton").textContent = "Translate";
   showView($("#resultsView"));
 }
 
@@ -126,12 +132,16 @@ async function loadSettings() {
 }
 
 async function analyzeActivePage() {
+  activeRemoteController?.abort();
+  activeRemoteController = null;
+  const generation = ++operationGeneration;
   setLoading("Reading the page…");
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (!tab?.id || !/^https?:/i.test(tab.url || "")) {
       throw new Error("Open a normal web page, then click the Clearframe toolbar icon again.");
     }
+    currentTabId = tab.id;
     const [result] = await chrome.scripting.executeScript({
       target: { tabId: tab.id },
       func: extractPage
@@ -139,11 +149,13 @@ async function analyzeActivePage() {
     if (!result?.result?.text) {
       throw new Error("This page does not expose enough readable text. Try an article, guide, or product page.");
     }
+    if (generation !== operationGeneration) return;
     currentPage = result.result;
     currentAnalysis = analyzePage(currentPage);
     originalSummary = currentAnalysis.summary;
     renderAnalysis();
   } catch (error) {
+    if (generation !== operationGeneration) return;
     showError(error.message || "The browser blocked access to this page.");
   }
 }
@@ -154,19 +166,29 @@ async function improveWithAi() {
     return;
   }
   const button = $("#aiButton");
+  const generation = ++operationGeneration;
+  const sourceURL = currentPage?.liveUrl || currentPage?.url;
+  const controller = new AbortController();
+  activeRemoteController?.abort();
+  activeRemoteController = controller;
   button.disabled = true;
   $("#aiButtonLabel").textContent = "Reading carefully…";
   try {
-    const aiResult = await createAiAnalysis(currentPage, settings);
+    const aiResult = await createAiAnalysis(currentPage, settings, controller.signal);
+    if (generation !== operationGeneration || sourceURL !== (currentPage?.liveUrl || currentPage?.url)) return;
     currentAnalysis = { ...currentAnalysis, ...aiResult, mode: "AI" };
     originalSummary = currentAnalysis.summary;
     renderAnalysis();
-    showToast("AI summary ready. Page text was sent only for this request.");
+    showToast("AI summary ready. The disclosed title, hostname, language, and extracted text were sent for this request.");
   } catch (error) {
+    if (generation !== operationGeneration) return;
     showToast(error.message || "AI summary failed.");
   } finally {
-    button.disabled = false;
-    $("#aiButtonLabel").textContent = "Improve with AI";
+    if (activeRemoteController === controller) activeRemoteController = null;
+    if (generation === operationGeneration) {
+      button.disabled = false;
+      $("#aiButtonLabel").textContent = "Improve with AI";
+    }
   }
 }
 
@@ -175,23 +197,40 @@ async function translateSummary() {
   const output = $("#translationOutput");
   $("#translateButton").disabled = true;
   $("#translateButton").textContent = "Working…";
+  const generation = ++operationGeneration;
+  const sourceURL = currentPage?.liveUrl || currentPage?.url;
+  const controller = new AbortController();
+  activeRemoteController?.abort();
+  activeRemoteController = controller;
   try {
-    if (target === "plain-en") {
-      output.textContent = simplifyEnglish(originalSummary);
+    let translated;
+    if (target === "plain-en" && canSimplifyToPlainEnglish(currentPage.language)) {
+      translated = simplifyEnglish(originalSummary);
     } else {
-      output.textContent = await translateText(
+      if (!settings.enabled || !settings.apiKey) {
+        await chrome.runtime.openOptionsPage();
+        throw new Error("This source needs Optional AI for translation. Local Plain English is available only for English pages.");
+      }
+      translated = await translateText(
         originalSummary,
         currentPage.language || "the source language",
-        target,
-        settings
+        target === "plain-en" ? "Plain English" : target,
+        settings,
+        controller.signal
       );
     }
+    if (generation !== operationGeneration || sourceURL !== (currentPage?.liveUrl || currentPage?.url)) return;
+    output.textContent = translated;
     output.classList.remove("hidden");
   } catch (error) {
+    if (generation !== operationGeneration) return;
     showToast(error.message || "Translation failed.");
   } finally {
-    $("#translateButton").disabled = false;
-    $("#translateButton").textContent = "Translate";
+    if (activeRemoteController === controller) activeRemoteController = null;
+    if (generation === operationGeneration) {
+      $("#translateButton").disabled = false;
+      $("#translateButton").textContent = "Translate";
+    }
   }
 }
 
@@ -260,3 +299,29 @@ $("#riskToggle").addEventListener("click", () => {
 });
 
 await loadSettings();
+
+function invalidateCurrentPage(message) {
+  activeRemoteController?.abort();
+  activeRemoteController = null;
+  operationGeneration += 1;
+  currentPage = null;
+  currentAnalysis = null;
+  originalSummary = "";
+  $("#aiButton").disabled = false;
+  $("#aiButtonLabel").textContent = "Improve with AI";
+  $("#translateButton").disabled = false;
+  $("#translateButton").textContent = "Translate";
+  showView($("#introView"));
+  if (message) showToast(message);
+}
+
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+  if (tabId !== currentTabId || !tab.active || (!changeInfo.url && changeInfo.status !== "loading")) return;
+  invalidateCurrentPage("Page changed. Analyze again when you want a fresh local result.");
+});
+
+chrome.tabs.onActivated.addListener(({ tabId }) => {
+  if (currentTabId === null || tabId === currentTabId) return;
+  currentTabId = tabId;
+  invalidateCurrentPage("Active tab changed. Click Clearframe again before analyzing this page.");
+});

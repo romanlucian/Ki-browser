@@ -1,9 +1,10 @@
 import Foundation
 
-public enum BookmarkURLPolicy {
-    /// Returns a normalized, bookmark-safe web URL. Bookmark drags deliberately
-    /// reject local files, script/data schemes, incomplete hosts, and credentials
-    /// embedded in a URL so a drop cannot persist an unsafe or secret-bearing link.
+public enum WebURLPolicy {
+    /// Returns a normalized URL that is safe to navigate to or persist. Clearframe
+    /// deliberately rejects local/script/data schemes, incomplete hosts, and URLs
+    /// containing credentials so the same boundary applies to navigation, history,
+    /// bookmarks, popups, and restored tabs.
     public static func validatedURL(_ value: String) -> URL? {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty,
@@ -15,6 +16,18 @@ public enum BookmarkURLPolicy {
               components.password == nil,
               let url = components.url else { return nil }
         return url
+    }
+
+    public static func validatedURL(_ url: URL) -> URL? {
+        validatedURL(url.absoluteString)
+    }
+}
+
+public enum BookmarkURLPolicy {
+    /// Kept as the bookmark-facing name for source compatibility. All browser
+    /// entry points now share `WebURLPolicy` rather than drifting independently.
+    public static func validatedURL(_ value: String) -> URL? {
+        WebURLPolicy.validatedURL(value)
     }
 }
 
@@ -32,11 +45,8 @@ public struct BrowserTabRecord: Codable, Equatable, Identifiable, Sendable {
     }
 
     public var restorableURL: URL? {
-        guard let url,
-              let parsed = URL(string: url),
-              let scheme = parsed.scheme?.lowercased(),
-              ["http", "https"].contains(scheme) else { return nil }
-        return parsed
+        guard let url else { return nil }
+        return WebURLPolicy.validatedURL(url)
     }
 }
 

@@ -2,6 +2,7 @@
   "name": "clearframe-browser-prototype",
   "version": "0.1.0",
   "private": true,
+  "license": "AGPL-3.0-only",
   "type": "module",
   "scripts": {
     "test": "node --test",

@@ -11,26 +11,26 @@ The browser market does not need another general-purpose Chromium wrapper with a
 
 The first validation artifact was a side-panel extension. The chosen implementation direction is now a standalone macOS app built with SwiftUI and WebKit. It opens its own native window and owns navigation, while retaining the focused page-understanding assistant. This is still not a Chromium fork: maintaining Chromium would add security updates, packaging, sync, profiles, password migration, mobile support, and distribution work before product demand is known.
 
-## First target audience
+## First validation audience
 
-Start with **international knowledge workers and advanced students who work in English but regularly read long or foreign-language sources**: independent researchers, analysts, freelancers, graduate students, and cross-border operators.
+Keep the product useful for ordinary people, researchers, students, and cross-border readers, but start founder-led validation with **photographers, designers, video creators, and creative freelancers who are overwhelmed by AI choices**. This is the current acquisition wedge from [go-to-market.md](go-to-market.md), not an exclusionary product boundary.
 
-This audience is a better first segment than “everyone who browses” because it has:
+This audience is a better first recruiting segment than “everyone who browses” because it has:
 
-- frequent long-page reading and source-comparison work;
-- real translation friction even when users are comfortable in English;
-- a reason to inspect unfamiliar publishers, vendors, and claims;
-- measurable time saved and a plausible future willingness to pay for heavy AI use;
-- reachable communities and workflows for interviews and distribution.
+- frequent, demonstrable decisions about unfamiliar AI tools and creative workflows;
+- visual before/after use cases that can be explained without browser jargon;
+- real client-reference, translation, vendor, tutorial, and source-comparison friction;
+- measurable activation and return behavior before any monetization claim;
+- founder-accessible communities for direct observation and zero-budget distribution.
 
 Scam signals are a supporting trust feature, not the initial positioning. A small heuristic scanner must not be marketed as anti-phishing protection.
 
 ## Core user loop
 
-1. The user explicitly opens Clearframe on the current page.
-2. Clearframe extracts visible reading content and analyzes it locally.
+1. The user opens a page in the standalone Clearframe browser.
+2. Only after the user clicks Analyze Page, Clearframe extracts visible reading content and analyzes it locally.
 3. The panel leads with the source, a short summary, key points, and claims to check.
-4. The user can simplify the summary locally, or explicitly send page text for an AI summary or translation.
+4. The user can reveal exact local evidence, simplify an English-source summary locally, or explicitly send the disclosed minimized payload for an AI summary or translation.
 5. The user can save a compact summary, navigate to a second source, and compare themes and figures.
 6. The native browser can keep bookmarks, a capped local history, and recent-tab metadata in the Mac user profile. History and tab restoration can be disabled; browsing history is never uploaded to the AI provider or sold.
 7. A new tab can help an ordinary user choose an AI service by task from a small static catalog, then open the service's official website without transferring the current page or an inferred prompt.
@@ -41,12 +41,12 @@ Scam signals are a supporting trust feature, not the initial positioning. A smal
 
 - Native SwiftUI application window with a real `WKWebView` page surface.
 - Native first-run onboarding that explains the product promise, persists a visible search choice locally, states the local/cloud boundary, teaches Analyze page, and can be reopened from Settings.
-- Independent tabs, recent-tab restoration, address/search, navigation controls, loading and error states.
+- Independent regular/private tabs, recent regular-tab restoration, address/search, navigation controls, same-document URL/title tracking, loading, renderer-failure, and error states.
 - Visible user choice among five web search providers, stored locally with no partnership claim.
-- Native AI-guide start page with locally defined task categories, local filtering, broad access hints, and ordinary links to listed services' official websites.
-- User-confirmed downloads plus local bookmark/history basics.
+- Task-first native AI-guide start page with locally defined task categories, local filtering, an explicit All Tools view, broad access hints, and ordinary links to listed services' official websites.
+- User-confirmed downloads plus local bookmark/history organization, recovery backups, and an explicit local browsing-data reset.
 - On-demand visible-page extraction from the app’s current web view.
-- Local summary, candidate claims, read-time estimate, risk signals, Plain English, and two-source comparison.
+- Local summary, candidate claims, read-time estimate, exact-text Evidence Mode, risk signals, English-source Plain English, and two-source comparison.
 - Optional OpenAI provider behind a core protocol; user-owned prototype key stored in macOS Keychain.
 - Clear separation between the Foundation-only analysis/service core and macOS-specific browser UI.
 
@@ -108,7 +108,7 @@ The provider boundary should later support a production Clearframe service, ente
 
 ## AI and security boundary
 
-Webpage text is untrusted. The optional AI prompt labels page content as data, tells the model not to obey embedded instructions, limits output, and keeps the feature read-only. This reduces impact but does not solve prompt injection. Do not add tools, browser actions, credentials, private history, email, or file access to the same model context without a separate threat model, least-privilege design, and approval layer.
+Webpage text is untrusted. The optional AI prompt labels page content as data, tells the model not to obey embedded instructions, constrains analysis to a strict response schema, limits output, and keeps the feature read-only. Analysis sends the source title, hostname, declared language, and truncated extracted text while omitting the full URL, query, fragment, cookies, form values, and history. This reduces impact but does not solve prompt injection or remove sensitive text that may appear in the page body. Do not add tools, browser actions, credentials, private history, email, or file access to the same model context without a separate threat model, least-privilege design, and approval layer.
 
 The prototype accepts a user-owned API key only to make local testing practical. Before any public paid plan:
 
@@ -133,23 +133,14 @@ Clearframe must not sell browsing histories, add hidden advertising, or bias ris
 
 ## Validation plan and gates
 
-The next milestone is not feature count. Recruit 20–30 target users and observe them using the macOS MVP (with the extension retained as a lower-friction validation option) for two weeks.
+The next milestone is observed use, not feature count. The authoritative recruitment targets, consented metrics, weekly sequence, and stop/continue thresholds live only in [go-to-market.md](go-to-market.md); do not duplicate changing numbers here. The repository has no completed observed-session evidence yet. Record only aggregate, consented activation, hesitation, Analyze Page quality, return, and referral evidence—never passive browsing history.
 
-Track only privacy-preserving product events with consent:
-
-- first successful analysis;
-- analyses per active day;
-- percentage using Plain English, translation, comparison, and AI;
-- repeat use in week 1 and week 4;
-- “summary was useful” and “important context missing” feedback;
-- local versus cloud completion time and estimated cost.
-
-Proceed to a backend and public beta when at least 40% of recruited users analyze three pages in their first week and at least 25% return in week four. Consider a production Chromium architecture only if a retained audience repeatedly hits WebKit-level constraints—such as Chrome extension compatibility, cross-platform engine parity, deep tab control, or enterprise policy—and those constraints block measured value.
+Consider a production backend or Chromium architecture only after retained users demonstrate value and repeatedly encounter constraints that block it. The retained extension remains a lower-friction validation artifact, not a second primary product.
 
 ## Next engineering priorities
 
 1. Test extraction against a corpus of news, documentation, shopping, forums, and international pages.
-2. Add sentence-to-source highlighting so every summary point can reveal its page evidence.
+2. Extend the delivered local key-point highlighting into citation-grade evidence for gist, claims, translations, and provider-assisted output.
 3. Add redaction for emails, phone numbers, account numbers, and form values before AI upload.
 4. Replace raw-key mode with a metered backend and abuse controls.
 5. Add a user-feedback affordance and privacy-preserving quality evaluation set.

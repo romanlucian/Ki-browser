@@ -7,6 +7,7 @@ final class BrowserDataStore: ObservableObject {
     @Published private(set) var bookmarks: [BookmarkRecord]
     @Published private(set) var bookmarkFolders: [BookmarkFolderRecord]
     @Published private(set) var history: [HistoryRecord]
+    @Published private(set) var recoveryNotice: String?
     @Published var showsBookmarksBar: Bool {
         didSet { defaults.set(showsBookmarksBar, forKey: showsBookmarksBarKey) }
     }
@@ -34,17 +35,38 @@ final class BrowserDataStore: ObservableObject {
         if defaults.object(forKey: showsBookmarksBarKey) == nil {
             defaults.set(true, forKey: showsBookmarksBarKey)
         }
-        let savedBookmarks = Self.decode([BookmarkRecord].self, key: bookmarksKey, defaults: defaults) ?? []
-        let savedFolders = Self.decode([BookmarkFolderRecord].self, key: bookmarkFoldersKey, defaults: defaults) ?? []
-        let bookmarkCollection = BookmarkCollection(folders: savedFolders, bookmarks: savedBookmarks)
+        let bookmarkLoad = Self.loadRecovering([BookmarkRecord].self, key: bookmarksKey, defaults: defaults)
+        let folderLoad = Self.loadRecovering([BookmarkFolderRecord].self, key: bookmarkFoldersKey, defaults: defaults)
+        let historyLoad = Self.loadRecovering([HistoryRecord].self, key: historyKey, defaults: defaults)
+        let bookmarkCollection = BookmarkCollection(
+            folders: folderLoad.value ?? [],
+            bookmarks: bookmarkLoad.value ?? []
+        )
         bookmarks = bookmarkCollection.bookmarks
         bookmarkFolders = bookmarkCollection.folders
-        history = Self.decode([HistoryRecord].self, key: historyKey, defaults: defaults) ?? []
+        history = historyLoad.value ?? []
         showsBookmarksBar = defaults.bool(forKey: showsBookmarksBarKey)
+        let recoveredNames = [
+            bookmarkLoad.wasRecovered ? "bookmarks" : nil,
+            folderLoad.wasRecovered ? "bookmark folders" : nil,
+            historyLoad.wasRecovered ? "history" : nil
+        ].compactMap { $0 }
+        let unreadableNames = [
+            bookmarkLoad.isUnreadable ? "bookmarks" : nil,
+            folderLoad.isUnreadable ? "bookmark folders" : nil,
+            historyLoad.isUnreadable ? "history" : nil
+        ].compactMap { $0 }
+        if !unreadableNames.isEmpty {
+            recoveryNotice = "Clearframe could not read saved \(unreadableNames.joined(separator: ", ")). The original data was preserved for recovery and was not replaced."
+        } else if !recoveredNames.isEmpty {
+            recoveryNotice = "Clearframe restored \(recoveredNames.joined(separator: ", ")) from the last known-good local backup."
+        } else {
+            recoveryNotice = nil
+        }
         // Re-encode legacy flat bookmarks with an explicit nil folder reference. They
         // remain visible in Unfiled and no saved page is discarded during migration.
-        save(bookmarks, key: bookmarksKey)
-        save(bookmarkFolders, key: bookmarkFoldersKey)
+        if !bookmarkLoad.isUnreadable { save(bookmarks, key: bookmarksKey) }
+        if !folderLoad.isUnreadable { save(bookmarkFolders, key: bookmarkFoldersKey) }
     }
 
     var restoresTabs: Bool {
@@ -53,19 +75,25 @@ final class BrowserDataStore: ObservableObject {
 
     func loadWorkspace() -> BrowserWorkspaceSnapshot? {
         guard restoresTabs else { return nil }
-        return Self.decode(BrowserWorkspaceSnapshot.self, key: workspaceKey, defaults: defaults)?.normalized()
+        let load = Self.loadRecovering(BrowserWorkspaceSnapshot.self, key: workspaceKey, defaults: defaults)
+        if load.wasRecovered {
+            recoveryNotice = "Clearframe restored the previous tab session from the last known-good local backup."
+        } else if load.isUnreadable {
+            recoveryNotice = "Clearframe could not read the previous tab session. The original data was preserved and no unsafe URL was restored."
+        }
+        return load.value?.normalized()
     }
 
     func saveWorkspace(_ snapshot: BrowserWorkspaceSnapshot) {
         guard restoresTabs else {
-            defaults.removeObject(forKey: workspaceKey)
+            removeStoredValue(forKey: workspaceKey)
             return
         }
         save(snapshot.normalized(), key: workspaceKey)
     }
 
     func clearSavedWorkspace() {
-        defaults.removeObject(forKey: workspaceKey)
+        removeStoredValue(forKey: workspaceKey)
     }
 
     func isBookmarked(_ url: String) -> Bool {
@@ -215,11 +243,30 @@ final class BrowserDataStore: ObservableObject {
 
     func clearHistory() {
         history = []
-        defaults.removeObject(forKey: historyKey)
+        removeStoredValue(forKey: historyKey)
     }
 
-    private func save<T: Encodable>(_ value: T, key: String) {
+    func clearAllBrowserRecords() {
+        bookmarks = []
+        bookmarkFolders = []
+        history = []
+        removeStoredValue(forKey: bookmarksKey)
+        removeStoredValue(forKey: bookmarkFoldersKey)
+        removeStoredValue(forKey: historyKey)
+        removeStoredValue(forKey: workspaceKey)
+        recoveryNotice = nil
+    }
+
+    func dismissRecoveryNotice() {
+        recoveryNotice = nil
+    }
+
+    private func save<T: Codable>(_ value: T, key: String) {
         guard let data = try? encoder.encode(value) else { return }
+        if let current = defaults.data(forKey: key),
+           (try? decoder.decode(T.self, from: current)) != nil {
+            defaults.set(current, forKey: Self.backupKey(for: key))
+        }
         defaults.set(data, forKey: key)
     }
 
@@ -234,11 +281,42 @@ final class BrowserDataStore: ObservableObject {
         save(bookmarkFolders, key: bookmarkFoldersKey)
     }
 
-    private static func decode<T: Decodable>(_ type: T.Type, key: String, defaults: UserDefaults) -> T? {
-        guard let data = defaults.data(forKey: key) else { return nil }
-        return try? JSONDecoder().decode(type, from: data)
+    private func removeStoredValue(forKey key: String) {
+        defaults.removeObject(forKey: key)
+        defaults.removeObject(forKey: Self.backupKey(for: key))
+        defaults.removeObject(forKey: Self.corruptKey(for: key))
     }
 
+    private static func loadRecovering<T: Decodable>(
+        _ type: T.Type,
+        key: String,
+        defaults: UserDefaults
+    ) -> PersistenceLoad<T> {
+        guard let primary = defaults.data(forKey: key) else {
+            return PersistenceLoad(value: nil, wasRecovered: false, isUnreadable: false)
+        }
+        if let value = try? JSONDecoder().decode(type, from: primary) {
+            return PersistenceLoad(value: value, wasRecovered: false, isUnreadable: false)
+        }
+
+        defaults.set(primary, forKey: corruptKey(for: key))
+        if let backup = defaults.data(forKey: backupKey(for: key)),
+           let recovered = try? JSONDecoder().decode(type, from: backup) {
+            defaults.set(backup, forKey: key)
+            return PersistenceLoad(value: recovered, wasRecovered: true, isUnreadable: false)
+        }
+        return PersistenceLoad(value: nil, wasRecovered: false, isUnreadable: true)
+    }
+
+    private static func backupKey(for key: String) -> String { "\(key).lastKnownGood" }
+    private static func corruptKey(for key: String) -> String { "\(key).unreadable" }
+
+}
+
+private struct PersistenceLoad<Value> {
+    let value: Value?
+    let wasRecovered: Bool
+    let isUnreadable: Bool
 }
 
 enum BookmarkDropDisposition: Equatable {

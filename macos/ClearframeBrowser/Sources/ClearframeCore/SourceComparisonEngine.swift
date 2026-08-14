@@ -2,7 +2,7 @@ import Foundation
 
 public enum SourceComparisonEngine {
     private static let generic: Set<String> = Set(
-        "page source article says said also information people new use using about into than then there these this those with would could should".split(separator: " ").map(String.init)
+        "page source article says said also information people new use using about into than then there these this those with would could should pagina pagină sursa sursă articol spune spus informatii informații oameni despre pentru și si avec dans cette article source information personnes dit pour les des une un et de la le".split(separator: " ").map(String.init)
     )
 
     public static func compare(_ first: AnalyzedSource, _ second: AnalyzedSource) -> SourceComparison {
@@ -28,7 +28,7 @@ public enum SourceComparisonEngine {
 
     private static func importantNumbers(_ source: AnalyzedSource) -> [String] {
         let value = "\(source.content.summary) \(source.content.keyPoints.joined(separator: " "))"
-        let pattern = #"\b\d[\d,.]*(?:%|\s?(?:million|billion|thousand))?\b"#
+        let pattern = #"\b\d[\d,.]*(?:%|\s?(?:million|billion|thousand|milliard|mille|milion|miliard|mie|mii|万|亿))?\b"#
         guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else { return [] }
         let range = NSRange(value.startIndex..., in: value)
         var seen: Set<String> = []

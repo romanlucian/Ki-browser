@@ -140,7 +140,7 @@ struct OnboardingView: View {
             VStack(spacing: 10) {
                 PrivacyLine(symbol: "square.grid.2x2", title: "The AI guide is local", detail: "Its curated cards and filters are bundled in Clearframe; opening one is ordinary website navigation.")
                 PrivacyLine(symbol: "lock.shield", title: "Analyze is local by default", detail: "Visible page text is extracted only after you click Analyze page. It is not sold or passively uploaded.")
-                PrivacyLine(symbol: "cloud", title: "Online AI is optional", detail: "A provider receives page text only after you configure it and deliberately request an online action.")
+                PrivacyLine(symbol: "cloud", title: "Online AI is optional", detail: "After you configure it and deliberately request an online action, the provider receives the page title, hostname, language, and extracted text—not the full URL, cookies, forms, or history.")
             }
             .frame(maxWidth: 820)
             Spacer(minLength: 12)

@@ -30,26 +30,27 @@ The first minute is a product acceptance criterion, not a marketing slogan:
 2. Clearframe presents a small, useful set of AI paths with plain-language reasons for choosing each one.
 3. After the user opens a webpage, Analyze Page makes it easier to understand and shows why its output is grounded in that page.
 
-The current build partially delivers this: onboarding hands off to a task-category AI home, the catalog is deliberately small and locally defined, and Analyze Page produces an extractive local gist, key points, claims, and risk explanations. Local key points now have Evidence Mode: users can reveal the exact extracted sentence and Clearframe attempts to highlight it in the live page. This is grounding, not a guarantee of page truth or a perfect citation system; provider-written summaries are not presented as automatic evidence.
+The current build partially delivers this: onboarding hands off to a genuinely task-first AI home that keeps the full catalog behind an explicit All Tools action, and Analyze Page produces an extractive local gist, key points, claims, and risk explanations. Local key points have an initial Evidence Mode: users can reveal the exact extracted sentence and Clearframe attempts to select and visibly highlight its live page block, including open Shadow DOM content. This is grounding, not a guarantee of page truth or a citation-grade system; provider-written summaries are not presented as automatic evidence.
 
 ## Current product state
 
 The installed local version currently includes:
 
 - an independent macOS window with SwiftUI browser chrome and WebKit rendering;
-- multiple tabs with safe close/teardown, recent-tab restoration, and local session metadata;
+- multiple tabs with safe close/teardown, recent regular-tab restoration, ephemeral private tabs, and local session metadata;
 - address/search input plus a local choice of DuckDuckGo, Google, Bing, Brave Search, or Startpage;
 - loading, offline, timeout, blocked-link, and general error states;
 - a visible native bookmarks bar with local top-level links, nested emoji-folder menus, safe current-page/saved-bookmark drag filing, the full local folder organizer, capped history, and user-confirmed downloads with a clear toolbar status/destination panel;
 - a native first-run introduction and a Settings action to revisit it;
-- a curated AI home organized around Ask & Learn, Write, Research, Create Images, Create Videos, Translate, and Code;
-- user-triggered Analyze Page with a local extractive gist, key points, candidate claims, reading time, explained risk signals, English-source Plain English simplification, and two-source comparison;
+- a task-first curated AI home organized around Ask & Learn, Write, Research, Create Images, Create Videos, Translate, and Code;
+- user-triggered Analyze Page with a local extractive gist, key points, candidate claims, reading time, initial Evidence Mode, explained risk signals, English-source Plain English simplification, and two-source comparison;
 - explicit on-device voice dictation into the visible address field for review;
-- an optional provider contract and user-owned prototype key stored in macOS Keychain.
+- an optional provider contract and user-owned prototype key stored in macOS Keychain;
+- local-data recovery from last-known-good records, a user-confirmed browsing-data reset, WebKit process-failure handling, and visible page dialog/media-permission prompts.
 
 The AI home is a small catalog bundled with the app. It links directly to official provider destinations. Within a selected task, a few sourced editorial badges can make the first choice simpler; they must remain sparse, dated, explained, and governed by [the AI catalog editorial policy](ai-catalog-editorial.md). They are not universal or live rankings, Clearframe product tests, partnerships, an endorsement marketplace, affiliate feed, exact-price tracker, regional-availability promise, or automatic prompt router. Selecting a card does not attach the current page or a user prompt.
 
-The installed app is an ad hoc local build. It is not Developer ID signed, notarized, distributed through TestFlight or the App Store, independently security reviewed, or ready to make production password-manager claims.
+The installed app is a hardened-runtime, ad hoc local build with an icon and privacy manifest. It is not Developer ID signed, notarized, distributed through TestFlight or the App Store, independently security reviewed, or ready to make production password-manager claims.
 
 ## Multilingual Analyze Page requirement
 
@@ -65,18 +66,18 @@ More broadly, “fast and calm” requires measured QA across real sites and rea
 
 ## Next differentiated experiences
 
-After extraction quality and release fundamentals, the next product ideas are:
+After extraction quality, the next differentiated product work is:
 
-1. **Evidence Mode:** show the exact page sentences supporting each gist point or claim so users can inspect context instead of trusting a floating summary.
+1. **Citation-grade Evidence Mode:** extend the delivered local key-point reveal into durable sentence-to-source links for gist points, candidate claims, translations, and provider-assisted output, with page-change handling and source-grounding evaluation.
 2. **Translate & Explain:** preserve source links while translating or explaining unfamiliar language, terms, and context in plain language.
 
-These are directions, not delivered features. They require usability testing, source-grounding tests, and clear local/cloud disclosure before release.
+The initial local evidence reveal is delivered; the broader citation-grade experience and Translate & Explain are not. Both require usability testing, source-grounding tests, and clear local/cloud disclosure before release.
 
 ## Privacy and security boundaries
 
 - Analyze Page runs only after an explicit click and is local by default.
 - Opening a page never silently uploads it to an AI provider.
-- Optional online AI is separately enabled, visibly triggered, and uses a user-owned prototype key. Do not ship a shared client key.
+- Optional online AI is separately enabled, visibly triggered, and uses a user-owned prototype key. Analysis sends only the source title, hostname, declared language, and truncated extracted text—not the full URL, query, fragment, cookies, form values, or history. Do not ship a shared client key.
 - Never sell browsing history. History, bookmarks, and recent-tab metadata remain local with user controls.
 - Do not append hidden affiliate or tracking parameters to AI-home links.
 - Do not add telemetry by default, hidden advertising, covert recommendation bias, or fabricated partnerships.
@@ -134,9 +135,9 @@ Do not buy paid ads before retention is understood. Do not spam communities, fab
 
 ### 2. Trustworthy differentiation
 
-- Prototype Evidence Mode with inspectable source sentences.
+- Evaluate and extend the initial local Evidence Mode into citation-grade grounding for every relevant output type.
 - Prototype Translate & Explain with explicit provider/local boundaries and source preservation.
-- Improve accessibility, keyboard behavior, page-permission clarity, and complete browsing-data controls.
+- Improve accessibility, keyboard behavior, page-permission clarity, and granular per-site browsing-data controls beyond the delivered all-data reset.
 
 ### 3. Release engineering
 
