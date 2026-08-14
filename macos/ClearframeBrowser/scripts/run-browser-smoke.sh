@@ -75,6 +75,7 @@ swiftc \
     "$PACKAGE_DIR/Sources/ClearframeBrowser/BookmarkBarViews.swift" \
     "$PACKAGE_DIR/Sources/ClearframeBrowser/BookmarkLibraryViews.swift" \
     "$PACKAGE_DIR/Sources/ClearframeBrowser/DownloadViews.swift" \
+    "$PACKAGE_DIR/Sources/ClearframeBrowser/ContentBlockingViews.swift" \
     "$PACKAGE_DIR/Sources/ClearframeBrowser/BrowserView.swift" \
     "$PACKAGE_DIR/Tests/BrowserE2ESmoke.swift" \
     "$BUILD_DIR"/ClearframeCore.build/*.swift.o \

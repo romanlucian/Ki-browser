@@ -369,6 +369,29 @@ final class BrowserBehaviorTests: XCTestCase {
         XCTAssertEqual(blocking.provider.registeredWebViewCount, 0)
     }
 
+    func testShieldStateMapsProviderStatusAndPerSiteExceptionForAllFourStates() {
+        XCTAssertEqual(ShieldState.make(status: .active(ruleCount: 2), hostDisabled: false), .activeForSite)
+        XCTAssertEqual(ShieldState.make(status: .compiling, hostDisabled: false), .activeForSite)
+        XCTAssertEqual(ShieldState.activeForSite.statusLine, "On for this site")
+        XCTAssertEqual(ShieldState.activeForSite.symbolName, "shield")
+
+        XCTAssertEqual(ShieldState.make(status: .active(ruleCount: 2), hostDisabled: true), .disabledForSite)
+        XCTAssertEqual(ShieldState.make(status: .compiling, hostDisabled: true), .disabledForSite)
+        XCTAssertEqual(ShieldState.disabledForSite.statusLine, "Off for this site")
+        XCTAssertEqual(ShieldState.disabledForSite.symbolName, "shield.slash")
+
+        // A global off wins over any per-site exception state.
+        XCTAssertEqual(ShieldState.make(status: .disabled, hostDisabled: false), .disabledGlobally)
+        XCTAssertEqual(ShieldState.make(status: .disabled, hostDisabled: true), .disabledGlobally)
+        XCTAssertEqual(ShieldState.disabledGlobally.statusLine, "Off in Settings")
+        XCTAssertEqual(ShieldState.disabledGlobally.symbolName, "shield.slash")
+
+        XCTAssertEqual(ShieldState.make(status: .unavailable("store error"), hostDisabled: false), .unavailable)
+        XCTAssertEqual(ShieldState.make(status: .unavailable("store error"), hostDisabled: true), .unavailable)
+        XCTAssertEqual(ShieldState.unavailable.statusLine, "Filter unavailable")
+        XCTAssertEqual(ShieldState.unavailable.symbolName, "shield.slash")
+    }
+
     private static func makeTemporaryDirectory() -> URL {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("clearframe-content-blocking-\(UUID().uuidString)", isDirectory: true)
