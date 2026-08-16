@@ -23,11 +23,6 @@ struct BookmarksBar: View {
 
     var body: some View {
         HStack(spacing: 7) {
-            Image(systemName: "bookmark.fill")
-                .font(.system(size: 10, weight: .semibold))
-                .foregroundStyle(ClearframeTheme.accent)
-                .accessibilityHidden(true)
-
             if isEmpty {
                 Button {
                     openAllBookmarks()
@@ -63,6 +58,13 @@ struct BookmarksBar: View {
                                 newFolder: newFolder,
                                 organize: openAllBookmarks
                             )
+                        }
+                        if !rootFolders.isEmpty && !rootBookmarks.isEmpty {
+                            Rectangle()
+                                .fill(ClearframeTheme.hairline2)
+                                .frame(width: 1, height: 14)
+                                .padding(.horizontal, 3)
+                                .accessibilityHidden(true)
                         }
                         ForEach(rootBookmarks) { bookmark in
                             BookmarkBarLink(bookmark: bookmark, open: open)
@@ -120,17 +122,16 @@ struct BookmarksBar: View {
                     Label("Hide Bookmarks Bar", systemImage: "eye.slash")
                 }
             } label: {
-                HStack(spacing: 4) {
-                    Image(systemName: "ellipsis")
-                    Text("More")
-                }
-                .font(.system(size: 10, weight: .semibold))
-                .foregroundStyle(ClearframeTheme.textSecondary)
-                .padding(.horizontal, 7)
-                .frame(height: 22)
-                .background(ClearframeTheme.bg3, in: RoundedRectangle(cornerRadius: ClearframeTheme.radius6))
+                // The design's quiet overflow glyph: no chip, no caret, just
+                // a chevron pair. The accessible name carries the meaning.
+                Text("»")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(ClearframeTheme.textTertiary)
+                    .frame(width: 18, height: BookmarksBar.itemHeight)
+                    .contentShape(Rectangle())
             }
             .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
             .fixedSize()
             .help("All bookmarks and bar options")
             .accessibilityLabel("More bookmarks")
@@ -145,7 +146,7 @@ struct BookmarksBar: View {
             }
         }
         .padding(.horizontal, 11)
-        .frame(height: 26)
+        .frame(height: 28)
         .background(isRootDropTargeted ? ClearframeTheme.accentDim : ClearframeTheme.bg1)
         .overlay(alignment: .bottom) {
             Rectangle()
@@ -183,6 +184,14 @@ struct BookmarksBar: View {
         .help("Drop a page link here to save it in Unfiled. Secondary-click or Control-click for more actions.")
     }
 
+    /// Shared bar-item metrics. The bar's items are borderless in the design:
+    /// icon plus name, no chip at rest, a white wash only while hovered or
+    /// drag-targeted — so these keep every item on one baseline without each
+    /// one re-deriving its own padding.
+    static let itemHeight: CGFloat = 22
+    static let itemPadding: CGFloat = 8
+    static let itemGap: CGFloat = 7
+
     private func reportDrop(_ result: BookmarkDropResult, folderName: String) {
         let message: String
         switch result.disposition {
@@ -199,33 +208,31 @@ struct BookmarksBar: View {
     }
 }
 
-/// Trailing bar chip that opens the full-page bookmarks home. Same chip
-/// language as the link and folder chips beside it (B4): bg3 fill, hairline
-/// edge, 22pt tall.
+/// Trailing bar item that opens the full-page bookmarks home. Same borderless
+/// language as the link and folder items beside it (B4): folder glyph plus
+/// name, no chip until hovered.
 private struct BookmarksBarAllChip: View {
     let action: () -> Void
     @State private var isHovered = false
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 5) {
-                Image(systemName: "square.grid.2x2")
-                    .font(.system(size: 9, weight: .semibold))
+            HStack(spacing: BookmarksBar.itemGap) {
+                Image(systemName: "folder")
+                    .font(.system(size: 10, weight: .medium))
                 Text("All bookmarks")
                     .lineLimit(1)
             }
-            .font(.system(size: 11, weight: .semibold))
+            .font(.system(size: 12, weight: .medium))
             .foregroundStyle(isHovered ? ClearframeTheme.textPrimary : ClearframeTheme.textSecondary)
-            .padding(.horizontal, 8)
-            .frame(height: 22)
+            .padding(.horizontal, BookmarksBar.itemPadding)
+            .padding(.vertical, 3)
+            .frame(height: BookmarksBar.itemHeight)
             .background(
-                isHovered ? ClearframeTheme.bg3Hover : ClearframeTheme.bg3,
+                isHovered ? ClearframeTheme.itemHover : Color.clear,
                 in: RoundedRectangle(cornerRadius: ClearframeTheme.radius6)
             )
-            .overlay(
-                RoundedRectangle(cornerRadius: ClearframeTheme.radius6)
-                    .stroke(ClearframeTheme.hairline2)
-            )
+            .contentShape(RoundedRectangle(cornerRadius: ClearframeTheme.radius6))
         }
         .buttonStyle(.plain)
         .onHover { isHovered = $0 }
@@ -251,18 +258,23 @@ private struct BookmarkBarLink: View {
 
     private var linkButton: some View {
         Button { open(bookmark.url) } label: {
-            HStack(spacing: 6) {
-                Circle()
-                    .fill(IdentityColor.color(forHost: URL(string: bookmark.url)?.host ?? ""))
-                    .frame(width: 6, height: 6)
+            HStack(spacing: BookmarksBar.itemGap) {
+                // A real icon once this site has been visited; the site's
+                // identity square until then.
+                SiteIconView(urlString: bookmark.url)
                 Text(bookmark.title)
-                    .foregroundStyle(ClearframeTheme.textPrimary)
+                    .foregroundStyle(isHovered ? ClearframeTheme.textPrimary : ClearframeTheme.textSecondary)
                     .lineLimit(1)
             }
-            .font(.system(size: 11, weight: .medium))
-            .padding(.horizontal, 8)
-            .frame(height: 22)
-            .background(isHovered ? ClearframeTheme.bg3Hover : ClearframeTheme.bg3, in: Capsule())
+            .font(.system(size: 12, weight: .medium))
+            .padding(.horizontal, BookmarksBar.itemPadding)
+            .padding(.vertical, 3)
+            .frame(height: BookmarksBar.itemHeight)
+            .background(
+                isHovered ? ClearframeTheme.itemHover : Color.clear,
+                in: RoundedRectangle(cornerRadius: ClearframeTheme.radius6)
+            )
+            .contentShape(RoundedRectangle(cornerRadius: ClearframeTheme.radius6))
         }
         .buttonStyle(.plain)
         .frame(maxWidth: 180)
@@ -285,46 +297,52 @@ private struct BookmarkFolderMenu: View {
     let newFolder: (UUID?) -> Void
     let organize: () -> Void
     @State private var isDropTargeted = false
+    @State private var isHovered = false
     // Real content is measured once via FolderChipWidthKey; 140 only ever
     // shows for the first frame, before that measurement lands.
     @State private var measuredWidth: CGFloat = 140
 
     private var chipWidth: CGFloat { min(measuredWidth, 220) }
 
+    private var chipFill: Color {
+        if isDropTargeted { return ClearframeTheme.accentDimStrong }
+        return isHovered ? ClearframeTheme.itemHover : Color.clear
+    }
+
     @ViewBuilder
     var body: some View {
         Group {
             if compact {
-                Menu { menuContents } label: { Color.clear.frame(width: chipWidth, height: 22) }
+                Menu { menuContents } label: {
+                    Color.clear.frame(width: chipWidth, height: BookmarksBar.itemHeight)
+                }
                     .menuStyle(.borderlessButton)
                     .menuIndicator(.hidden)
                     .overlay {
-                        HStack(spacing: 5) {
-                            Text(folder.barLabel)
-                                .lineLimit(1)
-                                .truncationMode(.tail)
-                                .foregroundStyle(ClearframeTheme.textPrimary)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                            Image(systemName: "chevron.down")
-                                .font(.system(size: 7, weight: .bold))
-                                .foregroundStyle(ClearframeTheme.textTertiary)
-                        }
-                        .font(.system(size: 11, weight: .semibold))
-                        .padding(.horizontal, 7)
-                        .frame(width: chipWidth, height: 22)
-                        .background(
-                            isDropTargeted ? ClearframeTheme.accentDimStrong : ClearframeTheme.bg3,
-                            in: RoundedRectangle(cornerRadius: ClearframeTheme.radius6)
-                        )
-                        .overlay {
-                            RoundedRectangle(cornerRadius: ClearframeTheme.radius6)
-                                .stroke(isDropTargeted ? ClearframeTheme.accent : ClearframeTheme.hairline2, lineWidth: isDropTargeted ? 1.5 : 1)
-                        }
-                        .allowsHitTesting(false)
+                        // No caret: the design's folder items are a glyph and
+                        // a name. It is still a Menu — only the chevron goes.
+                        Text(folder.barLabel)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                            .foregroundStyle(isHovered ? ClearframeTheme.textPrimary : ClearframeTheme.textSecondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .font(.system(size: 12, weight: .medium))
+                            .padding(.horizontal, BookmarksBar.itemPadding)
+                            .padding(.vertical, 3)
+                            .frame(width: chipWidth, height: BookmarksBar.itemHeight)
+                            .background(chipFill, in: RoundedRectangle(cornerRadius: ClearframeTheme.radius6))
+                            .overlay {
+                                if isDropTargeted {
+                                    RoundedRectangle(cornerRadius: ClearframeTheme.radius6)
+                                        .stroke(ClearframeTheme.accent, lineWidth: 1.5)
+                                }
+                            }
+                            .allowsHitTesting(false)
                     }
-                    .frame(width: chipWidth, height: 22)
+                    .frame(width: chipWidth, height: BookmarksBar.itemHeight)
                     .background(widthReader)
                     .onPreferenceChange(FolderChipWidthKey.self) { measuredWidth = $0 }
+                    .onHover { isHovered = $0 }
                     .dropDestination(for: URL.self) { urls, _ in
                         guard let url = urls.first, let result = fileDroppedURL(url, folder.id) else { return false }
                         reportDrop(result, folder.title)
@@ -378,20 +396,18 @@ private struct BookmarkFolderMenu: View {
     /// ignore whatever width the surrounding `.frame(width: chipWidth)`
     /// proposes, and `.hidden()` means nothing here is ever drawn.
     private var widthReader: some View {
-        HStack(spacing: 5) {
-            Text(folder.barLabel).lineLimit(1)
-            Image(systemName: "chevron.down").font(.system(size: 7, weight: .bold))
-        }
-        .font(.system(size: 11, weight: .semibold))
-        .padding(.horizontal, 7)
-        .fixedSize()
-        .hidden()
-        .accessibilityHidden(true)
-        .background(
-            GeometryReader { proxy in
-                Color.clear.preference(key: FolderChipWidthKey.self, value: proxy.size.width)
-            }
-        )
+        Text(folder.barLabel)
+            .lineLimit(1)
+            .font(.system(size: 12, weight: .medium))
+            .padding(.horizontal, BookmarksBar.itemPadding)
+            .fixedSize()
+            .hidden()
+            .accessibilityHidden(true)
+            .background(
+                GeometryReader { proxy in
+                    Color.clear.preference(key: FolderChipWidthKey.self, value: proxy.size.width)
+                }
+            )
     }
 }
 
