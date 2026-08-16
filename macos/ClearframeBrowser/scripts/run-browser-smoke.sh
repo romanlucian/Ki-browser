@@ -63,6 +63,7 @@ swiftc \
     "$PACKAGE_DIR/Sources/ClearframeBrowser/BrowserDataStore.swift" \
     "$PACKAGE_DIR/Sources/ClearframeBrowser/ClearframeTheme.swift" \
     "$PACKAGE_DIR/Sources/ClearframeBrowser/IdentityColor.swift" \
+    "$PACKAGE_DIR/Sources/ClearframeBrowser/FaviconStore.swift" \
     "$PACKAGE_DIR/Sources/ClearframeBrowser/WindowChromeSupport.swift" \
     "$PACKAGE_DIR/Sources/ClearframeBrowser/DownloadCenter.swift" \
     "$PACKAGE_DIR/Sources/ClearframeBrowser/OnboardingController.swift" \

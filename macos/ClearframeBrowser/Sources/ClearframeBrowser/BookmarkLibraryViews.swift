@@ -359,9 +359,12 @@ struct BookmarkOrganizerRow: View {
     private var row: some View {
         HStack(spacing: 8) {
             Button(action: open) {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(bookmark.title).font(.callout.weight(.medium)).lineLimit(1)
-                    Text(bookmark.url).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+                HStack(spacing: 9) {
+                    SiteIconView(urlString: bookmark.url)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(bookmark.title).font(.callout.weight(.medium)).lineLimit(1)
+                        Text(bookmark.url).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+                    }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .contentShape(Rectangle())

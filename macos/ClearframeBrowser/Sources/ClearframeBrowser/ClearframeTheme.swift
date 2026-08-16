@@ -9,14 +9,19 @@ enum ClearframeTheme {
 
     /// Window base, visible behind the tab strip/toolbar stack.
     static let bg0 = Color(hex: 0x07070a)
-    /// Tab strip and bookmarks bar.
+    /// Toolbar row, bookmarks bar, and the active tab chip that joins them —
+    /// one continuous darker plane under the tab strip.
     static let bg1 = Color(hex: 0x0b0b0e)
-    /// Toolbar row and the active tab chip that visually joins it.
+    /// The tab strip the chips sit in, plus roomier page surfaces (bookmark
+    /// cards) that want one step of lift off `bg0`.
     static let bg2 = Color(hex: 0x101013)
     /// Chips, pills, and popover-adjacent surfaces.
     static let bg3 = Color(hex: 0x15151a)
     /// `bg3`, lightened one notch for hover states.
     static let bg3Hover = Color(hex: 0x1b1b21)
+    /// Inactive tab chip: a touch lighter than `bg3` so an unselected tab
+    /// reads as raised out of the strip rather than cut into it.
+    static let tabChip = Color(hex: 0x1a1a1f)
 
     // MARK: - Text
 
@@ -36,6 +41,10 @@ enum ClearframeTheme {
     /// register at a glance (e.g. a single folder chip while drag-targeted).
     static let accentDimStrong = accent.opacity(0.28)
 
+    /// Borderless items (the bookmarks bar) carry no fill at rest and take
+    /// this wash while hovered, open, or otherwise active.
+    static let itemHover = Color.white.opacity(0.06)
+
     // MARK: - Hairlines
 
     static let hairline1 = Color.white.opacity(0.06)
@@ -46,6 +55,8 @@ enum ClearframeTheme {
 
     static let radius6: CGFloat = 6
     static let radius8: CGFloat = 8
+    /// Address pill and the active tab chip's top corners.
+    static let radius9: CGFloat = 9
     static let radius10: CGFloat = 10
     static let radius12: CGFloat = 12
     static let radius14: CGFloat = 14

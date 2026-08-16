@@ -55,18 +55,22 @@ final class BrowserSession: NSObject, ObservableObject {
     private var lastVersionedStandardNavigationURLString: String?
     private var webViewSubscriptions: Set<AnyCancellable> = []
     private let contentBlocking: ContentRuleListProvider?
+    private let favicons: FaviconStore?
+    private var faviconTask: Task<Void, Never>?
 
     init(
         downloadCenter: DownloadCenter,
         searchSettings: SearchSettingsStore,
         initialURL: URL? = nil,
         isPrivate: Bool = false,
-        contentBlocking: ContentRuleListProvider? = nil
+        contentBlocking: ContentRuleListProvider? = nil,
+        favicons: FaviconStore? = nil
     ) {
         self.downloadCenter = downloadCenter
         self.searchSettings = searchSettings
         self.isPrivate = isPrivate
         self.contentBlocking = contentBlocking
+        self.favicons = favicons
         let configuration = WKWebViewConfiguration()
         configuration.websiteDataStore = isPrivate ? .nonPersistent() : .default()
         configuration.preferences.isElementFullscreenEnabled = true
@@ -174,6 +178,8 @@ final class BrowserSession: NSObject, ObservableObject {
 
     func teardown() {
         webView.stopLoading()
+        faviconTask?.cancel()
+        faviconTask = nil
         onRequestNewTab = nil
         onCompletedVisit = nil
         webView.navigationDelegate = nil
@@ -578,6 +584,22 @@ extension BrowserSession: WKNavigationDelegate {
             if !currentURLString.isEmpty {
                 onCompletedVisit?(pageTitle, currentURLString)
             }
+            captureSiteIcon()
+        }
+    }
+
+    /// The only place Clearframe fetches a site icon: a real, finished visit
+    /// to an ordinary web page, from that page's own origin. Private tabs
+    /// still get an icon for the tab strip, but `FaviconStore` keeps it in
+    /// memory only.
+    private func captureSiteIcon() {
+        guard let favicons,
+              let url = webView.url.flatMap(WebURLPolicy.validatedURL),
+              FaviconStore.captureHost(for: url) != nil else { return }
+        faviconTask?.cancel()
+        faviconTask = Task { [weak self] in
+            guard let self else { return }
+            await favicons.captureIfNeeded(for: url, in: self.webView, isPrivate: self.isPrivate)
         }
     }
 

@@ -6,7 +6,7 @@ The installed and `dist` builds still use WebKit. A future Chromium migration no
 
 The native app provides:
 
-- a single-row dark browser chrome with inline traffic lights in the tab strip, one unified toolbar and address pill, and per-site identity-color dots computed locally from each host (no favicon fetching);
+- a single-row dark browser chrome with inline traffic lights in the tab strip, one unified toolbar and address pill, and per-site icons: a site's real icon is captured only while you visit it, from that site's own pages, and cached locally; sites you have not visited show a locally computed identity-color square, and no third-party icon service is ever contacted;
 - multi-tab browsing with safe per-tab WebKit and assistant state, including ephemeral private tabs that are never restored or added to history;
 - local restoration of recent regular tabs, with lazy loading, corruption recovery, and an opt-out setting;
 - downloads with a user-selected destination plus an obvious toolbar panel for status, destination, cancel, reveal, and the Downloads folder;

@@ -11,7 +11,8 @@ struct BrowserView: View {
         VStack(spacing: 0) {
             TabStrip(workspace: workspace)
             // No divider here: the active tab's rounded-top shape is filled
-            // the same bg2 as the toolbar below it so the two visually join.
+            // the same bg1 as the toolbar below it, and its bottom edge is
+            // flush with the strip, so chip and toolbar read as one surface.
             if let tab = workspace.selectedTab {
                 BrowserTabContent(tab: tab, workspace: workspace)
                     .id(tab.id)
@@ -24,6 +25,15 @@ struct BrowserView: View {
             }
         }
         .background(ClearframeTheme.bg0)
+        // `hiddenTitleBar` leaves a title-bar safe area behind: without this
+        // the strip's background bled up into it while the chips stayed
+        // below, adding an empty band above the tabs and pushing the traffic
+        // lights out of the strip. Ignoring it puts the lights inline with
+        // the tabs — what the 78pt leading inset in TabStrip is for.
+        .ignoresSafeArea(.container, edges: .top)
+        // One store for the whole window: tab chips, bookmark chips, and the
+        // bookmarks home all read icons captured by the tabs' own visits.
+        .environment(\.faviconStore, workspace.favicons)
         .onChange(of: scenePhase) { _, phase in
             if phase != .active { workspace.persistNow() }
         }
@@ -48,7 +58,7 @@ private struct TabStrip: View {
     }
 
     var body: some View {
-        ZStack {
+        ZStack(alignment: .bottom) {
             // Sits behind everything below; SwiftUI routes clicks on the
             // chips/button/pill in front of it before this ever sees them.
             // Explicit fill: a representable with no intrinsic size should
@@ -56,9 +66,9 @@ private struct TabStrip: View {
             WindowDragArea()
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-            HStack(spacing: 8) {
+            HStack(alignment: .bottom, spacing: 8) {
                 ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 5) {
+                    HStack(alignment: .bottom, spacing: Self.tabGap) {
                         ForEach(workspace.tabs) { tab in
                             TabChip(
                                 tab: tab,
@@ -68,7 +78,6 @@ private struct TabStrip: View {
                             )
                         }
                     }
-                    .padding(.horizontal, 8)
                 }
                 Button {
                     workspace.addTab()
@@ -77,6 +86,7 @@ private struct TabStrip: View {
                         .font(.system(size: 12, weight: .semibold))
                 }
                 .buttonStyle(GhostButtonStyle(size: 26))
+                .frame(height: TabChip.height)
                 .help("New tab (⌘T)")
 
                 Text(tabCountLabel)
@@ -87,16 +97,24 @@ private struct TabStrip: View {
                     .frame(height: 20)
                     .background(ClearframeTheme.bg3, in: Capsule())
                     .overlay(Capsule().stroke(ClearframeTheme.hairline2))
+                    .frame(height: TabChip.height)
                     .accessibilityLabel(tabCountAccessibilityLabel)
             }
             // 78pt clears the inline traffic lights that hiddenTitleBar
             // leaves floating at the top-left of the window content.
             .padding(.leading, 78)
-            .padding(.trailing, 10)
+            .padding(.trailing, Self.horizontalInset)
+            // The chips are bottom-aligned: their lower edge is the toolbar's
+            // top edge, which is what lets the active chip merge into it.
+            .padding(.top, Self.topInset)
         }
-        .frame(height: 38)
-        .background(ClearframeTheme.bg1)
+        .frame(height: Self.topInset + TabChip.height)
+        .background(ClearframeTheme.bg2)
     }
+
+    private static let topInset: CGFloat = 7
+    private static let horizontalInset: CGFloat = 12
+    private static let tabGap: CGFloat = 4
 }
 
 private struct TabChip: View {
@@ -115,29 +133,26 @@ private struct TabChip: View {
         self.close = close
     }
 
-    private var identityColor: Color {
-        IdentityColor.color(forHost: URL(string: session.currentURLString)?.host ?? "")
+    /// One band for both states so every chip's bottom edge lands exactly on
+    /// the toolbar below; the design's 6/7px vertical chip padding is what
+    /// this height expresses.
+    static let height: CGFloat = 34
+
+    private var host: String {
+        URL(string: session.currentURLString)?.host ?? ""
+    }
+
+    private var cornerRadius: CGFloat {
+        isSelected ? ClearframeTheme.radius9 : ClearframeTheme.radius8
     }
 
     var body: some View {
-        HStack(spacing: 7) {
+        HStack(spacing: 9) {
             Button(action: select) {
-                HStack(spacing: 7) {
-                    if session.isLoading {
-                        ProgressView().controlSize(.mini).frame(width: 12, height: 12)
-                    } else if tab.isPrivate {
-                        Image(systemName: "eye.slash.fill")
-                            .font(.system(size: 9, weight: .semibold))
-                            .foregroundStyle(.purple)
-                            .frame(width: 12)
-                    } else {
-                        Circle()
-                            .fill(identityColor)
-                            .frame(width: 6, height: 6)
-                            .frame(width: 12)
-                    }
+                HStack(spacing: 9) {
+                    leadingMark
                     Text(tab.displayTitle)
-                        .font(.system(size: 11, weight: isSelected ? .semibold : .regular))
+                        .font(.system(size: 12.5, weight: isSelected ? .semibold : .medium))
                         .foregroundStyle(isSelected ? ClearframeTheme.textPrimary : ClearframeTheme.textSecondary)
                         .lineLimit(1)
                         .frame(maxWidth: 145, alignment: .leading)
@@ -149,21 +164,74 @@ private struct TabChip: View {
             Button(action: close) {
                 Image(systemName: "xmark")
                     .font(.system(size: 9, weight: .semibold))
-                    .frame(width: 18, height: 18)
+                    .frame(width: 16, height: 16)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .foregroundStyle(ClearframeTheme.textTertiary)
             .help("Close tab")
         }
-        .padding(.leading, 9)
-        .padding(.trailing, 4)
-        .frame(height: 30)
+        .padding(.horizontal, isSelected ? 12 : 11)
+        .frame(height: Self.height)
         .background(
-            isSelected ? ClearframeTheme.bg2 : (isHovered ? Color.white.opacity(0.05) : Color.clear),
-            in: UnevenRoundedRectangle(topLeadingRadius: ClearframeTheme.radius8, topTrailingRadius: ClearframeTheme.radius8)
+            chipFill,
+            in: UnevenRoundedRectangle(topLeadingRadius: cornerRadius, topTrailingRadius: cornerRadius)
         )
+        // Top and sides only: the bottom edge is deliberately open so the
+        // active chip's fill runs straight into the toolbar's.
+        .overlay {
+            if isSelected {
+                TabChipTopBorder(cornerRadius: cornerRadius)
+                    .stroke(ClearframeTheme.hairline2, lineWidth: 1)
+            }
+        }
         .onHover { isHovered = $0 }
+    }
+
+    @ViewBuilder
+    private var leadingMark: some View {
+        if session.isLoading {
+            ProgressView().controlSize(.mini).frame(width: 13, height: 13)
+        } else if tab.isPrivate {
+            Image(systemName: "eye.slash.fill")
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundStyle(.purple)
+                .frame(width: 13, height: 13)
+        } else {
+            SiteIconView(host: host)
+        }
+    }
+
+    private var chipFill: Color {
+        if isSelected { return ClearframeTheme.bg1 }
+        return isHovered ? ClearframeTheme.bg3Hover : ClearframeTheme.tabChip
+    }
+}
+
+/// The active chip's hairline: up the leading side, around the two top
+/// corners, down the trailing side — and nothing across the bottom, where the
+/// chip meets the toolbar. Inset half a point so a 1pt stroke sits inside the
+/// chip instead of straddling its edge.
+private struct TabChipTopBorder: Shape {
+    let cornerRadius: CGFloat
+
+    func path(in rect: CGRect) -> Path {
+        let inset = rect.insetBy(dx: 0.5, dy: 0.5)
+        let radius = min(cornerRadius, min(inset.width, inset.height) / 2)
+        var path = Path()
+        path.move(to: CGPoint(x: inset.minX, y: rect.maxY))
+        path.addLine(to: CGPoint(x: inset.minX, y: inset.minY + radius))
+        path.addQuadCurve(
+            to: CGPoint(x: inset.minX + radius, y: inset.minY),
+            control: CGPoint(x: inset.minX, y: inset.minY)
+        )
+        path.addLine(to: CGPoint(x: inset.maxX - radius, y: inset.minY))
+        path.addQuadCurve(
+            to: CGPoint(x: inset.maxX, y: inset.minY + radius),
+            control: CGPoint(x: inset.maxX, y: inset.minY)
+        )
+        path.addLine(to: CGPoint(x: inset.maxX, y: rect.maxY))
+        return path
     }
 }
 
@@ -211,7 +279,7 @@ private struct BrowserTabContent: View {
                 // Purple wash over the toolbar surface rather than a bare
                 // translucent patch, so it reads correctly on near-black.
                 .background(Color.purple.opacity(0.14))
-                .background(ClearframeTheme.bg2)
+                .background(ClearframeTheme.bg1)
             }
             if session.isLoading {
                 ProgressView(value: session.estimatedProgress)
@@ -344,7 +412,7 @@ private struct BrowserToolbar: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 10) {
-                HStack(spacing: 2) {
+                HStack(spacing: 4) {
                     NavigationButton(symbol: "chevron.left", label: "Back", enabled: session.canGoBack) { session.goBack() }
                     NavigationButton(symbol: "chevron.right", label: "Forward", enabled: session.canGoForward) { session.goForward() }
                     NavigationButton(symbol: "house", label: "Start page", enabled: true) { goHome() }
@@ -357,72 +425,74 @@ private struct BrowserToolbar: View {
 
                 addressPill
 
-                Button { voiceInput.toggle() } label: {
-                    Image(systemName: voiceInput.isListening ? "waveform" : "mic")
-                }
-                .buttonStyle(GhostButtonStyle(tint: voiceInput.isListening ? Color.red : ClearframeTheme.textPrimary))
-                .help(voiceInput.isListening ? "Stop voice input" : "Start on-device voice input")
-                .accessibilityLabel(voiceInput.isListening ? "Stop voice input" : "Start voice input")
-                .accessibilityHint("Voice input fills the address field but does not submit automatically.")
+                HStack(spacing: 4) {
+                    Button { workspace.toggleBookmarkForSelectedTab() } label: {
+                        Image(systemName: isBookmarked ? "star.fill" : "star")
+                    }
+                    .buttonStyle(GhostButtonStyle(tint: isBookmarked ? Color.orange : ClearframeTheme.textPrimary))
+                    .disabled(session.currentURLString.isEmpty)
+                    .help(isBookmarked ? "Remove bookmark" : "Bookmark this page (⌘D)")
 
-                Button { workspace.toggleBookmarkForSelectedTab() } label: {
-                    Image(systemName: isBookmarked ? "star.fill" : "star")
-                }
-                .buttonStyle(GhostButtonStyle(tint: isBookmarked ? Color.orange : ClearframeTheme.textPrimary))
-                .disabled(session.currentURLString.isEmpty)
-                .help(isBookmarked ? "Remove bookmark" : "Bookmark this page (⌘D)")
+                    Button { voiceInput.toggle() } label: {
+                        Image(systemName: voiceInput.isListening ? "waveform" : "mic")
+                    }
+                    .buttonStyle(GhostButtonStyle(tint: voiceInput.isListening ? Color.red : ClearframeTheme.textPrimary))
+                    .help(voiceInput.isListening ? "Stop voice input" : "Start on-device voice input")
+                    .accessibilityLabel(voiceInput.isListening ? "Stop voice input" : "Start voice input")
+                    .accessibilityHint("Voice input fills the address field but does not submit automatically.")
 
-                Button { showsLibrary.toggle() } label: {
-                    Image(systemName: "books.vertical")
-                }
-                .buttonStyle(GhostButtonStyle())
-                .help("Bookmarks and history")
-                .popover(isPresented: $showsLibrary, arrowEdge: .top) {
-                    LibraryPopover(
-                        store: dataStore,
-                        open: { url, newTab in
-                            workspace.open(url, inNewTab: newTab)
-                            showsLibrary = false
-                        }
-                    )
-                }
+                    Button { showsLibrary.toggle() } label: {
+                        Image(systemName: "books.vertical")
+                    }
+                    .buttonStyle(GhostButtonStyle())
+                    .help("Bookmarks and history")
+                    .popover(isPresented: $showsLibrary, arrowEdge: .top) {
+                        LibraryPopover(
+                            store: dataStore,
+                            open: { url, newTab in
+                                workspace.open(url, inNewTab: newTab)
+                                showsLibrary = false
+                            }
+                        )
+                    }
 
-                Button { downloads.togglePanel() } label: {
-                    ZStack(alignment: .topTrailing) {
-                        Image(systemName: downloads.items.isEmpty ? "arrow.down.circle" : "arrow.down.circle.fill")
-                            .frame(width: 28, height: 28)
-                        if downloads.activeCount > 0 {
-                            Text("\(downloads.activeCount)")
-                                .font(.system(size: 8, weight: .bold))
-                                .foregroundStyle(ClearframeTheme.onAccent)
-                                .padding(3)
-                                .background(ClearframeTheme.accent, in: Circle())
-                                .offset(x: 3, y: -1)
+                    Button { downloads.togglePanel() } label: {
+                        ZStack(alignment: .topTrailing) {
+                            Image(systemName: downloads.items.isEmpty ? "arrow.down.circle" : "arrow.down.circle.fill")
+                                .frame(width: 28, height: 28)
+                            if downloads.activeCount > 0 {
+                                Text("\(downloads.activeCount)")
+                                    .font(.system(size: 8, weight: .bold))
+                                    .foregroundStyle(ClearframeTheme.onAccent)
+                                    .padding(3)
+                                    .background(ClearframeTheme.accent, in: Circle())
+                                    .offset(x: 3, y: -1)
+                            }
                         }
                     }
-                }
-                .buttonStyle(GhostButtonStyle())
-                .help("Show downloads")
-                .accessibilityLabel("Downloads")
-                .accessibilityHint("Shows downloaded files and their save locations.")
-                .popover(isPresented: $downloads.isPanelPresented, arrowEdge: .top) {
-                    DownloadsPopover(center: downloads)
-                }
+                    .buttonStyle(GhostButtonStyle())
+                    .help("Show downloads")
+                    .accessibilityLabel("Downloads")
+                    .accessibilityHint("Shows downloaded files and their save locations.")
+                    .popover(isPresented: $downloads.isPanelPresented, arrowEdge: .top) {
+                        DownloadsPopover(center: downloads)
+                    }
 
-                Button { showsAssistant.toggle() } label: {
-                    Image(systemName: "sparkles.rectangle.stack")
+                    Button { showsAssistant.toggle() } label: {
+                        Image(systemName: "sparkles.rectangle.stack")
+                    }
+                    .buttonStyle(GhostButtonStyle(isActive: showsAssistant))
+                    .help("Show or hide the page assistant")
+                    .accessibilityLabel("Assistant")
                 }
-                .buttonStyle(GhostButtonStyle(isActive: showsAssistant))
-                .help("Show or hide the page assistant")
-                .accessibilityLabel("Assistant")
             }
             .padding(.horizontal, 10)
-            .frame(height: 42)
-            .background(ClearframeTheme.bg2)
+            .frame(height: 44)
+            .background(ClearframeTheme.bg1)
 
             if dataStore.showsBookmarksBar {
-                // No divider: BookmarksBar supplies its own hairline bottom
-                // edge, and the bg2→bg1 color change alone reads as a seam.
+                // No divider: the bar continues the toolbar's own bg1 plane
+                // and closes it with a single hairline along its bottom edge.
                 BookmarksBar(
                     store: dataStore,
                     currentPageURL: session.currentURLString,
@@ -458,7 +528,7 @@ private struct BrowserToolbar: View {
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 7)
-                .background(ClearframeTheme.bg2)
+                .background(ClearframeTheme.bg1)
             }
         }
         .onChange(of: voiceInput.transcript) { _, transcript in
@@ -492,6 +562,8 @@ private struct BrowserToolbar: View {
         HStack(spacing: 8) {
             ContentBlockingShieldButton(provider: workspace.contentBlocking, session: session)
 
+            pillDivider
+
             Menu {
                 ForEach(SearchEngine.allCases) { engine in
                     Button {
@@ -507,22 +579,21 @@ private struct BrowserToolbar: View {
                 Divider()
                 Text("Change this any time in Clearframe Settings.")
             } label: {
-                HStack(spacing: 5) {
-                    Image(systemName: "magnifyingglass")
-                    Text(searchSettings.selectedEngine.displayName)
-                        .lineLimit(1)
-                }
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(ClearframeTheme.textSecondary)
+                // Compacted to the engine name alone: in the pill it is a
+                // quiet label for what Enter will do, not a second control
+                // competing with the shield and the address itself.
+                Text(searchSettings.selectedEngine.displayName)
+                    .lineLimit(1)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(ClearframeTheme.textTertiary)
             }
             .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
             .fixedSize()
             .help("Search engine: \(searchSettings.selectedEngine.displayName). Click to change.")
             .accessibilityLabel("Search engine: \(searchSettings.selectedEngine.displayName)")
 
-            Rectangle()
-                .fill(ClearframeTheme.hairline2)
-                .frame(width: 1, height: 16)
+            pillDivider
 
             HStack(spacing: 8) {
                 PageLinkDragHandle(
@@ -580,19 +651,23 @@ private struct BrowserToolbar: View {
                     .font(ClearframeTheme.metaFont)
                     .tracking(ClearframeTheme.metaTracking)
                     .foregroundStyle(ClearframeTheme.textTertiary)
-                    .padding(.horizontal, 6)
-                    .frame(height: 18)
-                    .background(ClearframeTheme.bg3, in: RoundedRectangle(cornerRadius: ClearframeTheme.radius6))
                     .accessibilityHidden(true)
             }
         }
         .padding(.horizontal, 12)
         .frame(height: 30)
-        .background(ClearframeTheme.bg1, in: RoundedRectangle(cornerRadius: ClearframeTheme.radius10))
+        .background(ClearframeTheme.bg3, in: RoundedRectangle(cornerRadius: ClearframeTheme.radius9))
         .overlay(
-            RoundedRectangle(cornerRadius: ClearframeTheme.radius10)
+            RoundedRectangle(cornerRadius: ClearframeTheme.radius9)
                 .stroke(addressFocused.wrappedValue ? ClearframeTheme.accent : ClearframeTheme.hairline2, lineWidth: 1)
         )
+    }
+
+    /// The pill's internal seams: shield | engine | address.
+    private var pillDivider: some View {
+        Rectangle()
+            .fill(ClearframeTheme.hairline2)
+            .frame(width: 1, height: 16)
     }
 
     private var showsHostEmphasis: Bool {

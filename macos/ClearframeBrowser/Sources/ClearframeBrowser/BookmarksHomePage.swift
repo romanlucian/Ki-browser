@@ -697,10 +697,11 @@ private struct BookmarkFolderCard: View {
     private var identityDots: some View {
         HStack(spacing: -5) {
             ForEach(Array(hosts.enumerated()), id: \.offset) { entry in
-                Circle()
-                    .fill(IdentityColor.color(forHost: entry.element))
-                    .frame(width: 13, height: 13)
-                    .overlay(Circle().stroke(ClearframeTheme.bg2, lineWidth: 2))
+                SiteIconView(host: entry.element)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 4, style: .continuous)
+                            .stroke(ClearframeTheme.bg2, lineWidth: 2)
+                    )
             }
         }
         .accessibilityHidden(true)

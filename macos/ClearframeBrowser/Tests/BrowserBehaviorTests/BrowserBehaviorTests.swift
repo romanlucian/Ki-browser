@@ -536,6 +536,171 @@ final class BrowserBehaviorTests: XCTestCase {
         XCTAssertEqual(store.bookmarks(in: work.id).count, 1, "the shallow listing is unchanged")
     }
 
+    // MARK: - Site icons
+
+    func testFaviconCaptureStoresOneFilePerNormalizedHostAndReadsItBack() async throws {
+        let directory = Self.makeFaviconDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let fetcher = RecordingFaviconFetcher(response: Self.pngFixture())
+        let store = FaviconStore(directory: directory, fetch: fetcher.fetch)
+
+        await store.capture(
+            pageURL: try XCTUnwrap(URL(string: "https://WWW.Example.com/articles/one")),
+            declaredIconURLs: [],
+            isPrivate: false
+        )
+
+        // No declared icon leaves exactly one same-origin attempt.
+        XCTAssertEqual(fetcher.requestedURLs.map(\.absoluteString), ["https://www.example.com/favicon.ico"])
+        XCTAssertNotNil(store.icon(forHost: "example.com"))
+        XCTAssertNotNil(store.icon(forHost: "WWW.Example.COM"), "www and case never split one site in two")
+
+        let files = try FileManager.default.contentsOfDirectory(atPath: directory.path)
+        XCTAssertEqual(files, ["example.com.png"])
+
+        // A second store proves the round-trip is the file, not the memory cache.
+        let reopened = FaviconStore(directory: directory, fetch: Self.forbiddenFaviconFetcher)
+        XCTAssertNotNil(reopened.icon(forHost: "example.com"))
+        XCTAssertNil(reopened.icon(forHost: "never-visited.example"))
+    }
+
+    func testFaviconLookupNeverReachesTheNetwork() {
+        let directory = Self.makeFaviconDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        // Any fetch from a plain lookup fails the test outright.
+        let store = FaviconStore(directory: directory, fetch: Self.forbiddenFaviconFetcher)
+
+        XCTAssertNil(store.icon(forHost: "example.com"))
+        XCTAssertNil(store.icon(forHost: ""))
+        XCTAssertNil(store.icon(forHost: "never-visited.example"))
+    }
+
+    func testFaviconCandidatesStayOnTheVisitedSiteOwnOrigin() throws {
+        let pageURL = try XCTUnwrap(URL(string: "https://example.com/story"))
+
+        XCTAssertEqual(
+            FaviconStore.iconCandidates(for: pageURL, declared: ["/assets/icon.png", "https://example.com/other.png"])
+                .map(\.absoluteString),
+            ["https://example.com/assets/icon.png", "https://example.com/favicon.ico"],
+            "a same-origin declared icon is tried first, then the origin's own /favicon.ico"
+        )
+        XCTAssertEqual(
+            FaviconStore.iconCandidates(
+                for: pageURL,
+                declared: [
+                    "https://www.google.com/s2/favicons?domain=example.com",
+                    "https://cdn.example.net/icon.png",
+                    "http://example.com/insecure.png",
+                    "https://images.example.com/icon.png"
+                ]
+            ).map(\.absoluteString),
+            ["https://example.com/favicon.ico"],
+            "icon services, CDNs, other subdomains, and scheme downgrades are all dropped"
+        )
+        XCTAssertTrue(
+            FaviconStore.iconCandidates(
+                for: try XCTUnwrap(URL(string: "file:///Users/private/page.html")),
+                declared: ["file:///Users/private/icon.png"]
+            ).isEmpty,
+            "only real web pages are ever candidates"
+        )
+        XCTAssertNil(FaviconStore.captureHost(for: try XCTUnwrap(URL(string: "about:blank"))))
+    }
+
+    func testPrivateFaviconCaptureKeepsTheIconInMemoryAndOffTheDisk() async throws {
+        let directory = Self.makeFaviconDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let fetcher = RecordingFaviconFetcher(response: Self.pngFixture())
+        let store = FaviconStore(directory: directory, fetch: fetcher.fetch)
+
+        await store.capture(
+            pageURL: try XCTUnwrap(URL(string: "https://private.example/page")),
+            declaredIconURLs: ["https://private.example/icon.png"],
+            isPrivate: true
+        )
+
+        XCTAssertNotNil(store.icon(forHost: "private.example"), "the open private tab still shows its icon")
+        XCTAssertEqual(
+            try FileManager.default.contentsOfDirectory(atPath: directory.path),
+            [],
+            "a private tab writes nothing to disk"
+        )
+        XCTAssertNil(
+            FaviconStore(directory: directory, fetch: Self.forbiddenFaviconFetcher).icon(forHost: "private.example"),
+            "nothing survives the private tab for another session to read"
+        )
+    }
+
+    func testClearAllErasesStoredIconsFromDiskAndMemory() async throws {
+        let directory = Self.makeFaviconDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = FaviconStore(directory: directory, fetch: RecordingFaviconFetcher(response: Self.pngFixture()).fetch)
+        await store.capture(
+            pageURL: try XCTUnwrap(URL(string: "https://example.com/page")),
+            declaredIconURLs: [],
+            isPrivate: false
+        )
+        XCTAssertNotNil(store.icon(forHost: "example.com"))
+
+        store.clearAll()
+
+        XCTAssertNil(store.icon(forHost: "example.com"))
+        XCTAssertEqual(
+            (try? FileManager.default.contentsOfDirectory(atPath: directory.path)) ?? [],
+            [],
+            "the favicon directory is wiped with the rest of the local browsing data"
+        )
+    }
+
+    func testFailedFaviconCaptureIsNotRetriedForTheSameHostInThisSession() async throws {
+        let directory = Self.makeFaviconDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        // What a 404 from the smoke fixture server looks like: no bytes.
+        let fetcher = RecordingFaviconFetcher(response: nil)
+        let store = FaviconStore(directory: directory, fetch: fetcher.fetch)
+        let pageURL = try XCTUnwrap(URL(string: "http://127.0.0.1:8080/index.html"))
+
+        await store.capture(pageURL: pageURL, declaredIconURLs: [], isPrivate: false)
+        await store.capture(pageURL: pageURL, declaredIconURLs: [], isPrivate: false)
+
+        XCTAssertEqual(fetcher.requestedURLs.count, 1, "one silent attempt per host per session, then nothing")
+        XCTAssertNil(store.icon(forHost: "127.0.0.1"))
+        XCTAssertEqual((try? FileManager.default.contentsOfDirectory(atPath: directory.path)) ?? [], [])
+    }
+
+    private static func makeFaviconDirectory() -> URL {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("clearframe-favicons-\(UUID().uuidString)", isDirectory: true)
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        return directory
+    }
+
+    /// A 2×2 PNG: enough for ImageIO to decode, downscale, and re-encode.
+    private static func pngFixture() -> Data {
+        let representation = NSBitmapImageRep(
+            bitmapDataPlanes: nil,
+            pixelsWide: 2,
+            pixelsHigh: 2,
+            bitsPerSample: 8,
+            samplesPerPixel: 4,
+            hasAlpha: true,
+            isPlanar: false,
+            colorSpaceName: .deviceRGB,
+            bytesPerRow: 0,
+            bitsPerPixel: 0
+        )
+        representation?.setColor(.systemGreen, atX: 0, y: 0)
+        representation?.setColor(.systemGreen, atX: 1, y: 0)
+        representation?.setColor(.systemGreen, atX: 0, y: 1)
+        representation?.setColor(.systemGreen, atX: 1, y: 1)
+        return representation?.representation(using: .png, properties: [:]) ?? Data()
+    }
+
+    private static let forbiddenFaviconFetcher: FaviconStore.Fetcher = { url in
+        XCTFail("a favicon lookup reached the network for \(url.absoluteString)")
+        return nil
+    }
+
     private func makeSurfaceTestWorkspace() throws -> BrowserWorkspace {
         let suiteName = "clearframe.startSurface.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
@@ -618,6 +783,24 @@ private struct TestContentBlocking {
 
     func removeStore() {
         try? FileManager.default.removeItem(at: directory)
+    }
+}
+
+/// Stands in for the network so favicon capture is exercised without one.
+/// Main-actor isolated to match `FaviconStore.Fetcher`, so its bookkeeping
+/// and the assertions that read it run on the same actor.
+@MainActor
+private final class RecordingFaviconFetcher {
+    private(set) var requestedURLs: [URL] = []
+    private let response: Data?
+
+    init(response: Data?) {
+        self.response = response
+    }
+
+    func fetch(_ url: URL) async -> Data? {
+        requestedURLs.append(url)
+        return response
     }
 }
 

@@ -33,7 +33,8 @@ final class BrowserTab: ObservableObject, Identifiable {
         downloadCenter: DownloadCenter,
         searchSettings: SearchSettingsStore,
         isPrivate: Bool = false,
-        contentBlocking: ContentRuleListProvider? = nil
+        contentBlocking: ContentRuleListProvider? = nil,
+        favicons: FaviconStore? = nil
     ) {
         self.id = id
         self.displayTitle = title
@@ -46,14 +47,16 @@ final class BrowserTab: ObservableObject, Identifiable {
                 searchSettings: searchSettings,
                 initialURL: initialURL,
                 isPrivate: isPrivate,
-                contentBlocking: contentBlocking
+                contentBlocking: contentBlocking,
+                favicons: favicons
             )
         } else {
             session = BrowserSession(
                 downloadCenter: downloadCenter,
                 searchSettings: searchSettings,
                 isPrivate: isPrivate,
-                contentBlocking: contentBlocking
+                contentBlocking: contentBlocking,
+                favicons: favicons
             )
             pendingRestoreURL = initialURL
         }
@@ -127,6 +130,9 @@ final class BrowserWorkspace: ObservableObject {
     let dataStore: BrowserDataStore
     let searchSettings: SearchSettingsStore
     let contentBlocking: ContentRuleListProvider
+    /// Site icons captured during real visits, shared by every tab so a site
+    /// is fetched at most once per run (see `FaviconStore` for the policy).
+    let favicons: FaviconStore
 
     private var tabSubscriptions: [UUID: AnyCancellable] = [:]
     private var downloadSubscription: AnyCancellable?
@@ -138,7 +144,8 @@ final class BrowserWorkspace: ObservableObject {
         dataStore: BrowserDataStore? = nil,
         downloads: DownloadCenter? = nil,
         searchSettings: SearchSettingsStore? = nil,
-        contentBlocking: ContentRuleListProvider? = nil
+        contentBlocking: ContentRuleListProvider? = nil,
+        favicons: FaviconStore? = nil
     ) {
         let resolvedDataStore = dataStore ?? BrowserDataStore()
         let resolvedDownloads = downloads ?? DownloadCenter()
@@ -147,10 +154,12 @@ final class BrowserWorkspace: ObservableObject {
         // the first rule-list compile is still running.
         let resolvedContentBlocking = contentBlocking
             ?? ContentRuleListProvider(settings: ContentBlockingSettingsStore())
+        let resolvedFavicons = favicons ?? FaviconStore()
         self.dataStore = resolvedDataStore
         self.downloads = resolvedDownloads
         self.searchSettings = resolvedSearchSettings
         self.contentBlocking = resolvedContentBlocking
+        self.favicons = resolvedFavicons
         downloadSubscription = resolvedDownloads.objectWillChange.sink { [weak self] _ in
             self?.objectWillChange.send()
         }
@@ -172,7 +181,8 @@ final class BrowserWorkspace: ObservableObject {
                     lastActivatedAt: record.lastActivatedAt,
                     downloadCenter: resolvedDownloads,
                     searchSettings: resolvedSearchSettings,
-                    contentBlocking: resolvedContentBlocking
+                    contentBlocking: resolvedContentBlocking,
+                    favicons: resolvedFavicons
                 )
             }
             selectedTabID = tabs.contains(where: { $0.id == selectedID }) ? selectedID : tabs.first?.id
@@ -180,7 +190,8 @@ final class BrowserWorkspace: ObservableObject {
             let tab = BrowserTab(
                 downloadCenter: resolvedDownloads,
                 searchSettings: resolvedSearchSettings,
-                contentBlocking: resolvedContentBlocking
+                contentBlocking: resolvedContentBlocking,
+                favicons: resolvedFavicons
             )
             tabs = [tab]
             selectedTabID = tab.id
@@ -206,7 +217,8 @@ final class BrowserWorkspace: ObservableObject {
             downloadCenter: downloads,
             searchSettings: searchSettings,
             isPrivate: isPrivate,
-            contentBlocking: contentBlocking
+            contentBlocking: contentBlocking,
+            favicons: favicons
         )
         tabs.append(tab)
         configure(tab)
@@ -232,7 +244,8 @@ final class BrowserWorkspace: ObservableObject {
             let replacement = BrowserTab(
                 downloadCenter: downloads,
                 searchSettings: searchSettings,
-                contentBlocking: contentBlocking
+                contentBlocking: contentBlocking,
+                favicons: favicons
             )
             tabs = [replacement]
             configure(replacement)
@@ -359,6 +372,9 @@ final class BrowserWorkspace: ObservableObject {
         selectedTabID = nil
         dataStore.clearAllBrowserRecords()
         downloads.clearAllRecords()
+        // Captured site icons are browsing evidence too: the same reset that
+        // erases bookmarks and history erases them from disk and memory.
+        favicons.clearAll()
 
         let dataStore = WKWebsiteDataStore.default()
         await withCheckedContinuation { continuation in
@@ -375,7 +391,8 @@ final class BrowserWorkspace: ObservableObject {
         let replacement = BrowserTab(
             downloadCenter: downloads,
             searchSettings: searchSettings,
-            contentBlocking: contentBlocking
+            contentBlocking: contentBlocking,
+            favicons: favicons
         )
         tabs = [replacement]
         selectedTabID = replacement.id
