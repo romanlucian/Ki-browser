@@ -46,7 +46,11 @@ The installed local version currently includes:
 - user-triggered Analyze Page with a local extractive gist, key points, candidate claims, reading time, initial Evidence Mode, explained risk signals, English-source Plain English simplification, and two-source comparison;
 - explicit on-device voice dictation into the visible address field for review;
 - an optional provider contract and user-owned prototype key stored in macOS Keychain;
-- local-data recovery from last-known-good records, a user-confirmed browsing-data reset, WebKit process-failure handling, and visible page dialog/media-permission prompts.
+- local-data recovery from last-known-good records, a user-confirmed browsing-data reset, WebKit process-failure handling, and visible page dialog/media-permission prompts;
+- a section-page structure notice: Analyze Page recognizes listing/index pages, explains that they list many articles rather than one text, and offers an explicit Analyze anyway instead of silently stitching headlines;
+- default-on tracker blocking against a small, versioned, first-party curated domain list through WebKit's content-rule engine, with an address-bar shield, per-site exceptions, and state-only status text (WebKit cannot count blocked requests; Clearframe never shows block numbers) — see [the content-blocking policy](content-blocking.md);
+- a redesigned single-row dark interface: hidden system title bar with inline traffic lights, identity-dot tab chips, a unified address pill, a slim bookmarks bar, and all colors centralized in one theme;
+- a full-page bookmarks home with visual folder cards, rolled-up link/subfolder counts, search across bookmarks and folder names, drill-down, and local history — while new tabs and Home keep opening the AI guide.
 
 The AI home is a small catalog bundled with the app. It links directly to official provider destinations. Within a selected task, a few sourced editorial badges can make the first choice simpler; they must remain sparse, dated, explained, and governed by [the AI catalog editorial policy](ai-catalog-editorial.md). They are not universal or live rankings, Clearframe product tests, partnerships, an endorsement marketplace, affiliate feed, exact-price tracker, regional-availability promise, or automatic prompt router. Selecting a card does not attach the current page or a user prompt.
 
@@ -83,6 +87,7 @@ The initial local evidence reveal is delivered; the broader citation-grade exper
 - Do not add telemetry by default, hidden advertising, covert recommendation bias, or fabricated partnerships.
 - Treat page text as untrusted input. Do not let it trigger actions, purchases, messages, permission changes, or data access.
 - Risk signals are explainable heuristics, not malware, scam, truth, or safety verdicts.
+- Tracker blocking is local and honest: a bundled, versioned, first-party curated list compiled on-device, with per-site exceptions stored locally. It is not a complete ad blocker, shows state rather than counts, and is never presented as a safety verdict.
 - Voice capture must be user-triggered, visibly active, reviewable, and stoppable. No wake word or silent cloud fallback.
 
 See [privacy-and-safety.md](privacy-and-safety.md) for the operational data boundary and release-security gaps.
