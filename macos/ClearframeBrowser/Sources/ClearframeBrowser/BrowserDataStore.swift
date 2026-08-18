@@ -174,6 +174,17 @@ final class BrowserDataStore: ObservableObject {
         apply(collection)
     }
 
+    /// Saves an edited bookmark name and address. Returns `false` — and writes
+    /// nothing — when the address is not a credential-free web link or the
+    /// bookmark no longer exists, so the editor can stay open and say why.
+    @discardableResult
+    func updateBookmark(id: UUID, title: String, url: String) -> Bool {
+        var collection = bookmarkCollection
+        guard collection.updateBookmark(id: id, title: title, url: url) else { return false }
+        apply(collection)
+        return true
+    }
+
     @discardableResult
     func createBookmarkFolder(title: String, emoji: String, parentID: UUID?) -> BookmarkFolderRecord? {
         var collection = bookmarkCollection

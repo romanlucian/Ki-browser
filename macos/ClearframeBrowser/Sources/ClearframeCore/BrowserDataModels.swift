@@ -31,32 +31,134 @@ public enum BookmarkURLPolicy {
     }
 }
 
+/// One tab group: a named, colored enclosure around a run of tabs.
+///
+/// Foundation-only by design — the actual colors live in the macOS UI layer.
+/// This record carries only the palette's stable identifier, so a restored
+/// session paints the same color it was saved with even after the palette is
+/// re-tuned, and an identifier this build does not know falls back to the
+/// first color instead of leaving the strip to guess.
+public struct TabGroupRecord: Codable, Equatable, Identifiable, Sendable {
+    /// The eight colors a group can take, in the order the group editor shows
+    /// them. Stored as text rather than an index so reordering the swatch row
+    /// never repaints somebody's saved groups.
+    public static let colorIDs = ["grey", "blue", "red", "yellow", "green", "pink", "purple", "cyan"]
+    /// The fallback for an empty or unknown color: the first palette entry.
+    public static let defaultColorID = "grey"
+
+    public let id: UUID
+    /// May be empty: an unnamed group shows as a colored dot, like Chrome's.
+    public var title: String
+    public var colorID: String
+    public var isCollapsed: Bool
+    public let createdAt: Date
+
+    public init(
+        id: UUID = UUID(),
+        title: String = "",
+        colorID: String = TabGroupRecord.defaultColorID,
+        isCollapsed: Bool = false,
+        createdAt: Date = Date()
+    ) {
+        self.id = id
+        self.title = Self.normalizedTitle(title)
+        self.colorID = Self.normalizedColorID(colorID)
+        self.isCollapsed = isCollapsed
+        self.createdAt = createdAt
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, title, colorID, isCollapsed, createdAt
+    }
+
+    /// Tolerant on purpose: every field except the identifier can be missing
+    /// or unrecognized, and the group still restores as a usable group.
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        title = Self.normalizedTitle(try container.decodeIfPresent(String.self, forKey: .title) ?? "")
+        colorID = Self.normalizedColorID(try container.decodeIfPresent(String.self, forKey: .colorID) ?? "")
+        isCollapsed = try container.decodeIfPresent(Bool.self, forKey: .isCollapsed) ?? false
+        createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date()
+    }
+
+    public static func normalizedColorID(_ value: String) -> String {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return colorIDs.contains(trimmed) ? trimmed : defaultColorID
+    }
+
+    public static func normalizedTitle(_ value: String) -> String {
+        value.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+}
+
 public struct BrowserTabRecord: Codable, Equatable, Identifiable, Sendable {
     public let id: UUID
     public let url: String?
     public let title: String
     public let lastActivatedAt: Date
+    /// The group this tab belonged to, or `nil` for an ungrouped tab. Older
+    /// saved sessions have no such key at all and restore ungrouped.
+    public let groupID: UUID?
 
-    public init(id: UUID, url: String?, title: String, lastActivatedAt: Date) {
+    public init(id: UUID, url: String?, title: String, lastActivatedAt: Date, groupID: UUID? = nil) {
         self.id = id
         self.url = url
         self.title = title
         self.lastActivatedAt = lastActivatedAt
+        self.groupID = groupID
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, url, title, lastActivatedAt, groupID
+    }
+
+    /// Written out the same way the legacy bookmark `folderID` migration is:
+    /// a record saved before tab groups existed decodes cleanly and simply
+    /// has no group.
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        url = try container.decodeIfPresent(String.self, forKey: .url)
+        title = try container.decode(String.self, forKey: .title)
+        lastActivatedAt = try container.decode(Date.self, forKey: .lastActivatedAt)
+        groupID = try container.decodeIfPresent(UUID.self, forKey: .groupID)
     }
 
     public var restorableURL: URL? {
         guard let url else { return nil }
         return WebURLPolicy.validatedURL(url)
     }
+
+    /// This record with a different group reference, used when normalization
+    /// has to drop a group a tab still points at.
+    public func withGroupID(_ groupID: UUID?) -> BrowserTabRecord {
+        BrowserTabRecord(id: id, url: url, title: title, lastActivatedAt: lastActivatedAt, groupID: groupID)
+    }
 }
 
 public struct BrowserWorkspaceSnapshot: Codable, Equatable, Sendable {
     public let tabs: [BrowserTabRecord]
     public let selectedTabID: UUID?
+    public let groups: [TabGroupRecord]
 
-    public init(tabs: [BrowserTabRecord], selectedTabID: UUID?) {
+    public init(tabs: [BrowserTabRecord], selectedTabID: UUID?, groups: [TabGroupRecord] = []) {
         self.tabs = tabs
         self.selectedTabID = selectedTabID
+        self.groups = groups
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case tabs, selectedTabID, groups
+    }
+
+    /// A session saved before tab groups existed has no `groups` key and
+    /// restores exactly as it always did.
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        tabs = try container.decode([BrowserTabRecord].self, forKey: .tabs)
+        selectedTabID = try container.decodeIfPresent(UUID.self, forKey: .selectedTabID)
+        groups = try container.decodeIfPresent([TabGroupRecord].self, forKey: .groups) ?? []
     }
 
     public func normalized(maximumTabs: Int = 12) -> BrowserWorkspaceSnapshot {
@@ -68,7 +170,26 @@ public struct BrowserWorkspaceSnapshot: Codable, Equatable, Sendable {
                 return leftIndex < rightIndex
             }
         let selection = trimmed.contains(where: { $0.id == selectedTabID }) ? selectedTabID : trimmed.first?.id
-        return BrowserWorkspaceSnapshot(tabs: trimmed, selectedTabID: selection)
+
+        // A group only survives if one of the kept tabs still belongs to it,
+        // and a tab only keeps a group reference the snapshot can resolve —
+        // so trimming a session can never restore an empty or dangling group.
+        var seenGroupIDs: Set<UUID> = []
+        let referencedGroupIDs = Set(trimmed.compactMap(\.groupID))
+        let keptGroups = groups.filter {
+            seenGroupIDs.insert($0.id).inserted && referencedGroupIDs.contains($0.id)
+        }
+        let keptGroupIDs = Set(keptGroups.map(\.id))
+        let reconciledTabs = trimmed.map { tab -> BrowserTabRecord in
+            guard let groupID = tab.groupID, !keptGroupIDs.contains(groupID) else { return tab }
+            return tab.withGroupID(nil)
+        }
+
+        return BrowserWorkspaceSnapshot(
+            tabs: reconciledTabs,
+            selectedTabID: selection,
+            groups: keptGroups
+        )
     }
 }
 
@@ -206,6 +327,38 @@ public struct BookmarkCollection: Codable, Equatable, Sendable {
 
     public mutating func removeBookmark(id: UUID) {
         bookmarks.removeAll { $0.id == id }
+    }
+
+    /// Applies an edited name and web address to one saved bookmark, and
+    /// reports whether the edit was accepted.
+    ///
+    /// The record keeps its identity: same `id`, same folder, same creation
+    /// date, same position in the list. An address that `WebURLPolicy` rejects
+    /// changes nothing, so an editor can keep its sheet open and explain the
+    /// problem, and an unknown `id` is a no-op rather than a new record. An
+    /// empty name falls back to the address' host, matching how a page saved
+    /// from the toolbar is named. Editing a bookmark onto an address another
+    /// record already holds leaves exactly one bookmark at that address — the
+    /// edited one — which is the same rule `addBookmark` applies.
+    @discardableResult
+    public mutating func updateBookmark(id: UUID, title: String, url: String) -> Bool {
+        guard let index = bookmarks.firstIndex(where: { $0.id == id }),
+              let safeURL = WebURLPolicy.validatedURL(url) else { return false }
+
+        let normalizedURL = safeURL.absoluteString
+        let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let existing = bookmarks[index]
+        let updated = BookmarkRecord(
+            id: existing.id,
+            title: trimmedTitle.isEmpty ? (safeURL.host ?? normalizedURL) : trimmedTitle,
+            url: normalizedURL,
+            createdAt: existing.createdAt,
+            folderID: existing.folderID
+        )
+        bookmarks.removeAll { $0.id != updated.id && $0.url == normalizedURL }
+        guard let editedIndex = bookmarks.firstIndex(where: { $0.id == updated.id }) else { return false }
+        bookmarks[editedIndex] = updated
+        return true
     }
 
     public mutating func moveBookmark(id: UUID, to folderID: UUID?) {

@@ -52,6 +52,13 @@ struct ClearframeBrowserApp: App {
                     .keyboardShortcut("]", modifiers: [.command, .shift])
                 Button("Previous Tab") { workspace.selectNextTab(direction: -1) }
                     .keyboardShortcut("[", modifiers: [.command, .shift])
+                Divider()
+                // ⌃⌘P is the shortcut Chrome uses for the same action, so a
+                // switching user's fingers already know it.
+                Button("New Tab Group") { workspace.createGroupForSelectedTab() }
+                    .keyboardShortcut("p", modifiers: [.control, .command])
+                Button("Remove Tab from Group") { workspace.removeSelectedTabFromGroup() }
+                    .disabled(workspace.selectedTabGroup == nil)
             }
             CommandMenu("Page") {
                 Button("Focus Address Bar") { workspace.requestAddressFocus() }

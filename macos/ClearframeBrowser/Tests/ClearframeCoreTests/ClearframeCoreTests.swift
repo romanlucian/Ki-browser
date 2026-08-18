@@ -358,6 +358,133 @@ final class ClearframeCoreTests: XCTestCase {
         XCTAssertFalse(snapshot.tabs.contains(where: { $0.id == records[0].id }))
     }
 
+    func testTabGroupNormalizesItsTitleAndRejectsUnknownColors() {
+        let trimmed = TabGroupRecord(title: "  Research  ", colorID: "  BLUE ")
+        XCTAssertEqual(trimmed.title, "Research")
+        XCTAssertEqual(trimmed.colorID, "blue", "a color is matched case- and space-insensitively")
+
+        XCTAssertEqual(TabGroupRecord(colorID: "chartreuse").colorID, TabGroupRecord.defaultColorID)
+        XCTAssertEqual(TabGroupRecord(colorID: "").colorID, TabGroupRecord.defaultColorID)
+        XCTAssertEqual(TabGroupRecord.defaultColorID, TabGroupRecord.colorIDs[0])
+        XCTAssertEqual(TabGroupRecord.colorIDs.count, 8)
+        XCTAssertEqual(Set(TabGroupRecord.colorIDs).count, 8, "no color identifier is listed twice")
+        XCTAssertEqual(TabGroupRecord(title: "   ").title, "", "a blank name is stored as no name")
+    }
+
+    func testTabGroupDecodesUnknownColorsAndMissingFieldsAsAUsableGroup() throws {
+        let id = UUID()
+        let json = Data("""
+        {"id":"\(id.uuidString)","colorID":"neon"}
+        """.utf8)
+
+        let decoded = try JSONDecoder().decode(TabGroupRecord.self, from: json)
+
+        XCTAssertEqual(decoded.id, id)
+        XCTAssertEqual(decoded.colorID, TabGroupRecord.defaultColorID, "an unknown saved color falls back")
+        XCTAssertEqual(decoded.title, "")
+        XCTAssertFalse(decoded.isCollapsed)
+    }
+
+    func testWorkspaceSnapshotRoundTripsTabGroupsAndTabMembership() throws {
+        let group = TabGroupRecord(title: "Research", colorID: "cyan", isCollapsed: true)
+        let grouped = BrowserTabRecord(
+            id: UUID(),
+            url: "https://example.com/one",
+            title: "One",
+            lastActivatedAt: Date(),
+            groupID: group.id
+        )
+        let loose = BrowserTabRecord(
+            id: UUID(),
+            url: "https://example.com/two",
+            title: "Two",
+            lastActivatedAt: Date()
+        )
+        let snapshot = BrowserWorkspaceSnapshot(
+            tabs: [grouped, loose],
+            selectedTabID: grouped.id,
+            groups: [group]
+        )
+
+        let restored = try JSONDecoder().decode(
+            BrowserWorkspaceSnapshot.self,
+            from: JSONEncoder().encode(snapshot)
+        )
+
+        XCTAssertEqual(restored, snapshot)
+        XCTAssertEqual(restored.groups.first?.title, "Research")
+        XCTAssertEqual(restored.groups.first?.isCollapsed, true)
+        XCTAssertEqual(restored.tabs.first?.groupID, group.id)
+        XCTAssertNil(restored.tabs.last?.groupID)
+    }
+
+    func testLegacySavedSessionWithoutTabGroupsRestoresExactlyAsBefore() throws {
+        let id = UUID()
+        let legacy = Data("""
+        {"tabs":[{"id":"\(id.uuidString)","url":"https://example.com/legacy","title":"Legacy","lastActivatedAt":768000000}],
+         "selectedTabID":"\(id.uuidString)"}
+        """.utf8)
+
+        let restored = try JSONDecoder().decode(BrowserWorkspaceSnapshot.self, from: legacy)
+
+        XCTAssertEqual(restored.tabs.count, 1)
+        XCTAssertEqual(restored.tabs.first?.id, id)
+        XCTAssertEqual(restored.tabs.first?.title, "Legacy")
+        XCTAssertNil(restored.tabs.first?.groupID, "a tab saved before groups existed restores ungrouped")
+        XCTAssertTrue(restored.groups.isEmpty)
+        XCTAssertEqual(restored.selectedTabID, id)
+        XCTAssertEqual(restored.normalized().tabs, restored.tabs, "normalization leaves a legacy session alone")
+    }
+
+    func testWorkspaceNormalizationDropsEmptyGroupsAndDanglingMemberships() {
+        let now = Date()
+        let keptGroup = TabGroupRecord(title: "Kept", colorID: "blue")
+        let emptyGroup = TabGroupRecord(title: "Empty", colorID: "red")
+        let missingGroupID = UUID()
+        let tabs = [
+            BrowserTabRecord(id: UUID(), url: "https://example.com/a", title: "A", lastActivatedAt: now, groupID: keptGroup.id),
+            BrowserTabRecord(id: UUID(), url: "https://example.com/b", title: "B", lastActivatedAt: now, groupID: missingGroupID),
+            BrowserTabRecord(id: UUID(), url: "https://example.com/c", title: "C", lastActivatedAt: now)
+        ]
+
+        let normalized = BrowserWorkspaceSnapshot(
+            tabs: tabs,
+            selectedTabID: tabs[1].id,
+            groups: [keptGroup, emptyGroup, keptGroup]
+        ).normalized()
+
+        XCTAssertEqual(normalized.groups.map(\.id), [keptGroup.id], "an empty or repeated group is not restored")
+        XCTAssertEqual(normalized.tabs[0].groupID, keptGroup.id)
+        XCTAssertNil(normalized.tabs[1].groupID, "a tab pointing at a group that is gone restores ungrouped")
+        XCTAssertNil(normalized.tabs[2].groupID)
+        XCTAssertEqual(normalized.tabs.map(\.id), tabs.map(\.id), "tab order is untouched")
+    }
+
+    func testTrimmingASavedSessionAlsoDropsTheGroupsItTrimmedAway() {
+        let now = Date()
+        let oldGroup = TabGroupRecord(title: "Old", colorID: "yellow")
+        let recentGroup = TabGroupRecord(title: "Recent", colorID: "green")
+        let records = (0..<15).map { index in
+            BrowserTabRecord(
+                id: UUID(),
+                url: "https://example.com/\(index)",
+                title: "Page \(index)",
+                lastActivatedAt: now.addingTimeInterval(TimeInterval(index)),
+                groupID: index < 2 ? oldGroup.id : recentGroup.id
+            )
+        }
+
+        let normalized = BrowserWorkspaceSnapshot(
+            tabs: records,
+            selectedTabID: records[14].id,
+            groups: [oldGroup, recentGroup]
+        ).normalized(maximumTabs: 12)
+
+        XCTAssertEqual(normalized.tabs.count, 12)
+        XCTAssertEqual(normalized.groups.map(\.id), [recentGroup.id])
+        XCTAssertTrue(normalized.tabs.allSatisfy { $0.groupID == recentGroup.id })
+    }
+
     func testEverySearchEngineBuildsAnHTTPSResultsURL() {
         let query = "clearframe privacy & sources"
 
@@ -743,6 +870,90 @@ final class ClearframeCoreTests: XCTestCase {
         XCTAssertEqual(collection.bookmarks(in: design.id).first?.id, original.id)
         XCTAssertEqual(collection.bookmarks(in: design.id).first?.title, "Updated Reference")
         XCTAssertTrue(collection.bookmarks(in: nil).isEmpty)
+    }
+
+    func testEditingABookmarkRenamesAndRepointsItWhileKeepingItsFolderAndDate() throws {
+        var collection = BookmarkCollection()
+        let design = try XCTUnwrap(
+            collection.createFolder(title: "Web Design", emoji: "🎨", parentID: nil)
+        )
+        let created = Date(timeIntervalSince1970: 1_700_000_000)
+        let saved = BookmarkRecord(
+            title: "Palette",
+            url: "https://example.com/palette",
+            createdAt: created,
+            folderID: design.id
+        )
+        collection.addBookmark(saved)
+
+        XCTAssertTrue(
+            collection.updateBookmark(
+                id: saved.id,
+                title: "  Colour palettes  ",
+                url: " https://example.com/colour-palettes "
+            )
+        )
+
+        let edited = try XCTUnwrap(collection.bookmarks.first { $0.id == saved.id })
+        XCTAssertEqual(collection.bookmarks.count, 1)
+        XCTAssertEqual(edited.title, "Colour palettes")
+        XCTAssertEqual(edited.url, "https://example.com/colour-palettes")
+        XCTAssertEqual(edited.folderID, design.id, "an edit never re-files the bookmark")
+        XCTAssertEqual(edited.createdAt, created, "an edit never rewrites when the page was saved")
+        XCTAssertEqual(collection.bookmarks(in: design.id).map(\.id), [saved.id])
+    }
+
+    func testEditingABookmarkRefusesAnAddressClearframeWouldNotSave() throws {
+        var collection = BookmarkCollection()
+        let saved = BookmarkRecord(title: "Reference", url: "https://example.com/reference")
+        collection.addBookmark(saved)
+
+        for refused in [
+            "javascript:alert(1)",
+            "file:///Users/example/private.txt",
+            "https://user:password@example.com/private",
+            "example.com/no-scheme",
+            "   "
+        ] {
+            XCTAssertFalse(
+                collection.updateBookmark(id: saved.id, title: "Renamed", url: refused),
+                "\(refused) is not a saveable web address"
+            )
+        }
+
+        XCTAssertEqual(collection.bookmarks, [saved], "a refused edit changes nothing at all")
+
+        XCTAssertFalse(
+            collection.updateBookmark(id: UUID(), title: "Ghost", url: "https://example.com/ghost"),
+            "an unknown bookmark is not silently created"
+        )
+        XCTAssertEqual(collection.bookmarks, [saved])
+    }
+
+    func testEditingABookmarkOntoAnAddressAlreadySavedLeavesOneRecord() throws {
+        var collection = BookmarkCollection()
+        let first = BookmarkRecord(title: "Docs", url: "https://swift.org/documentation/")
+        let second = BookmarkRecord(title: "Duplicate", url: "https://example.com/duplicate")
+        collection.addBookmark(first)
+        collection.addBookmark(second)
+
+        XCTAssertTrue(
+            collection.updateBookmark(id: second.id, title: "Swift docs", url: "https://swift.org/documentation/")
+        )
+
+        XCTAssertEqual(collection.bookmarks.count, 1)
+        XCTAssertEqual(collection.bookmarks.first?.id, second.id, "the edited bookmark is the one that survives")
+        XCTAssertEqual(collection.bookmarks.first?.title, "Swift docs")
+    }
+
+    func testEditingABookmarkWithAnEmptyNameFallsBackToTheSiteHost() throws {
+        var collection = BookmarkCollection()
+        let saved = BookmarkRecord(title: "Old name", url: "https://example.com/page")
+        collection.addBookmark(saved)
+
+        XCTAssertTrue(collection.updateBookmark(id: saved.id, title: "   ", url: "https://swift.org/documentation/"))
+
+        XCTAssertEqual(collection.bookmarks.first?.title, "swift.org")
     }
 
     func testBookmarkFolderBarLabelAlwaysContainsEmojiAndVisibleName() {

@@ -115,6 +115,7 @@ struct BookmarkOrganizerView: View {
     let open: (String, Bool) -> Void
     @State private var currentFolderID: UUID?
     @State private var editorRequest: BookmarkFolderEditorRequest?
+    @State private var bookmarkEditorRequest: BookmarkEditorRequest?
     @State private var pendingDeletion: BookmarkFolderRecord?
     @State private var dropConfirmation: String?
 
@@ -180,6 +181,15 @@ struct BookmarkOrganizerView: View {
                             bookmarkCount: store.bookmarks(in: folder.id).count,
                             subfolderCount: store.bookmarkFolders(in: folder.id).count,
                             open: { currentFolderID = folder.id },
+                            openAll: { openAll(in: folder) },
+                            newSubfolder: {
+                                editorRequest = BookmarkFolderEditorRequest(
+                                    folderID: nil,
+                                    parentID: folder.id,
+                                    title: "",
+                                    emoji: "📁"
+                                )
+                            },
                             rename: {
                                 editorRequest = BookmarkFolderEditorRequest(
                                     folderID: folder.id,
@@ -199,6 +209,7 @@ struct BookmarkOrganizerView: View {
                             destinations: destinations,
                             open: { open(bookmark.url, false) },
                             openNewTab: { open(bookmark.url, true) },
+                            edit: { bookmarkEditorRequest = BookmarkEditorRequest(bookmark: bookmark) },
                             move: { store.moveBookmark(bookmark, to: $0) },
                             remove: { store.removeBookmark(bookmark) }
                         )
@@ -214,6 +225,11 @@ struct BookmarkOrganizerView: View {
                         )
                         .frame(height: 255)
                     }
+                }
+            }
+            .sheet(item: $bookmarkEditorRequest) { request in
+                BookmarkEditor(request: request) { title, url in
+                    store.updateBookmark(id: request.bookmarkID, title: title, url: url)
                 }
             }
 
@@ -243,7 +259,7 @@ struct BookmarkOrganizerView: View {
             ),
             presenting: pendingDeletion
         ) { folder in
-            Button("Delete Folder", role: .destructive) {
+            Button("Delete folder", role: .destructive) {
                 store.deleteBookmarkFolderPreservingContents(folder)
                 pendingDeletion = nil
             }
@@ -258,6 +274,14 @@ struct BookmarkOrganizerView: View {
             pendingDeletion = folder
         } else {
             store.deleteBookmarkFolderPreservingContents(folder)
+        }
+    }
+
+    /// Opens the folder's own saved pages, each in its own tab — the count in
+    /// the menu entry is exactly what this loop opens.
+    private func openAll(in folder: BookmarkFolderRecord) {
+        for bookmark in store.bookmarks(in: folder.id) {
+            open(bookmark.url, true)
         }
     }
 
@@ -286,10 +310,29 @@ struct BookmarkFolderRow: View {
     let bookmarkCount: Int
     let subfolderCount: Int
     let open: () -> Void
+    let openAll: () -> Void
+    let newSubfolder: () -> Void
     let rename: () -> Void
     let fileDroppedURL: (URL) -> Bool
     let delete: () -> Void
     @State private var isDropTargeted = false
+
+    /// The organizer has no page of its own in front of the reader, so the
+    /// shared folder menu leaves its current-page entries out here, and this
+    /// view *is* the organizer, so it offers no "All bookmarks…" jump either.
+    private var menuItems: some View {
+        BookmarkFolderMenuItems(
+            folder: folder,
+            bookmarkCount: bookmarkCount,
+            currentPage: nil,
+            openAll: openAll,
+            addCurrentPage: {},
+            newSubfolder: newSubfolder,
+            rename: rename,
+            delete: delete,
+            organize: nil
+        )
+    }
 
     var body: some View {
         HStack(spacing: 9) {
@@ -311,14 +354,14 @@ struct BookmarkFolderRow: View {
             .accessibilityLabel("\(folder.title) folder, \(bookmarkCount) bookmarks, \(subfolderCount) subfolders")
 
             Menu {
-                Button("Rename Folder", action: rename)
-                Button("Delete Folder", role: .destructive, action: delete)
+                menuItems
             } label: {
                 Image(systemName: "ellipsis.circle").frame(width: 24, height: 24)
             }
             .menuStyle(.borderlessButton)
             .fixedSize()
             .help("Folder actions")
+            .accessibilityLabel("\(folder.title) folder actions")
         }
         .padding(9)
         .background(
@@ -329,6 +372,7 @@ struct BookmarkFolderRow: View {
             RoundedRectangle(cornerRadius: 9)
                 .stroke(isDropTargeted ? ClearframeTheme.accent : Color.clear, lineWidth: 1.5)
         }
+        .contextMenu { menuItems }
         .dropDestination(for: URL.self) { urls, _ in
             guard let url = urls.first else { return false }
             return fileDroppedURL(url)
@@ -344,8 +388,23 @@ struct BookmarkOrganizerRow: View {
     let destinations: [BookmarkFolderDestination]
     let open: () -> Void
     let openNewTab: () -> Void
+    let edit: () -> Void
     let move: (UUID?) -> Void
     let remove: () -> Void
+
+    /// The same six actions the bookmarks bar offers, so a saved page behaves
+    /// identically wherever the reader meets it.
+    private var menuItems: some View {
+        BookmarkLinkMenuItems(
+            bookmark: bookmark,
+            destinations: destinations,
+            open: open,
+            openInNewTab: openNewTab,
+            edit: edit,
+            move: move,
+            delete: remove
+        )
+    }
 
     @ViewBuilder
     var body: some View {
@@ -372,32 +431,27 @@ struct BookmarkOrganizerRow: View {
             .buttonStyle(.plain)
 
             Menu {
-                ForEach(destinations) { destination in
-                    Button {
-                        move(destination.folderID)
-                    } label: {
-                        if destination.folderID == bookmark.folderID {
-                            Label(destination.label, systemImage: "checkmark")
-                        } else {
-                            Text(destination.label)
-                        }
-                    }
-                }
+                menuItems
             } label: {
-                Image(systemName: "folder").frame(width: 22, height: 22)
+                Image(systemName: "ellipsis.circle").frame(width: 22, height: 22)
             }
             .menuStyle(.borderlessButton)
             .fixedSize()
-            .help("Move bookmark")
+            .help("Bookmark actions")
+            .accessibilityLabel("\(bookmark.title) actions")
 
+            Button(action: edit) { Image(systemName: "pencil").frame(width: 22, height: 22) }
+                .buttonStyle(.plain).help("Edit name and address")
+                .accessibilityLabel("Edit \(bookmark.title)")
             Button(action: openNewTab) { Image(systemName: "plus.square.on.square").frame(width: 22, height: 22) }
                 .buttonStyle(.plain).help("Open in new tab")
             Button(action: remove) { Image(systemName: "trash").frame(width: 22, height: 22) }
-                .buttonStyle(.plain).foregroundStyle(.secondary).help("Remove bookmark")
+                .buttonStyle(.plain).foregroundStyle(.secondary).help("Delete bookmark")
         }
         .padding(8)
         .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 8))
-        .accessibilityHint("Drag this bookmark onto a visible folder to move it. The Move menu is the keyboard alternative.")
+        .contextMenu { menuItems }
+        .accessibilityHint("Drag this bookmark onto a visible folder to move it. Secondary-click, or use the actions menu, to open, edit, copy, move, or delete it.")
     }
 }
 
