@@ -20,6 +20,9 @@ final class BrowserTab: ObservableObject, Identifiable {
     @Published private(set) var displayTitle: String
     @Published private(set) var lastActivatedAt: Date
     @Published var startSurface: StartSurface = .aiHome
+    /// The tab group this tab belongs to. `BrowserWorkspace` owns every write
+    /// so grouped tabs stay contiguous in the strip.
+    @Published fileprivate(set) var groupID: UUID?
 
     private var pendingRestoreURL: URL?
     private var cancellables: Set<AnyCancellable> = []
@@ -33,6 +36,7 @@ final class BrowserTab: ObservableObject, Identifiable {
         downloadCenter: DownloadCenter,
         searchSettings: SearchSettingsStore,
         isPrivate: Bool = false,
+        groupID: UUID? = nil,
         contentBlocking: ContentRuleListProvider? = nil,
         favicons: FaviconStore? = nil
     ) {
@@ -40,6 +44,7 @@ final class BrowserTab: ObservableObject, Identifiable {
         self.displayTitle = title
         self.lastActivatedAt = lastActivatedAt
         self.isPrivate = isPrivate
+        self.groupID = groupID
         assistant = PageAssistantModel()
         if loadImmediately {
             session = BrowserSession(
@@ -85,7 +90,8 @@ final class BrowserTab: ObservableObject, Identifiable {
             id: id,
             url: liveURL ?? pendingRestoreURL?.absoluteString,
             title: displayTitle,
-            lastActivatedAt: lastActivatedAt
+            lastActivatedAt: lastActivatedAt,
+            groupID: groupID
         )
     }
 
@@ -120,7 +126,14 @@ final class BrowserTab: ObservableObject, Identifiable {
 @MainActor
 final class BrowserWorkspace: ObservableObject {
     @Published private(set) var tabs: [BrowserTab] = []
+    /// Tab groups in creation order. A group exists only while at least one
+    /// tab belongs to it; closing or ungrouping the last member removes it.
+    @Published private(set) var tabGroups: [TabGroupRecord] = []
     @Published var selectedTabID: UUID?
+    /// The group whose editor the strip should present. Set when a group is
+    /// created so it can be named straight away, from the Tabs menu as well as
+    /// from the strip; the strip clears it when the editor closes.
+    @Published var pendingGroupEditorID: UUID?
     @Published var focusAddressRequest = 0
     @Published private(set) var bookmarkLibraryRequest = 0
     @Published private(set) var bookmarkFolderRequestID = UUID()
@@ -172,6 +185,7 @@ final class BrowserWorkspace: ObservableObject {
 
         if let restored = resolvedDataStore.loadWorkspace(), !restored.tabs.isEmpty {
             let selectedID = restored.selectedTabID ?? restored.tabs.first?.id
+            tabGroups = restored.groups
             tabs = restored.tabs.map { record in
                 BrowserTab(
                     id: record.id,
@@ -181,11 +195,16 @@ final class BrowserWorkspace: ObservableObject {
                     lastActivatedAt: record.lastActivatedAt,
                     downloadCenter: resolvedDownloads,
                     searchSettings: resolvedSearchSettings,
+                    groupID: record.groupID,
                     contentBlocking: resolvedContentBlocking,
                     favicons: resolvedFavicons
                 )
             }
             selectedTabID = tabs.contains(where: { $0.id == selectedID }) ? selectedID : tabs.first?.id
+            // The restored selection has to be a tab the strip actually shows.
+            if let group = selectedTab?.groupID {
+                setCollapsed(false, forGroup: group)
+            }
         } else {
             let tab = BrowserTab(
                 downloadCenter: resolvedDownloads,
@@ -212,22 +231,35 @@ final class BrowserWorkspace: ObservableObject {
     var canCloseTab: Bool { !tabs.isEmpty }
 
     func addTab(url: URL? = nil, select: Bool = true, isPrivate: Bool = false) {
-        let tab = BrowserTab(
-            initialURL: url,
-            downloadCenter: downloads,
-            searchSettings: searchSettings,
-            isPrivate: isPrivate,
-            contentBlocking: contentBlocking,
-            favicons: favicons
-        )
+        let tab = makeTab(url: url, isPrivate: isPrivate)
         tabs.append(tab)
         configure(tab)
         if select { selectTab(tab.id) }
         schedulePersistence()
     }
 
+    /// "New tab to the right". The new tab inherits the anchor's group, so
+    /// opening a tab next to a grouped one lands inside that group instead of
+    /// splitting its run in two.
+    func addTab(after anchorID: UUID) {
+        guard let anchorIndex = tabs.firstIndex(where: { $0.id == anchorID }) else {
+            addTab()
+            return
+        }
+        let anchor = tabs[anchorIndex]
+        let tab = makeTab(url: nil, isPrivate: anchor.isPrivate)
+        tab.groupID = anchor.groupID
+        tabs.insert(tab, at: anchorIndex + 1)
+        configure(tab)
+        selectTab(tab.id)
+        schedulePersistence()
+    }
+
     func selectTab(_ id: UUID) {
-        guard tabs.contains(where: { $0.id == id }) else { return }
+        guard let tab = tabs.first(where: { $0.id == id }) else { return }
+        // A tab the strip is hiding cannot be the active one: choosing one
+        // from ⌘1-9, a popup, or a menu opens its group back up.
+        if let groupID = tab.groupID { setCollapsed(false, forGroup: groupID) }
         selectedTabID = id
         selectedTab?.activate()
         schedulePersistence()
@@ -241,12 +273,7 @@ final class BrowserWorkspace: ObservableObject {
         removed.teardown()
 
         if tabs.isEmpty {
-            let replacement = BrowserTab(
-                downloadCenter: downloads,
-                searchSettings: searchSettings,
-                contentBlocking: contentBlocking,
-                favicons: favicons
-            )
+            let replacement = makeTab(url: nil, isPrivate: false)
             tabs = [replacement]
             configure(replacement)
             selectedTabID = replacement.id
@@ -255,6 +282,11 @@ final class BrowserWorkspace: ObservableObject {
             selectedTabID = tabs[nextIndex].id
             tabs[nextIndex].activate()
         }
+        pruneEmptyGroups()
+        // Closing the last visible tab of an expanded run can leave the
+        // selection inside a collapsed group; open it rather than show a
+        // strip with no active tab.
+        if let groupID = selectedTab?.groupID { setCollapsed(false, forGroup: groupID) }
         schedulePersistence()
     }
 
@@ -263,12 +295,248 @@ final class BrowserWorkspace: ObservableObject {
         closeTab(selectedTabID)
     }
 
+    /// Closes everything except `id`, which is left selected. The always-one-tab
+    /// invariant in `closeTab` still holds because `id` is never closed.
+    func closeOtherTabs(keeping id: UUID) {
+        guard tabs.contains(where: { $0.id == id }) else { return }
+        for other in tabs.map(\.id) where other != id {
+            closeTab(other)
+        }
+        selectTab(id)
+    }
+
     func selectNextTab(direction: Int = 1) {
         guard tabs.count > 1,
               let selectedTabID,
               let index = tabs.firstIndex(where: { $0.id == selectedTabID }) else { return }
         let next = (index + direction + tabs.count) % tabs.count
         selectTab(tabs[next].id)
+    }
+
+    // MARK: - Tab groups
+
+    /// The tabs the strip draws: everything except the members of a collapsed
+    /// group, which stay open and loaded but are folded behind their chip.
+    var visibleTabs: [BrowserTab] {
+        tabs.filter { tab in
+            guard let groupID = tab.groupID else { return true }
+            return group(groupID)?.isCollapsed != true
+        }
+    }
+
+    func group(_ id: UUID?) -> TabGroupRecord? {
+        guard let id else { return nil }
+        return tabGroups.first { $0.id == id }
+    }
+
+    func tabs(inGroup id: UUID) -> [BrowserTab] {
+        tabs.filter { $0.groupID == id }
+    }
+
+    var selectedTabGroup: TabGroupRecord? {
+        group(selectedTab?.groupID)
+    }
+
+    /// Creates a group around existing tabs and pulls them together so the
+    /// group occupies one unbroken run of the strip.
+    @discardableResult
+    func createGroup(withTabs tabIDs: [UUID], title: String = "", colorID: String? = nil) -> TabGroupRecord? {
+        let members = tabIDs.compactMap { id in tabs.first { $0.id == id } }
+        guard !members.isEmpty else { return nil }
+        let record = TabGroupRecord(
+            title: title,
+            colorID: colorID ?? nextGroupColorID()
+        )
+        let previousGroupIDs = Set(members.compactMap(\.groupID))
+        tabGroups.append(record)
+        for member in members { member.groupID = record.id }
+        if let anchor = members.first {
+            var cursor = tabs.firstIndex { $0.id == anchor.id } ?? 0
+            for member in members.dropFirst() {
+                placeTab(member, afterIndex: cursor)
+                cursor = tabs.firstIndex { $0.id == member.id } ?? cursor
+            }
+        }
+        // Taking tabs out of the middle of another group would otherwise leave
+        // that group in two pieces.
+        for groupID in previousGroupIDs { regatherGroupRun(groupID) }
+        pruneEmptyGroups()
+        pendingGroupEditorID = record.id
+        schedulePersistence()
+        return record
+    }
+
+    /// Moves a tab into an existing group, parking it at the end of that
+    /// group's run. Adding to a collapsed group opens the group: a tab the
+    /// user just filed should not disappear.
+    func addTab(_ tabID: UUID, toGroup groupID: UUID) {
+        guard let tab = tabs.first(where: { $0.id == tabID }),
+              group(groupID) != nil,
+              tab.groupID != groupID else { return }
+        let lastMemberIndex = tabs.lastIndex { $0.groupID == groupID }
+        let previousGroupID = tab.groupID
+        tab.groupID = groupID
+        if let lastMemberIndex { placeTab(tab, afterIndex: lastMemberIndex) }
+        if let previousGroupID { regatherGroupRun(previousGroupID) }
+        setCollapsed(false, forGroup: groupID)
+        pruneEmptyGroups()
+        schedulePersistence()
+    }
+
+    /// Opens a new tab already inside `groupID`, at the end of its run.
+    func addTab(toGroup groupID: UUID) {
+        guard group(groupID) != nil else { return }
+        let lastMemberIndex = tabs.lastIndex { $0.groupID == groupID }
+        let tab = makeTab(url: nil, isPrivate: lastMemberIndex.map { tabs[$0].isPrivate } ?? false)
+        tab.groupID = groupID
+        tabs.insert(tab, at: lastMemberIndex.map { $0 + 1 } ?? tabs.count)
+        configure(tab)
+        setCollapsed(false, forGroup: groupID)
+        selectTab(tab.id)
+        schedulePersistence()
+    }
+
+    /// Takes a tab out of its group and parks it just after the group's run,
+    /// so it visibly steps outside the enclosure instead of jumping away.
+    func removeTabFromGroup(_ tabID: UUID) {
+        guard let tab = tabs.first(where: { $0.id == tabID }), let groupID = tab.groupID else { return }
+        let lastMemberIndex = tabs.lastIndex { $0.groupID == groupID }
+        tab.groupID = nil
+        if let lastMemberIndex { placeTab(tab, afterIndex: lastMemberIndex) }
+        pruneEmptyGroups()
+        schedulePersistence()
+    }
+
+    func renameGroup(_ groupID: UUID, title: String) {
+        guard let index = tabGroups.firstIndex(where: { $0.id == groupID }) else { return }
+        let normalized = TabGroupRecord.normalizedTitle(title)
+        guard tabGroups[index].title != normalized else { return }
+        tabGroups[index].title = normalized
+        schedulePersistence()
+    }
+
+    func recolorGroup(_ groupID: UUID, colorID: String) {
+        guard let index = tabGroups.firstIndex(where: { $0.id == groupID }) else { return }
+        let normalized = TabGroupRecord.normalizedColorID(colorID)
+        guard tabGroups[index].colorID != normalized else { return }
+        tabGroups[index].colorID = normalized
+        schedulePersistence()
+    }
+
+    func toggleCollapse(groupID: UUID) {
+        guard let group = group(groupID) else { return }
+        setCollapsed(!group.isCollapsed, forGroup: groupID)
+    }
+
+    /// Keeps the tabs, drops the group.
+    func ungroup(groupID: UUID) {
+        guard tabGroups.contains(where: { $0.id == groupID }) else { return }
+        for tab in tabs where tab.groupID == groupID { tab.groupID = nil }
+        tabGroups.removeAll { $0.id == groupID }
+        pruneEmptyGroups()
+        schedulePersistence()
+    }
+
+    /// Closes the group's tabs. If they were the last open tabs, `closeTab`
+    /// leaves the usual single empty tab behind.
+    func closeGroup(groupID: UUID) {
+        let memberIDs = tabs.filter { $0.groupID == groupID }.map(\.id)
+        tabGroups.removeAll { $0.id == groupID }
+        for id in memberIDs { closeTab(id) }
+        pruneEmptyGroups()
+        schedulePersistence()
+    }
+
+    /// The Tabs menu's "New Tab Group" (⌃⌘P).
+    @discardableResult
+    func createGroupForSelectedTab() -> TabGroupRecord? {
+        guard let selectedTabID else { return nil }
+        return createGroup(withTabs: [selectedTabID])
+    }
+
+    func removeSelectedTabFromGroup() {
+        guard let selectedTabID else { return }
+        removeTabFromGroup(selectedTabID)
+    }
+
+    /// Grey is the palette's fallback color, so it is handed out last: a group
+    /// the user did not color should still look deliberate.
+    private static let automaticColorIDs =
+        TabGroupRecord.colorIDs.filter { $0 != TabGroupRecord.defaultColorID } + [TabGroupRecord.defaultColorID]
+
+    private func nextGroupColorID() -> String {
+        let used = Set(tabGroups.map(\.colorID))
+        return Self.automaticColorIDs.first { !used.contains($0) }
+            ?? Self.automaticColorIDs[tabGroups.count % Self.automaticColorIDs.count]
+    }
+
+    private func setCollapsed(_ collapsed: Bool, forGroup groupID: UUID) {
+        guard let index = tabGroups.firstIndex(where: { $0.id == groupID }),
+              tabGroups[index].isCollapsed != collapsed else { return }
+        if collapsed, selectedTab?.groupID == groupID {
+            // Folding the group away must not hide the active tab. Hand focus
+            // to the nearest tab outside it, and when there is none, leave the
+            // group open rather than leave the strip without an active tab.
+            guard let replacement = nearestTab(outsideGroup: groupID) else { return }
+            selectedTabID = replacement.id
+            replacement.activate()
+        }
+        tabGroups[index].isCollapsed = collapsed
+        schedulePersistence()
+    }
+
+    private func nearestTab(outsideGroup groupID: UUID) -> BrowserTab? {
+        guard let lastMemberIndex = tabs.lastIndex(where: { $0.groupID == groupID }) else { return nil }
+        if let after = tabs[(lastMemberIndex + 1)...].first(where: { $0.groupID != groupID }) { return after }
+        return tabs[..<lastMemberIndex].last { $0.groupID != groupID }
+    }
+
+    private func pruneEmptyGroups() {
+        let liveGroupIDs = Set(tabs.compactMap(\.groupID))
+        if tabGroups.contains(where: { !liveGroupIDs.contains($0.id) }) {
+            tabGroups.removeAll { !liveGroupIDs.contains($0.id) }
+        }
+        // A group that no longer exists must not leave its editor waiting.
+        if let pendingGroupEditorID, !tabGroups.contains(where: { $0.id == pendingGroupEditorID }) {
+            self.pendingGroupEditorID = nil
+        }
+    }
+
+    /// Pulls a group whose tabs ended up separated back into one run, anchored
+    /// where the group already starts.
+    private func regatherGroupRun(_ groupID: UUID) {
+        let memberIndices = tabs.indices.filter { tabs[$0].groupID == groupID }
+        guard let first = memberIndices.first,
+              let last = memberIndices.last,
+              last - first != memberIndices.count - 1 else { return }
+        let members = memberIndices.map { tabs[$0] }
+        var cursor = first
+        for member in members.dropFirst() {
+            placeTab(member, afterIndex: cursor)
+            cursor = tabs.firstIndex { $0.id == member.id } ?? cursor
+        }
+    }
+
+    /// Moves `tab` so it sits immediately after the tab currently at `index`.
+    private func placeTab(_ tab: BrowserTab, afterIndex index: Int) {
+        guard let current = tabs.firstIndex(where: { $0.id == tab.id }), current != index else { return }
+        var reordered = tabs
+        reordered.remove(at: current)
+        // Removing a tab that sat before the anchor shifts the anchor down one.
+        let target = current < index ? index : index + 1
+        reordered.insert(tab, at: min(max(target, 0), reordered.count))
+        tabs = reordered
+    }
+
+    private func makeTab(url: URL?, isPrivate: Bool) -> BrowserTab {
+        BrowserTab(
+            initialURL: url,
+            downloadCenter: downloads,
+            searchSettings: searchSettings,
+            isPrivate: isPrivate,
+            contentBlocking: contentBlocking,
+            favicons: favicons
+        )
     }
 
     func open(_ urlString: String, inNewTab: Bool = false) {
@@ -356,9 +624,13 @@ final class BrowserWorkspace: ObservableObject {
         let persistentSelection = persistentTabs.contains(where: { $0.id == selectedTabID })
             ? selectedTabID
             : persistentTabs.first?.id
+        // A group whose only members are private tabs is never written out,
+        // for the same reason those tabs are not.
+        let persistentGroupIDs = Set(persistentTabs.compactMap(\.groupID))
         let snapshot = BrowserWorkspaceSnapshot(
             tabs: persistentTabs.map(\.persistenceRecord),
-            selectedTabID: persistentSelection
+            selectedTabID: persistentSelection,
+            groups: tabGroups.filter { persistentGroupIDs.contains($0.id) }
         )
         dataStore.saveWorkspace(snapshot)
     }
@@ -369,6 +641,7 @@ final class BrowserWorkspace: ObservableObject {
         tabs.forEach { $0.teardown() }
         tabSubscriptions.removeAll()
         tabs = []
+        tabGroups = []
         selectedTabID = nil
         dataStore.clearAllBrowserRecords()
         downloads.clearAllRecords()
@@ -388,12 +661,7 @@ final class BrowserWorkspace: ObservableObject {
 
         await contentBlocking.clearSiteExceptions()
 
-        let replacement = BrowserTab(
-            downloadCenter: downloads,
-            searchSettings: searchSettings,
-            contentBlocking: contentBlocking,
-            favicons: favicons
-        )
+        let replacement = makeTab(url: nil, isPrivate: false)
         tabs = [replacement]
         selectedTabID = replacement.id
         configure(replacement)

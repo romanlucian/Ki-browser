@@ -536,6 +536,455 @@ final class BrowserBehaviorTests: XCTestCase {
         XCTAssertEqual(store.bookmarks(in: work.id).count, 1, "the shallow listing is unchanged")
     }
 
+    func testDataStoreSavesAnEditedBookmarkAndRefusesAnUnsafeAddress() throws {
+        let suiteName = "clearframe.bookmarks.edit.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let store = BrowserDataStore(defaults: defaults)
+        let design = try XCTUnwrap(store.createBookmarkFolder(title: "Web Design", emoji: "🎨", parentID: nil))
+        let saved = try XCTUnwrap(
+            store.addBookmark(title: "Palette", url: "https://example.com/palette", folderID: design.id)
+        )
+
+        XCTAssertTrue(
+            store.updateBookmark(id: saved.id, title: "Colour palettes", url: "https://example.com/colour")
+        )
+        let edited = try XCTUnwrap(store.bookmarks.first { $0.id == saved.id })
+        XCTAssertEqual(edited.title, "Colour palettes")
+        XCTAssertEqual(edited.url, "https://example.com/colour")
+        XCTAssertEqual(edited.folderID, design.id)
+        XCTAssertEqual(edited.createdAt, saved.createdAt)
+
+        XCTAssertFalse(
+            store.updateBookmark(id: saved.id, title: "Broken", url: "javascript:alert(1)"),
+            "the store refuses an address the browser would never open"
+        )
+        XCTAssertEqual(store.bookmarks.first { $0.id == saved.id }?.url, "https://example.com/colour")
+
+        let reloaded = BrowserDataStore(defaults: defaults)
+        XCTAssertEqual(reloaded.bookmarks.first { $0.id == saved.id }?.title, "Colour palettes",
+                       "the edit is written to this Mac user profile, not just held in memory")
+    }
+
+    func testBookmarksBarItemsHugTheirOwnNameAndCapLongOnes() {
+        let short = BookmarkBarMetrics.naturalWidth(label: "🤖 AI")
+        let longer = BookmarkBarMetrics.naturalWidth(label: "🎨 Design")
+        let padding = BookmarkBarMetrics.itemPadding * 2
+
+        XCTAssertEqual(short, BookmarkBarMetrics.labelWidth("🤖 AI") + padding)
+        XCTAssertLessThan(short, longer, "a shorter name makes a narrower item — no fixed chip width")
+        XCTAssertLessThan(longer, BookmarkBarMetrics.maximumItemWidth)
+
+        let veryLong = "📷 Photography references and colour grading experiments"
+        XCTAssertEqual(
+            BookmarkBarMetrics.naturalWidth(label: veryLong),
+            BookmarkBarMetrics.maximumItemWidth,
+            "a long name stops at the cap instead of taking the row"
+        )
+        XCTAssertNil(
+            BookmarkBarMetrics.cappedWidth(label: "🤖 AI"),
+            "a name that fits is left to hug its content"
+        )
+        XCTAssertEqual(BookmarkBarMetrics.cappedWidth(label: veryLong), BookmarkBarMetrics.maximumItemWidth)
+
+        // An icon is part of what has to fit inside the same cap.
+        XCTAssertGreaterThan(
+            BookmarkBarMetrics.naturalWidth(label: "Clearframe", iconWidth: 13),
+            BookmarkBarMetrics.naturalWidth(label: "Clearframe")
+        )
+        XCTAssertEqual(BookmarkBarMetrics.itemGap, 2, "adjacent bar items sit 2pt apart")
+    }
+
+    func testBookmarkMenuCopyNamesWhatTheActionWillDo() {
+        XCTAssertEqual(BookmarkMenuCopy.openAll(count: 4), "Open all (4)")
+        XCTAssertEqual(BookmarkMenuCopy.openAll(count: 0), "Open all (0)")
+        XCTAssertEqual(BookmarkMenuCopy.addCurrentPage(isSavedElsewhere: false), "Add current page")
+        XCTAssertEqual(BookmarkMenuCopy.addCurrentPage(isSavedElsewhere: true), "Move current page here")
+    }
+
+    func testBookmarkEditorExplainsAnAddressItCannotSave() {
+        XCTAssertNil(BookmarkAddressValidation.problem(with: "  https://example.com/page  "))
+        XCTAssertNil(BookmarkAddressValidation.problem(with: "http://127.0.0.1:8765/test"))
+        XCTAssertEqual(
+            BookmarkAddressValidation.problem(with: "javascript:alert(1)"),
+            BookmarkAddressValidation.guidance
+        )
+        XCTAssertEqual(
+            BookmarkAddressValidation.problem(with: "https://user:password@example.com/private"),
+            BookmarkAddressValidation.guidance
+        )
+        XCTAssertNotNil(BookmarkAddressValidation.problem(with: "   "))
+    }
+
+    func testCurrentPageStateTellsAFolderMenuWhereTheOpenPageIsFiled() {
+        let folderID = UUID()
+        let saved = BookmarkRecord(title: "Saved", url: "https://example.com/saved", folderID: folderID)
+
+        let filed = CurrentPageBookmarkState(canSave: true, currentBookmark: saved)
+        XCTAssertTrue(filed.isSaved)
+        XCTAssertEqual(filed.savedFolderID, folderID)
+
+        let unsaved = CurrentPageBookmarkState(canSave: true, currentBookmark: nil)
+        XCTAssertFalse(unsaved.isSaved)
+        XCTAssertNil(unsaved.savedFolderID)
+
+        let startPage = CurrentPageBookmarkState(canSave: false, currentBookmark: nil)
+        XCTAssertFalse(startPage.canSave)
+    }
+
+    // MARK: - Tab strip width distribution
+
+    func testTabStripSharesTheWidthAndCapsEveryTabAtTheMaximum() {
+        let roomy = TabStripMetrics.widths(availableWidth: 1200, tabCount: 5, selectedIndex: 2)
+        XCTAssertEqual(roomy, Array(repeating: TabStripMetrics.maximumTabWidth, count: 5))
+
+        let resolution = TabStripMetrics.resolve(availableWidth: 1200, tabCount: 5, hasSelectedTab: true)
+        XCTAssertFalse(resolution.scrolls)
+        XCTAssertLessThanOrEqual(resolution.contentWidth, 1200, "tabs stop growing instead of filling the strip")
+
+        XCTAssertTrue(TabStripMetrics.widths(availableWidth: 800, tabCount: 0, selectedIndex: nil).isEmpty)
+    }
+
+    func testTabStripCompressesTabsAndKeepsTheSelectedOneWider() {
+        // Wide enough that the active tab is at its maximum and the rest share
+        // what is left.
+        let widths = TabStripMetrics.widths(availableWidth: 800, tabCount: 5, selectedIndex: 0)
+        XCTAssertEqual(widths[0], TabStripMetrics.maximumTabWidth)
+        XCTAssertEqual(Set(widths.dropFirst()).count, 1, "every unselected tab gets the same width")
+        XCTAssertEqual(widths.reduce(0, +) + TabStripMetrics.spacing * 4, 800, accuracy: 4)
+
+        // Tight enough that nothing is at the maximum: the selected tab is
+        // still the wider one, by the priority factor.
+        let tight = TabStripMetrics.widths(availableWidth: 600, tabCount: 6, selectedIndex: 3)
+        let selected = tight[3]
+        let unselected = tight[0]
+        XCTAssertGreaterThan(selected, unselected)
+        XCTAssertEqual(selected / unselected, TabStripMetrics.selectedTabPriority, accuracy: 0.05)
+        XCTAssertEqual(Set(tight.enumerated().filter { $0.offset != 3 }.map(\.element)).count, 1)
+        XCTAssertLessThanOrEqual(
+            TabStripMetrics.resolve(availableWidth: 600, tabCount: 6, hasSelectedTab: true).contentWidth,
+            600
+        )
+    }
+
+    func testTabStripStopsCompressingAtTheComfortableMinimumAndScrolls() {
+        let resolution = TabStripMetrics.resolve(availableWidth: 400, tabCount: 12, hasSelectedTab: true)
+
+        XCTAssertTrue(resolution.scrolls, "past the comfortable minimum the strip scrolls instead of shrinking")
+        XCTAssertEqual(resolution.unselectedTabWidth, TabStripMetrics.comfortableMinimumTabWidth)
+        XCTAssertGreaterThan(resolution.selectedTabWidth, resolution.unselectedTabWidth)
+        XCTAssertGreaterThanOrEqual(
+            resolution.selectedTabWidth,
+            TabStripMetrics.comfortableMinimumTabWidth,
+            "the active tab never drops below icon plus close"
+        )
+        XCTAssertGreaterThan(resolution.contentWidth, 400, "the content overflows, which is what scrolls")
+
+        // One tab either side of the threshold: 8 tabs still fit, 9 do not.
+        XCTAssertFalse(TabStripMetrics.resolve(availableWidth: 520, tabCount: 8, hasSelectedTab: true).scrolls)
+        XCTAssertTrue(TabStripMetrics.resolve(availableWidth: 520, tabCount: 12, hasSelectedTab: true).scrolls)
+    }
+
+    func testTabStripReservesRoomForGroupChipsBeforeSharingWidth() {
+        let plain = TabStripMetrics.resolve(availableWidth: 500, tabCount: 4, hasSelectedTab: true)
+        let withGroupChip = TabStripMetrics.resolve(
+            availableWidth: 500,
+            tabCount: 4,
+            hasSelectedTab: true,
+            reservedWidth: 100
+        )
+
+        XCTAssertLessThan(withGroupChip.unselectedTabWidth, plain.unselectedTabWidth)
+        XCTAssertLessThanOrEqual(withGroupChip.contentWidth, 500, "a group chip never pushes the strip into scrolling early")
+    }
+
+    func testTabChipShowsMoreDetailAsItGetsWider() {
+        XCTAssertEqual(TabChipDensity.forWidth(200), .full)
+        XCTAssertEqual(TabChipDensity.forWidth(140), .full)
+        XCTAssertEqual(TabChipDensity.forWidth(139), .compact)
+        XCTAssertEqual(TabChipDensity.forWidth(100), .compact)
+        XCTAssertEqual(TabChipDensity.forWidth(99), .tight)
+        XCTAssertEqual(TabChipDensity.forWidth(70), .tight)
+        XCTAssertEqual(TabChipDensity.forWidth(69), .iconOnly)
+        XCTAssertEqual(TabChipDensity.forWidth(TabStripMetrics.comfortableMinimumTabWidth), .iconOnly)
+
+        XCTAssertTrue(TabChipDensity.full.showsTitle)
+        XCTAssertTrue(TabChipDensity.tight.showsTitle)
+        XCTAssertFalse(TabChipDensity.iconOnly.showsTitle)
+        XCTAssertTrue(TabChipDensity.compact.pinsCloseButton)
+        XCTAssertFalse(TabChipDensity.tight.pinsCloseButton, "a tight chip shows close only for the tab in play")
+    }
+
+    // MARK: - Tab groups
+
+    func testCreatingAGroupPullsItsTabsIntoOneRunAndOffersTheEditor() throws {
+        let workspace = try makeTabGroupWorkspace()
+        let first = try XCTUnwrap(workspace.tabs.first)
+        workspace.addTab()
+        workspace.addTab()
+        let second = workspace.tabs[1]
+        let third = workspace.tabs[2]
+
+        let group = try XCTUnwrap(workspace.createGroup(withTabs: [first.id, third.id]))
+
+        XCTAssertEqual(workspace.tabGroups.map(\.id), [group.id])
+        XCTAssertEqual(
+            workspace.tabs.map(\.id),
+            [first.id, third.id, second.id],
+            "the tabs of a group are pulled next to each other"
+        )
+        XCTAssertEqual(workspace.tabs(inGroup: group.id).map(\.id), [first.id, third.id])
+        XCTAssertEqual(workspace.group(group.id)?.colorID, group.colorID)
+        XCTAssertNotEqual(group.colorID, TabGroupRecord.defaultColorID, "a new group gets a real color, not the fallback")
+        XCTAssertEqual(workspace.pendingGroupEditorID, group.id, "a new group offers its editor so it can be named")
+    }
+
+    func testMovingATabBetweenGroupsKeepsRunsTogetherAndDropsTheEmptyGroup() throws {
+        let workspace = try makeTabGroupWorkspace()
+        workspace.addTab()
+        workspace.addTab()
+        workspace.addTab()
+        let tabIDs = workspace.tabs.map(\.id)
+        let left = try XCTUnwrap(workspace.createGroup(withTabs: [tabIDs[0], tabIDs[1]]))
+        let right = try XCTUnwrap(workspace.createGroup(withTabs: [tabIDs[3]]))
+
+        workspace.addTab(tabIDs[1], toGroup: right.id)
+
+        XCTAssertEqual(workspace.tabs(inGroup: left.id).map(\.id), [tabIDs[0]])
+        XCTAssertEqual(workspace.tabs(inGroup: right.id).map(\.id), [tabIDs[3], tabIDs[1]], "a moved tab joins the end of its new group")
+        XCTAssertEqual(workspace.tabs.map(\.id), [tabIDs[0], tabIDs[2], tabIDs[3], tabIDs[1]])
+        XCTAssertNotNil(workspace.group(left.id))
+
+        workspace.addTab(tabIDs[0], toGroup: right.id)
+
+        XCTAssertNil(workspace.group(left.id), "a group with no tabs left stops existing")
+        XCTAssertEqual(workspace.tabGroups.map(\.id), [right.id])
+    }
+
+    func testGroupingTabsOutOfAnotherGroupLeavesThatGroupInOneRun() throws {
+        let workspace = try makeTabGroupWorkspace()
+        workspace.addTab()
+        workspace.addTab()
+        workspace.addTab()
+        let tabIDs = workspace.tabs.map(\.id)
+        let first = try XCTUnwrap(workspace.createGroup(withTabs: [tabIDs[0], tabIDs[1], tabIDs[2]]))
+
+        // Takes the middle tab of an existing group and pairs it with a tab
+        // from outside — the group it left must not end up in two pieces.
+        let second = try XCTUnwrap(workspace.createGroup(withTabs: [tabIDs[1], tabIDs[3]]))
+
+        let groupOfTab = workspace.tabs.map { $0.groupID }
+        let firstRun = groupOfTab.enumerated().filter { $0.element == first.id }.map(\.offset)
+        XCTAssertEqual(firstRun.count, 2)
+        XCTAssertEqual(firstRun[1] - firstRun[0], 1, "the group left behind is still one unbroken run")
+        XCTAssertEqual(workspace.tabs(inGroup: second.id).map(\.id), [tabIDs[1], tabIDs[3]])
+        XCTAssertEqual(workspace.tabs.count, 4, "regrouping never closes a tab")
+    }
+
+    func testRemovingATabFromAGroupKeepsItOpenNextToTheGroup() throws {
+        let workspace = try makeTabGroupWorkspace()
+        workspace.addTab()
+        workspace.addTab()
+        let tabIDs = workspace.tabs.map(\.id)
+        let group = try XCTUnwrap(workspace.createGroup(withTabs: [tabIDs[0], tabIDs[1]]))
+
+        workspace.removeTabFromGroup(tabIDs[0])
+
+        XCTAssertNil(workspace.tabs.first { $0.id == tabIDs[0] }?.groupID)
+        XCTAssertEqual(workspace.tabs.count, 3, "the tab is still open")
+        XCTAssertEqual(workspace.tabs.map(\.id), [tabIDs[1], tabIDs[0], tabIDs[2]], "it steps out just after the group")
+        XCTAssertEqual(workspace.tabs(inGroup: group.id).map(\.id), [tabIDs[1]])
+
+        workspace.removeTabFromGroup(tabIDs[1])
+        XCTAssertNil(workspace.group(group.id), "removing the last member removes the group")
+        XCTAssertEqual(workspace.tabs.count, 3)
+    }
+
+    func testUngroupKeepsEveryTabAndDropsOnlyTheGroup() throws {
+        let workspace = try makeTabGroupWorkspace()
+        workspace.addTab()
+        let tabIDs = workspace.tabs.map(\.id)
+        let group = try XCTUnwrap(workspace.createGroup(withTabs: tabIDs))
+
+        workspace.ungroup(groupID: group.id)
+
+        XCTAssertTrue(workspace.tabGroups.isEmpty)
+        XCTAssertEqual(workspace.tabs.map(\.id), tabIDs)
+        XCTAssertTrue(workspace.tabs.allSatisfy { $0.groupID == nil })
+        XCTAssertNil(workspace.pendingGroupEditorID)
+    }
+
+    func testClosingAGroupClosesItsTabsAndStillLeavesOneOpenTab() throws {
+        let workspace = try makeTabGroupWorkspace()
+        workspace.addTab()
+        workspace.addTab()
+        let tabIDs = workspace.tabs.map(\.id)
+        let group = try XCTUnwrap(workspace.createGroup(withTabs: [tabIDs[0], tabIDs[1]]))
+
+        workspace.closeGroup(groupID: group.id)
+
+        XCTAssertTrue(workspace.tabGroups.isEmpty)
+        XCTAssertEqual(workspace.tabs.map(\.id), [tabIDs[2]])
+        XCTAssertEqual(workspace.selectedTabID, tabIDs[2])
+
+        // Closing the group that holds every tab still leaves the workspace
+        // with the one empty tab it always guarantees.
+        let survivingID = try XCTUnwrap(workspace.tabs.first?.id)
+        let onlyGroup = try XCTUnwrap(workspace.createGroup(withTabs: [survivingID]))
+        workspace.closeGroup(groupID: onlyGroup.id)
+
+        XCTAssertEqual(workspace.tabs.count, 1)
+        XCTAssertNotEqual(workspace.tabs.first?.id, survivingID, "the closed tab was replaced, not kept")
+        XCTAssertNil(workspace.tabs.first?.groupID)
+        XCTAssertEqual(workspace.selectedTabID, workspace.tabs.first?.id)
+        XCTAssertTrue(workspace.tabGroups.isEmpty)
+    }
+
+    func testCollapsedGroupHidesItsTabsAndSelectingOneOpensItAgain() throws {
+        let workspace = try makeTabGroupWorkspace()
+        workspace.addTab()
+        workspace.addTab()
+        let tabIDs = workspace.tabs.map(\.id)
+        let group = try XCTUnwrap(workspace.createGroup(withTabs: [tabIDs[0], tabIDs[1]]))
+        workspace.selectTab(tabIDs[0])
+
+        workspace.toggleCollapse(groupID: group.id)
+
+        XCTAssertEqual(workspace.group(group.id)?.isCollapsed, true)
+        XCTAssertEqual(workspace.visibleTabs.map(\.id), [tabIDs[2]], "collapsed tabs stay open but leave the strip")
+        XCTAssertEqual(workspace.tabs.count, 3)
+        XCTAssertEqual(workspace.selectedTabID, tabIDs[2], "collapsing hands the active tab to one still on the strip")
+
+        workspace.selectTab(tabIDs[1])
+
+        XCTAssertEqual(workspace.group(group.id)?.isCollapsed, false, "choosing a hidden tab opens its group")
+        XCTAssertEqual(workspace.selectedTabID, tabIDs[1])
+        XCTAssertEqual(workspace.visibleTabs.count, 3)
+    }
+
+    func testAGroupHoldingEveryTabStaysOpenSoTheStripAlwaysHasAnActiveTab() throws {
+        let workspace = try makeTabGroupWorkspace()
+        workspace.addTab()
+        let group = try XCTUnwrap(workspace.createGroup(withTabs: workspace.tabs.map(\.id)))
+
+        workspace.toggleCollapse(groupID: group.id)
+
+        XCTAssertEqual(workspace.group(group.id)?.isCollapsed, false)
+        XCTAssertEqual(workspace.visibleTabs.count, 2)
+        XCTAssertNotNil(workspace.selectedTab)
+    }
+
+    func testNewTabInAGroupAndToTheRightOfAGroupedTabJoinTheSameGroup() throws {
+        let workspace = try makeTabGroupWorkspace()
+        let first = try XCTUnwrap(workspace.tabs.first)
+        workspace.addTab()
+        let outsider = try XCTUnwrap(workspace.tabs.last)
+        let group = try XCTUnwrap(workspace.createGroup(withTabs: [first.id]))
+
+        workspace.addTab(toGroup: group.id)
+        let inGroup = try XCTUnwrap(workspace.selectedTab)
+        XCTAssertEqual(inGroup.groupID, group.id)
+        XCTAssertEqual(workspace.tabs.map(\.id), [first.id, inGroup.id, outsider.id])
+
+        workspace.addTab(after: first.id)
+        let toTheRight = try XCTUnwrap(workspace.selectedTab)
+        XCTAssertEqual(toTheRight.groupID, group.id, "a tab opened next to a grouped tab joins that group")
+        XCTAssertEqual(workspace.tabs.map(\.id), [first.id, toTheRight.id, inGroup.id, outsider.id])
+
+        workspace.addTab(after: outsider.id)
+        XCTAssertNil(workspace.selectedTab?.groupID, "next to an ungrouped tab it stays ungrouped")
+    }
+
+    func testRenamingAndRecoloringAGroupStoresNormalizedValues() throws {
+        let workspace = try makeTabGroupWorkspace()
+        let group = try XCTUnwrap(workspace.createGroup(withTabs: workspace.tabs.map(\.id)))
+
+        workspace.renameGroup(group.id, title: "  Client work  ")
+        workspace.recolorGroup(group.id, colorID: "PINK")
+        XCTAssertEqual(workspace.group(group.id)?.title, "Client work")
+        XCTAssertEqual(workspace.group(group.id)?.colorID, "pink")
+
+        workspace.recolorGroup(group.id, colorID: "not-a-color")
+        XCTAssertEqual(workspace.group(group.id)?.colorID, TabGroupRecord.defaultColorID)
+    }
+
+    func testCloseOtherTabsLeavesOnlyTheChosenTab() throws {
+        let workspace = try makeTabGroupWorkspace()
+        workspace.addTab()
+        workspace.addTab()
+        let keeper = workspace.tabs[1].id
+        _ = workspace.createGroup(withTabs: [workspace.tabs[0].id, workspace.tabs[2].id])
+
+        workspace.closeOtherTabs(keeping: keeper)
+
+        XCTAssertEqual(workspace.tabs.map(\.id), [keeper])
+        XCTAssertEqual(workspace.selectedTabID, keeper)
+        XCTAssertTrue(workspace.tabGroups.isEmpty, "a group whose tabs are all closed stops existing")
+    }
+
+    func testTabGroupsSurviveASavedSessionAndRestoreCollapsedTabsOpen() throws {
+        let suiteName = "clearframe.tabGroups.restore.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let store = BrowserDataStore(defaults: defaults)
+        let blocking = try Self.makeTestContentBlocking(defaults: defaults)
+        defer { blocking.removeStore() }
+        let workspace = BrowserWorkspace(
+            dataStore: store,
+            downloads: DownloadCenter(),
+            searchSettings: SearchSettingsStore(defaults: defaults),
+            contentBlocking: blocking.provider
+        )
+        workspace.addTab(url: URL(string: "https://example.com/one"))
+        workspace.addTab(url: URL(string: "https://example.com/two"))
+        let groupedIDs = [workspace.tabs[0].id, workspace.tabs[1].id]
+        let group = try XCTUnwrap(workspace.createGroup(withTabs: groupedIDs, title: "Research", colorID: "cyan"))
+        workspace.selectTab(workspace.tabs[2].id)
+        workspace.toggleCollapse(groupID: group.id)
+        workspace.persistNow()
+
+        let restored = BrowserWorkspace(
+            dataStore: BrowserDataStore(defaults: defaults),
+            downloads: DownloadCenter(),
+            searchSettings: SearchSettingsStore(defaults: defaults),
+            contentBlocking: blocking.provider
+        )
+
+        XCTAssertEqual(restored.tabGroups.map(\.title), ["Research"])
+        XCTAssertEqual(restored.tabGroups.first?.colorID, "cyan")
+        XCTAssertEqual(restored.tabGroups.first?.isCollapsed, true)
+        XCTAssertEqual(restored.tabs.filter { $0.groupID == group.id }.map(\.id), groupedIDs)
+        XCTAssertEqual(restored.visibleTabs.count, 1, "a collapsed group restores collapsed")
+
+        // A selection inside a collapsed group would leave the strip with no
+        // active chip, so restoring opens that group back up.
+        restored.selectTab(groupedIDs[0])
+        restored.persistNow()
+        let reopened = BrowserWorkspace(
+            dataStore: BrowserDataStore(defaults: defaults),
+            downloads: DownloadCenter(),
+            searchSettings: SearchSettingsStore(defaults: defaults),
+            contentBlocking: blocking.provider
+        )
+        XCTAssertEqual(reopened.selectedTabID, groupedIDs[0])
+        XCTAssertEqual(reopened.group(group.id)?.isCollapsed, false)
+        XCTAssertEqual(reopened.visibleTabs.count, 3)
+    }
+
+    private func makeTabGroupWorkspace() throws -> BrowserWorkspace {
+        let suiteName = "clearframe.tabGroups.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        addTeardownBlock { defaults.removePersistentDomain(forName: suiteName) }
+        let blocking = try Self.makeTestContentBlocking(defaults: defaults)
+        addTeardownBlock { blocking.removeStore() }
+        return BrowserWorkspace(
+            dataStore: BrowserDataStore(defaults: defaults),
+            downloads: DownloadCenter(),
+            searchSettings: SearchSettingsStore(defaults: defaults),
+            contentBlocking: blocking.provider
+        )
+    }
+
     // MARK: - Site icons
 
     func testFaviconCaptureStoresOneFilePerNormalizedHostAndReadsItBack() async throws {

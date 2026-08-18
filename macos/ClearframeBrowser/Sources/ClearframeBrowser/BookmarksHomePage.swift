@@ -20,6 +20,7 @@ struct BookmarksHomePage: View {
     @State private var search = ""
     @State private var currentFolderID: UUID?
     @State private var editorRequest: BookmarkFolderEditorRequest?
+    @State private var bookmarkEditorRequest: BookmarkEditorRequest?
     @State private var pendingDeletion: BookmarkFolderRecord?
     @State private var dropConfirmation: String?
 
@@ -59,7 +60,7 @@ struct BookmarksHomePage: View {
             ),
             presenting: pendingDeletion
         ) { folder in
-            Button("Delete Folder", role: .destructive) {
+            Button("Delete folder", role: .destructive) {
                 store.deleteBookmarkFolderPreservingContents(folder)
                 pendingDeletion = nil
             }
@@ -151,6 +152,11 @@ struct BookmarksHomePage: View {
             .padding(.horizontal, 32)
             .padding(.vertical, 28)
             .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .sheet(item: $bookmarkEditorRequest) { request in
+            BookmarkEditor(request: request) { title, url in
+                store.updateBookmark(id: request.bookmarkID, title: title, url: url)
+            }
         }
     }
 
@@ -255,10 +261,20 @@ struct BookmarksHomePage: View {
                     BookmarkFolderCard(
                         folder: folder,
                         counts: stats.counts(for: folder.id),
+                        directBookmarkCount: stats.directBookmarkCount(for: folder.id),
                         hosts: stats.identityHosts(for: folder.id),
                         openFolder: {
                             search = ""
                             currentFolderID = folder.id
+                        },
+                        openAll: { openAll(in: folder, stats: stats) },
+                        newSubfolder: {
+                            editorRequest = BookmarkFolderEditorRequest(
+                                folderID: nil,
+                                parentID: folder.id,
+                                title: "",
+                                emoji: "📁"
+                            )
                         },
                         rename: { presentRename(folder) },
                         delete: { requestDeletion(folder) },
@@ -305,6 +321,7 @@ struct BookmarksHomePage: View {
                             destinations: destinations,
                             open: { open(bookmark.url, false) },
                             openNewTab: { open(bookmark.url, true) },
+                            edit: { bookmarkEditorRequest = BookmarkEditorRequest(bookmark: bookmark) },
                             move: { store.moveBookmark(bookmark, to: $0) },
                             remove: { store.removeBookmark(bookmark) }
                         )
@@ -423,6 +440,13 @@ struct BookmarksHomePage: View {
             .padding(.horizontal, 14)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(ClearframeTheme.bg1, in: RoundedRectangle(cornerRadius: ClearframeTheme.radius12))
+    }
+
+    /// Opens the folder's own saved pages, each in its own tab.
+    private func openAll(in folder: BookmarkFolderRecord, stats: BookmarksHomeStats) {
+        for bookmark in stats.bookmarks(in: folder.id) {
+            open(bookmark.url, true)
+        }
     }
 
     private func presentRename(_ folder: BookmarkFolderRecord) {
@@ -577,8 +601,12 @@ private struct BookmarksHomeStats {
 private struct BookmarkFolderCard: View {
     let folder: BookmarkFolderRecord
     let counts: BookmarkDescendantCounts
+    /// Saved pages filed directly in this folder — what "Open all" opens.
+    let directBookmarkCount: Int
     let hosts: [String]
     let openFolder: () -> Void
+    let openAll: () -> Void
+    let newSubfolder: () -> Void
     let rename: () -> Void
     let delete: () -> Void
     let fileDroppedURL: (URL) -> Bool
@@ -628,8 +656,17 @@ private struct BookmarkFolderCard: View {
             return fileDroppedURL(url)
         } isTargeted: { isDropTargeted = $0 }
         .contextMenu {
-            Button("Rename Folder", action: rename)
-            Button("Delete Folder", role: .destructive, action: delete)
+            BookmarkFolderMenuItems(
+                folder: folder,
+                bookmarkCount: directBookmarkCount,
+                currentPage: nil,
+                openAll: openAll,
+                addCurrentPage: {},
+                newSubfolder: newSubfolder,
+                rename: rename,
+                delete: delete,
+                organize: nil
+            )
         }
         .help("Open \(folder.title), or drop a page link here to file it in this folder")
         .accessibilityLabel(accessibilityDescription)

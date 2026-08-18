@@ -1,5 +1,56 @@
+import AppKit
 import ClearframeCore
 import SwiftUI
+
+/// Metrics for one row of bookmarks bar items.
+///
+/// The bar's rhythm is deliberately tight, like Chrome's: every item hugs its
+/// own name, and only `itemGap` separates one from the next, so a row of short
+/// folder names reads as an even run of labels instead of a sparse grid.
+@MainActor
+enum BookmarkBarMetrics {
+    static let itemHeight: CGFloat = 22
+    /// Padding inside one item, left and right of its content.
+    static let itemPadding: CGFloat = 8
+    /// Space between two adjacent items. With `itemPadding` on both sides this
+    /// puts 18pt between neighbouring labels — Chrome's density.
+    static let itemGap: CGFloat = 2
+    /// Space between an item's site icon and its name.
+    static let iconGap: CGFloat = 6
+    /// How wide one item may get before its name truncates. Long titles stop
+    /// stealing the row from everything saved after them.
+    static let maximumItemWidth: CGFloat = 180
+    static let labelFontSize: CGFloat = 12
+
+    private static let labelFont = NSFont.systemFont(ofSize: labelFontSize, weight: .medium)
+    /// Bar items re-render on every hover; measuring each label once keeps
+    /// that free.
+    private static var labelWidths: [String: CGFloat] = [:]
+
+    /// Width of `label` drawn in the bar's own font.
+    static func labelWidth(_ label: String) -> CGFloat {
+        if let cached = labelWidths[label] { return cached }
+        let measured = ceil((label as NSString).size(withAttributes: [.font: labelFont]).width)
+        labelWidths[label] = measured
+        return measured
+    }
+
+    /// The width one item wants: its name at natural width, its icon when it
+    /// has one, plus padding — never more than `maximumItemWidth`.
+    static func naturalWidth(label: String, iconWidth: CGFloat = 0) -> CGFloat {
+        let icon = iconWidth > 0 ? iconWidth + iconGap : 0
+        return min(labelWidth(label) + icon + itemPadding * 2, maximumItemWidth)
+    }
+
+    /// A hard width, but only for a name long enough to need the cap: that is
+    /// what makes it truncate with an ellipsis. `nil` — the common case — is
+    /// the instruction to leave the item hugging its own content.
+    static func cappedWidth(label: String, iconWidth: CGFloat = 0) -> CGFloat? {
+        let icon = iconWidth > 0 ? iconWidth + iconGap : 0
+        let natural = labelWidth(label) + icon + itemPadding * 2
+        return natural > maximumItemWidth ? maximumItemWidth : nil
+    }
+}
 
 struct BookmarksBar: View {
     @ObservedObject var store: BrowserDataStore
@@ -13,16 +64,60 @@ struct BookmarksBar: View {
     /// bar leads here now (D7); the toolbar books button keeps its own quick
     /// popover.
     let openAllBookmarks: () -> Void
+    /// Opens one saved page in a new tab, for "Open in new tab" and "Open all".
+    /// Optional so a host that has no tabs of its own still builds; the bar
+    /// then falls back to `open` rather than showing a dead menu entry.
+    var openInNewTab: ((String) -> Void)? = nil
+
     @State private var isRootDropTargeted = false
     @State private var dropConfirmation: String?
+    /// One sheet slot for both editors: SwiftUI presents a single sheet per
+    /// view, so the bar asks for one at a time by name.
+    @State private var editorRequest: BookmarksBarEditorRequest?
+    @State private var pendingFolderDeletion: BookmarkFolderRecord?
 
     private var rootFolders: [BookmarkFolderRecord] { store.bookmarkFolders(in: nil) }
     private var rootBookmarks: [BookmarkRecord] { store.bookmarks(in: nil) }
     private var isEmpty: Bool { rootFolders.isEmpty && rootBookmarks.isEmpty }
     private var canBookmarkCurrentPage: Bool { WebURLPolicy.validatedURL(currentPageURL) != nil }
+    private var currentPage: CurrentPageBookmarkState {
+        CurrentPageBookmarkState(canSave: canBookmarkCurrentPage, currentBookmark: currentBookmark)
+    }
+
+    private var openInNewTabAction: (String) -> Void { openInNewTab ?? open }
+
+    private var linkActions: BookmarkBarLinkActions {
+        BookmarkBarLinkActions(
+            open: open,
+            openInNewTab: openInNewTabAction,
+            edit: { editorRequest = .bookmark(BookmarkEditorRequest(bookmark: $0)) },
+            move: { store.moveBookmark($0, to: $1) },
+            delete: { store.removeBookmark($0) }
+        )
+    }
+
+    private var folderActions: BookmarkBarFolderActions {
+        BookmarkBarFolderActions(
+            openAll: openAll(in:),
+            addCurrentPage: addCurrentPage,
+            newSubfolder: newFolder,
+            rename: { folder in
+                editorRequest = .folder(
+                    BookmarkFolderEditorRequest(
+                        folderID: folder.id,
+                        parentID: folder.parentID,
+                        title: folder.title,
+                        emoji: folder.emoji
+                    )
+                )
+            },
+            delete: requestFolderDeletion(_:),
+            organize: openAllBookmarks
+        )
+    }
 
     var body: some View {
-        HStack(spacing: 7) {
+        HStack(spacing: BookmarkBarMetrics.itemGap) {
             if isEmpty {
                 Button {
                     openAllBookmarks()
@@ -36,6 +131,7 @@ struct BookmarksBar: View {
                     }
                     .font(.system(size: 11))
                     .lineLimit(1)
+                    .padding(.horizontal, BookmarkBarMetrics.itemPadding)
                 }
                 .buttonStyle(.plain)
                 .help("Open all bookmarks")
@@ -43,37 +139,36 @@ struct BookmarksBar: View {
                 Spacer(minLength: 0)
             } else {
                 ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 4) {
+                    HStack(spacing: BookmarkBarMetrics.itemGap) {
+                        let destinations = BookmarkFolderDestination.tree(in: store)
                         ForEach(rootFolders) { folder in
                             BookmarkFolderMenu(
                                 store: store,
                                 folder: folder,
                                 compact: true,
-                                currentBookmark: currentBookmark,
-                                canBookmarkCurrentPage: canBookmarkCurrentPage,
+                                currentPage: currentPage,
                                 open: open,
-                                addCurrentPage: addCurrentPage,
                                 fileDroppedURL: fileDroppedURL,
                                 reportDrop: reportDrop,
-                                newFolder: newFolder,
-                                organize: openAllBookmarks
+                                actions: folderActions
                             )
                         }
                         if !rootFolders.isEmpty && !rootBookmarks.isEmpty {
-                            Rectangle()
-                                .fill(ClearframeTheme.hairline2)
-                                .frame(width: 1, height: 14)
-                                .padding(.horizontal, 3)
-                                .accessibilityHidden(true)
+                            barSeparator
                         }
                         ForEach(rootBookmarks) { bookmark in
-                            BookmarkBarLink(bookmark: bookmark, open: open)
+                            BookmarkBarLink(
+                                bookmark: bookmark,
+                                destinations: destinations,
+                                actions: linkActions
+                            )
                         }
                     }
                 }
                 .accessibilityLabel("Bookmarks bar")
             }
 
+            barSeparator
             BookmarksBarAllChip(action: openAllBookmarks)
 
             Menu {
@@ -85,14 +180,11 @@ struct BookmarksBar: View {
                             store: store,
                             folder: folder,
                             compact: false,
-                            currentBookmark: currentBookmark,
-                            canBookmarkCurrentPage: canBookmarkCurrentPage,
+                            currentPage: currentPage,
                             open: open,
-                            addCurrentPage: addCurrentPage,
                             fileDroppedURL: fileDroppedURL,
                             reportDrop: reportDrop,
-                            newFolder: newFolder,
-                            organize: openAllBookmarks
+                            actions: folderActions
                         )
                     }
                     if !rootFolders.isEmpty && !rootBookmarks.isEmpty { Divider() }
@@ -106,20 +198,20 @@ struct BookmarksBar: View {
                 if canBookmarkCurrentPage {
                     if currentBookmark == nil {
                         Button { addCurrentPage(nil) } label: {
-                            Label("Add Current Page to Bookmarks", systemImage: "bookmark.badge.plus")
+                            Label("Add current page", systemImage: "bookmark.badge.plus")
                         }
                     } else {
                         Text("Current page is bookmarked")
                     }
                 }
                 Button { newFolder(nil) } label: {
-                    Label("New Bookmark Folder…", systemImage: "folder.badge.plus")
+                    Label("New folder…", systemImage: "folder.badge.plus")
                 }
                 Button { openAllBookmarks() } label: {
-                    Label("Open All Bookmarks", systemImage: "books.vertical")
+                    Label("All bookmarks…", systemImage: "books.vertical")
                 }
                 Button { store.showsBookmarksBar = false } label: {
-                    Label("Hide Bookmarks Bar", systemImage: "eye.slash")
+                    Label("Hide bookmarks bar", systemImage: "eye.slash")
                 }
             } label: {
                 // The design's quiet overflow glyph: no chip, no caret, just
@@ -127,7 +219,7 @@ struct BookmarksBar: View {
                 Text("»")
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(ClearframeTheme.textTertiary)
-                    .frame(width: 18, height: BookmarksBar.itemHeight)
+                    .frame(width: 18, height: BookmarkBarMetrics.itemHeight)
                     .contentShape(Rectangle())
             }
             .menuStyle(.borderlessButton)
@@ -145,7 +237,7 @@ struct BookmarksBar: View {
                     .accessibilityLabel(dropConfirmation)
             }
         }
-        .padding(.horizontal, 11)
+        .padding(.horizontal, 9)
         .frame(height: 28)
         .background(isRootDropTargeted ? ClearframeTheme.accentDim : ClearframeTheme.bg1)
         .overlay(alignment: .bottom) {
@@ -163,34 +255,83 @@ struct BookmarksBar: View {
             if canBookmarkCurrentPage {
                 if currentBookmark == nil {
                     Button { addCurrentPage(nil) } label: {
-                        Label("Add Current Page to Bookmarks", systemImage: "bookmark.badge.plus")
+                        Label("Add current page", systemImage: "bookmark.badge.plus")
                     }
                 } else {
-                    Button("Current Page Is Already Bookmarked") {}.disabled(true)
+                    Button("Current page is bookmarked") {}.disabled(true)
                 }
                 Divider()
             }
             Button { newFolder(nil) } label: {
-                Label("New Bookmark Folder…", systemImage: "folder.badge.plus")
+                Label("New folder…", systemImage: "folder.badge.plus")
             }
             Button { openAllBookmarks() } label: {
-                Label("All Bookmarks…", systemImage: "books.vertical")
+                Label("All bookmarks…", systemImage: "books.vertical")
             }
             Divider()
             Button { store.showsBookmarksBar = false } label: {
-                Label("Hide Bookmarks Bar", systemImage: "eye.slash")
+                Label("Hide bookmarks bar", systemImage: "eye.slash")
             }
         }
         .help("Drop a page link here to save it in Unfiled. Secondary-click or Control-click for more actions.")
+        .sheet(item: $editorRequest) { request in
+            switch request {
+            case .bookmark(let bookmarkRequest):
+                BookmarkEditor(request: bookmarkRequest) { title, url in
+                    store.updateBookmark(id: bookmarkRequest.bookmarkID, title: title, url: url)
+                }
+            case .folder(let folderRequest):
+                BookmarkFolderEditor(request: folderRequest) { title, emoji in
+                    if let folderID = folderRequest.folderID {
+                        store.updateBookmarkFolder(id: folderID, title: title, emoji: emoji)
+                    }
+                    editorRequest = nil
+                }
+            }
+        }
+        .alert(
+            "Delete folder?",
+            isPresented: Binding(
+                get: { pendingFolderDeletion != nil },
+                set: { if !$0 { pendingFolderDeletion = nil } }
+            ),
+            presenting: pendingFolderDeletion
+        ) { folder in
+            Button("Delete folder", role: .destructive) {
+                store.deleteBookmarkFolderPreservingContents(folder)
+                pendingFolderDeletion = nil
+            }
+            Button("Cancel", role: .cancel) { pendingFolderDeletion = nil }
+        } message: { folder in
+            Text("\(folder.emoji) \(folder.title) contains saved items. Its bookmarks and subfolders will move to the parent folder; nothing will be deleted.")
+        }
     }
 
-    /// Shared bar-item metrics. The bar's items are borderless in the design:
-    /// icon plus name, no chip at rest, a white wash only while hovered or
-    /// drag-targeted — so these keep every item on one baseline without each
-    /// one re-deriving its own padding.
-    static let itemHeight: CGFloat = 22
-    static let itemPadding: CGFloat = 8
-    static let itemGap: CGFloat = 7
+    /// Hairline between two runs of bar items — folders and loose bookmarks,
+    /// and the row and its trailing controls.
+    private var barSeparator: some View {
+        Rectangle()
+            .fill(ClearframeTheme.hairline2)
+            .frame(width: 1, height: 14)
+            .padding(.horizontal, 3)
+            .accessibilityHidden(true)
+    }
+
+    private func openAll(in folder: BookmarkFolderRecord) {
+        for bookmark in store.bookmarks(in: folder.id) {
+            openInNewTabAction(bookmark.url)
+        }
+    }
+
+    /// A folder that still holds something asks first; its contents survive
+    /// either way, moving up to the parent folder.
+    private func requestFolderDeletion(_ folder: BookmarkFolderRecord) {
+        if store.bookmarkFolderContainsItems(folder) {
+            pendingFolderDeletion = folder
+        } else {
+            store.deleteBookmarkFolderPreservingContents(folder)
+        }
+    }
 
     private func reportDrop(_ result: BookmarkDropResult, folderName: String) {
         let message: String
@@ -208,6 +349,40 @@ struct BookmarksBar: View {
     }
 }
 
+/// Which editor the bar is showing: renaming a folder chip and editing a
+/// saved page share one sheet slot.
+private enum BookmarksBarEditorRequest: Identifiable {
+    case bookmark(BookmarkEditorRequest)
+    case folder(BookmarkFolderEditorRequest)
+
+    var id: UUID {
+        switch self {
+        case .bookmark(let request): return request.id
+        case .folder(let request): return request.id
+        }
+    }
+}
+
+/// What every bar bookmark can do, gathered once in `BookmarksBar` so each
+/// item's menu drives exactly the same code.
+private struct BookmarkBarLinkActions {
+    let open: (String) -> Void
+    let openInNewTab: (String) -> Void
+    let edit: (BookmarkRecord) -> Void
+    let move: (BookmarkRecord, UUID?) -> Void
+    let delete: (BookmarkRecord) -> Void
+}
+
+/// The same, for the bar's folder chips.
+private struct BookmarkBarFolderActions {
+    let openAll: (BookmarkFolderRecord) -> Void
+    let addCurrentPage: (UUID?) -> Void
+    let newSubfolder: (UUID?) -> Void
+    let rename: (BookmarkFolderRecord) -> Void
+    let delete: (BookmarkFolderRecord) -> Void
+    let organize: () -> Void
+}
+
 /// Trailing bar item that opens the full-page bookmarks home. Same borderless
 /// language as the link and folder items beside it (B4): folder glyph plus
 /// name, no chip until hovered.
@@ -217,17 +392,16 @@ private struct BookmarksBarAllChip: View {
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: BookmarksBar.itemGap) {
+            HStack(spacing: BookmarkBarMetrics.iconGap) {
                 Image(systemName: "folder")
                     .font(.system(size: 10, weight: .medium))
                 Text("All bookmarks")
                     .lineLimit(1)
             }
-            .font(.system(size: 12, weight: .medium))
+            .font(.system(size: BookmarkBarMetrics.labelFontSize, weight: .medium))
             .foregroundStyle(isHovered ? ClearframeTheme.textPrimary : ClearframeTheme.textSecondary)
-            .padding(.horizontal, BookmarksBar.itemPadding)
-            .padding(.vertical, 3)
-            .frame(height: BookmarksBar.itemHeight)
+            .padding(.horizontal, BookmarkBarMetrics.itemPadding)
+            .frame(height: BookmarkBarMetrics.itemHeight)
             .background(
                 isHovered ? ClearframeTheme.itemHover : Color.clear,
                 in: RoundedRectangle(cornerRadius: ClearframeTheme.radius6)
@@ -235,6 +409,7 @@ private struct BookmarksBarAllChip: View {
             .contentShape(RoundedRectangle(cornerRadius: ClearframeTheme.radius6))
         }
         .buttonStyle(.plain)
+        .fixedSize()
         .onHover { isHovered = $0 }
         .help("Open all bookmarks (⌘⌥B)")
         .accessibilityLabel("All bookmarks")
@@ -244,8 +419,11 @@ private struct BookmarksBarAllChip: View {
 
 private struct BookmarkBarLink: View {
     let bookmark: BookmarkRecord
-    let open: (String) -> Void
+    let destinations: [BookmarkFolderDestination]
+    let actions: BookmarkBarLinkActions
     @State private var isHovered = false
+
+    private static let iconWidth: CGFloat = 13
 
     @ViewBuilder
     var body: some View {
@@ -257,19 +435,23 @@ private struct BookmarkBarLink: View {
     }
 
     private var linkButton: some View {
-        Button { open(bookmark.url) } label: {
-            HStack(spacing: BookmarksBar.itemGap) {
+        Button { actions.open(bookmark.url) } label: {
+            HStack(spacing: BookmarkBarMetrics.iconGap) {
                 // A real icon once this site has been visited; the site's
                 // identity square until then.
-                SiteIconView(urlString: bookmark.url)
+                SiteIconView(urlString: bookmark.url, size: Self.iconWidth)
                 Text(bookmark.title)
                     .foregroundStyle(isHovered ? ClearframeTheme.textPrimary : ClearframeTheme.textSecondary)
                     .lineLimit(1)
+                    .truncationMode(.tail)
             }
-            .font(.system(size: 12, weight: .medium))
-            .padding(.horizontal, BookmarksBar.itemPadding)
-            .padding(.vertical, 3)
-            .frame(height: BookmarksBar.itemHeight)
+            .font(.system(size: BookmarkBarMetrics.labelFontSize, weight: .medium))
+            .padding(.horizontal, BookmarkBarMetrics.itemPadding)
+            .frame(
+                width: BookmarkBarMetrics.cappedWidth(label: bookmark.title, iconWidth: Self.iconWidth),
+                height: BookmarkBarMetrics.itemHeight,
+                alignment: .leading
+            )
             .background(
                 isHovered ? ClearframeTheme.itemHover : Color.clear,
                 in: RoundedRectangle(cornerRadius: ClearframeTheme.radius6)
@@ -277,10 +459,21 @@ private struct BookmarkBarLink: View {
             .contentShape(RoundedRectangle(cornerRadius: ClearframeTheme.radius6))
         }
         .buttonStyle(.plain)
-        .frame(maxWidth: 180)
+        .fixedSize()
         .onHover { isHovered = $0 }
         .help("Open \(bookmark.title) — \(bookmark.url)")
-        .accessibilityHint("Opens this bookmark in the current tab. Drag it onto a visible folder to move it.")
+        .accessibilityHint("Opens this bookmark in the current tab. Drag it onto a visible folder to move it. Secondary-click for edit, move, and delete.")
+        .contextMenu {
+            BookmarkLinkMenuItems(
+                bookmark: bookmark,
+                destinations: destinations,
+                open: { actions.open(bookmark.url) },
+                openInNewTab: { actions.openInNewTab(bookmark.url) },
+                edit: { actions.edit(bookmark) },
+                move: { actions.move(bookmark, $0) },
+                delete: { actions.delete(bookmark) }
+            )
+        }
     }
 }
 
@@ -288,151 +481,119 @@ private struct BookmarkFolderMenu: View {
     @ObservedObject var store: BrowserDataStore
     let folder: BookmarkFolderRecord
     let compact: Bool
-    let currentBookmark: BookmarkRecord?
-    let canBookmarkCurrentPage: Bool
+    let currentPage: CurrentPageBookmarkState
     let open: (String) -> Void
-    let addCurrentPage: (UUID?) -> Void
     let fileDroppedURL: (URL, UUID?) -> BookmarkDropResult?
     let reportDrop: (BookmarkDropResult, String) -> Void
-    let newFolder: (UUID?) -> Void
-    let organize: () -> Void
+    let actions: BookmarkBarFolderActions
     @State private var isDropTargeted = false
     @State private var isHovered = false
-    // Real content is measured once via FolderChipWidthKey; 140 only ever
-    // shows for the first frame, before that measurement lands.
-    @State private var measuredWidth: CGFloat = 140
-
-    private var chipWidth: CGFloat { min(measuredWidth, 220) }
 
     private var chipFill: Color {
         if isDropTargeted { return ClearframeTheme.accentDimStrong }
         return isHovered ? ClearframeTheme.itemHover : Color.clear
     }
 
+    /// Saved pages filed directly in this folder — what "Open all" opens and
+    /// what the number in its title counts.
+    private var directBookmarks: [BookmarkRecord] { store.bookmarks(in: folder.id) }
+
+    /// Exactly as wide as this folder's own name, capped at
+    /// `maximumItemWidth`. A borderless `Menu` hands its label to AppKit as a
+    /// plain title and draws none of the label's own padding, fill, or color,
+    /// so the chip is drawn in an overlay and the menu underneath is given a
+    /// clear label at this measured width. That is what makes a chip hug: the
+    /// number is the name's real width, known before the first frame is drawn
+    /// rather than fed back from a layout pass.
+    private var chipWidth: CGFloat {
+        BookmarkBarMetrics.naturalWidth(label: folder.barLabel)
+    }
+
     @ViewBuilder
     var body: some View {
-        Group {
-            if compact {
-                Menu { menuContents } label: {
-                    Color.clear.frame(width: chipWidth, height: BookmarksBar.itemHeight)
-                }
-                    .menuStyle(.borderlessButton)
-                    .menuIndicator(.hidden)
-                    .overlay {
-                        // No caret: the design's folder items are a glyph and
-                        // a name. It is still a Menu — only the chevron goes.
-                        Text(folder.barLabel)
-                            .lineLimit(1)
-                            .truncationMode(.tail)
-                            .foregroundStyle(isHovered ? ClearframeTheme.textPrimary : ClearframeTheme.textSecondary)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .font(.system(size: 12, weight: .medium))
-                            .padding(.horizontal, BookmarksBar.itemPadding)
-                            .padding(.vertical, 3)
-                            .frame(width: chipWidth, height: BookmarksBar.itemHeight)
-                            .background(chipFill, in: RoundedRectangle(cornerRadius: ClearframeTheme.radius6))
-                            .overlay {
-                                if isDropTargeted {
-                                    RoundedRectangle(cornerRadius: ClearframeTheme.radius6)
-                                        .stroke(ClearframeTheme.accent, lineWidth: 1.5)
-                                }
-                            }
-                            .allowsHitTesting(false)
-                    }
-                    .frame(width: chipWidth, height: BookmarksBar.itemHeight)
-                    .background(widthReader)
-                    .onPreferenceChange(FolderChipWidthKey.self) { measuredWidth = $0 }
-                    .onHover { isHovered = $0 }
-                    .dropDestination(for: URL.self) { urls, _ in
-                        guard let url = urls.first, let result = fileDroppedURL(url, folder.id) else { return false }
-                        reportDrop(result, folder.title)
-                        return true
-                    } isTargeted: { isDropTargeted = $0 }
-            } else {
-                Menu(folder.barLabel) { menuContents }
+        if compact {
+            Menu { menuContents } label: {
+                Color.clear.frame(width: chipWidth, height: BookmarkBarMetrics.itemHeight)
             }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .fixedSize()
+            .overlay { chipLabel }
+            .frame(width: chipWidth, height: BookmarkBarMetrics.itemHeight)
+            .onHover { isHovered = $0 }
+            .dropDestination(for: URL.self) { urls, _ in
+                guard let url = urls.first, let result = fileDroppedURL(url, folder.id) else { return false }
+                reportDrop(result, folder.title)
+                return true
+            } isTargeted: { isDropTargeted = $0 }
+            .help("Open \(folder.title) folder")
+            .accessibilityLabel("\(folder.title) bookmark folder")
+            .accessibilityHint("Opens this folder. Drop a page link or saved bookmark here to file it in this folder. Secondary-click for folder actions.")
+            .contextMenu { folderMenuItems }
+        } else {
+            Menu(folder.barLabel) { menuContents }
+                .help("Open \(folder.title) folder")
+                .accessibilityLabel("\(folder.title) bookmark folder")
         }
-        .help("Open \(folder.title) folder")
-        .accessibilityLabel("\(folder.title) bookmark folder")
-        .accessibilityHint("Opens this folder. Drop a page link or saved bookmark here to file it in this folder.")
-        .contextMenu {
-            if canBookmarkCurrentPage {
-                if currentBookmark?.folderID == folder.id {
-                    Button("Current Page Is in This Folder") {}.disabled(true)
-                } else {
-                    Button { addCurrentPage(folder.id) } label: {
-                        Label(
-                            currentBookmark == nil ? "Add Current Page to This Folder" : "Move Current Page to This Folder",
-                            systemImage: "bookmark.badge.plus"
-                        )
-                    }
+    }
+
+    /// No caret: the design's folder items are a glyph and a name. It is still
+    /// a Menu — only the chevron goes. Never hit-tested, so every click and
+    /// drag lands on the menu it decorates.
+    private var chipLabel: some View {
+        Text(folder.barLabel)
+            .lineLimit(1)
+            .truncationMode(.tail)
+            .foregroundStyle(isHovered ? ClearframeTheme.textPrimary : ClearframeTheme.textSecondary)
+            .font(.system(size: BookmarkBarMetrics.labelFontSize, weight: .medium))
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, BookmarkBarMetrics.itemPadding)
+            .frame(width: chipWidth, height: BookmarkBarMetrics.itemHeight)
+            .background(chipFill, in: RoundedRectangle(cornerRadius: ClearframeTheme.radius6))
+            .overlay {
+                if isDropTargeted {
+                    RoundedRectangle(cornerRadius: ClearframeTheme.radius6)
+                        .stroke(ClearframeTheme.accent, lineWidth: 1.5)
                 }
-                Divider()
             }
-            Button { newFolder(folder.id) } label: {
-                Label("New Subfolder…", systemImage: "folder.badge.plus")
-            }
-            Button(action: organize) { Label("All Bookmarks…", systemImage: "books.vertical") }
-        }
+            .allowsHitTesting(false)
+    }
+
+    private var folderMenuItems: some View {
+        BookmarkFolderMenuItems(
+            folder: folder,
+            bookmarkCount: directBookmarks.count,
+            currentPage: currentPage,
+            openAll: { actions.openAll(folder) },
+            addCurrentPage: { actions.addCurrentPage(folder.id) },
+            newSubfolder: { actions.newSubfolder(folder.id) },
+            rename: { actions.rename(folder) },
+            delete: { actions.delete(folder) },
+            organize: actions.organize
+        )
     }
 
     private var menuContents: some View {
         BookmarkFolderMenuContents(
             store: store,
             folder: folder,
-            currentBookmark: currentBookmark,
-            canBookmarkCurrentPage: canBookmarkCurrentPage,
+            currentPage: currentPage,
             open: open,
-            addCurrentPage: addCurrentPage,
             fileDroppedURL: fileDroppedURL,
             reportDrop: reportDrop,
-            newFolder: newFolder,
-            organize: organize
+            actions: actions
         )
-    }
-
-    /// Renders the same label at its natural, unconstrained size purely to
-    /// report that size via `FolderChipWidthKey` — `.fixedSize()` makes it
-    /// ignore whatever width the surrounding `.frame(width: chipWidth)`
-    /// proposes, and `.hidden()` means nothing here is ever drawn.
-    private var widthReader: some View {
-        Text(folder.barLabel)
-            .lineLimit(1)
-            .font(.system(size: 12, weight: .medium))
-            .padding(.horizontal, BookmarksBar.itemPadding)
-            .fixedSize()
-            .hidden()
-            .accessibilityHidden(true)
-            .background(
-                GeometryReader { proxy in
-                    Color.clear.preference(key: FolderChipWidthKey.self, value: proxy.size.width)
-                }
-            )
-    }
-}
-
-/// D12: replaces the old hardcoded-140pt bar folder chip. `reduce` keeps the
-/// most recent measurement — each `BookmarkFolderMenu` reads only its own
-/// `widthReader` contribution via a same-level `.onPreferenceChange`, so
-/// sibling folder chips never influence each other's width.
-private struct FolderChipWidthKey: PreferenceKey {
-    static var defaultValue: CGFloat = 140
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = nextValue()
     }
 }
 
 private struct BookmarkFolderMenuContents: View {
     @ObservedObject var store: BrowserDataStore
     let folder: BookmarkFolderRecord
-    let currentBookmark: BookmarkRecord?
-    let canBookmarkCurrentPage: Bool
+    let currentPage: CurrentPageBookmarkState
     let open: (String) -> Void
-    let addCurrentPage: (UUID?) -> Void
     let fileDroppedURL: (URL, UUID?) -> BookmarkDropResult?
     let reportDrop: (BookmarkDropResult, String) -> Void
-    let newFolder: (UUID?) -> Void
-    let organize: () -> Void
+    let actions: BookmarkBarFolderActions
 
     private var childFolders: [BookmarkFolderRecord] { store.bookmarkFolders(in: folder.id) }
     private var bookmarks: [BookmarkRecord] { store.bookmarks(in: folder.id) }
@@ -446,14 +607,11 @@ private struct BookmarkFolderMenuContents: View {
                     store: store,
                     folder: child,
                     compact: false,
-                    currentBookmark: currentBookmark,
-                    canBookmarkCurrentPage: canBookmarkCurrentPage,
+                    currentPage: currentPage,
                     open: open,
-                    addCurrentPage: addCurrentPage,
                     fileDroppedURL: fileDroppedURL,
                     reportDrop: reportDrop,
-                    newFolder: newFolder,
-                    organize: organize
+                    actions: actions
                 )
             }
             if !childFolders.isEmpty && !bookmarks.isEmpty { Divider() }
@@ -461,5 +619,9 @@ private struct BookmarkFolderMenuContents: View {
                 Button { open(bookmark.url) } label: { Label(bookmark.title, systemImage: "bookmark") }
             }
         }
+        Divider()
+        Button(BookmarkMenuCopy.openAll(count: bookmarks.count)) { actions.openAll(folder) }
+            .disabled(bookmarks.isEmpty)
+        Button("New subfolder…") { actions.newSubfolder(folder.id) }
     }
 }

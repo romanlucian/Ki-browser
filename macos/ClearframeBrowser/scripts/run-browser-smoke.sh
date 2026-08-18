@@ -76,11 +76,15 @@ swiftc \
     "$PACKAGE_DIR/Sources/ClearframeBrowser/BrowserWorkspace.swift" \
     "$PACKAGE_DIR/Sources/ClearframeBrowser/WebView.swift" \
     "$PACKAGE_DIR/Sources/ClearframeBrowser/AssistantPanel.swift" \
+    "$PACKAGE_DIR/Sources/ClearframeBrowser/BookmarkActions.swift" \
     "$PACKAGE_DIR/Sources/ClearframeBrowser/BookmarkBarViews.swift" \
     "$PACKAGE_DIR/Sources/ClearframeBrowser/BookmarkLibraryViews.swift" \
     "$PACKAGE_DIR/Sources/ClearframeBrowser/BookmarksHomePage.swift" \
     "$PACKAGE_DIR/Sources/ClearframeBrowser/DownloadViews.swift" \
     "$PACKAGE_DIR/Sources/ClearframeBrowser/ContentBlockingViews.swift" \
+    "$PACKAGE_DIR/Sources/ClearframeBrowser/TabGroupPalette.swift" \
+    "$PACKAGE_DIR/Sources/ClearframeBrowser/TabStripLayout.swift" \
+    "$PACKAGE_DIR/Sources/ClearframeBrowser/TabStripViews.swift" \
     "$PACKAGE_DIR/Sources/ClearframeBrowser/BrowserView.swift" \
     "$PACKAGE_DIR/Tests/BrowserE2ESmoke.swift" \
     "$BUILD_DIR"/ClearframeCore.build/*.swift.o \
