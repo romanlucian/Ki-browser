@@ -72,12 +72,14 @@ public enum ClearframeIconStyle: String, CaseIterable, Sendable {
     case clearframe
     case stickiesPlain
     case stickiesDuo
+    case emojiOne
 
     public var title: String {
         switch self {
         case .clearframe: return "Clearframe"
         case .stickiesPlain: return "Stickies"
         case .stickiesDuo: return "Stickies Duo"
+        case .emojiOne: return "Emoji"
         }
     }
 
@@ -88,6 +90,7 @@ public enum ClearframeIconStyle: String, CaseIterable, Sendable {
         case .clearframe: return "Line icons you can tint"
         case .stickiesPlain: return "Colourful, fixed colours"
         case .stickiesDuo: return "Colourful with a shadow, fixed colours"
+        case .emojiOne: return "Full-colour emoji, fixed colours"
         }
     }
 
@@ -97,6 +100,10 @@ public enum ClearframeIconStyle: String, CaseIterable, Sendable {
         switch self {
         case .clearframe: return 1.5
         case .stickiesPlain, .stickiesDuo: return 1
+        // The emoji set is filled artwork; the handful of strokes it does
+        // carry name their own width, and one unit in a 64 box is the closest
+        // equivalent of a hairline.
+        case .emojiOne: return 1
         }
     }
 
@@ -109,14 +116,14 @@ public enum ClearframeIconStyle: String, CaseIterable, Sendable {
     public var defaultLineCap: VectorShape.LineCap {
         switch self {
         case .clearframe: return .round
-        case .stickiesPlain, .stickiesDuo: return .butt
+        case .stickiesPlain, .stickiesDuo, .emojiOne: return .butt
         }
     }
 
     public var defaultLineJoin: VectorShape.LineJoin {
         switch self {
         case .clearframe: return .round
-        case .stickiesPlain, .stickiesDuo: return .miter
+        case .stickiesPlain, .stickiesDuo, .emojiOne: return .miter
         }
     }
 
@@ -130,6 +137,7 @@ public enum ClearframeIconStyle: String, CaseIterable, Sendable {
         case .clearframe: return ""
         case .stickiesPlain: return "stickies-"
         case .stickiesDuo: return "stickies-duo-"
+        case .emojiOne: return "emoji-"
         }
     }
 
@@ -141,6 +149,8 @@ public enum ClearframeIconStyle: String, CaseIterable, Sendable {
             return nil
         case .stickiesPlain, .stickiesDuo:
             return "Stickies by Streamline, CC BY 4.0"
+        case .emojiOne:
+            return "EmojiOne v1 by Emoji One, CC BY-SA 4.0"
         }
     }
 }
@@ -161,6 +171,14 @@ public enum ClearframeIconCategory: String, CaseIterable, Sendable {
     case nature
     case objects
     case interface
+    // Sections the emoji set needs and the drawn sets have no use for. The
+    // picker skips a category with nothing in it, so these stay invisible
+    // outside the style that fills them.
+    case faces
+    case food
+    case activities
+    case symbols
+    case flags
 
     /// The section heading a reader sees.
     public var title: String {
@@ -178,6 +196,11 @@ public enum ClearframeIconCategory: String, CaseIterable, Sendable {
         case .nature: return "Nature"
         case .objects: return "Objects"
         case .interface: return "Interface"
+        case .faces: return "Faces"
+        case .food: return "Food"
+        case .activities: return "Activities"
+        case .symbols: return "Symbols"
+        case .flags: return "Flags"
         }
     }
 }
@@ -200,7 +223,9 @@ public enum ClearframeIconCatalog {
     /// Identifiers are unique across the whole list — the licensed sets are
     /// prefixed — so one lookup answers for every style.
     public static let all: [ClearframeIcon] =
-        ClearframeIconCatalogData.icons + StickiesIconCatalogData.icons
+        ClearframeIconCatalogData.icons
+        + StickiesIconCatalogData.icons
+        + EmojiOneIconCatalogData.icons
 
     private static let index: [String: ClearframeIcon] = Dictionary(
         uniqueKeysWithValues: all.map { ($0.id, $0) }

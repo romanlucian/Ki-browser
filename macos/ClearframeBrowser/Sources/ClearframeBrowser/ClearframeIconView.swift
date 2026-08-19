@@ -22,14 +22,56 @@ struct ClearframeIconView: View {
         // The artwork's own units are square-scaled, so one factor converts a
         // stroke authored in box units into points at the drawn size.
         let scale = size / max(geometry.box.width, geometry.box.height)
-        ZStack {
-            ForEach(Array(geometry.shapes.enumerated()), id: \.offset) { _, shape in
-                VectorCommandShape(commands: shape.commands, box: geometry.box)
-                    .painted(shape, style: geometry.strokeStyle(for: shape, scale: scale))
+        Group {
+            if geometry.style.isTintable {
+                inherited(geometry, scale: scale)
+            } else {
+                painted(geometry, scale: scale)
             }
         }
         .frame(width: size, height: size)
         .accessibilityHidden(true)
+    }
+
+    /// Artwork that names no colour, drawn as a shape per element so the
+    /// caller's `foregroundStyle` reaches it. Only the Clearframe set takes
+    /// this path, and it is a handful of elements per icon.
+    private func inherited(_ geometry: ClearframeIconGeometry.Resolved, scale: CGFloat) -> some View {
+        ZStack {
+            ForEach(Array(geometry.shapes.enumerated()), id: \.offset) { _, shape in
+                VectorCommandShape(commands: shape.commands, box: geometry.box)
+                    .painted(shape, style: geometry.strokeStyle(for: shape, scale: scale))
+                    .opacity(shape.opacity)
+            }
+        }
+    }
+
+    /// Artwork that carries its own colours, drawn imperatively in one canvas.
+    ///
+    /// A view per element does not scale here. Illustrative sets are drawn in
+    /// hundreds or thousands of paths — one flag in the emoji set is over five
+    /// thousand — and at that size a shape view each costs a third of a second
+    /// per frame, which the bookmarks bar would pay on every redraw. The same
+    /// geometry through a single canvas is several times faster, and leaves
+    /// only two icons in the whole set above one frame's budget.
+    private func painted(_ geometry: ClearframeIconGeometry.Resolved, scale: CGFloat) -> some View {
+        Canvas { context, canvasSize in
+            let rect = CGRect(origin: .zero, size: canvasSize)
+            for shape in geometry.shapes {
+                let path = VectorCommandShape(commands: shape.commands, box: geometry.box).path(in: rect)
+                // A colourful set almost always names its colour; the rare
+                // element that does not falls back to the caller's, which
+                // stays visible on any surface.
+                let color = (shape.colorHex.flatMap(Color.init(iconHex:)) ?? .primary)
+                    .opacity(shape.opacity)
+                switch shape.paint {
+                case .filled:
+                    context.fill(path, with: .color(color), style: FillStyle(eoFill: shape.usesEvenOddFill))
+                case .stroked:
+                    context.stroke(path, with: .color(color), style: geometry.strokeStyle(for: shape, scale: scale))
+                }
+            }
+        }
     }
 }
 

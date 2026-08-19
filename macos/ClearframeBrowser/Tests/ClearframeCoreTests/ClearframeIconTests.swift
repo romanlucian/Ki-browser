@@ -16,13 +16,16 @@ final class ClearframeIconTests: XCTestCase {
 
     func testCatalogShipsOneHundredFourIconsAcrossThirteenCategories() {
         XCTAssertEqual(ClearframeIconCatalog.icons(style: .clearframe).count, 104)
-        XCTAssertEqual(ClearframeIconCategory.allCases.count, 13)
+        XCTAssertEqual(ClearframeIconCategory.allCases.count, 18)
 
         let expectedCounts: [ClearframeIconCategory: Int] = [
             .work: 7, .creative: 7, .reading: 7, .shopping: 7, .travel: 7, .code: 7,
             .people: 10, .media: 10, .home: 10, .markers: 10,
             .nature: 8, .objects: 8,
-            .interface: 6
+            .interface: 6,
+            // Sections only the emoji set fills. Zero here, and the picker
+            // skips an empty section, so they never show for this style.
+            .faces: 0, .food: 0, .activities: 0, .symbols: 0, .flags: 0
         ]
         for category in ClearframeIconCategory.allCases {
             XCTAssertEqual(
@@ -54,7 +57,7 @@ final class ClearframeIconTests: XCTestCase {
 
         XCTAssertEqual(
             ClearframeIconCatalog.all.count,
-            104 + 200,
+            104 + 200 + 1261,
             "one lookup has to answer for every style"
         )
         XCTAssertEqual(ClearframeIconCatalog.availableStyles, ClearframeIconStyle.allCases)
@@ -71,6 +74,108 @@ final class ClearframeIconTests: XCTestCase {
         for style in [ClearframeIconStyle.stickiesPlain, .stickiesDuo] {
             XCTAssertEqual(style.attribution, "Stickies by Streamline, CC BY 4.0")
         }
+    }
+
+    /// The emoji set is the largest and the only one filed heuristically, so
+    /// the things worth pinning are the ones a regeneration could quietly break.
+    func testEmojiSetShipsWholeAndInItsOwnBox() {
+        let emoji = ClearframeIconCatalog.icons(style: .emojiOne)
+        XCTAssertEqual(emoji.count, 1261, "1262 drawings less the one painted with a gradient")
+        XCTAssertTrue(emoji.allSatisfy { $0.id.hasPrefix("emoji-") })
+        XCTAssertTrue(
+            emoji.allSatisfy { $0.box == VectorBox(x: 0, y: 0, width: 64, height: 64) },
+            "the whole set is drawn in one box, which is why it is written once"
+        )
+        XCTAssertNil(
+            ClearframeIconCatalog.icon(id: "emoji-flag-for-mexico"),
+            "the one gradient drawing is skipped rather than approximated"
+        )
+        XCTAssertEqual(
+            ClearframeIconStyle.emojiOne.attribution,
+            "EmojiOne v1 by Emoji One, CC BY-SA 4.0",
+            "share-alike artwork has to say so wherever it is shown"
+        )
+        XCTAssertFalse(ClearframeIconStyle.emojiOne.isTintable)
+
+        // Every category the heuristic files into must actually be reachable in
+        // the picker, and none may be empty.
+        let filled = Set(emoji.map(\.category))
+        for category in filled {
+            XCTAssertFalse(ClearframeIconCatalog.icons(in: category, style: .emojiOne).isEmpty)
+        }
+    }
+
+    // MARK: - Transforms
+
+    func testTransformsMoveGeometryWhereTheArtworkSaysAndComposeRightToLeft() {
+        let plain = VectorPathParser.parse(#"<path d="M1 1 L3 1"/>"#)
+        let moved = VectorPathParser.parse(#"<path transform="translate(10 5)" d="M1 1 L3 1"/>"#)
+        XCTAssertEqual(Self.points(in: plain?.first?.commands ?? []).first, CGPoint(x: 1, y: 1))
+        XCTAssertEqual(Self.points(in: moved?.first?.commands ?? []).first, CGPoint(x: 11, y: 6))
+
+        // "translate then scale" must scale first: SVG applies the rightmost
+        // function to the coordinates first. Getting this backwards would put
+        // the point at (22, 12) instead.
+        let composed = VectorPathParser.parse(#"<path transform="translate(10 5) scale(2)" d="M1 1 L3 1"/>"#)
+        XCTAssertEqual(Self.points(in: composed?.first?.commands ?? []).first, CGPoint(x: 12, y: 7))
+
+        // A group's transform reaches its children, and a child's own applies
+        // inside it.
+        let nested = VectorPathParser.parse(
+            #"<g transform="translate(10 0)"><path transform="translate(0 5)" d="M1 1 L3 1"/></g>"#
+        )
+        XCTAssertEqual(Self.points(in: nested?.first?.commands ?? []).first, CGPoint(x: 11, y: 6))
+
+        XCTAssertNil(
+            VectorPathParser.parse(#"<path transform="wobble(3)" d="M1 1 L3 1"/>"#),
+            "a transform this parser cannot read draws in the wrong place; refuse instead"
+        )
+    }
+
+    /// A circle under a rotation is no longer axis-aligned, so it has to stop
+    /// being an ellipse primitive or it would draw untilted.
+    func testARotatedRoundShapeBecomesCurvesRatherThanADrawnUntiltedEllipse() {
+        let upright = VectorPathParser.parse(#"<ellipse cx="10" cy="10" rx="6" ry="2"/>"#)
+        let turned = VectorPathParser.parse(#"<ellipse transform="rotate(45 10 10)" cx="10" cy="10" rx="6" ry="2"/>"#)
+
+        if case .ellipse = upright?.first?.commands.first {} else {
+            XCTFail("an untransformed ellipse should stay an exact ellipse")
+        }
+        guard let turnedCommands = turned?.first?.commands else { return XCTFail("did not parse") }
+        XCTAssertFalse(
+            turnedCommands.contains { if case .ellipse = $0 { return true } else { return false } },
+            "a turned ellipse must become curves"
+        )
+        // Turning a 6x2 ellipse 45 degrees about its own centre keeps its
+        // centre and swaps which diagonal is long.
+        let xs = Self.drawnPoints(in: turnedCommands).map(\.x)
+        let ys = Self.drawnPoints(in: turnedCommands).map(\.y)
+        XCTAssertEqual((xs.min()! + xs.max()!) / 2, 10, accuracy: 0.01)
+        XCTAssertEqual((ys.min()! + ys.max()!) / 2, 10, accuracy: 0.01)
+        XCTAssertEqual(xs.max()! - xs.min()!, ys.max()! - ys.min()!, accuracy: 0.01)
+    }
+
+    // MARK: - Opacity
+
+    func testOpacityMultipliesDownTheTreeAndDefaultsToSolid() {
+        XCTAssertEqual(VectorPathParser.parse(##"<path fill="#fff" d="M1 1 H5"/>"##)?.first?.opacity, 1)
+        XCTAssertEqual(
+            VectorPathParser.parse(##"<path fill="#fff" opacity="0.5" d="M1 1 H5"/>"##)?.first?.opacity,
+            0.5
+        )
+        XCTAssertEqual(
+            VectorPathParser.parse(
+                ##"<g opacity="0.5"><path fill="#fff" opacity="0.5" d="M1 1 H5"/></g>"##
+            )?.first?.opacity,
+            0.25,
+            "a group at half over a child at half draws the child at a quarter"
+        )
+        // fill-opacity reaches the fill and leaves the stroke alone.
+        let both = VectorPathParser.parse(
+            ##"<path fill="#fff" stroke="#000" fill-opacity="0.25" d="M1 1 H5"/>"##
+        )
+        XCTAssertEqual(both?.first?.opacity, 0.25)
+        XCTAssertEqual(both?.last?.opacity, 1)
     }
 
     func testEveryIconHasAUniqueIdentifierAndKeepsItsCategoryOrder() {
@@ -133,7 +238,8 @@ final class ClearframeIconTests: XCTestCase {
     /// to actually sit in the box each icon declares — otherwise it would be
     /// silently cropped or floated off-centre.
     func testEveryStickiesIconStaysInsideTheBoxItDeclares() {
-        let stickies = ClearframeIconCatalog.all.filter { $0.style != .clearframe }
+        let stickies = ClearframeIconCatalog.icons(style: .stickiesPlain)
+            + ClearframeIconCatalog.icons(style: .stickiesDuo)
         XCTAssertEqual(stickies.count, 200)
 
         var worst = (id: "", overshoot: 0.0)
@@ -164,7 +270,9 @@ final class ClearframeIconTests: XCTestCase {
     /// their own colours, which is exactly what the Clearframe set never does.
     func testStickiesArtworkCarriesItsOwnColours() {
         var seen = Set<String>()
-        for icon in ClearframeIconCatalog.all where icon.style != .clearframe {
+        let stickies = ClearframeIconCatalog.icons(style: .stickiesPlain)
+            + ClearframeIconCatalog.icons(style: .stickiesDuo)
+        for icon in stickies {
             guard let shapes = VectorPathParser.parse(icon.markup) else {
                 XCTFail("\(icon.id) failed to parse")
                 continue

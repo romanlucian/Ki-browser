@@ -47,6 +47,11 @@ public struct VectorShape: Equatable, Sendable {
     /// sharp points such as a star's.
     public let lineCap: LineCap?
     public let lineJoin: LineJoin?
+    /// How opaque this element is, 0...1, with `opacity` and the paint's own
+    /// `fill-opacity` or `stroke-opacity` already multiplied together.
+    /// Illustrative artwork uses it for shadows and soft highlights; drawing
+    /// those at full strength turns a shadow into a black shape.
+    public let opacity: Double
 
     public enum LineCap: String, Sendable {
         case butt, round, square
@@ -62,7 +67,8 @@ public struct VectorShape: Equatable, Sendable {
         colorHex: String? = nil,
         usesEvenOddFill: Bool = false,
         lineCap: LineCap? = nil,
-        lineJoin: LineJoin? = nil
+        lineJoin: LineJoin? = nil,
+        opacity: Double = 1
     ) {
         self.paint = paint
         self.commands = commands
@@ -70,6 +76,7 @@ public struct VectorShape: Equatable, Sendable {
         self.usesEvenOddFill = usesEvenOddFill
         self.lineCap = lineCap
         self.lineJoin = lineJoin
+        self.opacity = opacity
     }
 }
 
@@ -107,13 +114,16 @@ public enum VectorPathParser {
         return shapes.isEmpty ? nil : shapes
     }
 
-    /// Indexes everything inside `<defs>` by its identifier, so `<use>` can
-    /// find it. A definition draws nothing where it sits.
+    /// Indexes every element that carries an identifier, so `<use>` can find it.
+    ///
+    /// Not just the contents of `<defs>`: SVG lets `<use>` reference anything by
+    /// id, and this artwork does exactly that — a shape is drawn once in place
+    /// and then instantiated again elsewhere under a different transform, which
+    /// is how a set gets two eyes out of one drawing. Where an element sits
+    /// still decides whether it draws there; only `<defs>` is silent.
     private static func collectDefinitions(_ node: MarkupNode, into definitions: inout [String: MarkupNode]) {
-        if node.name == "defs" {
-            for child in node.children where child.attributes["id"] != nil {
-                definitions[child.attributes["id"]!] = child
-            }
+        if let id = node.attributes["id"], definitions[id] == nil {
+            definitions[id] = node
         }
         for child in node.children { collectDefinitions(child, into: &definitions) }
     }
@@ -127,6 +137,11 @@ public enum VectorPathParser {
         definitions: [String: MarkupNode],
         into shapes: inout [VectorShape]
     ) -> Bool {
+        // A transform this parser cannot read would silently draw the element
+        // in the wrong place, which is worse than refusing the icon.
+        if let transform = node.attributes["transform"], parseTransform(transform) == nil {
+            return false
+        }
         let context = context.inheriting(node.attributes)
 
         switch node.name {
@@ -191,6 +206,12 @@ public enum VectorPathParser {
         context: PaintContext,
         into shapes: inout [VectorShape]
     ) {
+        // Geometry is baked into the root's coordinates here, once, so no
+        // renderer has to know a transform ever existed.
+        let commands = applying(context.transform, to: commands)
+        let cap = context.lineCap.flatMap(VectorShape.LineCap.init(rawValue:))
+        let join = context.lineJoin.flatMap(VectorShape.LineJoin.init(rawValue:))
+
         var painted = false
         if let fill = context.fill, fill != "none" {
             shapes.append(
@@ -198,7 +219,8 @@ public enum VectorPathParser {
                     paint: .filled,
                     commands: commands,
                     colorHex: normalizedHex(fill),
-                    usesEvenOddFill: context.fillRule == "evenodd"
+                    usesEvenOddFill: context.fillRule == "evenodd",
+                    opacity: context.opacity * context.fillOpacity
                 )
             )
             painted = true
@@ -209,8 +231,9 @@ public enum VectorPathParser {
                     paint: .stroked,
                     commands: commands,
                     colorHex: normalizedHex(stroke),
-                    lineCap: context.lineCap.flatMap(VectorShape.LineCap.init(rawValue:)),
-                    lineJoin: context.lineJoin.flatMap(VectorShape.LineJoin.init(rawValue:))
+                    lineCap: cap,
+                    lineJoin: join,
+                    opacity: context.opacity * context.strokeOpacity
                 )
             )
             painted = true
@@ -224,11 +247,146 @@ public enum VectorPathParser {
                     paint: .stroked,
                     commands: commands,
                     colorHex: nil,
-                    lineCap: context.lineCap.flatMap(VectorShape.LineCap.init(rawValue:)),
-                    lineJoin: context.lineJoin.flatMap(VectorShape.LineJoin.init(rawValue:))
+                    lineCap: cap,
+                    lineJoin: join,
+                    opacity: context.opacity * context.strokeOpacity
                 )
             )
         }
+    }
+
+    // MARK: - Transforms
+
+    /// Reads a `transform` attribute into a single matrix.
+    ///
+    /// Functions compose left to right the way SVG says: in
+    /// `translate(10 10) rotate(45)` a point is rotated first and then moved.
+    /// Returns `nil` on anything unrecognised, which refuses the icon rather
+    /// than drawing it in the wrong place.
+    static func parseTransform(_ value: String) -> CGAffineTransform? {
+        var matrices: [CGAffineTransform] = []
+        var remainder = Substring(value)
+
+        while true {
+            remainder = remainder.drop { $0 == " " || $0 == "," || $0 == "\n" || $0 == "\t" }
+            if remainder.isEmpty { break }
+            guard let open = remainder.firstIndex(of: "(") else { return nil }
+            let name = remainder[remainder.startIndex..<open].trimmingCharacters(in: .whitespaces)
+            guard let close = remainder[open...].firstIndex(of: ")") else { return nil }
+            let arguments = remainder[remainder.index(after: open)..<close]
+                .split(whereSeparator: { $0 == " " || $0 == "," || $0 == "\n" || $0 == "\t" })
+                .compactMap { Double($0) }
+            remainder = remainder[remainder.index(after: close)...]
+
+            switch (name, arguments.count) {
+            case ("translate", 1):
+                matrices.append(CGAffineTransform(translationX: arguments[0], y: 0))
+            case ("translate", 2):
+                matrices.append(CGAffineTransform(translationX: arguments[0], y: arguments[1]))
+            case ("scale", 1):
+                matrices.append(CGAffineTransform(scaleX: arguments[0], y: arguments[0]))
+            case ("scale", 2):
+                matrices.append(CGAffineTransform(scaleX: arguments[0], y: arguments[1]))
+            case ("rotate", 1):
+                matrices.append(CGAffineTransform(rotationAngle: arguments[0] * .pi / 180))
+            case ("rotate", 3):
+                // Rotation about a named point: move it to the origin, turn,
+                // and put it back.
+                let angle = CGAffineTransform(rotationAngle: arguments[0] * .pi / 180)
+                matrices.append(
+                    CGAffineTransform(translationX: -arguments[1], y: -arguments[2])
+                        .concatenating(angle)
+                        .concatenating(CGAffineTransform(translationX: arguments[1], y: arguments[2]))
+                )
+            case ("matrix", 6):
+                matrices.append(
+                    CGAffineTransform(
+                        a: arguments[0], b: arguments[1],
+                        c: arguments[2], d: arguments[3],
+                        tx: arguments[4], ty: arguments[5]
+                    )
+                )
+            case ("skewX", 1):
+                matrices.append(CGAffineTransform(a: 1, b: 0, c: tan(arguments[0] * .pi / 180), d: 1, tx: 0, ty: 0))
+            case ("skewY", 1):
+                matrices.append(CGAffineTransform(a: 1, b: tan(arguments[0] * .pi / 180), c: 0, d: 1, tx: 0, ty: 0))
+            default:
+                return nil
+            }
+        }
+
+        // Rightmost applies first, so fold from the right.
+        return matrices.reversed().reduce(CGAffineTransform.identity) { $0.concatenating($1) }
+    }
+
+    /// Maps geometry into the space its transform names.
+    ///
+    /// An ellipse only survives as an ellipse under a transform that does not
+    /// turn or skew it; anything else would draw a straight ellipse where the
+    /// artwork asked for a tilted one, so it becomes béziers first.
+    private static func applying(_ transform: CGAffineTransform, to commands: [VectorPathCommand]) -> [VectorPathCommand] {
+        if transform.isIdentity { return commands }
+        let turnsOrSkews = transform.b != 0 || transform.c != 0
+
+        return commands.flatMap { command -> [VectorPathCommand] in
+            switch command {
+            case .move(let p):
+                return [.move(p.applying(transform))]
+            case .line(let p):
+                return [.line(p.applying(transform))]
+            case .quad(let to, let control):
+                return [.quad(to: to.applying(transform), control: control.applying(transform))]
+            case .cubic(let to, let c1, let c2):
+                return [.cubic(to: to.applying(transform), c1: c1.applying(transform), c2: c2.applying(transform))]
+            case .close:
+                return [.close]
+            case .ellipse(let center, let radii):
+                guard turnsOrSkews else {
+                    return [
+                        .ellipse(
+                            center: center.applying(transform),
+                            radii: CGSize(
+                                width: radii.width * abs(transform.a),
+                                height: radii.height * abs(transform.d)
+                            )
+                        )
+                    ]
+                }
+                return applying(transform, to: ellipseAsCurves(center: center, radii: radii))
+            }
+        }
+    }
+
+    /// One ellipse as four cubic segments, the standard circular approximation.
+    /// Only used when a transform would otherwise tilt it.
+    static func ellipseAsCurves(center: CGPoint, radii: CGSize) -> [VectorPathCommand] {
+        let k = 0.5522847498307936
+        let (cx, cy) = (center.x, center.y)
+        let (rx, ry) = (radii.width, radii.height)
+        return [
+            .move(CGPoint(x: cx + rx, y: cy)),
+            .cubic(
+                to: CGPoint(x: cx, y: cy + ry),
+                c1: CGPoint(x: cx + rx, y: cy + ry * k),
+                c2: CGPoint(x: cx + rx * k, y: cy + ry)
+            ),
+            .cubic(
+                to: CGPoint(x: cx - rx, y: cy),
+                c1: CGPoint(x: cx - rx * k, y: cy + ry),
+                c2: CGPoint(x: cx - rx, y: cy + ry * k)
+            ),
+            .cubic(
+                to: CGPoint(x: cx, y: cy - ry),
+                c1: CGPoint(x: cx - rx, y: cy - ry * k),
+                c2: CGPoint(x: cx - rx * k, y: cy - ry)
+            ),
+            .cubic(
+                to: CGPoint(x: cx + rx, y: cy),
+                c1: CGPoint(x: cx + rx * k, y: cy - ry),
+                c2: CGPoint(x: cx + rx, y: cy - ry * k)
+            ),
+            .close
+        ]
     }
 
     /// Six lowercase hex digits, or `nil` for a colour that means "whatever
@@ -539,15 +697,37 @@ private struct PaintContext {
     var fillRule: String?
     var lineCap: String?
     var lineJoin: String?
+    /// Opacity multiplies down the tree: a group at 0.5 holding a child at 0.5
+    /// draws that child at 0.25.
+    var opacity: Double = 1
+    var fillOpacity: Double = 1
+    var strokeOpacity: Double = 1
+    /// Everything from the root down to this element, already composed, so a
+    /// point only has to be mapped once.
+    var transform: CGAffineTransform = .identity
 
     func inheriting(_ attributes: [String: String]) -> PaintContext {
-        PaintContext(
+        let local = attributes["transform"].flatMap(VectorPathParser.parseTransform) ?? .identity
+        return PaintContext(
             fill: attributes["fill"] ?? fill,
             stroke: attributes["stroke"] ?? stroke,
             fillRule: attributes["fill-rule"] ?? fillRule,
             lineCap: attributes["stroke-linecap"] ?? lineCap,
-            lineJoin: attributes["stroke-linejoin"] ?? lineJoin
+            lineJoin: attributes["stroke-linejoin"] ?? lineJoin,
+            opacity: opacity * Self.number(attributes["opacity"]),
+            fillOpacity: fillOpacity * Self.number(attributes["fill-opacity"]),
+            strokeOpacity: strokeOpacity * Self.number(attributes["stroke-opacity"]),
+            // The child's own transform takes its coordinates into the parent's
+            // space, and the parent's takes those on to the root.
+            transform: local.concatenating(transform)
         )
+    }
+
+    /// An unreadable or absent opacity is full opacity, which is what SVG says
+    /// and what keeps a typo from erasing an icon.
+    private static func number(_ value: String?) -> Double {
+        guard let value, let parsed = Double(value.trimmingCharacters(in: .whitespaces)) else { return 1 }
+        return min(1, max(0, parsed))
     }
 }
 
