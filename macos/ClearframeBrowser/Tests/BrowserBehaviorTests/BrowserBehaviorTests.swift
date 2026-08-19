@@ -570,6 +570,35 @@ final class BrowserBehaviorTests: XCTestCase {
     /// must still be pointable across the bar's whole height. When it was not,
     /// the few points above and below each item belonged to the bar, and a
     /// right-click aimed at a folder opened the bar's own menu instead.
+    /// A bare WebKit user agent gets Clearframe the page sites keep for
+    /// clients they cannot identify. Presenting Safari's is a claim about the
+    /// engine, and it has to keep both tokens sites actually read.
+    func testClearframeAsksForThePageSafariWouldGet() {
+        let name = BrowserUserAgent.applicationName
+
+        XCTAssertTrue(name.hasPrefix("Version/"), "sites read the Version token")
+        XCTAssertTrue(name.hasSuffix("Safari/\(BrowserUserAgent.safariBuild)"), "and the Safari build")
+        XCTAssertFalse(
+            BrowserUserAgent.installedSafariVersion.isEmpty,
+            "an empty version would produce a malformed user agent"
+        )
+    }
+
+    func testTheSafariVersionIsReadFromTheMacRatherThanFrozenInTheApp() throws {
+        let directory = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let plist = directory.appendingPathComponent("Info.plist")
+        try (["CFBundleShortVersionString": "99.9"] as NSDictionary).write(to: plist)
+
+        XCTAssertEqual(BrowserUserAgent.version(fromInfoPlistAt: plist.path), "99.9")
+        XCTAssertNil(
+            BrowserUserAgent.version(fromInfoPlistAt: directory.appendingPathComponent("missing.plist").path),
+            "a Mac without a readable Safari falls back instead of sending nothing"
+        )
+    }
+
     func testBookmarksBarItemsArePointableAcrossTheWholeBarHeight() {
         XCTAssertGreaterThan(
             BookmarkBarMetrics.barHeight,

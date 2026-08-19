@@ -118,6 +118,8 @@ npm test
 npm run validate
 ```
 
+Clearframe presents Safari's user agent because it renders with WebKit, Safari's engine. Sites that tailor pages by user agent then serve what they serve Safari, rather than the reduced page they keep for clients they cannot identify. The version is read from the Safari installed on the Mac.
+
 ## Important limits
 
 - A local summary selects representative sentences; it is not a fact check.

@@ -73,6 +73,8 @@ final class BrowserSession: NSObject, ObservableObject {
         self.favicons = favicons
         let configuration = WKWebViewConfiguration()
         configuration.websiteDataStore = isPrivate ? .nonPersistent() : .default()
+        // Ask for the page Safari would get: same engine, same capabilities.
+        configuration.applicationNameForUserAgent = BrowserUserAgent.applicationName
         configuration.preferences.isElementFullscreenEnabled = true
         webView = WKWebView(frame: .zero, configuration: configuration)
         super.init()
