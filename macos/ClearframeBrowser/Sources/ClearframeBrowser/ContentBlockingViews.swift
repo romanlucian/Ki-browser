@@ -6,15 +6,21 @@ import SwiftUI
 /// SwiftUI/WebKit types so the mapping is unit-testable on its own.
 enum ShieldState: Equatable {
     case activeForSite
+    /// The rule list is still compiling, so it is not attached to any page yet
+    /// and nothing is being blocked. Kept separate from `.activeForSite`
+    /// because the shield must never state protection the app is not applying.
+    case preparing
     case disabledForSite
     case disabledGlobally
     case unavailable
 
     static func make(status: ContentBlockingStatus, hostDisabled: Bool) -> ShieldState {
         switch status {
-        case .compiling, .active:
-            // Blocking is configured on whenever status reaches this branch;
-            // a brief compile in flight does not change what the shield says.
+        case .compiling:
+            // A site the user switched off stays off either way; otherwise the
+            // honest answer during a compile is "not yet", not "on".
+            return hostDisabled ? .disabledForSite : .preparing
+        case .active:
             return hostDisabled ? .disabledForSite : .activeForSite
         case .disabled:
             return .disabledGlobally
@@ -26,6 +32,7 @@ enum ShieldState: Equatable {
     var statusLine: String {
         switch self {
         case .activeForSite: return "On for this site"
+        case .preparing: return "Not blocking yet"
         case .disabledForSite: return "Off for this site"
         case .disabledGlobally: return "Off in Settings"
         case .unavailable: return "Filter unavailable"
@@ -129,13 +136,21 @@ private struct ContentBlockingPopover: View {
     @ViewBuilder
     private var bodyText: some View {
         switch provider.status {
-        case .compiling, .active:
+        case .compiling:
+            Text(preparingBodyCopy)
+        case .active:
             Text(activeBodyCopy)
         case .disabled:
             EmptyView()
         case .unavailable(let reason):
             Text("The blocking filter could not be loaded on this Mac, so no requests are being blocked. (\(reason))")
         }
+    }
+
+    /// The one window where blocking is switched on but not applied. Say so:
+    /// a page opened right now is not being filtered.
+    private var preparingBodyCopy: String {
+        "Clearframe is still preparing its tracker filter, so nothing is being blocked on this page yet. It applies to pages you open once it is ready — reload this page then to filter it too."
     }
 
     /// Pre-approved copy — keep this exact. It is the one place the app

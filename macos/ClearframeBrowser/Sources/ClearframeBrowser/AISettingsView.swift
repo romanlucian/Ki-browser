@@ -43,7 +43,7 @@ struct AISettingsView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Toggle("Save browsing history on this Mac", isOn: $savesHistory)
-                Text("History stays in this Mac user profile, is never included in AI requests, and can be cleared from the Library.")
+                Text("History stays in this Mac user profile and is never included in AI requests. Turning this off stops Clearframe recording new visits; visits it already saved stay until you clear them from All Bookmarks (⌘⌥B) or with Clear local browsing data below.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 if let notice = workspace.dataStore.recoveryNotice {
@@ -138,9 +138,11 @@ struct AISettingsView: View {
                 workspace.dataStore.clearSavedWorkspace()
             }
         }
-        .onChange(of: savesHistory) { _, enabled in
-            if !enabled { workspace.dataStore.clearHistory() }
-        }
+        // Deliberately no `onChange` for `savesHistory`: switching it off used
+        // to delete every stored visit as a side effect of a preference. The
+        // preference decides what Clearframe records next (`recordVisit`
+        // checks it); erasing what is already saved is a separate, confirmed
+        // action the user takes from Clear History or Clear local browsing data.
         .confirmationDialog(
             "Clear local browsing data?",
             isPresented: $showsResetConfirmation,

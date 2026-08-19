@@ -41,7 +41,8 @@ final class BrowserTab: ObservableObject, Identifiable {
         isPrivate: Bool = false,
         groupID: UUID? = nil,
         contentBlocking: ContentRuleListProvider? = nil,
-        favicons: FaviconStore? = nil
+        favicons: FaviconStore? = nil,
+        adoptingPopupConfiguration popupConfiguration: WKWebViewConfiguration? = nil
     ) {
         self.id = id
         self.displayTitle = title
@@ -52,7 +53,19 @@ final class BrowserTab: ObservableObject, Identifiable {
         // Built as a local first: the find controller needs the session's web
         // view, and `self` cannot be read until every stored property is set.
         let resolvedSession: BrowserSession
-        if loadImmediately {
+        if let popupConfiguration {
+            // A `window.open()` popup: WebKit built the configuration and owns
+            // the first navigation, so this tab adopts that web view rather
+            // than making one of its own.
+            resolvedSession = BrowserSession(
+                downloadCenter: downloadCenter,
+                searchSettings: searchSettings,
+                isPrivate: isPrivate,
+                contentBlocking: contentBlocking,
+                favicons: favicons,
+                adoptingPopupConfiguration: popupConfiguration
+            )
+        } else if loadImmediately {
             resolvedSession = BrowserSession(
                 downloadCenter: downloadCenter,
                 searchSettings: searchSettings,
@@ -148,6 +161,11 @@ final class BrowserWorkspace: ObservableObject {
     /// send to a printer. Republished from that tab's session so the menu item
     /// disables itself on the start surfaces instead of offering a blank job.
     @Published private(set) var canPrintSelectedPage = false
+    /// Mirrors the selected tab's history and loading state so the Back,
+    /// Forward, and Stop menu items disable themselves when they cannot act.
+    @Published private(set) var canGoBackInSelectedTab = false
+    @Published private(set) var canGoForwardInSelectedTab = false
+    @Published private(set) var isSelectedTabLoading = false
     @Published private(set) var bookmarkLibraryRequest = 0
     @Published private(set) var bookmarkFolderRequestID = UUID()
     private(set) var requestedBookmarkFolderParentID: UUID?
@@ -232,6 +250,7 @@ final class BrowserWorkspace: ObservableObject {
         tabs.forEach(configure)
         selectedTab?.activate()
         observeSelectedPagePrintability()
+        observeSelectedTabNavigation()
     }
 
     deinit {
@@ -252,6 +271,32 @@ final class BrowserWorkspace: ObservableObject {
             .switchToLatest()
             .removeDuplicates()
             .assign(to: &$canPrintSelectedPage)
+    }
+
+    /// Same shape as the printability observer, for the three values the
+    /// Back, Forward, Reload, and Stop menu items read.
+    private func observeSelectedTabNavigation() {
+        selectedSessionPublisher { $0.$canGoBack.eraseToAnyPublisher() }
+            .assign(to: &$canGoBackInSelectedTab)
+        selectedSessionPublisher { $0.$canGoForward.eraseToAnyPublisher() }
+            .assign(to: &$canGoForwardInSelectedTab)
+        selectedSessionPublisher { $0.$isLoading.eraseToAnyPublisher() }
+            .assign(to: &$isSelectedTabLoading)
+    }
+
+    private func selectedSessionPublisher(
+        _ value: @escaping (BrowserSession) -> AnyPublisher<Bool, Never>
+    ) -> AnyPublisher<Bool, Never> {
+        $selectedTabID
+            .map { [weak self] id -> AnyPublisher<Bool, Never> in
+                guard let session = self?.tabs.first(where: { $0.id == id })?.session else {
+                    return Just(false).eraseToAnyPublisher()
+                }
+                return value(session)
+            }
+            .switchToLatest()
+            .removeDuplicates()
+            .eraseToAnyPublisher()
     }
 
     var selectedTab: BrowserTab? {
@@ -558,6 +603,25 @@ final class BrowserWorkspace: ObservableObject {
         tabs = reordered
     }
 
+    /// Builds the tab a `window.open()` popup will live in and hands its web
+    /// view back to WebKit. The tab must adopt that exact instance: it is what
+    /// keeps `window.opener` connected, so a popup sign-in can report its
+    /// result to the page that opened it instead of finishing in a dead end.
+    private func adoptPopupTab(configuration: WKWebViewConfiguration, isPrivate: Bool) -> WKWebView {
+        let tab = BrowserTab(
+            downloadCenter: downloads,
+            searchSettings: searchSettings,
+            isPrivate: isPrivate,
+            contentBlocking: contentBlocking,
+            favicons: favicons,
+            adoptingPopupConfiguration: configuration
+        )
+        tabs.append(tab)
+        configure(tab)
+        selectTab(tab.id)
+        return tab.session.webView
+    }
+
     private func makeTab(url: URL?, isPrivate: Bool) -> BrowserTab {
         BrowserTab(
             initialURL: url,
@@ -672,6 +736,24 @@ final class BrowserWorkspace: ObservableObject {
         selectedTab?.session.printPage()
     }
 
+    /// ⌘R, ⌘., ⌘[, ⌘]. Each acts on the tab in front, like the toolbar
+    /// buttons beside the address bar.
+    func reloadSelectedTab() {
+        selectedTab?.session.reload()
+    }
+
+    func stopLoadingSelectedTab() {
+        selectedTab?.session.stopLoading()
+    }
+
+    func goBackInSelectedTab() {
+        selectedTab?.session.goBack()
+    }
+
+    func goForwardInSelectedTab() {
+        selectedTab?.session.goForward()
+    }
+
     func requestAddressFocusForAppActivation() {
         guard selectedTab?.session.shouldFocusAddressOnAppActivation == true else { return }
         requestAddressFocus()
@@ -733,8 +815,15 @@ final class BrowserWorkspace: ObservableObject {
 
     private func configure(_ tab: BrowserTab) {
         let isPrivate = tab.isPrivate
+        // A popup that has no address yet opens an empty tab; the script that
+        // opened it sets the location a moment later.
         tab.session.onRequestNewTab = { [weak self] url in
             self?.addTab(url: url, isPrivate: isPrivate)
+        }
+        // A popup inherits the opener's private/normal session along with the
+        // configuration WebKit handed over.
+        tab.session.onRequestPopupWebView = { [weak self] configuration in
+            self?.adoptPopupTab(configuration: configuration, isPrivate: isPrivate)
         }
         tab.session.onCompletedVisit = { [weak self] title, url in
             guard let self else { return }

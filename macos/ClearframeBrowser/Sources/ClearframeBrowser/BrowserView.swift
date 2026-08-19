@@ -99,6 +99,9 @@ private struct BrowserTabContent: View {
                     session.webView.window?.makeFirstResponder(session.webView)
                 }
             }
+            if let notice = session.linkNotice {
+                LinkNoticeBar(message: notice) { session.dismissLinkNotice() }
+            }
             if session.isLoading {
                 ProgressView(value: session.estimatedProgress)
                     .progressViewStyle(.linear)
@@ -542,6 +545,41 @@ private struct BrowserToolbar: View {
 /// WebKit reports whether a match was found and nothing else — no position, no
 /// total — so this bar says "No results" or says nothing at all. It never
 /// invents "3 of 12".
+/// States a link Clearframe declined to open, above the page rather than over
+/// it. A refused link is not a failed page: whatever the reader was reading
+/// stays on screen and keeps working.
+private struct LinkNoticeBar: View {
+    let message: String
+    let dismiss: () -> Void
+
+    var body: some View {
+        HStack(spacing: 9) {
+            Image(systemName: "link.badge.plus")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(ClearframeTheme.textTertiary)
+            Text(message)
+                .font(.system(size: 11))
+                .foregroundStyle(ClearframeTheme.textSecondary)
+                .lineLimit(2)
+            Spacer(minLength: 8)
+            Button { dismiss() } label: {
+                Image(systemName: "xmark").font(.system(size: 11, weight: .semibold))
+            }
+            .buttonStyle(GhostButtonStyle())
+            .help("Dismiss this notice")
+            .accessibilityLabel("Dismiss this notice")
+        }
+        .padding(.horizontal, 10)
+        .frame(height: 38)
+        .background(ClearframeTheme.bg2)
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(ClearframeTheme.hairline1)
+                .frame(height: 1)
+        }
+    }
+}
+
 private struct FindInPageBar: View {
     @ObservedObject var find: PageFindController
     let returnFocusToPage: () -> Void

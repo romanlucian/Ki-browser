@@ -61,6 +61,21 @@ struct ClearframeBrowserApp: App {
                     .disabled(workspace.selectedTabGroup == nil)
             }
             CommandMenu("Page") {
+                // ⌘R is the most-used key in a browser and ⌘[ / ⌘] are the
+                // macOS history pair. ⇧⌘[ and ⇧⌘] already switch tabs; these
+                // are separate chords and do not collide with them.
+                Button("Reload Page") { workspace.reloadSelectedTab() }
+                    .keyboardShortcut("r", modifiers: [.command])
+                Button("Stop Loading") { workspace.stopLoadingSelectedTab() }
+                    .keyboardShortcut(".", modifiers: [.command])
+                    .disabled(!workspace.isSelectedTabLoading)
+                Button("Back") { workspace.goBackInSelectedTab() }
+                    .keyboardShortcut("[", modifiers: [.command])
+                    .disabled(!workspace.canGoBackInSelectedTab)
+                Button("Forward") { workspace.goForwardInSelectedTab() }
+                    .keyboardShortcut("]", modifiers: [.command])
+                    .disabled(!workspace.canGoForwardInSelectedTab)
+                Divider()
                 Button("Focus Address Bar") { workspace.requestAddressFocus() }
                     .keyboardShortcut("l", modifiers: [.command])
                 Button("Add or Remove Bookmark") { workspace.toggleBookmarkForSelectedTab() }

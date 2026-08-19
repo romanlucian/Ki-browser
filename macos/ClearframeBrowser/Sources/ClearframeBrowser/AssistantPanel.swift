@@ -22,6 +22,8 @@ struct AssistantPanel: View {
                 loadingState(message)
             case .structureNotice:
                 structureNoticeState
+            case .needsPage:
+                needsPageState
             case .failed(let message):
                 errorState(message)
             case .ready:
@@ -101,6 +103,29 @@ struct AssistantPanel: View {
                 .multilineTextAlignment(.center)
             Button("Analyze anyway") {
                 Task { await model.analyzeDespiteStructure(session: session) }
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(ClearframeTheme.accent)
+            .foregroundStyle(ClearframeTheme.onAccent)
+        }
+        .padding(28)
+    }
+
+    /// Analyze page pressed on a tab that holds no web page. A calm refusal,
+    /// not an error: nothing went wrong, there is simply nothing to read yet.
+    private var needsPageState: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "doc.text.magnifyingglass")
+                .font(.system(size: 36))
+                .foregroundStyle(ClearframeTheme.accent)
+            Text("No page to analyze yet")
+                .font(.title3.bold())
+            Text(PageAssistantModel.needsPageMessage)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+            Button("Analyze page") {
+                Task { await model.analyzeCurrentPage(session: session) }
             }
             .buttonStyle(.borderedProminent)
             .tint(ClearframeTheme.accent)
