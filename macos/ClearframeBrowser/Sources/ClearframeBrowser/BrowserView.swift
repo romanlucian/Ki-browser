@@ -356,10 +356,10 @@ private struct BrowserToolbar: View {
             presentFolderEditor(parentID: workspace.requestedBookmarkFolderParentID)
         }
         .sheet(item: $folderEditorRequest) { request in
-            BookmarkFolderEditor(request: request) { title, emoji in
+            BookmarkFolderEditor(request: request) { title, iconID in
                 _ = dataStore.createBookmarkFolder(
                     title: title,
-                    emoji: emoji,
+                    iconID: iconID,
                     parentID: request.parentID
                 )
                 folderEditorRequest = nil
@@ -508,7 +508,7 @@ private struct BrowserToolbar: View {
             folderID: nil,
             parentID: parentID,
             title: "",
-            emoji: "📁"
+            iconID: ClearframeIconCatalog.defaultIconID
         )
     }
 

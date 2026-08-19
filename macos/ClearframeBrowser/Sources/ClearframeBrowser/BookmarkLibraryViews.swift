@@ -70,7 +70,7 @@ struct BookmarkFolderEditorRequest: Identifiable {
     let folderID: UUID?
     let parentID: UUID?
     let title: String
-    let emoji: String
+    let iconID: String
 }
 
 struct BookmarkFolderDestination: Identifiable {
@@ -98,8 +98,8 @@ struct BookmarkFolderDestination: Identifiable {
         func appendChildren(of parentID: UUID?, prefix: String) {
             for folder in childrenByParent[parentID] ?? [] {
                 let path = prefix.isEmpty
-                    ? "\(folder.emoji) \(folder.title)"
-                    : "\(prefix) › \(folder.emoji) \(folder.title)"
+                    ? folder.title
+                    : "\(prefix) › \(folder.title)"
                 result.append(BookmarkFolderDestination(folderID: folder.id, label: path))
                 appendChildren(of: folder.id, prefix: path)
             }
@@ -151,7 +151,7 @@ struct BookmarkOrganizerView: View {
                     .help("Back to parent folder")
                 }
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(currentFolder.map { "\($0.emoji) \($0.title)" } ?? "Bookmarks")
+                    Text(currentFolder?.title ?? "Bookmarks")
                         .font(.callout.bold())
                     Text(search.isEmpty ? (currentFolder == nil ? "Folders and unfiled bookmarks" : "Local bookmark folder") : "Search all bookmarks")
                         .font(.caption2)
@@ -163,7 +163,7 @@ struct BookmarkOrganizerView: View {
                         folderID: nil,
                         parentID: currentFolderID,
                         title: "",
-                        emoji: "📁"
+                        iconID: ClearframeIconCatalog.defaultIconID
                     )
                 } label: {
                     Label("New Folder", systemImage: "folder.badge.plus")
@@ -187,7 +187,7 @@ struct BookmarkOrganizerView: View {
                                     folderID: nil,
                                     parentID: folder.id,
                                     title: "",
-                                    emoji: "📁"
+                                    iconID: ClearframeIconCatalog.defaultIconID
                                 )
                             },
                             rename: {
@@ -195,7 +195,7 @@ struct BookmarkOrganizerView: View {
                                     folderID: folder.id,
                                     parentID: folder.parentID,
                                     title: folder.title,
-                                    emoji: folder.emoji
+                                    iconID: ClearframeIconGeometry.iconID(for: folder)
                                 )
                             },
                             fileDroppedURL: { fileDroppedURL($0, to: folder) },
@@ -242,11 +242,11 @@ struct BookmarkOrganizerView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .sheet(item: $editorRequest) { request in
-            BookmarkFolderEditor(request: request) { title, emoji in
+            BookmarkFolderEditor(request: request) { title, iconID in
                 if let folderID = request.folderID {
-                    store.updateBookmarkFolder(id: folderID, title: title, emoji: emoji)
+                    store.updateBookmarkFolder(id: folderID, title: title, iconID: iconID)
                 } else {
-                    _ = store.createBookmarkFolder(title: title, emoji: emoji, parentID: request.parentID)
+                    _ = store.createBookmarkFolder(title: title, iconID: iconID, parentID: request.parentID)
                 }
                 editorRequest = nil
             }
@@ -265,7 +265,7 @@ struct BookmarkOrganizerView: View {
             }
             Button("Cancel", role: .cancel) { pendingDeletion = nil }
         } message: { folder in
-            Text("\(folder.emoji) \(folder.title) contains saved items. Its bookmarks and subfolders will move to the parent folder; nothing will be deleted.")
+            Text("\(folder.title) contains saved items. Its bookmarks and subfolders will move to the parent folder; nothing will be deleted.")
         }
     }
 
@@ -338,7 +338,7 @@ struct BookmarkFolderRow: View {
         HStack(spacing: 9) {
             Button(action: open) {
                 HStack(spacing: 9) {
-                    Text(folder.emoji).font(.title3)
+                    BookmarkFolderIcon(folder: folder, size: 17).foregroundStyle(ClearframeTheme.textSecondary)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(folder.title).font(.callout.weight(.semibold)).lineLimit(1)
                         Text("\(bookmarkCount) bookmarks · \(subfolderCount) folders")
@@ -460,55 +460,120 @@ struct BookmarkFolderEditor: View {
     let save: (String, String) -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var title: String
-    @State private var emoji: String
-
-    private let suggestedEmoji = ["📁", "🎨", "💻", "🛍️", "📚", "✈️", "💡", "❤️"]
+    @State private var iconID: String
+    @State private var search = ""
 
     init(request: BookmarkFolderEditorRequest, save: @escaping (String, String) -> Void) {
         self.request = request
         self.save = save
         _title = State(initialValue: request.title)
-        _emoji = State(initialValue: request.emoji)
+        _iconID = State(initialValue: request.iconID)
+    }
+
+    /// Matches on the icon's own name and its category, so "work" finds the
+    /// whole work set and "plane" finds the one icon.
+    private var matches: [ClearframeIconCategory: [ClearframeIcon]] {
+        let query = search.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !query.isEmpty else { return ClearframeIconCatalog.byCategory }
+        var result: [ClearframeIconCategory: [ClearframeIcon]] = [:]
+        for category in ClearframeIconCategory.allCases {
+            let icons = ClearframeIconCatalog.icons(in: category).filter {
+                $0.id.contains(query) || category.title.lowercased().contains(query)
+            }
+            if !icons.isEmpty { result[category] = icons }
+        }
+        return result
+    }
+
+    private var isSaveDisabled: Bool {
+        title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text(request.folderID == nil ? "New bookmark folder" : "Edit bookmark folder")
                 .font(.title2.bold())
-            TextField("Folder title", text: $title)
-                .textFieldStyle(.roundedBorder)
-            HStack {
-                TextField("Emoji", text: $emoji)
+
+            HStack(spacing: 12) {
+                ClearframeIconView(iconID: iconID, size: 24)
+                    .foregroundStyle(ClearframeTheme.accent)
+                    .frame(width: 40, height: 40)
+                    .background(ClearframeTheme.bg3, in: RoundedRectangle(cornerRadius: ClearframeTheme.radius9))
+                TextField("Folder name", text: $title)
                     .textFieldStyle(.roundedBorder)
-                    .frame(width: 85)
-                    .onChange(of: emoji) { _, value in
-                        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-                        if trimmed.count > 1 { emoji = String(trimmed.prefix(1)) }
-                    }
-                Text("Choose one or enter your own")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
             }
-            HStack(spacing: 8) {
-                ForEach(suggestedEmoji, id: \.self) { suggestion in
-                    Button(suggestion) { emoji = suggestion }
-                        .buttonStyle(.bordered)
-                        .accessibilityLabel("Use \(suggestion) folder icon")
-                }
-            }
+
+            Divider()
+
+            TextField("Search icons", text: $search)
+                .textFieldStyle(.roundedBorder)
+
+            iconGrid
+
             HStack {
                 Spacer()
                 Button("Cancel") { dismiss() }
                 Button("Save") {
-                    save(title, emoji)
+                    save(title, iconID)
                     dismiss()
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .disabled(isSaveDisabled)
             }
         }
         .padding(22)
         .frame(width: 470)
+    }
+
+    private var iconGrid: some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 14, pinnedViews: []) {
+                ForEach(ClearframeIconCategory.allCases, id: \.self) { category in
+                    if let icons = matches[category], !icons.isEmpty {
+                        VStack(alignment: .leading, spacing: 7) {
+                            Text(category.title.uppercased())
+                                .font(ClearframeTheme.metaFont)
+                                .tracking(ClearframeTheme.metaTracking)
+                                .foregroundStyle(ClearframeTheme.textTertiary)
+                            LazyVGrid(
+                                columns: [GridItem(.adaptive(minimum: 38, maximum: 38), spacing: 6)],
+                                alignment: .leading,
+                                spacing: 6
+                            ) {
+                                ForEach(icons) { icon in
+                                    iconCell(icon)
+                                }
+                            }
+                        }
+                    }
+                }
+                if matches.isEmpty {
+                    Text("No icon matches “\(search)”.")
+                        .font(.callout)
+                        .foregroundStyle(ClearframeTheme.textSecondary)
+                        .padding(.vertical, 18)
+                }
+            }
+            .padding(.vertical, 2)
+        }
+        .frame(height: 240)
+    }
+
+    private func iconCell(_ icon: ClearframeIcon) -> some View {
+        let isSelected = icon.id == iconID
+        return Button { iconID = icon.id } label: {
+            ClearframeIconView(iconID: icon.id, size: 22)
+                .foregroundStyle(isSelected ? ClearframeTheme.onAccent : ClearframeTheme.textSecondary)
+                .frame(width: 38, height: 38)
+                .background(
+                    isSelected ? ClearframeTheme.accent : ClearframeTheme.bg3,
+                    in: RoundedRectangle(cornerRadius: ClearframeTheme.radius6)
+                )
+        }
+        .buttonStyle(.plain)
+        .help(icon.id)
+        .accessibilityLabel(icon.id)
+        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
     }
 }
 

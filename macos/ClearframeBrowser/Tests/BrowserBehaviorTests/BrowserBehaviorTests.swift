@@ -524,8 +524,8 @@ final class BrowserBehaviorTests: XCTestCase {
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
         let store = BrowserDataStore(defaults: defaults)
-        let work = try XCTUnwrap(store.createBookmarkFolder(title: "Work", emoji: "💼", parentID: nil))
-        let code = try XCTUnwrap(store.createBookmarkFolder(title: "Code", emoji: "💻", parentID: work.id))
+        let work = try XCTUnwrap(store.createBookmarkFolder(title: "Work", iconID: "briefcase", parentID: nil))
+        let code = try XCTUnwrap(store.createBookmarkFolder(title: "Code", iconID: "terminal", parentID: work.id))
         _ = store.addBookmark(title: "Brief", url: "https://example.com/brief", folderID: work.id)
         _ = store.addBookmark(title: "Docs", url: "https://swift.org/documentation/", folderID: code.id)
 
@@ -541,7 +541,7 @@ final class BrowserBehaviorTests: XCTestCase {
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
         let store = BrowserDataStore(defaults: defaults)
-        let design = try XCTUnwrap(store.createBookmarkFolder(title: "Web Design", emoji: "🎨", parentID: nil))
+        let design = try XCTUnwrap(store.createBookmarkFolder(title: "Web Design", iconID: "palette", parentID: nil))
         let saved = try XCTUnwrap(
             store.addBookmark(title: "Palette", url: "https://example.com/palette", folderID: design.id)
         )
