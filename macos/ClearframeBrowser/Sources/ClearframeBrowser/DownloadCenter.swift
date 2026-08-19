@@ -167,6 +167,22 @@ extension DownloadCenter: WKDownloadDelegate {
                     completionHandler(nil)
                     return
                 }
+                // The save panel already offered Replace and the user chose it,
+                // but WKDownload refuses to write over a file that exists and
+                // ends the transfer as Failed. The file the user agreed to
+                // replace is removed here, after that consent and nowhere else.
+                if FileManager.default.fileExists(atPath: destination.path) {
+                    do {
+                        try FileManager.default.removeItem(at: destination)
+                    } catch {
+                        self.update(id) {
+                            $0.status = .failed("Clearframe could not replace \(destination.lastPathComponent).")
+                        }
+                        self.removeTracking(download, id: id)
+                        completionHandler(nil)
+                        return
+                    }
+                }
                 self.update(id) {
                     $0.filename = destination.lastPathComponent
                     $0.destinationURL = destination

@@ -41,6 +41,53 @@ final class BrowserBehaviorTests: XCTestCase {
         XCTAssertNil(model.operationMessage)
     }
 
+    /// Analyze page is enabled and prominent on a brand-new tab. Extraction of
+    /// the start surface succeeds, so the identity check downstream used to
+    /// fail and abandon the work while the panel still said "Reading the
+    /// visible page…", with no timeout and no way back.
+    func testAnalyzingATabWithNoWebPageRefusesInsteadOfLoadingForever() async {
+        let session = ControlledAssistantSession(page: Self.page, waitsForExtraction: false)
+        session.currentURLString = ""
+        let model = PageAssistantModel()
+
+        await model.analyzeCurrentPage(session: session)
+
+        XCTAssertEqual(model.state, .needsPage)
+        XCTAssertNil(model.analysis)
+        XCTAssertNil(model.snapshot)
+    }
+
+    func testAnalyzingRecoversOnceTheTabHoldsARealPage() async {
+        let session = ControlledAssistantSession(page: Self.page, waitsForExtraction: false)
+        session.currentURLString = ""
+        let model = PageAssistantModel()
+        await model.analyzeCurrentPage(session: session)
+        XCTAssertEqual(model.state, .needsPage)
+
+        session.currentURLString = Self.page.url
+        await model.analyzeCurrentPage(session: session)
+
+        XCTAssertEqual(model.state, .ready)
+        XCTAssertEqual(model.analysis?.mode, .local)
+    }
+
+    /// The page moving out from under a read is the other way the panel could
+    /// be abandoned mid-load. It has to settle on something the reader can act
+    /// on, never on a spinner.
+    func testAPageThatMovesDuringAnalysisSettlesOnAStateTheReaderCanActOn() async {
+        let session = ControlledAssistantSession(page: Self.page)
+        let model = PageAssistantModel()
+
+        let analysisTask = Task { await model.analyzeCurrentPage(session: session) }
+        while !session.isWaitingForExtraction { await Task.yield() }
+        session.currentURLString = "https://second.example/other-article"
+        session.completeExtraction()
+        await analysisTask.value
+
+        XCTAssertEqual(model.state, .failed(PageAssistantModel.pageChangedMessage))
+        XCTAssertNil(model.analysis)
+    }
+
     func testOptionalAIErrorKeepsTheValidLocalResultVisible() async {
         let session = ControlledAssistantSession(page: Self.page, waitsForExtraction: false)
         let model = PageAssistantModel(remoteProviderFactory: { _ in FailingProvider() })
@@ -143,6 +190,86 @@ final class BrowserBehaviorTests: XCTestCase {
             XCTAssertEqual(failure.kind, .blocked)
             XCTAssertTrue(session.currentURLString.isEmpty)
         }
+    }
+
+    /// `window.open()` hands over a configuration; the popup's tab has to build
+    /// its web view from that exact configuration, or `window.opener` is null
+    /// in the new tab and a popup sign-in can never report back.
+    func testAPopupSessionAdoptsWebKitsConfigurationAndLeavesTheFirstNavigationToIt() throws {
+        let suiteName = "clearframe.popup.adoption.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let openerConfiguration = WKWebViewConfiguration()
+        openerConfiguration.applicationNameForUserAgent = "AdoptedPopupProbe"
+        let popup = BrowserSession(
+            downloadCenter: DownloadCenter(),
+            searchSettings: SearchSettingsStore(defaults: defaults),
+            adoptingPopupConfiguration: openerConfiguration
+        )
+        defer { popup.teardown() }
+
+        XCTAssertEqual(popup.webView.configuration.applicationNameForUserAgent, "AdoptedPopupProbe")
+        // Nothing is loaded into a popup here: WebKit owns its first
+        // navigation, and loading the start document would throw it away.
+        XCTAssertEqual(popup.loadState, .startPage)
+        XCTAssertTrue(popup.currentURLString.isEmpty)
+
+        let ordinary = BrowserSession(
+            downloadCenter: DownloadCenter(),
+            searchSettings: SearchSettingsStore(defaults: defaults)
+        )
+        defer { ordinary.teardown() }
+        XCTAssertEqual(
+            ordinary.webView.configuration.applicationNameForUserAgent,
+            BrowserUserAgent.applicationName
+        )
+    }
+
+    func testAPopupRequestOpensATabThatAdoptsTheReturnedWebView() throws {
+        let suiteName = "clearframe.popup.tab.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let blocking = try Self.makeTestContentBlocking(defaults: defaults)
+        defer { blocking.removeStore() }
+        let workspace = BrowserWorkspace(
+            dataStore: BrowserDataStore(defaults: defaults),
+            downloads: DownloadCenter(),
+            searchSettings: SearchSettingsStore(defaults: defaults),
+            contentBlocking: blocking.provider
+        )
+        let opener = try XCTUnwrap(workspace.selectedTab)
+
+        let popupWebView = opener.session.onRequestPopupWebView?(WKWebViewConfiguration())
+
+        XCTAssertEqual(workspace.tabs.count, 2)
+        let popupTab = try XCTUnwrap(workspace.tabs.last)
+        XCTAssertTrue(popupWebView === popupTab.session.webView, "WebKit was handed a web view no tab owns")
+        XCTAssertEqual(workspace.selectedTabID, popupTab.id)
+        // A popup inherits the opener's private/normal session.
+        XCTAssertFalse(popupTab.isPrivate)
+    }
+
+    /// A popup with no address of its own — `const w = window.open()` — is an
+    /// ordinary pattern. It used to open nothing at all, with no feedback.
+    func testAPopupWithNoAddressYetStillOpensATab() throws {
+        let suiteName = "clearframe.popup.blank.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let blocking = try Self.makeTestContentBlocking(defaults: defaults)
+        defer { blocking.removeStore() }
+        let workspace = BrowserWorkspace(
+            dataStore: BrowserDataStore(defaults: defaults),
+            downloads: DownloadCenter(),
+            searchSettings: SearchSettingsStore(defaults: defaults),
+            contentBlocking: blocking.provider
+        )
+        let opener = try XCTUnwrap(workspace.selectedTab)
+
+        opener.session.onRequestNewTab?(nil)
+
+        XCTAssertEqual(workspace.tabs.count, 2)
+        XCTAssertEqual(workspace.selectedTab?.session.loadState, .startPage)
     }
 
     func testPrivateTabsUseEphemeralStorageAndAreNeverRestored() throws {
@@ -369,11 +496,17 @@ final class BrowserBehaviorTests: XCTestCase {
         XCTAssertEqual(blocking.provider.registeredWebViewCount, 0)
     }
 
-    func testShieldStateMapsProviderStatusAndPerSiteExceptionForAllFourStates() {
+    func testShieldStateMapsProviderStatusAndPerSiteExceptionForAllFiveStates() {
         XCTAssertEqual(ShieldState.make(status: .active(ruleCount: 2), hostDisabled: false), .activeForSite)
-        XCTAssertEqual(ShieldState.make(status: .compiling, hostDisabled: false), .activeForSite)
         XCTAssertEqual(ShieldState.activeForSite.statusLine, "On for this site")
         XCTAssertEqual(ShieldState.activeForSite.symbolName, "shield")
+
+        // While the rule list is still compiling it is attached to nothing, so
+        // the shield must not claim the site is protected.
+        XCTAssertEqual(ShieldState.make(status: .compiling, hostDisabled: false), .preparing)
+        XCTAssertNotEqual(ShieldState.make(status: .compiling, hostDisabled: false), .activeForSite)
+        XCTAssertEqual(ShieldState.preparing.statusLine, "Not blocking yet")
+        XCTAssertEqual(ShieldState.preparing.symbolName, "shield.slash")
 
         XCTAssertEqual(ShieldState.make(status: .active(ruleCount: 2), hostDisabled: true), .disabledForSite)
         XCTAssertEqual(ShieldState.make(status: .compiling, hostDisabled: true), .disabledForSite)

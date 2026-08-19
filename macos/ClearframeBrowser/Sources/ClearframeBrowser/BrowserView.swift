@@ -50,6 +50,7 @@ private struct BrowserTabContent: View {
     @ObservedObject var tab: BrowserTab
     @ObservedObject private var session: BrowserSession
     @ObservedObject private var assistant: PageAssistantModel
+    @ObservedObject private var find: PageFindController
     @ObservedObject var workspace: BrowserWorkspace
     @State private var addressText: String
     @State private var showsAssistant = true
@@ -60,6 +61,7 @@ private struct BrowserTabContent: View {
         self.tab = tab
         _session = ObservedObject(wrappedValue: tab.session)
         _assistant = ObservedObject(wrappedValue: tab.assistant)
+        _find = ObservedObject(wrappedValue: tab.find)
         self.workspace = workspace
         _addressText = State(initialValue: tab.session.currentURLString)
     }
@@ -92,6 +94,14 @@ private struct BrowserTabContent: View {
                 .background(Color.purple.opacity(0.14))
                 .background(ClearframeTheme.bg1)
             }
+            if find.isPresented {
+                FindInPageBar(find: find) {
+                    session.webView.window?.makeFirstResponder(session.webView)
+                }
+            }
+            if let notice = session.linkNotice {
+                LinkNoticeBar(message: notice) { session.dismissLinkNotice() }
+            }
             if session.isLoading {
                 ProgressView(value: session.estimatedProgress)
                     .progressViewStyle(.linear)
@@ -119,6 +129,9 @@ private struct BrowserTabContent: View {
         }
         .onChange(of: session.navigationVersion) { _, _ in
             assistant.clearForNavigation()
+            // A "No results" from the page that was just replaced would be a
+            // statement about a page nobody is looking at any more.
+            find.resetForNavigation()
         }
         .onChange(of: workspace.focusAddressRequest) { _, _ in
             Task { await focusAddressBar() }
@@ -524,6 +537,126 @@ private struct BrowserToolbar: View {
         DispatchQueue.main.async {
             session.webView.window?.makeFirstResponder(session.webView)
         }
+    }
+}
+
+/// Find in page (⌘F), under the toolbar and inside the tab it belongs to.
+///
+/// WebKit reports whether a match was found and nothing else — no position, no
+/// total — so this bar says "No results" or says nothing at all. It never
+/// invents "3 of 12".
+/// States a link Clearframe declined to open, above the page rather than over
+/// it. A refused link is not a failed page: whatever the reader was reading
+/// stays on screen and keeps working.
+private struct LinkNoticeBar: View {
+    let message: String
+    let dismiss: () -> Void
+
+    var body: some View {
+        HStack(spacing: 9) {
+            Image(systemName: "link.badge.plus")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(ClearframeTheme.textTertiary)
+            Text(message)
+                .font(.system(size: 11))
+                .foregroundStyle(ClearframeTheme.textSecondary)
+                .lineLimit(2)
+            Spacer(minLength: 8)
+            Button { dismiss() } label: {
+                Image(systemName: "xmark").font(.system(size: 11, weight: .semibold))
+            }
+            .buttonStyle(GhostButtonStyle())
+            .help("Dismiss this notice")
+            .accessibilityLabel("Dismiss this notice")
+        }
+        .padding(.horizontal, 10)
+        .frame(height: 38)
+        .background(ClearframeTheme.bg2)
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(ClearframeTheme.hairline1)
+                .frame(height: 1)
+        }
+    }
+}
+
+private struct FindInPageBar: View {
+    @ObservedObject var find: PageFindController
+    let returnFocusToPage: () -> Void
+    @FocusState private var fieldFocused: Bool
+
+    var body: some View {
+        HStack(spacing: 9) {
+            field
+
+            if find.outcome == .noResults {
+                Text("No results")
+                    .font(.system(size: 11))
+                    .foregroundStyle(ClearframeTheme.textSecondary)
+            }
+
+            Spacer(minLength: 8)
+
+            Button { find.step(backwards: true) } label: {
+                Image(systemName: "chevron.up").font(.system(size: 11, weight: .semibold))
+            }
+            .buttonStyle(GhostButtonStyle())
+            .disabled(find.query.isEmpty)
+            .help("Find the previous match (⇧⌘G)")
+            .accessibilityLabel("Find the previous match")
+
+            Button { find.step(backwards: false) } label: {
+                Image(systemName: "chevron.down").font(.system(size: 11, weight: .semibold))
+            }
+            .buttonStyle(GhostButtonStyle())
+            .disabled(find.query.isEmpty)
+            .help("Find the next match (⌘G)")
+            .accessibilityLabel("Find the next match")
+
+            Button { close() } label: {
+                Image(systemName: "xmark").font(.system(size: 11, weight: .semibold))
+            }
+            .buttonStyle(GhostButtonStyle())
+            .help("Close find in page (Escape)")
+            .accessibilityLabel("Close find in page")
+        }
+        .padding(.horizontal, 10)
+        .frame(height: 38)
+        .background(ClearframeTheme.bg2)
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(ClearframeTheme.hairline1)
+                .frame(height: 1)
+        }
+        .onAppear { fieldFocused = true }
+        .onChange(of: find.focusRequest) { _, _ in fieldFocused = true }
+        .onChange(of: find.query) { _, _ in find.queryChanged() }
+        .onExitCommand { close() }
+    }
+
+    private var field: some View {
+        HStack(spacing: 7) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(ClearframeTheme.textTertiary)
+            TextField("Find in page", text: $find.query)
+                .textFieldStyle(.plain)
+                .focused($fieldFocused)
+                .foregroundStyle(ClearframeTheme.textPrimary)
+                .onSubmit { find.step(backwards: false) }
+        }
+        .padding(.horizontal, 11)
+        .frame(width: 300, height: 26)
+        .background(ClearframeTheme.bg3, in: RoundedRectangle(cornerRadius: ClearframeTheme.radius9))
+        .overlay(
+            RoundedRectangle(cornerRadius: ClearframeTheme.radius9)
+                .stroke(fieldFocused ? ClearframeTheme.accent : ClearframeTheme.hairline2, lineWidth: 1)
+        )
+    }
+
+    private func close() {
+        find.close()
+        returnFocusToPage()
     }
 }
 

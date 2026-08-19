@@ -8,11 +8,25 @@ enum LibrarySection: String, CaseIterable {
     case history = "History"
 }
 
+/// One wording for the Clear History confirmation, shared by the library
+/// popover and the full-page bookmarks home. Clearing history removes up to
+/// 500 stored visits and cannot be undone, so both places ask first.
+enum ClearHistoryConfirmation {
+    static let title = "Clear all local history?"
+    static let confirmLabel = "Clear history"
+
+    static func message(visitCount: Int) -> String {
+        let visits = visitCount == 1 ? "1 stored visit" : "\(visitCount) stored visits"
+        return "This removes \(visits) from this Mac and cannot be undone. Your bookmarks, open tabs, and downloaded files are not affected."
+    }
+}
+
 struct LibraryPopover: View {
     @ObservedObject var store: BrowserDataStore
     let open: (String, Bool) -> Void
     @State private var section: LibrarySection = .bookmarks
     @State private var search = ""
+    @State private var showsClearHistoryConfirmation = false
 
     private var filteredHistory: [HistoryRecord] {
         guard !search.isEmpty else { return store.history }
@@ -50,13 +64,26 @@ struct LibraryPopover: View {
                     HStack {
                         Text("Stored only in this Mac user profile.").font(.caption2).foregroundStyle(.secondary)
                         Spacer()
-                        Button("Clear History", role: .destructive) { store.clearHistory() }.font(.caption)
+                        Button("Clear History", role: .destructive) {
+                            showsClearHistoryConfirmation = true
+                        }
+                        .font(.caption)
                     }
                 }
             }
         }
         .padding(14)
         .frame(width: 430, height: 450)
+        .confirmationDialog(
+            ClearHistoryConfirmation.title,
+            isPresented: $showsClearHistoryConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button(ClearHistoryConfirmation.confirmLabel, role: .destructive) { store.clearHistory() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text(ClearHistoryConfirmation.message(visitCount: store.history.count))
+        }
     }
 
     private func libraryEmpty(_ title: String, _ detail: String) -> some View {

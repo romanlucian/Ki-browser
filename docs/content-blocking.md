@@ -65,4 +65,6 @@ One honest caveat: a tab that is already loading a page when the very first comp
 
 ## Honest UI rule
 
-Every surface that mentions tracker blocking — the address-bar shield and Settings — states only what is currently true (on for this site, off for this site, off in Settings, or the filter could not be loaded) and never renders a count of blocked requests. WebKit does not report that number back to the app, so Clearframe cannot know it, and the UI does not imply otherwise.
+Every surface that mentions tracker blocking — the address-bar shield and Settings — states only what is currently true (on for this site, not blocking yet, off for this site, off in Settings, or the filter could not be loaded) and never renders a count of blocked requests. WebKit does not report that number back to the app, so Clearframe cannot know it, and the UI does not imply otherwise.
+
+“Not blocking yet” is the launch-window caveat above, said out loud. While the first compile is in flight no rule list is attached to any web view, so the shield must not read “On for this site”: it is neutral, it says nothing is being blocked yet, and its popover explains that the filter applies to pages opened once it is ready and that reloading covers the current page too.

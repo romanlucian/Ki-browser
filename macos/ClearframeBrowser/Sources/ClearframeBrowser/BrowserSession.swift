@@ -42,9 +42,26 @@ final class BrowserSession: NSObject, ObservableObject {
     @Published private(set) var navigationVersion = 0
     @Published private(set) var loadState: BrowserLoadState = .startPage
     @Published private(set) var hasCommittedNavigation = false
+    /// Mirrors `webView.pageZoom` so the chrome and tests can read the current
+    /// step. Per tab, and deliberately not stored: a site's zoom is not
+    /// remembered between tabs or between launches.
+    @Published private(set) var pageZoom: CGFloat = BrowserSession.defaultPageZoom
+    /// A link Clearframe declined to open, stated as a dismissible line above
+    /// the page. Refusing a link must never take away the page the reader is
+    /// on, so this never touches `loadState`.
+    @Published private(set) var linkNotice: String?
 
-    var onRequestNewTab: ((URL) -> Void)?
+    /// `nil` opens an empty tab: a popup script may set the location later.
+    var onRequestNewTab: ((URL?) -> Void)?
+    /// Builds the tab a `window.open()` popup will live in and returns the web
+    /// view that tab adopted, so WebKit can drive that exact instance and keep
+    /// `window.opener` connected to the page that opened it.
+    var onRequestPopupWebView: ((WKWebViewConfiguration) -> WKWebView?)?
     var onCompletedVisit: ((String, String) -> Void)?
+    /// How a `mailto:`/`tel:` link reaches the app that owns it. Injectable so
+    /// the smoke suite can prove the page survives the hand-off without
+    /// launching the tester's mail client.
+    var openExternalScheme: (URL) -> Void = { NSWorkspace.shared.open($0) }
 
     private var isShowingStartPage = true
     private var lastRequestedURL: URL?
@@ -58,6 +75,7 @@ final class BrowserSession: NSObject, ObservableObject {
     private let contentBlocking: ContentRuleListProvider?
     private let favicons: FaviconStore?
     private var faviconTask: Task<Void, Never>?
+    private var linkNoticeTask: Task<Void, Never>?
 
     init(
         downloadCenter: DownloadCenter,
@@ -65,18 +83,26 @@ final class BrowserSession: NSObject, ObservableObject {
         initialURL: URL? = nil,
         isPrivate: Bool = false,
         contentBlocking: ContentRuleListProvider? = nil,
-        favicons: FaviconStore? = nil
+        favicons: FaviconStore? = nil,
+        adoptingPopupConfiguration popupConfiguration: WKWebViewConfiguration? = nil
     ) {
         self.downloadCenter = downloadCenter
         self.searchSettings = searchSettings
         self.isPrivate = isPrivate
         self.contentBlocking = contentBlocking
         self.favicons = favicons
-        let configuration = WKWebViewConfiguration()
-        configuration.websiteDataStore = isPrivate ? .nonPersistent() : .default()
-        // Ask for the page Safari would get: same engine, same capabilities.
-        configuration.applicationNameForUserAgent = BrowserUserAgent.applicationName
-        configuration.preferences.isElementFullscreenEnabled = true
+        // A popup has to be built from the configuration WebKit handed over, or
+        // the opener relationship is severed and `window.opener` is null in the
+        // new tab — which is how a popup sign-in completes and can never report
+        // back to the page that started it. That configuration already carries
+        // the opener's data store and user agent, so nothing here overrides it.
+        let configuration = popupConfiguration ?? WKWebViewConfiguration()
+        if popupConfiguration == nil {
+            configuration.websiteDataStore = isPrivate ? .nonPersistent() : .default()
+            // Ask for the page Safari would get: same engine, same capabilities.
+            configuration.applicationNameForUserAgent = BrowserUserAgent.applicationName
+            configuration.preferences.isElementFullscreenEnabled = true
+        }
         webView = WKWebView(frame: .zero, configuration: configuration)
         super.init()
         // Registered before the first load so tracker rules apply from the
@@ -90,9 +116,20 @@ final class BrowserSession: NSObject, ObservableObject {
         webView.navigationDelegate = self
         webView.uiDelegate = self
         webView.allowsMagnification = true
+        // Two-finger swipe for back and forward. It is reflexive on a Mac
+        // trackpad, and a browser that ignores it reads as broken.
+        webView.allowsBackForwardNavigationGestures = true
         observeSystemAppearance()
         observeWebViewState()
-        if let initialURL {
+        if popupConfiguration != nil {
+            // WebKit owns this web view's first navigation — it either has one
+            // queued from `window.open(url)` or the script that opened it will
+            // assign `location`. Loading anything here would throw that away,
+            // so the tab simply shows its start surface until the popup moves.
+            isShowingStartPage = true
+            pageTitle = "New Tab"
+            loadState = .startPage
+        } else if let initialURL {
             load(initialURL)
         } else {
             showStartPage()
@@ -152,6 +189,61 @@ final class BrowserSession: NSObject, ObservableObject {
         load(tool.officialURL, displayName: tool.name)
     }
 
+    // MARK: - Page zoom
+
+    /// The steps ⌘+ and ⌘− walk. `1.0` is the unzoomed page and the value ⌘0
+    /// returns to.
+    static let pageZoomSteps: [CGFloat] = [0.5, 0.67, 0.8, 0.9, 1.0, 1.1, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0]
+    static let defaultPageZoom: CGFloat = 1.0
+
+    func zoomIn() {
+        setPageZoom(Self.pageZoomSteps.first { $0 > pageZoom } ?? pageZoom)
+    }
+
+    func zoomOut() {
+        setPageZoom(Self.pageZoomSteps.last { $0 < pageZoom } ?? pageZoom)
+    }
+
+    /// ⌘0.
+    func resetPageZoom() {
+        setPageZoom(Self.defaultPageZoom)
+    }
+
+    private func setPageZoom(_ value: CGFloat) {
+        pageZoom = value
+        webView.pageZoom = value
+    }
+
+    // MARK: - Printing
+
+    /// True only while a real web page is on screen. The AI guide, the
+    /// bookmarks home, and the error surfaces are app views, not documents, so
+    /// the Print command disables itself on them.
+    var canPrintPage: Bool { loadState == .content }
+
+    /// ⌘P. WebKit paginates the page the user is looking at; the print panel
+    /// runs as a sheet on the browser window when there is one.
+    func printPage() {
+        guard canPrintPage else { return }
+        let printInfo = NSPrintInfo.shared
+        let operation = webView.printOperation(with: printInfo)
+        operation.showsPrintPanel = true
+        operation.showsProgressPanel = true
+        // The operation's view has no frame of its own; without one WebKit
+        // paginates an empty rectangle and the job comes out blank.
+        operation.view?.frame = NSRect(
+            x: 0,
+            y: 0,
+            width: max(printInfo.paperSize.width - printInfo.leftMargin - printInfo.rightMargin, 1),
+            height: max(printInfo.paperSize.height - printInfo.topMargin - printInfo.bottomMargin, 1)
+        )
+        if let window = webView.window {
+            operation.runModal(for: window, delegate: nil, didRun: nil, contextInfo: nil)
+        } else {
+            operation.run()
+        }
+    }
+
     func goBack() { webView.goBack() }
     func goForward() { webView.goForward() }
     func reload() {
@@ -185,11 +277,87 @@ final class BrowserSession: NSObject, ObservableObject {
         load(lastRequestedURL)
     }
 
+    // MARK: - Declined links
+
+    /// Schemes Clearframe does not navigate to but macOS owns. Handing them
+    /// over is what every browser does; the page the reader was on stays put.
+    private static let systemHandoffSchemes: Set<String> = ["mailto", "tel"]
+
+    /// The address WebKit reports for a tab's start surface. `showStartPage()`
+    /// renders it with `loadHTMLString`, which WebKit records as `about:blank`
+    /// and keeps in the back-forward list like any other entry.
+    static func isStartSurfaceURL(_ url: URL) -> Bool {
+        url.absoluteString == "about:blank"
+    }
+
+    /// A link Clearframe will not navigate to. `mailto:` and `tel:` go to the
+    /// app that owns them; anything else is named in a dismissible notice.
+    /// Neither path touches `loadState` — refusing a link must not destroy the
+    /// page the reader is reading.
+    private func handleUnsupportedLink(_ url: URL) {
+        let scheme = url.scheme?.lowercased() ?? ""
+        if Self.systemHandoffSchemes.contains(scheme) {
+            openExternalScheme(url)
+            return
+        }
+        let described = scheme.isEmpty ? "link" : "\(scheme) link"
+        showLinkNotice("Clearframe opens web links only, so it did not open this \(described).")
+    }
+
+    /// One rule for every request to open a tab, whether it came from a
+    /// `target="_blank"` link or from `window.open()`.
+    private func requestNewTab(for url: URL?) {
+        if let url, WebURLPolicy.validatedURL(url) == nil, !Self.isStartSurfaceURL(url) {
+            handleUnsupportedLink(url)
+            return
+        }
+        // A popup with no address yet is still a tab: scripts routinely open
+        // one blank and set its location a moment later. Opening nothing,
+        // silently, is how a sign-in flow appears to do nothing at all.
+        onRequestNewTab?(url.flatMap(WebURLPolicy.validatedURL))
+    }
+
+    private func showLinkNotice(_ message: String) {
+        linkNoticeTask?.cancel()
+        linkNotice = message
+        linkNoticeTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 8_000_000_000)
+            guard !Task.isCancelled else { return }
+            self?.linkNotice = nil
+        }
+    }
+
+    func dismissLinkNotice() {
+        linkNoticeTask?.cancel()
+        linkNoticeTask = nil
+        linkNotice = nil
+    }
+
+    /// Returns the chrome to the start surface for a back or forward move onto
+    /// the tab's own `about:blank` entry, without loading anything. Calling
+    /// `showStartPage()` here would push a second entry each time and make the
+    /// back list grow instead of shrink.
+    private func adoptStartPageEntry() {
+        isShowingStartPage = true
+        lastRequestedURL = nil
+        lastCommittedWebURL = nil
+        navigationDisplayName = nil
+        hasCommittedNavigation = false
+        estimatedProgress = 0
+        currentURLString = ""
+        pageTitle = "New Tab"
+        loadState = .startPage
+    }
+
     func teardown() {
         webView.stopLoading()
         faviconTask?.cancel()
         faviconTask = nil
+        linkNoticeTask?.cancel()
+        linkNoticeTask = nil
+        linkNotice = nil
         onRequestNewTab = nil
+        onRequestPopupWebView = nil
         onCompletedVisit = nil
         webView.navigationDelegate = nil
         webView.uiDelegate = nil
@@ -614,6 +782,9 @@ extension BrowserSession: WKNavigationDelegate {
         activeNavigation = navigation
         isLoading = true
         hasCommittedNavigation = false
+        // A notice about a link Clearframe declined belongs to the page it was
+        // declined on; the next page starts without it.
+        dismissLinkNotice()
         navigationVersion += 1
         lastVersionedStandardNavigationURLString = lastRequestedURL?.absoluteString
         if !isShowingStartPage { loadState = .loading }
@@ -622,7 +793,16 @@ extension BrowserSession: WKNavigationDelegate {
 
     func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
         if let activeNavigation, navigation !== activeNavigation { return }
+        // A back or forward move onto the tab's own start-surface entry may
+        // arrive here without passing the policy decision — WebKit can restore
+        // a cached document directly. Whichever route it took, the tab is on
+        // its start surface now and the chrome has to agree, or it keeps
+        // showing the address and title of the page the reader just left.
+        if let url = webView.url, Self.isStartSurfaceURL(url), !isShowingStartPage {
+            adoptStartPageEntry()
+        }
         hasCommittedNavigation = true
+        if isShowingStartPage { loadState = .startPage }
         if let url = webView.url,
            let scheme = url.scheme?.lowercased(),
            ["http", "https"].contains(scheme) {
@@ -701,35 +881,34 @@ extension BrowserSession: WKNavigationDelegate {
         decidePolicyFor navigationAction: WKNavigationAction,
         decisionHandler: @escaping (WKNavigationActionPolicy) -> Void
     ) {
-        if navigationAction.targetFrame == nil, let url = navigationAction.request.url {
-            if let safeURL = WebURLPolicy.validatedURL(url) {
-                onRequestNewTab?(safeURL)
-            } else {
-                loadState = .failed(
-                    BrowserFailure(
-                        kind: .blocked,
-                        title: "Unsupported link",
-                        message: "Clearframe did not open this link because this release supports web links only.",
-                        retryable: false
-                    )
-                )
-            }
+        // Asked first, deliberately. `<a download href="blob:…">` is how a web
+        // app hands over a CSV or a PDF it built in the page, and a blob: or
+        // data: address is not a navigable web URL. Judging the scheme before
+        // asking WebKit what the link is for would refuse the file the user
+        // just asked to save.
+        if navigationAction.shouldPerformDownload {
+            decisionHandler(.download)
+            return
+        }
+        if navigationAction.targetFrame == nil {
+            requestNewTab(for: navigationAction.request.url)
             decisionHandler(.cancel)
             return
         }
         if navigationAction.targetFrame?.isMainFrame == true,
            let url = navigationAction.request.url,
-           WebURLPolicy.validatedURL(url) == nil,
-           !(isShowingStartPage && url.absoluteString == "about:blank") {
-            let scheme = url.scheme?.lowercased() ?? "unknown"
-            loadState = .failed(
-                BrowserFailure(
-                    kind: .blocked,
-                    title: "Unsupported link",
-                    message: "Clearframe did not open the \(scheme) link because this browser foundation supports web links only.",
-                    retryable: false
-                )
-            )
+           WebURLPolicy.validatedURL(url) == nil {
+            if Self.isStartSurfaceURL(url) {
+                // Every tab opens on `loadHTMLString`, so its first
+                // back-forward entry is `about:blank`. Going back onto that
+                // entry is a return to this tab's start surface, not a link
+                // Clearframe cannot open: let WebKit restore the document it
+                // already holds and put the chrome back on the start state.
+                adoptStartPageEntry()
+                decisionHandler(.allow)
+                return
+            }
+            handleUnsupportedLink(url)
             decisionHandler(.cancel)
             return
         }
@@ -738,10 +917,6 @@ extension BrowserSession: WKNavigationDelegate {
            let safeURL = WebURLPolicy.validatedURL(url) {
             isShowingStartPage = false
             lastRequestedURL = safeURL
-        }
-        if navigationAction.shouldPerformDownload {
-            decisionHandler(.download)
-            return
         }
         decisionHandler(.allow)
     }
@@ -779,10 +954,54 @@ extension BrowserSession: WKUIDelegate {
         windowFeatures: WKWindowFeatures
     ) -> WKWebView? {
         if let url = navigationAction.request.url,
-           let safeURL = WebURLPolicy.validatedURL(url) {
-            onRequestNewTab?(safeURL)
+           WebURLPolicy.validatedURL(url) == nil,
+           !Self.isStartSurfaceURL(url) {
+            // `window.open('mailto:…')` is still not a web link.
+            handleUnsupportedLink(url)
+            return nil
         }
+        // Handing back a web view built from WebKit's own configuration is what
+        // keeps `window.opener` alive in the new tab. Returning nil severs it,
+        // so a popup sign-in completes in the new tab and can never tell the
+        // page that started it. `window.open()` with no address is ordinary
+        // too — the script opens the popup first and assigns `location` a
+        // moment later — so a popup without a URL still gets its tab.
+        if let popup = onRequestPopupWebView?(configuration) { return popup }
+        // No workspace attached (unit fixtures): open a plain tab rather than
+        // drop the popup silently.
+        requestNewTab(for: navigationAction.request.url)
         return nil
+    }
+
+    /// Without this, every `<input type="file">` on the web is dead: no picker
+    /// appears and the page is never told anything happened. Private tabs are
+    /// no different — a file the user chose is a file the user chose.
+    func webView(
+        _ webView: WKWebView,
+        runOpenPanelWith parameters: WKOpenPanelParameters,
+        initiatedByFrame frame: WKFrameInfo,
+        completionHandler: @escaping ([URL]?) -> Void
+    ) {
+        // WebKit keeps the page's file input suspended until this handler is
+        // called, and dropping it deadlocks uploads for the rest of the
+        // session. Every path out of here — choose, cancel, no window — answers
+        // through one latch that fires exactly once.
+        let answer = OpenPanelAnswer(completionHandler)
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = parameters.allowsMultipleSelection
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = parameters.allowsDirectories
+        panel.canCreateDirectories = false
+        panel.prompt = "Choose"
+        panel.message = webView.url?.host.map { "Choose what to upload to \($0)." }
+            ?? "Choose what to upload to this page."
+        if let window = webView.window {
+            panel.beginSheetModal(for: window) { response in
+                answer.deliver(response == .OK ? panel.urls : nil)
+            }
+        } else {
+            answer.deliver(panel.runModal() == .OK ? panel.urls : nil)
+        }
     }
 
     func webView(
@@ -843,6 +1062,23 @@ extension BrowserSession: WKUIDelegate {
         alert.informativeText = String(message.prefix(4_000))
         alert.alertStyle = .informational
         return alert
+    }
+}
+
+/// One-shot latch for WebKit's open-panel completion handler. WebKit treats a
+/// second call as a hard error and a missing call as a permanent stall, so the
+/// handler is released here once and then forgotten.
+private final class OpenPanelAnswer {
+    private var completionHandler: (([URL]?) -> Void)?
+
+    init(_ completionHandler: @escaping ([URL]?) -> Void) {
+        self.completionHandler = completionHandler
+    }
+
+    func deliver(_ urls: [URL]?) {
+        guard let completionHandler else { return }
+        self.completionHandler = nil
+        completionHandler(urls)
     }
 }
 

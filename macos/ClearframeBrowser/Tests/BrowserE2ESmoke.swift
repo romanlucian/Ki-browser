@@ -623,6 +623,127 @@ struct BrowserE2ESmoke {
             try require((assistant.analysis?.content.summary.count ?? 0) > 80, "the ordinary article fixture produced an unexpectedly short summary")
             print("PASS structure default: the article fixture still analyzes straight to ready without a listing notice")
 
+            // Analyze page is enabled and prominent on every new tab, and the
+            // start surface is not a web page. Reading it used to succeed and
+            // then be abandoned by the identity check, leaving the panel on
+            // "Reading the visible page…" with no timeout and no way back.
+            session.showStartPage()
+            let assistantOnStartSurface = await waitUntil {
+                session.loadState == .startPage && session.currentURLString.isEmpty
+            }
+            try require(assistantOnStartSurface, "the tab did not return to its start surface")
+            await assistant.analyzeCurrentPage(session: session)
+            try require(
+                assistant.state == .needsPage,
+                "Analyze page on a start surface did not refuse; it left the panel loading with no way back"
+            )
+            try require(assistant.analysis == nil, "a refused analysis produced results anyway")
+            try await loadDeterministicPage(in: session, localURL: fixtureURL)
+            await assistant.analyzeCurrentPage(session: session)
+            try require(assistant.state == .ready, "the assistant did not recover once a real page was open")
+            print("PASS assistant refusal: Analyze page on a start surface refused honestly and recovered on a real page")
+
+            // File upload: WebKit only shows a file picker for a page if the UI
+            // delegate answers this request. Without it every <input type=file>
+            // is silently dead, so the wiring itself is what gets checked here;
+            // opening a real NSOpenPanel would block this suite.
+            try require(
+                session.responds(to: #selector(WKUIDelegate.webView(_:runOpenPanelWith:initiatedByFrame:completionHandler:))),
+                "the session did not answer WebKit's open-panel request, so file inputs would never show a picker"
+            )
+            print("PASS file upload: the session answers WebKit's open-panel request instead of leaving file inputs dead")
+
+            guard let find = workspace.selectedTab?.find else {
+                throw SmokeFailure.check("selected tab did not expose a find controller")
+            }
+            find.present()
+            try require(find.isPresented, "⌘F did not present the find bar for the selected tab")
+            find.query = "shade structures"
+            let phraseOnPage = await find.search(backwards: false, fromTop: true)
+            try require(
+                phraseOnPage == .matched && find.outcome == .matched,
+                "find in page did not match a phrase the fixture page contains"
+            )
+            find.query = "kumquat telemetry"
+            let phraseNotOnPage = await find.search(backwards: false, fromTop: true)
+            try require(
+                phraseNotOnPage == .noResults && find.outcome == .noResults,
+                "find in page claimed a match for text the fixture page does not contain"
+            )
+            find.close()
+            try require(!find.isPresented && find.outcome == .idle, "closing the find bar left a stale result behind")
+            print("PASS find in page: a phrase on the page matched, an absent phrase reported no results, and closing cleared the state")
+
+            try require(
+                session.pageZoom == BrowserSession.defaultPageZoom && session.webView.pageZoom == BrowserSession.defaultPageZoom,
+                "the tab did not start at actual size"
+            )
+            session.zoomIn()
+            let firstZoomStep = session.pageZoom
+            try require(firstZoomStep > BrowserSession.defaultPageZoom, "⌘+ did not zoom the page in")
+            try require(abs(session.webView.pageZoom - firstZoomStep) < 0.0001, "the zoom step never reached the web view")
+            session.zoomIn()
+            try require(session.pageZoom > firstZoomStep, "a second ⌘+ did not continue up the zoom steps")
+            session.zoomOut()
+            try require(session.pageZoom == firstZoomStep, "⌘− did not step back down to the previous zoom")
+            session.resetPageZoom()
+            try require(
+                session.pageZoom == BrowserSession.defaultPageZoom && session.webView.pageZoom == BrowserSession.defaultPageZoom,
+                "⌘0 did not restore actual size"
+            )
+            print("PASS page zoom: ⌘+ and ⌘− walked the zoom steps and ⌘0 restored actual size")
+
+            try require(session.canPrintPage, "a loaded web page did not report itself printable")
+            try require(workspace.canPrintSelectedPage, "Print was disabled while a real web page was open")
+            session.showStartPage()
+            let printUnavailableOnStartPage = await waitUntil { !workspace.canPrintSelectedPage }
+            try require(printUnavailableOnStartPage, "Print stayed available on the start surface, where there is no page to print")
+            try await loadDeterministicPage(in: session, localURL: fixtureURL)
+            let printAvailableAgain = await waitUntil { workspace.canPrintSelectedPage }
+            try require(printAvailableAgain, "Print did not become available again once a page finished loading")
+            print("PASS print availability: the Print command followed the loaded page and disabled itself on the start surface")
+
+            // Every tab opens on `loadHTMLString`, so its first back-forward
+            // entry is `about:blank`. Once the reader has navigated away, Back
+            // lands on it — and it used to be refused as an unsupported link,
+            // covering the still-loaded page with a non-retryable error.
+            // The audit expected a tab's start surface to sit in the back list,
+            // so that pressing Back onto it would be refused as an unsupported
+            // link. WebKit does not record `loadHTMLString` as a back entry at
+            // all, so a tab that has navigated once has nothing behind it and
+            // the chrome correctly offers no way back. The session still adopts
+            // its start surface if an `about:blank` entry ever does arrive —
+            // that path is kept as a guard, not as a fix for this.
+            let freshTab = BrowserSession(
+                downloadCenter: DownloadCenter(),
+                searchSettings: SearchSettingsStore(defaults: defaults)
+            )
+            let freshOnStartSurface = await waitUntil { freshTab.loadState == .startPage && !freshTab.isLoading }
+            try require(freshOnStartSurface, "a new tab did not settle on its start surface")
+            try require(!freshTab.canGoBack, "a new tab offered a back step before it had been anywhere")
+            try await loadDeterministicPage(in: freshTab, localURL: fixtureURL)
+            try require(
+                !freshTab.canGoBack,
+                "the start surface entered the back list, so Back can land on it and must be handled"
+            )
+            try require(freshTab.loadState == .content, "the fresh tab did not settle on the page it loaded")
+            freshTab.teardown()
+            print("PASS back/forward: a tab's start surface stays out of the back list, so Back never lands on it")
+
+            // A mailto: link is not a web link, but refusing it must not take
+            // away the page the reader is reading. The hand-off is injected so
+            // this check never launches a real mail client.
+            var handedOffLink: URL?
+            session.openExternalScheme = { handedOffLink = $0 }
+            try await evaluate("location.href = 'mailto:someone@example.com?subject=Clearframe'", in: session)
+            let mailtoHandedOff = await waitUntil { handedOffLink != nil }
+            session.openExternalScheme = { _ in }
+            try require(mailtoHandedOff, "a mailto: link was not handed to the app that owns it")
+            try require(handedOffLink?.scheme == "mailto", "the hand-off received something other than the mailto: link")
+            try require(session.loadState == .content, "a mailto: link replaced the page the reader was on")
+            try require(session.currentURLString == localURL, "a mailto: link changed the address of the page the reader was on")
+            print("PASS declined links: a mailto: link went to the app that owns it and left the open page untouched")
+
             workspace.toggleBookmarkForSelectedTab()
             try require(dataStore.bookmarks.count == 1, "bookmark was not saved")
             try require(dataStore.history.contains(where: { $0.url == localURL }), "completed visit was not recorded")
@@ -642,12 +763,60 @@ struct BrowserE2ESmoke {
             )
             print("PASS tabs/focus: popup tab opened and closed without stealing focus into the address field")
 
+            // A popup opened with no address of its own — the shape a script
+            // uses when it opens the tab first and assigns location after.
+            // It used to be dropped silently, so the flow appeared to do
+            // nothing at all.
+            try await evaluate("document.querySelector('#blank-popup').click()", in: session)
+            let blankPopupOpened = await waitUntil { workspace.tabs.count == 2 }
+            try require(blankPopupOpened, "a popup with no address of its own did not open a tab")
+            try require(workspace.selectedTab?.session.currentURLString.isEmpty == true, "the blank popup tab was not left waiting on its start surface")
+            workspace.closeSelectedTab()
+            try require(workspace.tabs.count == 1, "the blank popup tab did not close cleanly")
+            print("PASS blank popup: a popup with no address yet still opened a tab instead of vanishing")
+
+            // window.open(): the popup tab has to adopt the exact web view
+            // WebKit handed over. Building a different one severs the opener,
+            // so a popup sign-in completes in the new tab and can never report
+            // its result to the page that started it.
+            try await evaluate("document.querySelector('#script-popup').click()", in: session)
+            let scriptedPopupOpened = await waitUntil { workspace.tabs.count == 2 }
+            try require(scriptedPopupOpened, "window.open() did not open a tab")
+            guard let popupSession = workspace.selectedTab?.session, popupSession !== session else {
+                throw SmokeFailure.check("window.open() did not select a popup tab of its own")
+            }
+            let popupLoaded = await waitUntil(timeout: 12) { popupSession.loadState == .content }
+            try require(popupLoaded, "the adopted popup web view never loaded the page window.open() asked for")
+            let openerIsConnected = try await evaluateValue("window.opener !== null", in: popupSession) as? Bool
+            try require(
+                openerIsConnected == true,
+                "the popup lost its opener, so a popup sign-in could never notify the page that started it"
+            )
+            workspace.closeSelectedTab()
+            try require(workspace.tabs.count == 1, "the scripted popup tab did not close cleanly")
+            print("PASS window.open(): the popup adopted WebKit's own web view and kept its opener")
+
             session.navigate("clearframe deterministic smoke query")
             let searchURL = reflectedRequestedURL(session)
             try require(searchURL?.host == "duckduckgo.com", "search text did not resolve to the configured search URL")
             try require(searchQuery(in: searchURL) == "clearframe deterministic smoke query", "search query was not preserved")
             session.stopLoading()
             print("PASS search: plain text resolved to DuckDuckGo with the expected query")
+
+            // Every listed engine reads a literal + in a query value as a
+            // space, so "C++ tutorial" used to be searched as "C tutorial".
+            session.navigate("C++ tutorial")
+            let plusSearchURL = reflectedRequestedURL(session)
+            try require(
+                searchQuery(in: plusSearchURL) == "C++ tutorial",
+                "a search containing + did not round-trip through the results URL"
+            )
+            try require(
+                plusSearchURL?.absoluteString.contains("+") == false,
+                "the results URL kept a literal +, which the search engine reads as a space"
+            )
+            session.stopLoading()
+            print("PASS search encoding: a query containing + reached the engine as the words that were typed")
 
             try await loadDeterministicPage(in: session, localURL: fixtureURL)
             workspace.persistNow()

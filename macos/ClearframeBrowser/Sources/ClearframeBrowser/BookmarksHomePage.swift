@@ -23,6 +23,7 @@ struct BookmarksHomePage: View {
     @State private var bookmarkEditorRequest: BookmarkEditorRequest?
     @State private var pendingDeletion: BookmarkFolderRecord?
     @State private var dropConfirmation: String?
+    @State private var showsClearHistoryConfirmation = false
 
     private var trimmedSearch: String {
         search.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -67,6 +68,16 @@ struct BookmarksHomePage: View {
             Button("Cancel", role: .cancel) { pendingDeletion = nil }
         } message: { folder in
             Text("\(folder.title) contains saved items. Its bookmarks and subfolders will move to the parent folder; nothing will be deleted.")
+        }
+        .confirmationDialog(
+            ClearHistoryConfirmation.title,
+            isPresented: $showsClearHistoryConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button(ClearHistoryConfirmation.confirmLabel, role: .destructive) { store.clearHistory() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text(ClearHistoryConfirmation.message(visitCount: store.history.count))
         }
         .accessibilityLabel("All bookmarks")
     }
@@ -407,9 +418,11 @@ struct BookmarksHomePage: View {
                     .foregroundStyle(ClearframeTheme.textTertiary)
                 Spacer(minLength: 8)
                 if !store.history.isEmpty {
-                    Button("Clear History", role: .destructive) { store.clearHistory() }
-                        .font(.system(size: 11, weight: .semibold))
-                        .help("Removes every stored visit from this Mac")
+                    Button("Clear History", role: .destructive) {
+                        showsClearHistoryConfirmation = true
+                    }
+                    .font(.system(size: 11, weight: .semibold))
+                    .help("Removes every stored visit from this Mac, after you confirm")
                 }
             }
             .padding(.top, 2)

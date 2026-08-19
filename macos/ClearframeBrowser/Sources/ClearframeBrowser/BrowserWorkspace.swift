@@ -16,6 +16,9 @@ final class BrowserTab: ObservableObject, Identifiable {
     let id: UUID
     let session: BrowserSession
     let assistant: PageAssistantModel
+    /// Find in page belongs to the tab, like its page does: two tabs searching
+    /// for different words do not share a bar or a result.
+    let find: PageFindController
     let isPrivate: Bool
     @Published private(set) var displayTitle: String
     @Published private(set) var lastActivatedAt: Date
@@ -38,7 +41,8 @@ final class BrowserTab: ObservableObject, Identifiable {
         isPrivate: Bool = false,
         groupID: UUID? = nil,
         contentBlocking: ContentRuleListProvider? = nil,
-        favicons: FaviconStore? = nil
+        favicons: FaviconStore? = nil,
+        adoptingPopupConfiguration popupConfiguration: WKWebViewConfiguration? = nil
     ) {
         self.id = id
         self.displayTitle = title
@@ -46,8 +50,23 @@ final class BrowserTab: ObservableObject, Identifiable {
         self.isPrivate = isPrivate
         self.groupID = groupID
         assistant = PageAssistantModel()
-        if loadImmediately {
-            session = BrowserSession(
+        // Built as a local first: the find controller needs the session's web
+        // view, and `self` cannot be read until every stored property is set.
+        let resolvedSession: BrowserSession
+        if let popupConfiguration {
+            // A `window.open()` popup: WebKit built the configuration and owns
+            // the first navigation, so this tab adopts that web view rather
+            // than making one of its own.
+            resolvedSession = BrowserSession(
+                downloadCenter: downloadCenter,
+                searchSettings: searchSettings,
+                isPrivate: isPrivate,
+                contentBlocking: contentBlocking,
+                favicons: favicons,
+                adoptingPopupConfiguration: popupConfiguration
+            )
+        } else if loadImmediately {
+            resolvedSession = BrowserSession(
                 downloadCenter: downloadCenter,
                 searchSettings: searchSettings,
                 initialURL: initialURL,
@@ -56,7 +75,7 @@ final class BrowserTab: ObservableObject, Identifiable {
                 favicons: favicons
             )
         } else {
-            session = BrowserSession(
+            resolvedSession = BrowserSession(
                 downloadCenter: downloadCenter,
                 searchSettings: searchSettings,
                 isPrivate: isPrivate,
@@ -65,6 +84,8 @@ final class BrowserTab: ObservableObject, Identifiable {
             )
             pendingRestoreURL = initialURL
         }
+        session = resolvedSession
+        find = PageFindController(webView: resolvedSession.webView)
 
         session.$pageTitle
             .dropFirst()
@@ -119,6 +140,7 @@ final class BrowserTab: ObservableObject, Identifiable {
     func teardown() {
         cancellables.removeAll()
         assistant.teardown()
+        find.teardown()
         session.teardown()
     }
 }
@@ -135,6 +157,15 @@ final class BrowserWorkspace: ObservableObject {
     /// from the strip; the strip clears it when the editor closes.
     @Published var pendingGroupEditorID: UUID?
     @Published var focusAddressRequest = 0
+    /// Whether the selected tab currently shows a page the Print command can
+    /// send to a printer. Republished from that tab's session so the menu item
+    /// disables itself on the start surfaces instead of offering a blank job.
+    @Published private(set) var canPrintSelectedPage = false
+    /// Mirrors the selected tab's history and loading state so the Back,
+    /// Forward, and Stop menu items disable themselves when they cannot act.
+    @Published private(set) var canGoBackInSelectedTab = false
+    @Published private(set) var canGoForwardInSelectedTab = false
+    @Published private(set) var isSelectedTabLoading = false
     @Published private(set) var bookmarkLibraryRequest = 0
     @Published private(set) var bookmarkFolderRequestID = UUID()
     private(set) var requestedBookmarkFolderParentID: UUID?
@@ -218,10 +249,54 @@ final class BrowserWorkspace: ObservableObject {
 
         tabs.forEach(configure)
         selectedTab?.activate()
+        observeSelectedPagePrintability()
+        observeSelectedTabNavigation()
     }
 
     deinit {
         persistenceTask?.cancel()
+    }
+
+    /// Follows the selection, then that tab's load state. Only the print
+    /// question is republished here; forwarding every session change would
+    /// redraw the whole window on each progress tick.
+    private func observeSelectedPagePrintability() {
+        $selectedTabID
+            .map { [weak self] id -> AnyPublisher<Bool, Never> in
+                guard let session = self?.tabs.first(where: { $0.id == id })?.session else {
+                    return Just(false).eraseToAnyPublisher()
+                }
+                return session.$loadState.map { $0 == .content }.eraseToAnyPublisher()
+            }
+            .switchToLatest()
+            .removeDuplicates()
+            .assign(to: &$canPrintSelectedPage)
+    }
+
+    /// Same shape as the printability observer, for the three values the
+    /// Back, Forward, Reload, and Stop menu items read.
+    private func observeSelectedTabNavigation() {
+        selectedSessionPublisher { $0.$canGoBack.eraseToAnyPublisher() }
+            .assign(to: &$canGoBackInSelectedTab)
+        selectedSessionPublisher { $0.$canGoForward.eraseToAnyPublisher() }
+            .assign(to: &$canGoForwardInSelectedTab)
+        selectedSessionPublisher { $0.$isLoading.eraseToAnyPublisher() }
+            .assign(to: &$isSelectedTabLoading)
+    }
+
+    private func selectedSessionPublisher(
+        _ value: @escaping (BrowserSession) -> AnyPublisher<Bool, Never>
+    ) -> AnyPublisher<Bool, Never> {
+        $selectedTabID
+            .map { [weak self] id -> AnyPublisher<Bool, Never> in
+                guard let session = self?.tabs.first(where: { $0.id == id })?.session else {
+                    return Just(false).eraseToAnyPublisher()
+                }
+                return value(session)
+            }
+            .switchToLatest()
+            .removeDuplicates()
+            .eraseToAnyPublisher()
     }
 
     var selectedTab: BrowserTab? {
@@ -528,6 +603,25 @@ final class BrowserWorkspace: ObservableObject {
         tabs = reordered
     }
 
+    /// Builds the tab a `window.open()` popup will live in and hands its web
+    /// view back to WebKit. The tab must adopt that exact instance: it is what
+    /// keeps `window.opener` connected, so a popup sign-in can report its
+    /// result to the page that opened it instead of finishing in a dead end.
+    private func adoptPopupTab(configuration: WKWebViewConfiguration, isPrivate: Bool) -> WKWebView {
+        let tab = BrowserTab(
+            downloadCenter: downloads,
+            searchSettings: searchSettings,
+            isPrivate: isPrivate,
+            contentBlocking: contentBlocking,
+            favicons: favicons,
+            adoptingPopupConfiguration: configuration
+        )
+        tabs.append(tab)
+        configure(tab)
+        selectTab(tab.id)
+        return tab.session.webView
+    }
+
     private func makeTab(url: URL?, isPrivate: Bool) -> BrowserTab {
         BrowserTab(
             initialURL: url,
@@ -609,6 +703,57 @@ final class BrowserWorkspace: ObservableObject {
         focusAddressRequest += 1
     }
 
+    // MARK: - Page menu commands
+
+    /// ⌘F, ⌘G, ⇧⌘G. Each acts on the tab in front, never on all of them.
+    func findInSelectedTab() {
+        selectedTab?.find.present()
+    }
+
+    func findNextInSelectedTab() {
+        selectedTab?.find.step(backwards: false)
+    }
+
+    func findPreviousInSelectedTab() {
+        selectedTab?.find.step(backwards: true)
+    }
+
+    /// ⌘+, ⌘−, ⌘0.
+    func zoomInSelectedTab() {
+        selectedTab?.session.zoomIn()
+    }
+
+    func zoomOutSelectedTab() {
+        selectedTab?.session.zoomOut()
+    }
+
+    func resetZoomInSelectedTab() {
+        selectedTab?.session.resetPageZoom()
+    }
+
+    /// ⌘P.
+    func printSelectedPage() {
+        selectedTab?.session.printPage()
+    }
+
+    /// ⌘R, ⌘., ⌘[, ⌘]. Each acts on the tab in front, like the toolbar
+    /// buttons beside the address bar.
+    func reloadSelectedTab() {
+        selectedTab?.session.reload()
+    }
+
+    func stopLoadingSelectedTab() {
+        selectedTab?.session.stopLoading()
+    }
+
+    func goBackInSelectedTab() {
+        selectedTab?.session.goBack()
+    }
+
+    func goForwardInSelectedTab() {
+        selectedTab?.session.goForward()
+    }
+
     func requestAddressFocusForAppActivation() {
         guard selectedTab?.session.shouldFocusAddressOnAppActivation == true else { return }
         requestAddressFocus()
@@ -670,8 +815,15 @@ final class BrowserWorkspace: ObservableObject {
 
     private func configure(_ tab: BrowserTab) {
         let isPrivate = tab.isPrivate
+        // A popup that has no address yet opens an empty tab; the script that
+        // opened it sets the location a moment later.
         tab.session.onRequestNewTab = { [weak self] url in
             self?.addTab(url: url, isPrivate: isPrivate)
+        }
+        // A popup inherits the opener's private/normal session along with the
+        // configuration WebKit handed over.
+        tab.session.onRequestPopupWebView = { [weak self] configuration in
+            self?.adoptPopupTab(configuration: configuration, isPrivate: isPrivate)
         }
         tab.session.onCompletedVisit = { [weak self] title, url in
             guard let self else { return }

@@ -504,6 +504,38 @@ final class ClearframeCoreTests: XCTestCase {
         XCTAssertNil(SearchEngine.google.searchURL(for: "  \n "))
     }
 
+    /// `URLComponents.queryItems` leaves `+`, `&`, and `=` literal in a value,
+    /// and every engine listed here reads a literal `+` as a space — "C++
+    /// tutorial" used to be sent as "C tutorial".
+    func testSearchQueryPreservesCharactersEnginesWouldOtherwiseReadAsSyntax() {
+        let queries = [
+            "C++ tutorial",
+            "a+b=c",
+            "rust & wasm",
+            "swift?why",
+            "100% of #1"
+        ]
+
+        for engine in SearchEngine.allCases {
+            for query in queries {
+                guard let url = engine.searchURL(for: query) else {
+                    return XCTFail("\(engine.displayName) did not create a results URL for “\(query)”")
+                }
+                XCTAssertFalse(
+                    url.absoluteString.contains("+"),
+                    "\(engine.displayName) left a literal + in “\(query)”, which reads as a space"
+                )
+                // The receiving engine decodes the query string; the round trip
+                // must return exactly the words that were typed.
+                let decoded = URLComponents(url: url, resolvingAgainstBaseURL: false)?
+                    .queryItems?
+                    .first?
+                    .value
+                XCTAssertEqual(decoded, query, "\(engine.displayName) altered “\(query)”")
+            }
+        }
+    }
+
     func testAIToolCatalogUsesSafeOfficialWebLinksAndUniqueIDs() {
         XCTAssertEqual(Set(AIToolCatalog.tools.map(\.id)).count, AIToolCatalog.tools.count)
         XCTAssertGreaterThanOrEqual(AIToolCatalog.tools.count, 12)

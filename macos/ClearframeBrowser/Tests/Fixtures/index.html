@@ -12,6 +12,8 @@
     <div class="video-player"><p>Video Player is loading. Stream Type LIVE. Playback controls.</p></div>
     <div id="shadow-reading"></div>
     <a href="second.html" target="_blank">Open a second safe page in a new tab</a>
+    <a id="blank-popup" href="about:blank" target="_blank">Open a popup that has no address yet</a>
+    <button id="script-popup" onclick="window.open('second.html', '_blank')">Open a scripted popup</button>
   </main>
   <script>
     const shadow = document.querySelector('#shadow-reading').attachShadow({ mode: 'open' });
