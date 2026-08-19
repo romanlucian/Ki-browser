@@ -63,19 +63,24 @@ public struct VectorBox: Equatable, Sendable {
 
 /// The icon sets the app ships.
 ///
-/// Clearframe's own set is the default and the only tintable one: it is drawn
-/// in a single stroke weight with no colour of its own, which is exactly what
-/// lets a folder recolour it. The licensed sets carry their own colours, so a
-/// tint has nothing to act on — that is a property of the artwork, not a gap
-/// in the picker.
+/// What decides how a set behaves is whether its artwork names a colour.
+/// Clearframe's own set and Elegant are drawn in `currentColor`, so a folder's
+/// tint reaches them; Stickies and the emoji set carry their own colours, so a
+/// tint has nothing to act on and the swatch row is hidden rather than shown
+/// doing nothing. That is a property of the artwork, not a gap in the picker.
+///
+/// Clearframe's own set stays the default: it is the only one that includes the
+/// plain folder every unset folder falls back to.
 public enum ClearframeIconStyle: String, CaseIterable, Sendable {
     case clearframe
+    case elegant
     case stickies
     case emojiOne
 
     public var title: String {
         switch self {
         case .clearframe: return "Clearframe"
+        case .elegant: return "Elegant"
         case .stickies: return "Stickies"
         case .emojiOne: return "Emoji"
         }
@@ -86,6 +91,7 @@ public enum ClearframeIconStyle: String, CaseIterable, Sendable {
     public var subtitle: String {
         switch self {
         case .clearframe: return "Line icons you can tint"
+        case .elegant: return "Finer line icons you can tint"
         case .stickies: return "Colourful, fixed colours"
         case .emojiOne: return "Full-colour emoji, fixed colours"
         }
@@ -96,6 +102,9 @@ public enum ClearframeIconStyle: String, CaseIterable, Sendable {
     public var strokeWidth: Double {
         switch self {
         case .clearframe: return 1.5
+        // Elegant is drawn in filled forms and carries no strokes at all; the
+        // number exists only so every style can answer.
+        case .elegant: return 1
         case .stickies: return 1
         // The emoji set is filled artwork; the handful of strokes it does
         // carry name their own width, and one unit in a 64 box is the closest
@@ -113,25 +122,35 @@ public enum ClearframeIconStyle: String, CaseIterable, Sendable {
     public var defaultLineCap: VectorShape.LineCap {
         switch self {
         case .clearframe: return .round
-        case .stickies, .emojiOne: return .butt
+        case .elegant, .stickies, .emojiOne: return .butt
         }
     }
 
     public var defaultLineJoin: VectorShape.LineJoin {
         switch self {
         case .clearframe: return .round
-        case .stickies, .emojiOne: return .miter
+        case .elegant, .stickies, .emojiOne: return .miter
         }
     }
 
     /// Whether a folder's chosen tint reaches this style's artwork.
-    public var isTintable: Bool { self == .clearframe }
+    ///
+    /// True for any set drawn in `currentColor`. Clearframe's own is one; so is
+    /// Elegant, which is why it ships as a second line style rather than a
+    /// third fixed-colour one.
+    public var isTintable: Bool {
+        switch self {
+        case .clearframe, .elegant: return true
+        case .stickies, .emojiOne: return false
+        }
+    }
 
     /// What every identifier in this style begins with, so identifiers stay
     /// unique across sets without the prefix leaking into the interface.
     public var identifierPrefix: String {
         switch self {
         case .clearframe: return ""
+        case .elegant: return "elegant-"
         case .stickies: return "stickies-"
         case .emojiOne: return "emoji-"
         }
@@ -143,6 +162,11 @@ public enum ClearframeIconStyle: String, CaseIterable, Sendable {
         switch self {
         case .clearframe:
             return nil
+        case .elegant:
+            // GPL-3.0 asks for no attribution; crediting the author anyway is
+            // the decent default, and naming the licence is what a reader
+            // needs to understand what the set costs.
+            return "Elegant by Kenny Sing, GPL-3.0"
         case .stickies:
             return "Stickies by Streamline, CC BY 4.0"
         case .emojiOne:
@@ -220,6 +244,7 @@ public enum ClearframeIconCatalog {
     /// prefixed — so one lookup answers for every style.
     public static let all: [ClearframeIcon] =
         ClearframeIconCatalogData.icons
+        + ElegantIconCatalogData.icons
         + StickiesIconCatalogData.icons
         + EmojiOneIconCatalogData.icons
 
