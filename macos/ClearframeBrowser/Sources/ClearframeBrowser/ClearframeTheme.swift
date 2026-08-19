@@ -62,6 +62,13 @@ enum ClearframeTheme {
     static let radius14: CGFloat = 14
     static let radius18: CGFloat = 18
 
+    /// The size of a site's icon and a bookmark folder's mark, wherever either
+    /// appears: tab chips, the bookmarks bar, the bookmarks home. One number so
+    /// the two never drift apart, and 16 because that is both what the folder
+    /// icons were drawn at — below it their 1.5 stroke is scaled down — and
+    /// what other browsers use for a favicon.
+    static let siteIconSize: CGFloat = 16
+
     // MARK: - Type
 
     /// Monospace metadata capitals — tab counter, ⌘L hint, folder chip

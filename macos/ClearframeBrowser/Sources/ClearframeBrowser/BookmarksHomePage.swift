@@ -646,7 +646,7 @@ private struct BookmarkFolderCard: View {
                 art
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 7) {
-                        BookmarkFolderIcon(folder: folder, size: 15).foregroundStyle(ClearframeTheme.textSecondary)
+                        BookmarkFolderIcon(folder: folder, size: ClearframeTheme.siteIconSize).foregroundStyle(ClearframeTheme.textSecondary)
                         Text(folder.title)
                             .font(.system(size: 13, weight: .semibold))
                             .foregroundStyle(ClearframeTheme.textPrimary)
@@ -815,7 +815,7 @@ private struct BookmarksHomeFolderRow: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 10) {
-                BookmarkFolderIcon(folder: folder, size: 15).foregroundStyle(ClearframeTheme.textSecondary)
+                BookmarkFolderIcon(folder: folder, size: ClearframeTheme.siteIconSize).foregroundStyle(ClearframeTheme.textSecondary)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(folder.title)
                         .font(.system(size: 12.5, weight: .semibold))

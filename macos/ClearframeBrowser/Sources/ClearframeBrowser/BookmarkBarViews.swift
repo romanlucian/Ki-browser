@@ -27,7 +27,7 @@ enum BookmarkBarMetrics {
     static let maximumItemWidth: CGFloat = 180
     static let labelFontSize: CGFloat = 12
     /// A folder's mark, sized to match the site icons it sits beside.
-    static let folderIconSize: CGFloat = 13
+    static let folderIconSize: CGFloat = ClearframeTheme.siteIconSize
 
     private static let labelFont = NSFont.systemFont(ofSize: labelFontSize, weight: .medium)
     /// Bar items re-render on every hover; measuring each label once keeps
@@ -432,7 +432,7 @@ private struct BookmarkBarLink: View {
     let actions: BookmarkBarLinkActions
     @State private var isHovered = false
 
-    private static let iconWidth: CGFloat = 13
+    private static let iconWidth: CGFloat = ClearframeTheme.siteIconSize
 
     @ViewBuilder
     var body: some View {

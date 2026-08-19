@@ -333,15 +333,15 @@ extension EnvironmentValues {
 /// does, and only for the page being visited.
 struct SiteIconView: View {
     let host: String
-    var size: CGFloat = 13
+    var size: CGFloat = ClearframeTheme.siteIconSize
     @Environment(\.faviconStore) private var store
 
-    init(host: String, size: CGFloat = 13) {
+    init(host: String, size: CGFloat = ClearframeTheme.siteIconSize) {
         self.host = host
         self.size = size
     }
 
-    init(urlString: String, size: CGFloat = 13) {
+    init(urlString: String, size: CGFloat = ClearframeTheme.siteIconSize) {
         self.init(host: URL(string: urlString)?.host ?? "", size: size)
     }
 
