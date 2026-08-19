@@ -414,6 +414,32 @@ struct BrowserE2ESmoke {
             try require(!(window.firstResponder is NSTextView), "navigation unexpectedly stole focus back from web content")
             print("PASS navigation: deterministic page rendered from a verified local HTTP server")
 
+            // A second navigation starting while the first is still in flight is
+            // ordinary on real sites — a redirect, a player, a single-page app
+            // taking over. The newest one has to win: if an older one stays
+            // active, WebKit abandons it, the newer one's completion is dismissed
+            // as stale, and the tab spins forever on a page that has finished.
+            session.navigate(fixtureURL.deletingLastPathComponent().appendingPathComponent("self-navigating.html").absoluteString)
+            let settled = await waitUntil(timeout: 12) {
+                !session.isLoading && session.currentURLString.hasSuffix("index.html")
+            }
+            try require(settled, "a page that navigated itself left the tab loading forever")
+            try require(session.loadState == .content, "the tab did not settle on the page it was sent to")
+            print("PASS navigation race: a page that redirected itself finished loading")
+
+            // Leave the shared session on the page later checks expect.
+            try await loadDeterministicPage(in: session, localURL: fixtureURL)
+
+            // The safety net: whatever strands the chrome — a superseded
+            // navigation, a site that never reports finishing — WebKit still
+            // knows the truth. Strand it deliberately and it must recover.
+            session.simulateStrandedLoadingForTesting()
+            try require(session.isLoading, "the stranded state did not take hold")
+            let recovered = await waitUntil(timeout: 6) { !session.isLoading }
+            try require(recovered, "a stranded loading state never cleared itself")
+            try require(session.loadState == .content, "recovery left the tab in the wrong state")
+            print("PASS loading recovery: a stranded spinner cleared once WebKit reported idle")
+
             // Content blocking: (1) a control session with no provider proves the
             // fixture itself is valid — both its inline and external-script markers
             // load; (2) a provider scoped to a test-only list blocks the tracker

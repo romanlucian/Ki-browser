@@ -333,6 +333,21 @@ final class BrowserSession: NSObject, ObservableObject {
             }
             .store(in: &webViewSubscriptions)
 
+        // WebKit knows whether the page is still loading; this object only
+        // mirrors it. The mirror can strand — a navigation superseded before it
+        // reported an outcome leaves nothing to clear the flag, and the tab
+        // spins on a page that finished. Treat WebKit as the authority: once it
+        // has been idle briefly while this still claims to be loading, the
+        // claim is wrong. Debounced so the moment between asking for a page and
+        // WebKit starting it is not mistaken for the end of one.
+        webView.publisher(for: \.isLoading)
+            .debounce(for: .milliseconds(400), scheduler: RunLoop.main)
+            .sink { [weak self] webKitIsLoading in
+                guard let self, !webKitIsLoading, self.isLoading else { return }
+                self.reconcileStrandedLoadingState()
+            }
+            .store(in: &webViewSubscriptions)
+
         webView.publisher(for: \.title)
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in self?.refreshState() }
@@ -365,6 +380,35 @@ final class BrowserSession: NSObject, ObservableObject {
         navigationVersion += 1
         lastRequestedURL = safeURL
         lastCommittedWebURL = safeURL
+    }
+
+    /// Clears a loading state WebKit has already finished with. Deliberately
+    /// narrow: it settles the chrome and nothing else. It does not record a
+    /// visit, because a navigation that never reported finishing is not
+    /// something to write into history from a guess.
+    private func reconcileStrandedLoadingState() {
+        activeNavigation = nil
+        isLoading = false
+        estimatedProgress = 1
+        navigationDisplayName = nil
+        if isShowingStartPage {
+            loadState = .startPage
+        } else if case .failed = loadState {
+            // A failure already explains itself; leave it on screen.
+        } else {
+            hasCommittedNavigation = true
+            loadState = .content
+        }
+        refreshState()
+    }
+
+    /// Puts the chrome into the stranded state the recovery path exists for, so
+    /// the smoke suite can prove it recovers rather than trusting that it would.
+    /// Not reachable from the interface; nothing in the app calls it.
+    func simulateStrandedLoadingForTesting() {
+        isLoading = true
+        estimatedProgress = 0.4
+        loadState = .loading
     }
 
     private func refreshState() {
@@ -561,7 +605,12 @@ final class BrowserSession: NSObject, ObservableObject {
 
 extension BrowserSession: WKNavigationDelegate {
     func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
-        if let activeNavigation, navigation !== activeNavigation { return }
+        // A provisional navigation that starts now is by definition the newest,
+        // so it takes over. Refusing it would leave the older one active while
+        // WebKit quietly abandons it, and the newer one's didFinish would then
+        // be dismissed as stale — the tab spins for a page that finished
+        // loading. Staleness is filtered where it belongs, on the callbacks
+        // that report an outcome.
         activeNavigation = navigation
         isLoading = true
         hasCommittedNavigation = false
