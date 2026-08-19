@@ -525,6 +525,143 @@ final class BrowserBehaviorTests: XCTestCase {
         XCTAssertEqual(ShieldState.unavailable.symbolName, "shield.slash")
     }
 
+    func testConnectionSecurityReadsWebKitsSecureContentReportAndNotJustTheScheme() {
+        // The bug this exists for: an HTTPS page pulling part of itself over
+        // HTTP used to show a full green lock, because only the scheme was read.
+        XCTAssertEqual(
+            ConnectionSecurity.make(
+                urlString: "https://example.com/article",
+                hasOnlySecureContent: true,
+                hasCommittedNavigation: true
+            ),
+            .secure
+        )
+        XCTAssertEqual(
+            ConnectionSecurity.make(
+                urlString: "https://example.com/article",
+                hasOnlySecureContent: false,
+                hasCommittedNavigation: true
+            ),
+            .mixedContent
+        )
+        XCTAssertEqual(
+            ConnectionSecurity.mixedContent.statusLine,
+            "Parts of this page were loaded over an unencrypted connection"
+        )
+        XCTAssertNotEqual(ConnectionSecurity.mixedContent.symbolName, ConnectionSecurity.secure.symbolName)
+
+        // Plain HTTP is never secure, whatever WebKit says about subresources.
+        for onlySecure in [true, false] {
+            XCTAssertEqual(
+                ConnectionSecurity.make(
+                    urlString: "http://example.com/",
+                    hasOnlySecureContent: onlySecure,
+                    hasCommittedNavigation: true
+                ),
+                .notSecure
+            )
+        }
+
+        // Before the navigation commits, `hasOnlySecureContent` still describes
+        // the document being replaced, so there is nothing truthful to say yet.
+        XCTAssertEqual(
+            ConnectionSecurity.make(
+                urlString: "https://example.com/",
+                hasOnlySecureContent: false,
+                hasCommittedNavigation: false
+            ),
+            .checking
+        )
+
+        // A Clearframe surface is not a website.
+        XCTAssertEqual(
+            ConnectionSecurity.make(urlString: "", hasOnlySecureContent: true, hasCommittedNavigation: true),
+            .noPage
+        )
+        XCTAssertEqual(
+            ConnectionSecurity.make(urlString: "about:blank", hasOnlySecureContent: true, hasCommittedNavigation: true),
+            .noPage
+        )
+
+        for state: ConnectionSecurity in [.noPage, .checking, .secure, .mixedContent, .notSecure] {
+            XCTAssertFalse(state.statusLine.isEmpty)
+            XCTAssertFalse(state.detail.isEmpty)
+            XCTAssertFalse(state.symbolName.isEmpty)
+        }
+    }
+
+    func testSiteDataKindsNameEveryWebKitTypeInPlainWordsAndDegradeForUnknownOnes() {
+        XCTAssertEqual(SiteDataKind.kind(forDataType: WKWebsiteDataTypeCookies), .cookies)
+        XCTAssertEqual(SiteDataKind.kind(forDataType: WKWebsiteDataTypeDiskCache), .cachedFiles)
+        XCTAssertEqual(SiteDataKind.kind(forDataType: WKWebsiteDataTypeMemoryCache), .cachedFiles)
+        XCTAssertEqual(SiteDataKind.kind(forDataType: WKWebsiteDataTypeFetchCache), .cachedFiles)
+        XCTAssertEqual(SiteDataKind.kind(forDataType: WKWebsiteDataTypeLocalStorage), .localStorage)
+        XCTAssertEqual(SiteDataKind.kind(forDataType: WKWebsiteDataTypeSessionStorage), .localStorage)
+        XCTAssertEqual(SiteDataKind.kind(forDataType: WKWebsiteDataTypeIndexedDBDatabases), .databases)
+        XCTAssertEqual(SiteDataKind.kind(forDataType: WKWebsiteDataTypeWebSQLDatabases), .databases)
+        XCTAssertEqual(SiteDataKind.kind(forDataType: WKWebsiteDataTypeServiceWorkerRegistrations), .serviceWorkers)
+        XCTAssertEqual(SiteDataKind.kind(forDataType: WKWebsiteDataTypeFileSystem), .storedFiles)
+        XCTAssertEqual(SiteDataKind.kind(forDataType: WKWebsiteDataTypeMediaKeys), .mediaKeys)
+        XCTAssertEqual(SiteDataKind.kind(forDataType: WKWebsiteDataTypeSearchFieldRecentSearches), .recentSearches)
+        XCTAssertEqual(SiteDataKind.kind(forDataType: WKWebsiteDataTypeHashSalt), .deviceIdentifiers)
+        XCTAssertEqual(SiteDataKind.kind(forDataType: "WKWebsiteDataTypeScreenTime"), .screenTime)
+
+        // A constant a future macOS adds must degrade to words, not crash and
+        // not leak WebKit's identifier into the interface.
+        XCTAssertEqual(SiteDataKind.kind(forDataType: "WKWebsiteDataTypeSomethingNotInventedYet"), .other)
+        XCTAssertEqual(SiteDataKind.kind(forDataType: ""), .other)
+        XCTAssertEqual(SiteDataKind.other.label, "other site data")
+
+        for kind in SiteDataKind.allCases {
+            XCTAssertFalse(kind.label.isEmpty)
+            XCTAssertFalse(
+                kind.label.contains("WKWebsiteData"),
+                "\(kind) leaked a WebKit identifier into user-facing text"
+            )
+        }
+
+        // Whatever this Mac's WebKit actually offers is covered by words too.
+        for rawValue in WKWebsiteDataStore.allWebsiteDataTypes() {
+            let label = SiteDataKind.kind(forDataType: rawValue).label
+            XCTAssertFalse(label.contains("WKWebsiteData"), "\(rawValue) had no plain-words name")
+        }
+    }
+
+    func testSiteDataKindsCollapseRepeatedGroupsAndReadAsOneOrderedLine() {
+        let kinds = SiteDataKind.kinds(for: [
+            WKWebsiteDataTypeMemoryCache,
+            WKWebsiteDataTypeDiskCache,
+            WKWebsiteDataTypeFetchCache,
+            WKWebsiteDataTypeCookies,
+            WKWebsiteDataTypeLocalStorage
+        ])
+        XCTAssertEqual(kinds, [.cookies, .cachedFiles, .localStorage], "three caches are one everyday idea")
+        XCTAssertEqual(SiteDataKind.summary(of: kinds), "Cookies, cached files, local storage")
+        XCTAssertEqual(SiteDataKind.summary(of: []), "Site data")
+
+        // Nothing anywhere in this vocabulary is a size or a count: WebKit
+        // reports neither, so neither can appear.
+        let everyLabel = SiteDataKind.allCases.map(\.label).joined(separator: " ")
+        XCTAssertFalse(everyLabel.contains(where: \.isNumber))
+    }
+
+    func testSiteDataRemovalMatchesTheRegistrableDomainWebKitReportsForASite() {
+        // WebKit names a record by its registrable domain, so a page on
+        // `www.example.com` must still find and remove the `example.com` record.
+        XCTAssertTrue(SiteDataInventory.matches(displayName: "example.com", host: "example.com"))
+        XCTAssertTrue(SiteDataInventory.matches(displayName: "example.com", host: "www.example.com"))
+        XCTAssertTrue(SiteDataInventory.matches(displayName: "example.com", host: "shop.eu.example.com"))
+        XCTAssertTrue(SiteDataInventory.matches(displayName: "EXAMPLE.com", host: "www.Example.COM"))
+
+        XCTAssertFalse(SiteDataInventory.matches(displayName: "example.com", host: "example.org"))
+        XCTAssertFalse(
+            SiteDataInventory.matches(displayName: "example.com", host: "notexample.com"),
+            "a shared suffix is not the same site"
+        )
+        XCTAssertFalse(SiteDataInventory.matches(displayName: "", host: "example.com"))
+        XCTAssertFalse(SiteDataInventory.matches(displayName: "example.com", host: ""))
+    }
+
     func testIdentityColorIsDeterministicAcrossCalls() {
         let first = IdentityColor.color(forHost: "example.com")
         let second = IdentityColor.color(forHost: "example.com")

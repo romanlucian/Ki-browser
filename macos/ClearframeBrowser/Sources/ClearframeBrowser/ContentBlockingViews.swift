@@ -76,12 +76,18 @@ struct ContentBlockingShieldButton: View {
         .accessibilityLabel("Tracker blocking: \(shieldState.statusLine)")
         .accessibilityHint("Shows tracker blocking status and this site's controls.")
         .popover(isPresented: $showsPopover, arrowEdge: .top) {
-            ContentBlockingPopover(provider: provider, session: session, host: host, shieldState: shieldState)
+            ContentBlockingSiteControl(provider: provider, session: session, host: host, shieldState: shieldState)
+                .padding(16)
+                .frame(width: 320)
         }
     }
 }
 
-private struct ContentBlockingPopover: View {
+/// The whole per-site tracker-blocking control: what state blocking is in, why,
+/// and the switch for this one site. The shield's own popover and the address
+/// bar's site information popover both show this exact view, so the two can
+/// never drift into saying different things about the same site.
+struct ContentBlockingSiteControl: View {
     @ObservedObject var provider: ContentRuleListProvider
     @ObservedObject var session: BrowserSession
     let host: String?
@@ -129,8 +135,6 @@ private struct ContentBlockingPopover: View {
                 }
             }
         }
-        .padding(16)
-        .frame(width: 320)
     }
 
     @ViewBuilder

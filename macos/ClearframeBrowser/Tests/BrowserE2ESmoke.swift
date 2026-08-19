@@ -543,6 +543,96 @@ struct BrowserE2ESmoke {
             blockedSession.teardown()
             print("PASS content blocking exception: a per-site exception let the tracker script load, and removing it resumed blocking")
 
+            // Site information: the connection state the address chip and its
+            // popover both read. It comes from the scheme *and* from WebKit's
+            // own answer about the page's subresources, so an https page that
+            // pulled part of itself over http can never show a plain lock.
+            try require(
+                ConnectionSecurity.make(
+                    urlString: "https://example.com/",
+                    hasOnlySecureContent: true,
+                    hasCommittedNavigation: true
+                ) == .secure,
+                "a fully encrypted https page was not reported as secure"
+            )
+            try require(
+                ConnectionSecurity.make(
+                    urlString: "https://example.com/",
+                    hasOnlySecureContent: false,
+                    hasCommittedNavigation: true
+                ) == .mixedContent,
+                "an https page carrying insecure subresources was reported as fully secure"
+            )
+            try require(
+                ConnectionSecurity.make(
+                    urlString: "http://example.com/",
+                    hasOnlySecureContent: true,
+                    hasCommittedNavigation: true
+                ) == .notSecure,
+                "a plain http page was not reported as not secure"
+            )
+            try require(
+                ConnectionSecurity.mixedContent.statusLine == "Parts of this page were loaded over an unencrypted connection",
+                "the mixed-content state did not say what happened in plain words"
+            )
+            // The live session agrees with the derivation: the fixture server
+            // speaks plain http, so nothing here may claim a secure connection.
+            try require(
+                session.connectionSecurity == .notSecure && !session.isSecure,
+                "the loaded http fixture page did not report an insecure connection"
+            )
+            print("PASS site connection state: https, mixed-content, and http pages are reported from WebKit's own secure-content answer")
+
+            // Per-site data removal, on a throwaway non-persistent store so the
+            // tester's real cookies are never touched. Two sites are each given
+            // a cookie; removing one must leave the other's record standing.
+            let siteDataStore = WKWebsiteDataStore.nonPersistent()
+            func smokeCookie(domain: String, name: String) throws -> HTTPCookie {
+                try requireValue(
+                    HTTPCookie(properties: [
+                        .domain: domain,
+                        .path: "/",
+                        .name: name,
+                        .value: "1",
+                        .expires: Date().addingTimeInterval(3_600)
+                    ]),
+                    "smoke harness could not build a cookie for \(domain)"
+                )
+            }
+            let firstSiteCookie = try smokeCookie(domain: "example.com", name: "clearframe-smoke-a")
+            let secondSiteCookie = try smokeCookie(domain: "www.example.org", name: "clearframe-smoke-b")
+            await siteDataStore.httpCookieStore.setCookie(firstSiteCookie)
+            await siteDataStore.httpCookieStore.setCookie(secondSiteCookie)
+            let siteData = SiteDataInventory(dataStore: siteDataStore)
+            await siteData.refresh()
+            try require(
+                siteData.sites.contains { SiteDataInventory.matches(displayName: $0.displayName, host: "example.com") },
+                "the site data list did not report the first site's stored cookie"
+            )
+            try require(
+                siteData.sites.contains { SiteDataInventory.matches(displayName: $0.displayName, host: "www.example.org") },
+                "the site data list did not report the second site's stored cookie"
+            )
+            try require(
+                siteData.sites.allSatisfy { !$0.kinds.isEmpty && !$0.kindSummary.contains(where: \.isNumber) },
+                "a site row described its stored data with a size or count WebKit never reports"
+            )
+            // Removed by subdomain on purpose: WebKit names the record after the
+            // registrable domain, so this also proves the match is not equality.
+            let removedFirstSite = await siteData.remove(forHost: "www.example.com")
+            try require(removedFirstSite, "removing data for a subdomain of a listed site reported nothing to remove")
+            try require(
+                !siteData.sites.contains { SiteDataInventory.matches(displayName: $0.displayName, host: "example.com") },
+                "the removed site was still listed as holding data"
+            )
+            try require(
+                siteData.sites.contains { SiteDataInventory.matches(displayName: $0.displayName, host: "example.org") },
+                "removing one site's data also removed another site's records"
+            )
+            let removedMissingSite = await siteData.remove(forHost: "never-visited.example.net")
+            try require(!removedMissingSite, "a site that stored nothing was reported as having had data removed")
+            print("PASS site data: one site's stored data was listed in plain words and removed without touching another site's records")
+
             let spaURL = fixtureURL.appendingPathComponent("spa-state").absoluteString
             try await evaluate("history.pushState({}, '', '/spa-state'); document.title = 'Clearframe SPA State'", in: session)
             let spaStateObserved = await waitUntil {

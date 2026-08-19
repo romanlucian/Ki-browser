@@ -55,6 +55,11 @@ final class BrowserSession: NSObject, ObservableObject {
     /// the page. Refusing a link must never take away the page the reader is
     /// on, so this never touches `loadState`.
     @Published private(set) var linkNotice: String?
+    /// How the connection to the current page actually stands, from the scheme
+    /// *and* from WebKit's own report of whether everything on the page arrived
+    /// encrypted. Published so the address chip and the site information
+    /// popover can never disagree about the same page.
+    @Published private(set) var connectionSecurity: ConnectionSecurity = .noPage
 
     /// `nil` opens an empty tab: a popup script may set the location later.
     var onRequestNewTab: ((URL?) -> Void)?
@@ -141,8 +146,23 @@ final class BrowserSession: NSObject, ObservableObject {
         }
     }
 
+    /// Fully secure means HTTPS *and* nothing on the page arrived unencrypted.
+    /// An HTTPS page carrying insecure subresources is not secure, and used to
+    /// read as one here because only the scheme was consulted.
     var isSecure: Bool {
-        URL(string: currentURLString)?.scheme?.lowercased() == "https"
+        connectionSecurity == .secure
+    }
+
+    /// Recomputed wherever `currentURLString` changes and whenever WebKit
+    /// revises `hasOnlySecureContent`, which it can do after a page has already
+    /// finished loading — a late subresource is exactly the case a scheme check
+    /// misses.
+    private func refreshConnectionSecurity() {
+        connectionSecurity = ConnectionSecurity.make(
+            urlString: currentURLString,
+            hasOnlySecureContent: webView.hasOnlySecureContent,
+            hasCommittedNavigation: hasCommittedNavigation
+        )
     }
 
     /// App activation may focus the address field on a start/new tab, but must
@@ -187,6 +207,7 @@ final class BrowserSession: NSObject, ObservableObject {
         isLoading = true
         estimatedProgress = 0.05
         loadState = .loading
+        refreshConnectionSecurity()
         activeNavigation = webView.load(URLRequest(url: safeURL))
     }
 
@@ -272,6 +293,7 @@ final class BrowserSession: NSObject, ObservableObject {
         currentURLString = ""
         pageTitle = "New Tab"
         loadState = .startPage
+        refreshConnectionSecurity()
         activeNavigation = webView.loadHTMLString(Self.startPageHTML, baseURL: nil)
     }
 
@@ -354,6 +376,7 @@ final class BrowserSession: NSObject, ObservableObject {
         currentURLString = ""
         pageTitle = "New Tab"
         loadState = .startPage
+        refreshConnectionSecurity()
     }
 
     func teardown() {
@@ -532,6 +555,14 @@ final class BrowserSession: NSObject, ObservableObject {
             .receive(on: RunLoop.main)
             .sink { [weak self] url in self?.observeURLChange(url) }
             .store(in: &webViewSubscriptions)
+
+        // A page can pull an insecure subresource long after it finished
+        // loading. WebKit revises this then, and the chip has to follow, or the
+        // lock keeps claiming something that stopped being true.
+        webView.publisher(for: \.hasOnlySecureContent)
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in self?.refreshConnectionSecurity() }
+            .store(in: &webViewSubscriptions)
     }
 
     private func observeURLChange(_ url: URL?) {
@@ -600,6 +631,7 @@ final class BrowserSession: NSObject, ObservableObject {
         }
         canGoBack = webView.canGoBack
         canGoForward = webView.canGoForward
+        refreshConnectionSecurity()
     }
 
     private func handleFailure(_ error: Error, navigation: WKNavigation?) {
