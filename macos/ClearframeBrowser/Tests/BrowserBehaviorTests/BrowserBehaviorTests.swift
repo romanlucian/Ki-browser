@@ -566,6 +566,20 @@ final class BrowserBehaviorTests: XCTestCase {
                        "the edit is written to this Mac user profile, not just held in memory")
     }
 
+    /// A bar item is drawn shorter than the bar so it reads as a chip, but it
+    /// must still be pointable across the bar's whole height. When it was not,
+    /// the few points above and below each item belonged to the bar, and a
+    /// right-click aimed at a folder opened the bar's own menu instead.
+    func testBookmarksBarItemsArePointableAcrossTheWholeBarHeight() {
+        XCTAssertGreaterThan(
+            BookmarkBarMetrics.barHeight,
+            BookmarkBarMetrics.itemHeight,
+            "the chip is meant to sit inside a taller bar"
+        )
+        XCTAssertEqual(BookmarkBarMetrics.barHeight, 28)
+        XCTAssertEqual(BookmarkBarMetrics.itemHeight, 22)
+    }
+
     func testBookmarksBarItemsHugTheirOwnNameAndCapLongOnes() {
         let short = BookmarkBarMetrics.naturalWidth(label: "🤖 AI")
         let longer = BookmarkBarMetrics.naturalWidth(label: "🎨 Design")

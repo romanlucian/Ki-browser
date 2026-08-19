@@ -10,6 +10,11 @@ import SwiftUI
 @MainActor
 enum BookmarkBarMetrics {
     static let itemHeight: CGFloat = 22
+    /// The bar itself. Items are shorter than this so they read as chips, but
+    /// they must still take the whole height for pointing: a strip of bar
+    /// above and below each one that swallowed clicks meant a right-click near
+    /// an item opened the bar's own menu instead of the item's.
+    static let barHeight: CGFloat = 28
     /// Padding inside one item, left and right of its content.
     static let itemPadding: CGFloat = 8
     /// Space between two adjacent items. With `itemPadding` on both sides this
@@ -241,7 +246,7 @@ struct BookmarksBar: View {
             }
         }
         .padding(.horizontal, 9)
-        .frame(height: 28)
+        .frame(height: BookmarkBarMetrics.barHeight)
         .background(isRootDropTargeted ? ClearframeTheme.accentDim : ClearframeTheme.bg1)
         .overlay(alignment: .bottom) {
             Rectangle()
@@ -409,7 +414,8 @@ private struct BookmarksBarAllChip: View {
                 isHovered ? ClearframeTheme.itemHover : Color.clear,
                 in: RoundedRectangle(cornerRadius: ClearframeTheme.radius6)
             )
-            .contentShape(RoundedRectangle(cornerRadius: ClearframeTheme.radius6))
+            .frame(height: BookmarkBarMetrics.barHeight)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .fixedSize()
@@ -459,7 +465,8 @@ private struct BookmarkBarLink: View {
                 isHovered ? ClearframeTheme.itemHover : Color.clear,
                 in: RoundedRectangle(cornerRadius: ClearframeTheme.radius6)
             )
-            .contentShape(RoundedRectangle(cornerRadius: ClearframeTheme.radius6))
+            .frame(height: BookmarkBarMetrics.barHeight)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .fixedSize()
@@ -519,13 +526,14 @@ private struct BookmarkFolderMenu: View {
     var body: some View {
         if compact {
             Menu { menuContents } label: {
-                Color.clear.frame(width: chipWidth, height: BookmarkBarMetrics.itemHeight)
+                Color.clear.frame(width: chipWidth, height: BookmarkBarMetrics.barHeight)
             }
             .menuStyle(.borderlessButton)
             .menuIndicator(.hidden)
             .fixedSize()
             .overlay { chipLabel }
-            .frame(width: chipWidth, height: BookmarkBarMetrics.itemHeight)
+            .frame(width: chipWidth, height: BookmarkBarMetrics.barHeight)
+            .contentShape(Rectangle())
             .onHover { isHovered = $0 }
             .dropDestination(for: URL.self) { urls, _ in
                 guard let url = urls.first, let result = fileDroppedURL(url, folder.id) else { return false }
