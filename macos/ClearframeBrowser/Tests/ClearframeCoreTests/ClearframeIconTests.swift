@@ -55,7 +55,7 @@ final class ClearframeIconTests: XCTestCase {
 
         XCTAssertEqual(
             ClearframeIconCatalog.all.count,
-            104 + 100 + 100 + 1261,
+            104 + 100 + 1261,
             "one lookup has to answer for every style"
         )
         XCTAssertEqual(ClearframeIconCatalog.availableStyles, ClearframeIconStyle.allCases)
@@ -79,12 +79,10 @@ final class ClearframeIconTests: XCTestCase {
     /// set carries its own, so the swatch row must not pretend otherwise.
     func testOnlyTheClearframeSetIsTintable() {
         XCTAssertTrue(ClearframeIconStyle.clearframe.isTintable)
-        XCTAssertTrue(ClearframeIconStyle.elegant.isTintable)
         XCTAssertFalse(ClearframeIconStyle.stickies.isTintable)
         XCTAssertFalse(ClearframeIconStyle.emojiOne.isTintable)
 
         XCTAssertNil(ClearframeIconStyle.clearframe.attribution)
-        XCTAssertEqual(ClearframeIconStyle.elegant.attribution, "Elegant by Kenny Sing, GPL-3.0")
         XCTAssertEqual(ClearframeIconStyle.stickies.attribution, "Stickies by Streamline, CC BY 4.0")
 
         // The claim above has to hold against the artwork, not just the enum:
@@ -208,26 +206,6 @@ final class ClearframeIconTests: XCTestCase {
         )
         XCTAssertEqual(both?.first?.opacity, 0.25)
         XCTAssertEqual(both?.last?.opacity, 1)
-    }
-
-    /// Elegant is the second tintable set, and the only one whose drawings are
-    /// not square: widths run from 15 to 56 against a fixed height of 32.
-    func testElegantShipsTintableArtworkInItsOwnVaryingBoxes() {
-        let elegant = ClearframeIconCatalog.icons(style: .elegant)
-        XCTAssertEqual(elegant.count, 100)
-        XCTAssertTrue(elegant.allSatisfy { $0.id.hasPrefix("elegant-") })
-        XCTAssertTrue(
-            elegant.allSatisfy { $0.box.height == 32 },
-            "the set is drawn to one height"
-        )
-        XCTAssertTrue(
-            elegant.contains { $0.box.width != $0.box.height },
-            "some drawings are not square, which is why each carries its own box"
-        )
-        // Aspect has to be preserved rather than stretched, so a wide drawing
-        // must keep its width-to-height ratio.
-        let widest = elegant.max { $0.box.width < $1.box.width }!
-        XCTAssertGreaterThan(widest.box.width, widest.box.height)
     }
 
     func testEveryIconHasAUniqueIdentifierAndKeepsItsCategoryOrder() {
