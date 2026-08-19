@@ -425,12 +425,12 @@ private struct BrowserToolbar: View {
 
             pillDivider
 
+            // Outside the tap-to-focus block on purpose: the chip is now its own
+            // control, so clicking it opens site information instead of putting
+            // the cursor in the address field.
+            SiteInformationChip(session: session, contentBlocking: workspace.contentBlocking)
+
             HStack(spacing: 8) {
-                PageLinkDragHandle(
-                    urlString: session.currentURLString,
-                    title: session.pageTitle,
-                    isSecure: session.isSecure
-                )
                 ZStack(alignment: .leading) {
                     TextField("Search \(searchSettings.selectedEngine.displayName) or enter a website", text: $addressText)
                         .textFieldStyle(.plain)
@@ -678,41 +678,6 @@ private struct NavigationButton: View {
         .buttonStyle(GhostButtonStyle(tint: enabled ? ClearframeTheme.textPrimary : ClearframeTheme.textTertiary))
         .disabled(!enabled)
         .help(label)
-    }
-}
-
-private struct PageLinkDragHandle: View {
-    let urlString: String
-    let title: String
-    let isSecure: Bool
-
-    @ViewBuilder
-    var body: some View {
-        if let url = BookmarkURLPolicy.validatedURL(urlString) {
-            symbol
-                .frame(width: 20, height: 22)
-                .background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 5))
-                .contentShape(RoundedRectangle(cornerRadius: 5))
-                .draggable(url) {
-                    Label(title.isEmpty ? (url.host ?? "Web page") : title, systemImage: "link")
-                        .lineLimit(1)
-                        .padding(8)
-                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
-                }
-                .help("Drag this page link to the bookmarks bar or a visible folder")
-                .accessibilityLabel("Page link drag handle")
-                .accessibilityHint("Drag to the bookmarks bar to save this page, or onto a folder to file it there.")
-        } else {
-            symbol
-                .frame(width: 20, height: 22)
-                .accessibilityHidden(true)
-        }
-    }
-
-    private var symbol: some View {
-        Image(systemName: isSecure ? "lock.fill" : "globe")
-            .foregroundStyle(isSecure ? Color.green : Color.secondary)
-            .font(.system(size: 11, weight: .semibold))
     }
 }
 

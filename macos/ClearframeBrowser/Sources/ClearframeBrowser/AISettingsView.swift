@@ -11,6 +11,7 @@ struct AISettingsView: View {
     @State private var showsResetConfirmation = false
     @State private var isResettingBrowserData = false
     @State private var browserDataStatus = ""
+    @StateObject private var siteData = SiteDataInventory()
 
     var body: some View {
         Form {
@@ -77,6 +78,8 @@ struct AISettingsView: View {
                 }
             }
 
+            SiteDataSettingsSection(inventory: siteData)
+
             ContentBlockingSettingsSection(provider: workspace.contentBlocking)
 
             Section("Bookmarks bar") {
@@ -133,6 +136,7 @@ struct AISettingsView: View {
         }
         .formStyle(.grouped)
         .padding(16)
+        .task { await siteData.refresh() }
         .onChange(of: restoresTabs) { _, enabled in
             if !enabled {
                 workspace.dataStore.clearSavedWorkspace()
@@ -155,6 +159,10 @@ struct AISettingsView: View {
                     await workspace.resetLocalBrowsingData()
                     isResettingBrowserData = false
                     browserDataStatus = "Local browsing data cleared."
+                    // The per-site list describes the same WebKit store the
+                    // reset just emptied; leaving it on screen would show
+                    // sites that no longer hold anything.
+                    await siteData.refresh()
                 }
             }
             Button("Cancel", role: .cancel) {}
@@ -182,6 +190,97 @@ private struct SearchEngineSettingsSection: View {
             Text("Only text submitted as a search is sent to \(settings.selectedEngine.displayName). Website addresses open directly. Clearframe does not request suggestions while you type and has no claimed partnership with any listed provider.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
+        }
+    }
+}
+
+/// Every site that currently holds data in the non-private WebKit store, with a
+/// remove button each. It sits beside **Clear local browsing data** rather than
+/// replacing it: that action still clears everything at once, this one names a
+/// single site.
+///
+/// It shows kinds of data and never an amount. `WKWebsiteDataRecord` carries a
+/// display name and a set of data types — no byte count, no cookie count — so
+/// "4.9 MB · 34 cookies" is not something Clearframe could report without
+/// inventing it.
+private struct SiteDataSettingsSection: View {
+    @ObservedObject var inventory: SiteDataInventory
+    @State private var pendingRemoval: SiteDataEntry?
+
+    var body: some View {
+        Section("Site data") {
+            Text("Websites you visit can store cookies, cached files, and local storage on this Mac. Remove a single site here, or clear everything with Clear local browsing data above. Private tabs are not listed: their storage is discarded when the tab closes.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            switch inventory.state {
+            case .idle, .loading:
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small)
+                    Text("Reading stored site data…")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            case .loaded:
+                if inventory.sites.isEmpty {
+                    Text("No site has stored data on this Mac.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(inventory.sites) { site in
+                        row(for: site)
+                    }
+                    Button("Refresh list") {
+                        Task { await inventory.refresh() }
+                    }
+                    .font(.caption)
+                }
+            }
+
+            Text("Clearframe shows which kinds of data a site stored, not how much: WebKit reports no size and no number of cookies, so no amount is shown anywhere. Removing a site's data usually signs you out of it. Bookmarks, history, and downloaded files are kept.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    /// The confirmation is attached to the row it acts on, so the dialog it
+    /// opens is anchored to the site it names.
+    private func row(for site: SiteDataEntry) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(site.displayName)
+                Text(site.kindSummary)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 8)
+            if inventory.removingSite == site.displayName {
+                ProgressView().controlSize(.small)
+            } else {
+                Button("Remove") { pendingRemoval = site }
+                    .buttonStyle(.plain)
+                    .font(.caption)
+                    .disabled(inventory.removingSite != nil)
+                    .accessibilityLabel("Remove data stored by \(site.displayName)")
+                    .accessibilityHint("Asks for confirmation first. \(site.displayName) currently holds \(site.kindSummary.lowercased()).")
+            }
+        }
+        .confirmationDialog(
+            "Remove data stored by \(site.displayName)?",
+            isPresented: Binding(
+                get: { pendingRemoval == site },
+                set: { if !$0 { pendingRemoval = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("Remove site data", role: .destructive) {
+                pendingRemoval = nil
+                Task { await inventory.remove(site) }
+            }
+            Button("Cancel", role: .cancel) { pendingRemoval = nil }
+        } message: {
+            Text("This removes \(site.displayName)'s cookies, cached files, and other stored website data from this Mac. You will probably be signed out of it. Your bookmarks, history, and downloaded files are kept. This cannot be undone.")
         }
     }
 }

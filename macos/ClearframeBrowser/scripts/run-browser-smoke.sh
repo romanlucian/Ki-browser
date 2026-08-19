@@ -85,6 +85,8 @@ swiftc \
     "$PACKAGE_DIR/Sources/ClearframeBrowser/BookmarksHomePage.swift" \
     "$PACKAGE_DIR/Sources/ClearframeBrowser/DownloadViews.swift" \
     "$PACKAGE_DIR/Sources/ClearframeBrowser/ContentBlockingViews.swift" \
+    "$PACKAGE_DIR/Sources/ClearframeBrowser/SiteDataInventory.swift" \
+    "$PACKAGE_DIR/Sources/ClearframeBrowser/SiteInformationViews.swift" \
     "$PACKAGE_DIR/Sources/ClearframeBrowser/TabGroupPalette.swift" \
     "$PACKAGE_DIR/Sources/ClearframeBrowser/TabStripLayout.swift" \
     "$PACKAGE_DIR/Sources/ClearframeBrowser/TabStripViews.swift" \
