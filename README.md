@@ -146,6 +146,7 @@ Clearframe presents Safari's user agent because it renders with WebKit, Safari's
 - The native browser is a single-window version-1 MVP with basic tabs; its local bundle is ad hoc signed with the hardened runtime, but it is not Developer ID signed, notarized, or independently security reviewed for consumer distribution.
 - WebKit does not provide Chrome extension compatibility and is not a drop-in substitute for a future Chromium product.
 - The repository is published under the [GNU Affero General Public License v3.0](LICENSE). Source may be read, modified, and redistributed under those terms; modified versions offered to users over a network must also offer their corresponding source. Clearframe holds the copyright and may additionally offer separate commercial terms.
+- The folder icon picker offers three sets. The Clearframe set (104 icons) is the project's own artwork. The two Stickies sets (100 drawings in a plain and a shadowed form) are ["Stickies color icons" by Streamline](https://github.com/webalys-hq/streamline-vectors), used under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/); the picker credits them wherever they are shown. Redistributing this repository carries that attribution requirement with it.
 
 ## Documentation index
 

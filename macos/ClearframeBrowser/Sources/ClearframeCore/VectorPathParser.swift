@@ -30,10 +30,46 @@ public struct VectorShape: Equatable, Sendable {
 
     public let paint: Paint
     public let commands: [VectorPathCommand]
+    /// The colour this element names, as six hex digits without the `#`.
+    ///
+    /// `nil` means the element named none, so it draws in whatever colour the
+    /// caller is using. That is the Clearframe set's whole convention, and the
+    /// only reason a folder tint can apply at all — a multicolour set carries
+    /// its own colours here and ignores the tint by construction.
+    public let colorHex: String?
+    /// Even-odd winding rather than non-zero. Only meaningful while filling,
+    /// and only the multicolour sets ask for it.
+    public let usesEvenOddFill: Bool
+    /// How this element's stroke ends and turns corners, when the artwork says.
+    /// `nil` leaves the choice to the style: the Clearframe set is drawn to be
+    /// rounded throughout, while a set that follows SVG's own defaults wants
+    /// butt ends and mitred corners — forcing round joins on it visibly blunts
+    /// sharp points such as a star's.
+    public let lineCap: LineCap?
+    public let lineJoin: LineJoin?
 
-    public init(paint: Paint, commands: [VectorPathCommand]) {
+    public enum LineCap: String, Sendable {
+        case butt, round, square
+    }
+
+    public enum LineJoin: String, Sendable {
+        case miter, round, bevel
+    }
+
+    public init(
+        paint: Paint,
+        commands: [VectorPathCommand],
+        colorHex: String? = nil,
+        usesEvenOddFill: Bool = false,
+        lineCap: LineCap? = nil,
+        lineJoin: LineJoin? = nil
+    ) {
         self.paint = paint
         self.commands = commands
+        self.colorHex = colorHex
+        self.usesEvenOddFill = usesEvenOddFill
+        self.lineCap = lineCap
+        self.lineJoin = lineJoin
     }
 }
 
@@ -48,47 +84,164 @@ public struct VectorShape: Equatable, Sendable {
 /// are geometry value types, not a UI dependency.
 public enum VectorPathParser {
     /// Every element of one icon's markup, in drawing order.
+    ///
+    /// Groups are walked rather than drawn: `fill`, `stroke`, and `fill-rule`
+    /// inherit down the tree the way SVG says they do, so a `<g>` that names a
+    /// colour hands it to every child that does not name its own.
     public static func parse(_ markup: String) -> [VectorShape]? {
         var scanner = MarkupScanner(markup)
-        guard let elements = scanner.scanElements() else { return nil }
-        guard !elements.isEmpty else { return nil }
+        guard let nodes = scanner.scanNodes(closing: nil) else { return nil }
+        guard !nodes.isEmpty else { return nil }
+
+        // Definitions are gathered up front: `<use>` may reference a shape
+        // declared after it, and document order is not reference order.
+        var definitions: [String: MarkupNode] = [:]
+        for node in nodes { collectDefinitions(node, into: &definitions) }
 
         var shapes: [VectorShape] = []
-        for element in elements {
-            switch element.name {
-            case "path":
-                guard let data = element.attributes["d"],
-                      let commands = parsePathData(data),
-                      !commands.isEmpty else { return nil }
-                shapes.append(VectorShape(paint: element.paint, commands: commands))
-            case "circle":
-                guard let cx = element.number("cx"),
-                      let cy = element.number("cy"),
-                      let r = element.number("r"),
-                      r > 0 else { return nil }
-                shapes.append(
-                    VectorShape(
-                        paint: element.paint,
-                        commands: [.ellipse(center: CGPoint(x: cx, y: cy), radii: CGSize(width: r, height: r))]
-                    )
-                )
-            case "ellipse":
-                guard let cx = element.number("cx"),
-                      let cy = element.number("cy"),
-                      let rx = element.number("rx"),
-                      let ry = element.number("ry"),
-                      rx > 0, ry > 0 else { return nil }
-                shapes.append(
-                    VectorShape(
-                        paint: element.paint,
-                        commands: [.ellipse(center: CGPoint(x: cx, y: cy), radii: CGSize(width: rx, height: ry))]
-                    )
-                )
-            default:
+        for node in nodes {
+            guard emit(node, context: PaintContext(), definitions: definitions, into: &shapes) else {
                 return nil
             }
         }
-        return shapes
+        return shapes.isEmpty ? nil : shapes
+    }
+
+    /// Indexes everything inside `<defs>` by its identifier, so `<use>` can
+    /// find it. A definition draws nothing where it sits.
+    private static func collectDefinitions(_ node: MarkupNode, into definitions: inout [String: MarkupNode]) {
+        if node.name == "defs" {
+            for child in node.children where child.attributes["id"] != nil {
+                definitions[child.attributes["id"]!] = child
+            }
+        }
+        for child in node.children { collectDefinitions(child, into: &definitions) }
+    }
+
+    /// Appends one node's drawing to `shapes`, or reports refusal. Returning a
+    /// flag rather than throwing keeps the parser's all-or-nothing contract:
+    /// one unknown element and the whole icon is refused.
+    private static func emit(
+        _ node: MarkupNode,
+        context: PaintContext,
+        definitions: [String: MarkupNode],
+        into shapes: inout [VectorShape]
+    ) -> Bool {
+        let context = context.inheriting(node.attributes)
+
+        switch node.name {
+        case "g":
+            for child in node.children {
+                guard emit(child, context: context, definitions: definitions, into: &shapes) else { return false }
+            }
+            return true
+        case "defs":
+            // Already indexed; a definition is drawn only where it is used.
+            return true
+        case "clipPath":
+            // Every clip in the shipped artwork is the icon's own full frame,
+            // which clips nothing. Honouring it would cost a layer per icon
+            // and change no pixel. If artwork ever ships a real clip, this is
+            // the line that has to grow.
+            return true
+        case "use":
+            guard let href = node.attributes["href"], href.hasPrefix("#") else { return false }
+            guard let target = definitions[String(href.dropFirst())] else { return false }
+            return emit(target, context: context, definitions: definitions, into: &shapes)
+        case "path":
+            guard let data = node.attributes["d"],
+                  let commands = parsePathData(data),
+                  !commands.isEmpty else { return false }
+            append(commands, context: context, into: &shapes)
+            return true
+        case "circle":
+            guard let cx = node.number("cx"),
+                  let cy = node.number("cy"),
+                  let r = node.number("r"),
+                  r > 0 else { return false }
+            append(
+                [.ellipse(center: CGPoint(x: cx, y: cy), radii: CGSize(width: r, height: r))],
+                context: context,
+                into: &shapes
+            )
+            return true
+        case "ellipse":
+            guard let cx = node.number("cx"),
+                  let cy = node.number("cy"),
+                  let rx = node.number("rx"),
+                  let ry = node.number("ry"),
+                  rx > 0, ry > 0 else { return false }
+            append(
+                [.ellipse(center: CGPoint(x: cx, y: cy), radii: CGSize(width: rx, height: ry))],
+                context: context,
+                into: &shapes
+            )
+            return true
+        default:
+            return false
+        }
+    }
+
+    /// Turns one element's geometry and its resolved paint into drawable
+    /// shapes. An element that both fills and strokes becomes two shapes in
+    /// that order, which is what SVG draws and what keeps `paint` a single
+    /// unambiguous answer per shape.
+    private static func append(
+        _ commands: [VectorPathCommand],
+        context: PaintContext,
+        into shapes: inout [VectorShape]
+    ) {
+        var painted = false
+        if let fill = context.fill, fill != "none" {
+            shapes.append(
+                VectorShape(
+                    paint: .filled,
+                    commands: commands,
+                    colorHex: normalizedHex(fill),
+                    usesEvenOddFill: context.fillRule == "evenodd"
+                )
+            )
+            painted = true
+        }
+        if let stroke = context.stroke, stroke != "none" {
+            shapes.append(
+                VectorShape(
+                    paint: .stroked,
+                    commands: commands,
+                    colorHex: normalizedHex(stroke),
+                    lineCap: context.lineCap.flatMap(VectorShape.LineCap.init(rawValue:)),
+                    lineJoin: context.lineJoin.flatMap(VectorShape.LineJoin.init(rawValue:))
+                )
+            )
+            painted = true
+        }
+        // The Clearframe set names no paint at all: a bare element is a stroke
+        // in the caller's own colour. An element that explicitly asked for
+        // neither fill nor stroke is honoured as drawing nothing.
+        if !painted && context.fill == nil && context.stroke == nil {
+            shapes.append(
+                VectorShape(
+                    paint: .stroked,
+                    commands: commands,
+                    colorHex: nil,
+                    lineCap: context.lineCap.flatMap(VectorShape.LineCap.init(rawValue:)),
+                    lineJoin: context.lineJoin.flatMap(VectorShape.LineJoin.init(rawValue:))
+                )
+            )
+        }
+    }
+
+    /// Six lowercase hex digits, or `nil` for a colour that means "whatever
+    /// the caller is drawing in".
+    private static func normalizedHex(_ value: String) -> String? {
+        let trimmed = value.trimmingCharacters(in: .whitespaces)
+        guard trimmed.hasPrefix("#") else { return nil }
+        let digits = trimmed.dropFirst().lowercased()
+        if digits.count == 6, digits.allSatisfy(\.isHexDigit) { return String(digits) }
+        if digits.count == 3, digits.allSatisfy(\.isHexDigit) {
+            return digits.map { "\($0)\($0)" }.joined()
+        }
+        return nil
     }
 
     /// The same markup flattened into one command list, for callers that only
@@ -376,27 +529,43 @@ public enum VectorPathParser {
 
 // MARK: - Markup scanning
 
-/// One `<tag …/>` from an icon's markup.
-private struct MarkupElement {
+/// The paint an element has inherited from its ancestors, before its own
+/// attributes are applied. Held as the raw attribute strings so the rules for
+/// "unset" and "none" stay distinguishable — the first falls back to the
+/// caller's colour, the second draws nothing.
+private struct PaintContext {
+    var fill: String?
+    var stroke: String?
+    var fillRule: String?
+    var lineCap: String?
+    var lineJoin: String?
+
+    func inheriting(_ attributes: [String: String]) -> PaintContext {
+        PaintContext(
+            fill: attributes["fill"] ?? fill,
+            stroke: attributes["stroke"] ?? stroke,
+            fillRule: attributes["fill-rule"] ?? fillRule,
+            lineCap: attributes["stroke-linecap"] ?? lineCap,
+            lineJoin: attributes["stroke-linejoin"] ?? lineJoin
+        )
+    }
+}
+
+/// One element from an icon's markup, with whatever it contains.
+private struct MarkupNode {
     let name: String
     let attributes: [String: String]
-
-    /// The set draws in strokes; only an explicit `fill` turns an element into
-    /// a solid form.
-    var paint: VectorShape.Paint {
-        guard let fill = attributes["fill"], fill != "none" else { return .stroked }
-        return .filled
-    }
+    let children: [MarkupNode]
 
     func number(_ name: String) -> Double? {
         attributes[name].flatMap(Double.init)
     }
 }
 
-/// A deliberately tiny reader for the one markup shape this catalog uses:
-/// self-closing elements with quoted attributes and no text between them.
-/// Anything richer — nesting, entities, comments, text nodes — is rejected
-/// rather than half-understood.
+/// A deliberately tiny reader for the markup these catalogs use: elements with
+/// quoted attributes, nested or self-closing, and no text between them.
+/// Anything richer — entities, comments, text nodes, an unbalanced tag — is
+/// rejected rather than half-understood.
 private struct MarkupScanner {
     private let characters: [Character]
     private var index = 0
@@ -405,19 +574,34 @@ private struct MarkupScanner {
         characters = Array(markup)
     }
 
-    mutating func scanElements() -> [MarkupElement]? {
-        var elements: [MarkupElement] = []
+    /// Reads sibling elements until `</closing>`, or until the markup ends when
+    /// `closing` is nil. A missing closing tag is a refusal, not a guess.
+    mutating func scanNodes(closing: String?) -> [MarkupNode]? {
+        var nodes: [MarkupNode] = []
         while true {
             skipWhitespace()
-            if index >= characters.count { return elements }
+            if index >= characters.count {
+                return closing == nil ? nodes : nil
+            }
             guard characters[index] == "<" else { return nil }
+
+            if index + 1 < characters.count, characters[index + 1] == "/" {
+                guard let closing else { return nil }
+                index += 2
+                guard let name = scanName(), name == closing else { return nil }
+                skipWhitespace()
+                guard index < characters.count, characters[index] == ">" else { return nil }
+                index += 1
+                return nodes
+            }
+
             index += 1
-            guard let element = scanElement() else { return nil }
-            elements.append(element)
+            guard let node = scanElement() else { return nil }
+            nodes.append(node)
         }
     }
 
-    private mutating func scanElement() -> MarkupElement? {
+    private mutating func scanElement() -> MarkupNode? {
         guard let name = scanName(), !name.isEmpty else { return nil }
         var attributes: [String: String] = [:]
         while true {
@@ -427,7 +611,12 @@ private struct MarkupScanner {
                 index += 1
                 guard index < characters.count, characters[index] == ">" else { return nil }
                 index += 1
-                return MarkupElement(name: name, attributes: attributes)
+                return MarkupNode(name: name, attributes: attributes, children: [])
+            }
+            if characters[index] == ">" {
+                index += 1
+                guard let children = scanNodes(closing: name) else { return nil }
+                return MarkupNode(name: name, attributes: attributes, children: children)
             }
             guard let attributeName = scanName(), !attributeName.isEmpty else { return nil }
             skipWhitespace()
@@ -450,7 +639,8 @@ private struct MarkupScanner {
 
     private mutating func scanName() -> String? {
         var name = ""
-        while index < characters.count, characters[index].isLetter || characters[index] == "-" {
+        while index < characters.count,
+              characters[index].isLetter || characters[index].isNumber || characters[index] == "-" {
             name.append(characters[index])
             index += 1
         }
