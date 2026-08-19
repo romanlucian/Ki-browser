@@ -1,7 +1,14 @@
 # Clearframe: product and technical foundation
 
 **Status:** standalone macOS version-1 MVP release stage plus an earlier extension validation artifact, August 2026
-**Working name:** Clearframe; validate naming and trademarks before public launch.
+**Name:** Clearframe, kept after a deliberate review on August 19, 2026. It carries a true double meaning for a browser, it reads calm rather than boastful, which is the product's whole posture, and it generated the app mark: an empty frame with the icon set's turned corner. Alternatives were considered and rejected — a studio name on a consumer browser reads as a side project, and grander names contradict a product whose differentiation is refusing to overclaim.
+
+Two costs are accepted knowingly and are not settled by this decision:
+
+- The "Clear" prefix is crowded in software, which makes for a weak trademark. A proper trademark search is still required before any public launch, and it may yet force a change.
+- `clearframe.com`, `.app`, and `getclearframe.com` are all registered. The plan is to ship from `zincoo.com/clearframe`, the pattern Firefox and Orion use, which also puts the download on an established studio domain rather than a new one — a trust advantage when the file being downloaded is a browser.
+
+The strongest naming evidence is still missing: no one outside the founder has used the product. Watch what observed testers call it before treating the name as final.
 
 ## Product thesis
 
