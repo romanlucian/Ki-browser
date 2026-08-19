@@ -115,7 +115,7 @@ struct BookmarksBar: View {
                         parentID: folder.parentID,
                         title: folder.title,
                         iconID: ClearframeIconGeometry.iconID(for: folder),
-            colorID: folder.colorID,
+                        colorID: folder.colorID
                     )
                 )
             },
@@ -227,10 +227,15 @@ struct BookmarksBar: View {
                 Text("»")
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(ClearframeTheme.textTertiary)
-                    .frame(width: 18, height: BookmarkBarMetrics.itemHeight)
+                    .frame(width: 18, height: BookmarkBarMetrics.barHeight)
                     .contentShape(Rectangle())
             }
-            .menuStyle(.borderlessButton)
+            // As with the folder chips: `.borderlessButton` flattens this label
+            // into a plain control title, discarding the frame and the colour
+            // it names, and leaves a hit target the size of the glyph rather
+            // than the bar row. `.menuStyle(.button)` keeps the label a label.
+            .buttonStyle(.plain)
+            .menuStyle(.button)
             .menuIndicator(.hidden)
             .fixedSize()
             .help("All bookmarks and bar options")
@@ -509,12 +514,9 @@ private struct BookmarkFolderMenu: View {
     private var directBookmarks: [BookmarkRecord] { store.bookmarks(in: folder.id) }
 
     /// Exactly as wide as this folder's own name, capped at
-    /// `maximumItemWidth`. A borderless `Menu` hands its label to AppKit as a
-    /// plain title and draws none of the label's own padding, fill, or color,
-    /// so the chip is drawn in an overlay and the menu underneath is given a
-    /// clear label at this measured width. That is what makes a chip hug: the
-    /// number is the name's real width, known before the first frame is drawn
-    /// rather than fed back from a layout pass.
+    /// `maximumItemWidth`. The number is the name's real width, known before
+    /// the first frame is drawn rather than fed back from a layout pass, which
+    /// is what makes a chip hug its own label.
     private var chipWidth: CGFloat {
         BookmarkBarMetrics.naturalWidth(
             label: folder.title,
@@ -525,15 +527,33 @@ private struct BookmarkFolderMenu: View {
     @ViewBuilder
     var body: some View {
         if compact {
+            // The chip is the menu's own label, not an overlay on top of one.
+            //
+            // It used to be drawn over a `Menu` whose label was a clear
+            // rectangle at the chip's width, under `.menuStyle(.borderlessButton)`.
+            // That style does not host a SwiftUI label inside the control — it
+            // flattens the label into an `NSPopUpButton`'s title and image, so
+            // a clear rectangle became an empty title and the control collapsed
+            // to the intrinsic size of the menu indicator. Measured on this
+            // machine: an 11x14 point control inside a 110x28 chip, under six
+            // per cent of what a reader is aiming at, which is why opening a
+            // folder worked only when a click happened to land in the middle of
+            // its name. Hover, drop, and secondary-click all hung off the outer
+            // wrapper and covered the whole chip, so the chip lit up under the
+            // pointer and invited clicks that then did nothing.
+            //
+            // `.menuStyle(.button)` hosts the label instead of flattening it,
+            // and creates no AppKit control at all, so the hit region is the
+            // label's own `contentShape` — the chip exactly.
             Menu { menuContents } label: {
-                Color.clear.frame(width: chipWidth, height: BookmarkBarMetrics.barHeight)
+                chipLabel
+                    .frame(width: chipWidth, height: BookmarkBarMetrics.barHeight)
+                    .contentShape(Rectangle())
             }
-            .menuStyle(.borderlessButton)
+            .buttonStyle(.plain)
+            .menuStyle(.button)
             .menuIndicator(.hidden)
             .fixedSize()
-            .overlay { chipLabel }
-            .frame(width: chipWidth, height: BookmarkBarMetrics.barHeight)
-            .contentShape(Rectangle())
             .onHover { isHovered = $0 }
             .dropDestination(for: URL.self) { urls, _ in
                 guard let url = urls.first, let result = fileDroppedURL(url, folder.id) else { return false }
@@ -552,8 +572,9 @@ private struct BookmarkFolderMenu: View {
     }
 
     /// No caret: the design's folder items are a glyph and a name. It is still
-    /// a Menu — only the chevron goes. Never hit-tested, so every click and
-    /// drag lands on the menu it decorates.
+    /// a Menu — only the chevron goes. This is the menu's label rather than a
+    /// decoration over it, so it must stay hit-testable: it is what a click
+    /// lands on.
     private var chipLabel: some View {
         HStack(spacing: BookmarkBarMetrics.iconGap) {
             BookmarkFolderIcon(folder: folder, size: BookmarkBarMetrics.folderIconSize)
@@ -573,7 +594,6 @@ private struct BookmarkFolderMenu: View {
                         .stroke(ClearframeTheme.accent, lineWidth: 1.5)
                 }
             }
-            .allowsHitTesting(false)
     }
 
     private var folderMenuItems: some View {

@@ -416,8 +416,12 @@ private struct BrowserToolbar: View {
                     .lineLimit(1)
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(ClearframeTheme.textTertiary)
+                    .contentShape(Rectangle())
             }
-            .menuStyle(.borderlessButton)
+            // `.borderlessButton` would flatten this label into a control
+            // title, taking its colour and weight with it.
+            .buttonStyle(.plain)
+            .menuStyle(.button)
             .menuIndicator(.hidden)
             .fixedSize()
             .help("Search engine: \(searchSettings.selectedEngine.displayName). Click to change.")

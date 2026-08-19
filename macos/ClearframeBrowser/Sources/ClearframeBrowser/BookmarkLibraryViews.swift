@@ -387,9 +387,13 @@ struct BookmarkFolderRow: View {
             Menu {
                 menuItems
             } label: {
-                Image(systemName: "ellipsis.circle").frame(width: 24, height: 24)
+                Image(systemName: "ellipsis.circle")
+                    .frame(width: 24, height: 24)
+                    .contentShape(Rectangle())
             }
-            .menuStyle(.borderlessButton)
+            .buttonStyle(.plain)
+            .menuStyle(.button)
+            .menuIndicator(.hidden)
             .fixedSize()
             .help("Folder actions")
             .accessibilityLabel("\(folder.title) folder actions")
@@ -464,9 +468,13 @@ struct BookmarkOrganizerRow: View {
             Menu {
                 menuItems
             } label: {
-                Image(systemName: "ellipsis.circle").frame(width: 22, height: 22)
+                Image(systemName: "ellipsis.circle")
+                    .frame(width: 22, height: 22)
+                    .contentShape(Rectangle())
             }
-            .menuStyle(.borderlessButton)
+            .buttonStyle(.plain)
+            .menuStyle(.button)
+            .menuIndicator(.hidden)
             .fixedSize()
             .help("Bookmark actions")
             .accessibilityLabel("\(bookmark.title) actions")
