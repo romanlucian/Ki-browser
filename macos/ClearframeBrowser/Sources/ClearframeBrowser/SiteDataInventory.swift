@@ -117,9 +117,13 @@ enum SiteDataKind: String, CaseIterable, Comparable {
     /// count — WebKit reports neither.
     static func summary(of kinds: [SiteDataKind]) -> String {
         guard let first = kinds.first else { return "Site data" }
+        // Spelled out with explicit String conversions: `prefix(1)` on a String
+        // is ambiguous enough that older Swift resolves it to the Sequence
+        // overload, which has no `uppercased()`. It built here and failed on CI.
+        let head = String(first.label.prefix(1)).uppercased()
+        let tail = String(first.label.dropFirst())
         let rest = kinds.dropFirst().map(\.label)
-        return ([first.label.prefix(1).uppercased() + first.label.dropFirst()] + rest)
-            .joined(separator: ", ")
+        return ([head + tail] + rest).joined(separator: ", ")
     }
 }
 
