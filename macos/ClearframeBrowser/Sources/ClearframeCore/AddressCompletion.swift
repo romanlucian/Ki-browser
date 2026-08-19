@@ -83,7 +83,7 @@ public enum AddressCompletion {
         var keys: Set<String> = []
 
         for record in history {
-            let key = normalized(record.url)
+            let key = presentable(record.url)
             guard !key.isEmpty else { continue }
             keys.insert(key)
             visits[key, default: 0] += 1
@@ -97,7 +97,7 @@ public enum AddressCompletion {
 
         var bookmarked: Set<String> = []
         for bookmark in bookmarks {
-            let key = normalized(bookmark.url)
+            let key = presentable(bookmark.url)
             guard !key.isEmpty else { continue }
             keys.insert(key)
             bookmarked.insert(key)
@@ -133,10 +133,16 @@ public enum AddressCompletion {
         let trimmed = typed.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return [] }
 
-        let needle = normalized(trimmed)
+        // "garlic chilli" has to find the page "garlic" finds. Each word is
+        // matched separately, and all of them must land somewhere.
+        let terms = trimmed.lowercased().split(separator: " ").map(String.init)
+        guard !terms.isEmpty else { return [] }
+        // Only a single unbroken word can be the start of an address.
+        let needle = terms.count == 1 ? normalized(trimmed) : ""
+
         let matches = candidates
             .compactMap { candidate -> (AddressCandidate, MatchStrength)? in
-                guard let strength = strength(of: candidate, for: needle) else { return nil }
+                guard let strength = strength(of: candidate, terms: terms, needle: needle) else { return nil }
                 return (candidate, strength)
             }
             .sorted { left, right in
@@ -171,14 +177,20 @@ public enum AddressCompletion {
         case addressContains = 2
     }
 
-    private static func strength(of candidate: AddressCandidate, for needle: String) -> MatchStrength? {
-        if candidate.url.hasPrefix(needle) { return .addressPrefix }
+    private static func strength(
+        of candidate: AddressCandidate,
+        terms: [String],
+        needle: String
+    ) -> MatchStrength? {
+        let url = candidate.url.lowercased()
+        if !needle.isEmpty, url.hasPrefix(needle) { return .addressPrefix }
+
         let title = candidate.title.lowercased()
         if !title.isEmpty {
-            let words = title.split(whereSeparator: { !$0.isLetter && !$0.isNumber })
-            if words.contains(where: { $0.hasPrefix(needle) }) { return .titleWord }
+            let words = title.split(whereSeparator: { !$0.isLetter && !$0.isNumber }).map(String.init)
+            if terms.allSatisfy({ term in words.contains { $0.hasPrefix(term) } }) { return .titleWord }
         }
-        if candidate.url.contains(needle) { return .addressContains }
+        if terms.allSatisfy({ url.contains($0) }) { return .addressContains }
         return nil
     }
 
@@ -194,16 +206,36 @@ public enum AddressCompletion {
         // A space means the reader is writing a search phrase, not an address.
         guard !trimmed.contains(" ") else { return nil }
 
-        let prefix = normalized(trimmed)
+        // What is kept of the typed text before the remainder is appended.
+        //
+        // Appending works by counting characters off the front of the match, so
+        // it is only sound while normalising has removed characters from the
+        // front too — a scheme, a `www.`, a change of case. Trailing slashes
+        // come off the *back*, which leaves the counts out of step: typing
+        // "google.com/" would otherwise finish as "google.com//search?q=x".
+        // Dropping them here puts the two ends back in agreement.
+        var kept = trimmed
+        while kept.hasSuffix("/") { kept.removeLast() }
+
+        let prefix = normalized(kept)
         guard !prefix.isEmpty else { return nil }
 
-        let matches = candidates.filter { $0.url.hasPrefix(prefix) && $0.url.count > prefix.count }
+        // Someone who has typed a whole address has said where they are going.
+        // Extending it into the deepest page under that host is how typing
+        // "google.com" used to finish as an old search-results URL, and Return
+        // then opened the search instead of the site.
+        guard !candidates.contains(where: { $0.url.lowercased() == prefix }) else { return nil }
+
+        let matches = candidates.filter {
+            let folded = $0.url.lowercased()
+            return folded.hasPrefix(prefix) && folded.count > prefix.count
+        }
         guard let best = matches.min(by: isBetter) else { return nil }
 
-        // Keep what was typed verbatim and append only the remainder, so the
-        // caret never jumps and nobody's capitalisation is corrected at them.
-        let remainder = best.url.dropFirst(prefix.count)
-        return trimmed + remainder
+        // Keep what was typed and append only the remainder, so the caret never
+        // jumps and nobody's capitalisation is corrected at them.
+        let remainder = best.url.dropFirst(min(prefix.count, best.url.count))
+        return kept + remainder
     }
 
     /// The ranking, in order of what actually decides it.
@@ -224,17 +256,32 @@ public enum AddressCompletion {
         !normalizedURL.contains("/")
     }
 
-    /// One address reduced to what a reader would type: no scheme, no `www.`,
-    /// no trailing slash, lowercased. Typing "you" has to match
-    /// `https://www.youtube.com/` or the feature is useless on real history.
-    static func normalized(_ value: String) -> String {
-        var text = value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        for scheme in ["https://", "http://"] where text.hasPrefix(scheme) {
+    /// One address as a reader would type it: no scheme, no `www.`, no
+    /// trailing slash — and with its case left alone everywhere case carries
+    /// meaning.
+    ///
+    /// Only the host is lowered. A host is case-insensitive; a path and a query
+    /// are not, and folding them destroys the address: a YouTube video id
+    /// becomes `watch?v=dqw4w9wgxcq` and a Google Docs link becomes a document
+    /// that does not exist. Those strings are what a suggestion row opens, so
+    /// this is the difference between a working row and a dead link.
+    static func presentable(_ value: String) -> String {
+        var text = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        for scheme in ["https://", "http://"] where text.lowercased().hasPrefix(scheme) {
             text.removeFirst(scheme.count)
         }
-        if text.hasPrefix("www.") { text.removeFirst(4) }
+        if text.lowercased().hasPrefix("www.") { text.removeFirst(4) }
         while text.hasSuffix("/") { text.removeLast() }
-        return text
+        guard let boundary = text.firstIndex(where: { $0 == "/" || $0 == "?" || $0 == "#" }) else {
+            return text.lowercased()
+        }
+        return text[..<boundary].lowercased() + text[boundary...]
+    }
+
+    /// The same address folded flat, for comparing only. Never stored, never
+    /// navigated to.
+    static func normalized(_ value: String) -> String {
+        presentable(value).lowercased()
     }
 }
 

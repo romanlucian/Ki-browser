@@ -520,8 +520,7 @@ private struct BrowserToolbar: View {
                     selection: suggestionSelection,
                     typed: addressText,
                     engineName: searchSettings.selectedEngine.displayName,
-                    open: open(_:),
-                    hover: { suggestionSelection = $0 }
+                    open: open(_:)
                 )
                 .offset(y: 36)
                 .transition(.opacity)
@@ -541,10 +540,13 @@ private struct BrowserToolbar: View {
     }
 
     /// The rows for what is in the field, from this profile alone.
+    ///
+    /// Only for text the reader has actually typed. Falling back to the field's
+    /// contents meant that merely focusing the bar opened a list offering to
+    /// search the web for the address already on screen.
     private var addressSuggestions: [AddressSuggestion] {
-        guard !session.isPrivate else { return [] }
-        let query = addressTypedText.isEmpty ? addressText : addressTypedText
-        return AddressCompletion.suggestions(for: query, in: addressCandidates)
+        guard !session.isPrivate, !addressTypedText.isEmpty else { return [] }
+        return AddressCompletion.suggestions(for: addressTypedText, in: addressCandidates)
     }
 
     /// Arrow keys wrap, so holding one never dead-ends at an edge.
@@ -557,6 +559,9 @@ private struct BrowserToolbar: View {
     /// Opens one row. A search row hands the typed text to the engine through
     /// the same resolver the field uses, so there is one path to a search.
     private func open(_ suggestion: AddressSuggestion) {
+        // Cleared first: submitAddress acts on the highlighted row, and this
+        // row was chosen by name rather than by that index.
+        suggestionSelection = 0
         switch suggestion.kind {
         case .search:
             addressText = suggestion.title

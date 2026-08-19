@@ -14,7 +14,11 @@ struct AddressSuggestionsView: View {
     let typed: String
     let engineName: String
     let open: (AddressSuggestion) -> Void
-    let hover: (Int) -> Void
+    /// Which row the pointer is over. Kept here rather than reported upwards on
+    /// purpose: the pointer moving across the list must not change where Return
+    /// goes. The list appears directly under the field, so the pointer is very
+    /// often resting on a row nobody chose.
+    @State private var hoveredIndex: Int?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -33,7 +37,7 @@ struct AddressSuggestionsView: View {
     }
 
     private func row(_ suggestion: AddressSuggestion, index: Int) -> some View {
-        let isSelected = index == selection
+        let isSelected = index == selection || index == hoveredIndex
         return Button {
             open(suggestion)
         } label: {
@@ -72,9 +76,9 @@ struct AddressSuggestionsView: View {
         }
         .buttonStyle(.plain)
         .padding(.horizontal, 4)
-        .onHover { if $0 { hover(index) } }
+        .onHover { hoveredIndex = $0 ? index : (hoveredIndex == index ? nil : hoveredIndex) }
         .accessibilityLabel(accessibilityLabel(for: suggestion))
-        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
+        .accessibilityAddTraits(index == selection ? [.isButton, .isSelected] : .isButton)
     }
 
     /// A visited site shows its own icon, captured on a real visit; a search
