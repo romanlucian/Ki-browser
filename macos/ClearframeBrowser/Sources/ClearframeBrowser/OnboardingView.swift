@@ -60,10 +60,15 @@ struct OnboardingView: View {
                     .foregroundStyle(accent)
                     .frame(width: 38, height: 38)
                     .background(deepGreen, in: RoundedRectangle(cornerRadius: 11))
-                Text("CLEARFRAME")
-                    .font(.system(size: 11, weight: .bold))
-                    .tracking(1.8)
-                    .foregroundStyle(Color.white.opacity(0.76))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("CLEARFRAME")
+                        .font(.system(size: 11, weight: .bold))
+                        .tracking(1.8)
+                        .foregroundStyle(Color.white.opacity(0.76))
+                    Text("by Zincoo")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(Color.white.opacity(0.42))
+                }
             }
 
             Spacer()

@@ -116,6 +116,15 @@ struct AISettingsView: View {
                 }
             }
 
+            Section("About") {
+                LabeledContent("Clearframe") {
+                    Text("by Zincoo")
+                        .foregroundStyle(.secondary)
+                }
+                Link("zincoo.com", destination: URL(string: "https://zincoo.com/")!)
+                    .font(.caption)
+            }
+
             Section("Production boundary") {
                 Text("Direct user-key access is only for this personal prototype. A public product must use an authenticated, metered backend, redact sensitive data, publish retention controls, and keep page agents read-only until a separate security review.")
                     .font(.caption)

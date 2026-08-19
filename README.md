@@ -1,5 +1,7 @@
 # Clearframe browser prototype
 
+A browser by [Zincoo](https://zincoo.com/).
+
 Clearframe is now a **standalone macOS browser foundation** built with SwiftUI and WebKit. It opens its own native window, navigates the web, and includes a source-aware page assistant. The earlier Chromium extension remains in the repository as a useful validation artifact; it is not the final browser.
 
 The installed and `dist` builds still use WebKit. A future Chromium migration now has an isolated [CEF migration plan](docs/chromium-migration.md) and validation scaffold under `chromium/cef-spike`; that scaffold is not linked into the current app and must not be described as a working Chromium build.

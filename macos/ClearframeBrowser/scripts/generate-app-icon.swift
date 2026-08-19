@@ -48,40 +48,59 @@ func renderIcon(pixels: Int) throws -> Data {
     NSColor.clear.setFill()
     NSRect(x: 0, y: 0, width: size, height: size).fill()
 
-    let outerInset = size * 0.055
-    let outerRect = NSRect(
-        x: outerInset,
-        y: outerInset,
-        width: size - outerInset * 2,
-        height: size - outerInset * 2
+    // The mark is the product's name drawn in the icon set's own rule: a
+    // closed form whose top-right corner is cut at 45 degrees. An empty frame,
+    // because that is what the name says. Same geometry as the 104 folder
+    // icons — 1.5 units of stroke and 1.75 of cut on a 16 box — so the app
+    // icon reads as the family's own member rather than a separate logo.
+    let tileInset = size * 0.055
+    let tileRect = NSRect(
+        x: tileInset,
+        y: tileInset,
+        width: size - tileInset * 2,
+        height: size - tileInset * 2
     )
-    let outer = NSBezierPath(roundedRect: outerRect, xRadius: size * 0.22, yRadius: size * 0.22)
-    NSColor(calibratedRed: 0.035, green: 0.19, blue: 0.14, alpha: 1).setFill()
-    outer.fill()
+    let tile = NSBezierPath(roundedRect: tileRect, xRadius: size * 0.2237, yRadius: size * 0.2237)
 
-    let frameInset = size * 0.17
-    let frameRect = NSRect(
-        x: frameInset,
-        y: frameInset,
-        width: size - frameInset * 2,
-        height: size - frameInset * 2
+    // Near-black, lifted very slightly at the top so the tile has depth in the
+    // Dock instead of reading as a hole.
+    let ground = NSGradient(
+        starting: NSColor(calibratedRed: 0.086, green: 0.094, blue: 0.110, alpha: 1),
+        ending: NSColor(calibratedRed: 0.035, green: 0.039, blue: 0.047, alpha: 1)
     )
-    let frame = NSBezierPath(roundedRect: frameRect, xRadius: size * 0.15, yRadius: size * 0.15)
-    NSColor(calibratedRed: 0.075, green: 0.34, blue: 0.25, alpha: 1).setFill()
-    frame.fill()
+    tile.addClip()
+    ground?.draw(in: tileRect, angle: -90)
+    NSGraphicsContext.current?.cgContext.resetClip()
 
-    let font = NSFont(name: "Georgia-Bold", size: size * 0.48)
-        ?? NSFont.systemFont(ofSize: size * 0.48, weight: .bold)
-    let text = "C" as NSString
-    let attributes: [NSAttributedString.Key: Any] = [
-        .font: font,
-        .foregroundColor: NSColor(calibratedRed: 0.83, green: 0.96, blue: 0.46, alpha: 1)
-    ]
-    let textSize = text.size(withAttributes: attributes)
-    text.draw(
-        at: NSPoint(x: (size - textSize.width) / 2, y: (size - textSize.height) / 2 + size * 0.015),
-        withAttributes: attributes
-    )
+    // A hairline so the tile still has an edge on a black wallpaper.
+    NSColor(calibratedWhite: 1, alpha: 0.06).setStroke()
+    tile.lineWidth = max(1, size * 0.004)
+    tile.stroke()
+
+    // Small sizes need a heavier, slightly larger mark to survive; the shape
+    // is identical, only its weight changes.
+    let isSmall = pixels <= 32
+    let markSide = size * (isSmall ? 0.52 : 0.46)
+    let strokeWidth = markSide * (isSmall ? 0.135 : 0.094)
+    // The cut is the whole point of the shape, and at menu-bar size the
+    // authored 1.75 units round away to nothing. Deepen it there so the corner
+    // still reads as turned instead of merely rounded.
+    let cut = markSide * (isSmall ? 0.26 : 0.109)
+    let originX = (size - markSide) / 2
+    let originY = (size - markSide) / 2
+
+    let mark = NSBezierPath()
+    mark.move(to: NSPoint(x: originX, y: originY))
+    mark.line(to: NSPoint(x: originX + markSide, y: originY))
+    mark.line(to: NSPoint(x: originX + markSide, y: originY + markSide - cut))
+    mark.line(to: NSPoint(x: originX + markSide - cut, y: originY + markSide))
+    mark.line(to: NSPoint(x: originX, y: originY + markSide))
+    mark.close()
+    mark.lineWidth = strokeWidth
+    mark.lineCapStyle = .round
+    mark.lineJoinStyle = .round
+    NSColor(calibratedRed: 0.40, green: 0.86, blue: 0.49, alpha: 1).setStroke()
+    mark.stroke()
 
     guard let png = bitmap.representation(using: .png, properties: [:]) else {
         throw NSError(domain: "ClearframeIcon", code: 2)
