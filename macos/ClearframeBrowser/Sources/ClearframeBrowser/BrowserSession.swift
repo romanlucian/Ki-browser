@@ -54,6 +54,7 @@ final class BrowserSession: NSObject, ObservableObject {
     private var lastObservedWebURLString: String?
     private var lastVersionedStandardNavigationURLString: String?
     private var webViewSubscriptions: Set<AnyCancellable> = []
+    private var appearanceObservation: NSKeyValueObservation?
     private let contentBlocking: ContentRuleListProvider?
     private let favicons: FaviconStore?
     private var faviconTask: Task<Void, Never>?
@@ -81,9 +82,15 @@ final class BrowserSession: NSObject, ObservableObject {
         // Registered before the first load so tracker rules apply from the
         // first request, including in private tabs.
         contentBlocking?.register(webView)
+        // Chrome is dark because that is the product; a webpage is not. The
+        // window forces dark on everything inside it, so without this a site
+        // would be told the Mac prefers dark even when it is set to light.
+        // Pages follow the Mac, and keep following it when it changes.
+        webView.appearance = NSApp.effectiveAppearance
         webView.navigationDelegate = self
         webView.uiDelegate = self
         webView.allowsMagnification = true
+        observeSystemAppearance()
         observeWebViewState()
         if let initialURL {
             load(initialURL)
@@ -188,6 +195,7 @@ final class BrowserSession: NSObject, ObservableObject {
         webView.uiDelegate = nil
         contentBlocking?.unregister(webView)
         webViewSubscriptions.removeAll()
+        appearanceObservation = nil
     }
 
     func extractPage() async throws -> PageSnapshot {
@@ -305,6 +313,14 @@ final class BrowserSession: NSObject, ObservableObject {
             return value as? Bool ?? false
         } catch {
             return false
+        }
+    }
+
+    /// macOS posts this when the user switches Light and Dark; the page should
+    /// follow without needing a reload.
+    private func observeSystemAppearance() {
+        appearanceObservation = NSApp.observe(\.effectiveAppearance) { [weak self] app, _ in
+            Task { @MainActor in self?.webView.appearance = app.effectiveAppearance }
         }
     }
 
