@@ -494,6 +494,7 @@ struct BookmarkFolderEditor: View {
     @State private var iconID: String
     @State private var color: ClearframeIconColor
     @State private var search = ""
+    @State private var style: ClearframeIconStyle
 
     init(request: BookmarkFolderEditorRequest, save: @escaping (String, String, String) -> Void) {
         self.request = request
@@ -501,21 +502,38 @@ struct BookmarkFolderEditor: View {
         _title = State(initialValue: request.title)
         _iconID = State(initialValue: request.iconID)
         _color = State(initialValue: ClearframeIconColor(id: request.colorID) ?? .mint)
+        // Open on the set the folder is already using, so editing a folder does
+        // not silently move it to another style's grid.
+        _style = State(initialValue: ClearframeIconCatalog.icon(id: request.iconID)?.style ?? .clearframe)
     }
 
     /// Matches on the icon's own name and its category, so "work" finds the
-    /// whole work set and "plane" finds the one icon.
+    /// whole work set and "plane" finds the one icon. Scoped to the chosen
+    /// style: the sets are different visual languages, and a grid that mixed
+    /// them would invite a bar that mixes them too.
     private var matches: [ClearframeIconCategory: [ClearframeIcon]] {
         let query = search.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard !query.isEmpty else { return ClearframeIconCatalog.byCategory }
+        guard !query.isEmpty else { return ClearframeIconCatalog.byCategory(style: style) }
         var result: [ClearframeIconCategory: [ClearframeIcon]] = [:]
         for category in ClearframeIconCategory.allCases {
-            let icons = ClearframeIconCatalog.icons(in: category).filter {
-                $0.id.contains(query) || category.title.lowercased().contains(query)
+            let icons = ClearframeIconCatalog.icons(in: category, style: style).filter {
+                $0.displayName.contains(query) || category.title.lowercased().contains(query)
             }
             if !icons.isEmpty { result[category] = icons }
         }
         return result
+    }
+
+    /// Whether the grid currently being browsed is tintable. Drives how its
+    /// cells draw.
+    private var isTintable: Bool { style.isTintable }
+
+    /// Whether the icon the folder will actually be saved with is tintable.
+    /// Distinct from `isTintable` on purpose: browsing the Stickies tab with a
+    /// Clearframe icon still selected must not hide the tint that icon is
+    /// really using, or the preview would misrepresent what Save does.
+    private var selectedIsTintable: Bool {
+        ClearframeIconCatalog.icon(id: iconID)?.style.isTintable ?? true
     }
 
     private var isSaveDisabled: Bool {
@@ -528,21 +546,28 @@ struct BookmarkFolderEditor: View {
                 .font(.title2.bold())
 
             HStack(spacing: 12) {
-                ClearframeIconView(iconID: iconID, size: 24)
-                    .foregroundStyle(Color(color))
-                    .frame(width: 40, height: 40)
-                    .background(ClearframeTheme.bg3, in: RoundedRectangle(cornerRadius: ClearframeTheme.radius9))
+                iconPreview
                 TextField("Folder name", text: $title)
                     .textFieldStyle(.roundedBorder)
-                colorSwatches
+                if selectedIsTintable {
+                    colorSwatches
+                }
             }
 
             Divider()
+
+            stylePicker
 
             TextField("Search icons", text: $search)
                 .textFieldStyle(.roundedBorder)
 
             iconGrid
+
+            if let attribution = style.attribution {
+                Text(attribution)
+                    .font(.system(size: 10.5))
+                    .foregroundStyle(ClearframeTheme.textTertiary)
+            }
 
             HStack {
                 Spacer()
@@ -559,8 +584,42 @@ struct BookmarkFolderEditor: View {
         .frame(width: 470)
     }
 
+    /// The chosen icon at the size it will actually draw at in the bar, so the
+    /// preview is a preview and not a flattering enlargement.
+    @ViewBuilder
+    private var iconPreview: some View {
+        let icon = ClearframeIconView(iconID: iconID, size: 24)
+        Group {
+            if selectedIsTintable {
+                icon.foregroundStyle(Color(color))
+            } else {
+                icon
+            }
+        }
+        .frame(width: 40, height: 40)
+        .background(ClearframeTheme.bg3, in: RoundedRectangle(cornerRadius: ClearframeTheme.radius9))
+    }
+
+    /// The sets are separate styles rather than one mixed grid. Switching here
+    /// changes what the grid offers; it never rewrites the folder's icon, so
+    /// looking around costs nothing until something is picked.
+    private var stylePicker: some View {
+        Picker("Icon set", selection: $style) {
+            ForEach(ClearframeIconCatalog.availableStyles, id: \.self) { option in
+                Text(option.title).tag(option)
+            }
+        }
+        .pickerStyle(.segmented)
+        .labelsHidden()
+        .help(style.subtitle)
+        .accessibilityLabel("Icon set")
+        .accessibilityHint(style.subtitle)
+    }
+
     /// Four tints, not a colour well: the set holds together because it is
-    /// drawn in one of these.
+    /// drawn in one of these. Shown only for artwork that named no colour of
+    /// its own — offering it over a multicolour set would be a control that
+    /// does nothing.
     private var colorSwatches: some View {
         HStack(spacing: 6) {
             ForEach(ClearframeIconColor.allCases, id: \.self) { swatch in
@@ -618,18 +677,36 @@ struct BookmarkFolderEditor: View {
     private func iconCell(_ icon: ClearframeIcon) -> some View {
         let isSelected = icon.id == iconID
         return Button { iconID = icon.id } label: {
-            ClearframeIconView(iconID: icon.id, size: 22)
-                .foregroundStyle(isSelected ? ClearframeTheme.bg0 : Color(color))
+            cellArtwork(icon, isSelected: isSelected)
                 .frame(width: 38, height: 38)
                 .background(
-                    isSelected ? Color(color) : ClearframeTheme.bg3,
+                    // A tintable icon inverts into its tint when chosen. A
+                    // multicolour one cannot — recolouring it would do nothing
+                    // — so selection is a ring around artwork left alone.
+                    isSelected && isTintable ? Color(color) : ClearframeTheme.bg3,
                     in: RoundedRectangle(cornerRadius: ClearframeTheme.radius6)
                 )
+                .overlay {
+                    if isSelected && !isTintable {
+                        RoundedRectangle(cornerRadius: ClearframeTheme.radius6)
+                            .stroke(ClearframeTheme.accent, lineWidth: 2)
+                    }
+                }
         }
         .buttonStyle(.plain)
-        .help(icon.id)
-        .accessibilityLabel(icon.id)
+        .help(icon.displayName)
+        .accessibilityLabel(icon.displayName)
         .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
+    }
+
+    @ViewBuilder
+    private func cellArtwork(_ icon: ClearframeIcon, isSelected: Bool) -> some View {
+        let artwork = ClearframeIconView(iconID: icon.id, size: 22)
+        if isTintable {
+            artwork.foregroundStyle(isSelected ? ClearframeTheme.bg0 : Color(color))
+        } else {
+            artwork
+        }
     }
 }
 

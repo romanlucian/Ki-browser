@@ -64,10 +64,15 @@ enum ClearframeTheme {
 
     /// The size of a site's icon and a bookmark folder's mark, wherever either
     /// appears: tab chips, the bookmarks bar, the bookmarks home. One number so
-    /// the two never drift apart, and 16 because that is both what the folder
-    /// icons were drawn at — below it their 1.5 stroke is scaled down — and
-    /// what other browsers use for a favicon.
-    static let siteIconSize: CGFloat = 16
+    /// the two never drift apart.
+    ///
+    /// 18 to match the toolbar's own row of icons, which are SF Symbols at the
+    /// 13pt body size and measure 15–19pt across (`books.vertical` 19x17,
+    /// `sparkles.rectangle.stack` 17x18). At 16 the folder marks read as a
+    /// second, smaller class of icon sitting under a larger one; at 18 the two
+    /// rows line up. It is also above the 16 the artwork was drawn at, so the
+    /// Clearframe set's 1.5 stroke is scaled up rather than down.
+    static let siteIconSize: CGFloat = 18
 
     // MARK: - Type
 

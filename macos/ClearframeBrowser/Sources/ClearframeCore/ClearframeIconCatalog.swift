@@ -11,11 +11,147 @@ public struct ClearframeIcon: Equatable, Identifiable, Sendable {
     public let id: String
     public let category: ClearframeIconCategory
     public let markup: String
+    /// Which shipped set this icon belongs to. Drives how it is drawn and
+    /// whether a folder tint can reach it.
+    public let style: ClearframeIconStyle
+    /// The coordinate box the artwork was drawn in. The Clearframe set is a
+    /// 16x16 square; a licensed set brings its own, sometimes with a non-zero
+    /// origin, so the renderer must be told rather than assume.
+    public let box: VectorBox
 
-    public init(id: String, category: ClearframeIconCategory, markup: String) {
+    public init(
+        id: String,
+        category: ClearframeIconCategory,
+        markup: String,
+        style: ClearframeIconStyle = .clearframe,
+        box: VectorBox = .sixteen
+    ) {
         self.id = id
         self.category = category
         self.markup = markup
+        self.style = style
+        self.box = box
+    }
+
+    /// The name without its set prefix: what the picker labels a cell with, and
+    /// what someone typing "mail" is actually looking for. Identifiers stay
+    /// prefixed because they are the stored value and must not collide.
+    public var displayName: String {
+        let prefix = style.identifierPrefix
+        return prefix.isEmpty ? id : String(id.dropFirst(prefix.count))
+    }
+}
+
+/// The rectangle an icon's coordinates live in — an SVG `viewBox`, kept as a
+/// value type so `ClearframeCore` stays Foundation-only.
+public struct VectorBox: Equatable, Sendable {
+    public let x: Double
+    public let y: Double
+    public let width: Double
+    public let height: Double
+
+    /// The Clearframe set's own box.
+    public static let sixteen = VectorBox(x: 0, y: 0, width: 16, height: 16)
+
+    public init(x: Double, y: Double, width: Double, height: Double) {
+        self.x = x
+        self.y = y
+        self.width = width
+        self.height = height
+    }
+}
+
+/// The icon sets the app ships.
+///
+/// Clearframe's own set is the default and the only tintable one: it is drawn
+/// in a single stroke weight with no colour of its own, which is exactly what
+/// lets a folder recolour it. The licensed Stickies sets carry their own
+/// colours, so a tint has nothing to act on — that is a property of the
+/// artwork, not a gap in the picker.
+public enum ClearframeIconStyle: String, CaseIterable, Sendable {
+    case clearframe
+    case stickiesPlain
+    case stickiesDuo
+    case emojiOne
+
+    public var title: String {
+        switch self {
+        case .clearframe: return "Clearframe"
+        case .stickiesPlain: return "Stickies"
+        case .stickiesDuo: return "Stickies Duo"
+        case .emojiOne: return "Emoji"
+        }
+    }
+
+    /// A one-line note the picker can show under the style, so the difference
+    /// is visible before a folder commits to it.
+    public var subtitle: String {
+        switch self {
+        case .clearframe: return "Line icons you can tint"
+        case .stickiesPlain: return "Colourful, fixed colours"
+        case .stickiesDuo: return "Colourful with a shadow, fixed colours"
+        case .emojiOne: return "Full-colour emoji, fixed colours"
+        }
+    }
+
+    /// Stroke width in the artwork's own units. The Clearframe set is drawn at
+    /// 1.5 in a 16 box; the Stickies sets at 1 in a 40 box.
+    public var strokeWidth: Double {
+        switch self {
+        case .clearframe: return 1.5
+        case .stickiesPlain, .stickiesDuo: return 1
+        // The emoji set is filled artwork; the handful of strokes it does
+        // carry name their own width, and one unit in a 64 box is the closest
+        // equivalent of a hairline.
+        case .emojiOne: return 1
+        }
+    }
+
+    /// How a stroke ends and turns a corner when the artwork does not say.
+    ///
+    /// The Clearframe set is drawn to be rounded throughout, so that is its
+    /// default. A licensed set follows SVG's own defaults, and imposing round
+    /// joins on it visibly blunts every sharp point — a star stops having
+    /// points. Elements that name a cap or join still win over both.
+    public var defaultLineCap: VectorShape.LineCap {
+        switch self {
+        case .clearframe: return .round
+        case .stickiesPlain, .stickiesDuo, .emojiOne: return .butt
+        }
+    }
+
+    public var defaultLineJoin: VectorShape.LineJoin {
+        switch self {
+        case .clearframe: return .round
+        case .stickiesPlain, .stickiesDuo, .emojiOne: return .miter
+        }
+    }
+
+    /// Whether a folder's chosen tint reaches this style's artwork.
+    public var isTintable: Bool { self == .clearframe }
+
+    /// What every identifier in this style begins with, so identifiers stay
+    /// unique across sets without the prefix leaking into the interface.
+    public var identifierPrefix: String {
+        switch self {
+        case .clearframe: return ""
+        case .stickiesPlain: return "stickies-"
+        case .stickiesDuo: return "stickies-duo-"
+        case .emojiOne: return "emoji-"
+        }
+    }
+
+    /// Attribution the app must show for a style it did not draw. `nil` for
+    /// Clearframe's own artwork.
+    public var attribution: String? {
+        switch self {
+        case .clearframe:
+            return nil
+        case .stickiesPlain, .stickiesDuo:
+            return "Stickies by Streamline, CC BY 4.0"
+        case .emojiOne:
+            return "EmojiOne v1 by Emoji One, CC BY-SA 4.0"
+        }
     }
 }
 
@@ -35,6 +171,14 @@ public enum ClearframeIconCategory: String, CaseIterable, Sendable {
     case nature
     case objects
     case interface
+    // Sections the emoji set needs and the drawn sets have no use for. The
+    // picker skips a category with nothing in it, so these stay invisible
+    // outside the style that fills them.
+    case faces
+    case food
+    case activities
+    case symbols
+    case flags
 
     /// The section heading a reader sees.
     public var title: String {
@@ -52,6 +196,11 @@ public enum ClearframeIconCategory: String, CaseIterable, Sendable {
         case .nature: return "Nature"
         case .objects: return "Objects"
         case .interface: return "Interface"
+        case .faces: return "Faces"
+        case .food: return "Food"
+        case .activities: return "Activities"
+        case .symbols: return "Symbols"
+        case .flags: return "Flags"
         }
     }
 }
@@ -68,16 +217,25 @@ public enum ClearframeIconCatalog {
     /// identifier this build does not know.
     public static let defaultIconID = "folder"
 
-    /// Every icon, in catalog order: category by category, and within a
-    /// category the order the set was drawn in.
-    public static let all: [ClearframeIcon] = ClearframeIconCatalogData.icons
+    /// Every icon the app ships, in catalog order: Clearframe's own set first,
+    /// then each licensed set, and within a set category by category.
+    ///
+    /// Identifiers are unique across the whole list — the licensed sets are
+    /// prefixed — so one lookup answers for every style.
+    public static let all: [ClearframeIcon] =
+        ClearframeIconCatalogData.icons
+        + StickiesIconCatalogData.icons
+        + EmojiOneIconCatalogData.icons
 
     private static let index: [String: ClearframeIcon] = Dictionary(
         uniqueKeysWithValues: all.map { ($0.id, $0) }
     )
 
-    public static let byCategory: [ClearframeIconCategory: [ClearframeIcon]] =
-        Dictionary(grouping: all, by: \.category)
+    private static let byStyle: [ClearframeIconStyle: [ClearframeIcon]] =
+        Dictionary(grouping: all, by: \.style)
+
+    private static let byStyleAndCategory: [ClearframeIconStyle: [ClearframeIconCategory: [ClearframeIcon]]] =
+        byStyle.mapValues { Dictionary(grouping: $0, by: \.category) }
 
     /// `nil` for an identifier the catalog does not contain, so a caller can
     /// decide between falling back and reporting the gap.
@@ -85,8 +243,30 @@ public enum ClearframeIconCatalog {
         index[id]
     }
 
-    public static func icons(in category: ClearframeIconCategory) -> [ClearframeIcon] {
-        byCategory[category] ?? []
+    /// One style's icons, in catalog order.
+    public static func icons(style: ClearframeIconStyle) -> [ClearframeIcon] {
+        byStyle[style] ?? []
+    }
+
+    /// One style's icons grouped for the picker.
+    public static func byCategory(style: ClearframeIconStyle) -> [ClearframeIconCategory: [ClearframeIcon]] {
+        byStyleAndCategory[style] ?? [:]
+    }
+
+    /// Defaults to Clearframe's own set, which is what every surface outside
+    /// the picker means when it asks for a category.
+    public static func icons(
+        in category: ClearframeIconCategory,
+        style: ClearframeIconStyle = .clearframe
+    ) -> [ClearframeIcon] {
+        byStyleAndCategory[style]?[category] ?? []
+    }
+
+    /// The styles that actually shipped artwork, in picker order. Reads the
+    /// catalog rather than the enum so a style with no icons never shows an
+    /// empty tab.
+    public static var availableStyles: [ClearframeIconStyle] {
+        ClearframeIconStyle.allCases.filter { !icons(style: $0).isEmpty }
     }
 
     /// The icon a folder actually draws. Never fails: an unknown identifier and

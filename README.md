@@ -146,6 +146,10 @@ Clearframe presents Safari's user agent because it renders with WebKit, Safari's
 - The native browser is a single-window version-1 MVP with basic tabs; its local bundle is ad hoc signed with the hardened runtime, but it is not Developer ID signed, notarized, or independently security reviewed for consumer distribution.
 - WebKit does not provide Chrome extension compatibility and is not a drop-in substitute for a future Chromium product.
 - The repository is published under the [GNU Affero General Public License v3.0](LICENSE). Source may be read, modified, and redistributed under those terms; modified versions offered to users over a network must also offer their corresponding source. Clearframe holds the copyright and may additionally offer separate commercial terms.
+- The folder icon picker offers four sets. The Clearframe set (104 icons) is the project's own artwork, and the only one a folder tint can recolour. The rest are licensed, carry their own colours, and are credited in the picker wherever they are shown:
+  - **Stickies** and **Stickies Duo** (100 drawings each) — ["Stickies color icons" by Streamline](https://github.com/webalys-hq/streamline-vectors), [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Attribution required.
+  - **Emoji** (1261 drawings) — [EmojiOne v1 by Emoji One](https://github.com/joypixels/emojione), [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/). Attribution required, **and share-alike**: any modification of that artwork must be released under the same licence. Bundling it is a collection rather than an adaptation, and CC 4.0 states that a change of format alone never creates an adaptation, so compiling it into the app does not place the app under share-alike — but redrawing or remixing these icons would put the result under CC BY-SA 4.0. That matters if separate commercial terms are ever offered, so treat the set as read-only artwork.
+  Redistributing this repository carries these attribution requirements with it.
 
 ## Documentation index
 
