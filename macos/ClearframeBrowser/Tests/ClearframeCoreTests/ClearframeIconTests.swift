@@ -42,38 +42,48 @@ final class ClearframeIconTests: XCTestCase {
         )
     }
 
-    /// The licensed sets are one hundred drawings twice, and the two are
-    /// separate styles rather than one mixed set: a bar that mixed them would
-    /// read as a mistake.
-    func testStickiesShipsBothStylesOfEveryDrawing() {
-        let plain = ClearframeIconCatalog.icons(style: .stickiesPlain)
-        let duo = ClearframeIconCatalog.icons(style: .stickiesDuo)
-        XCTAssertEqual(plain.count, 100)
-        XCTAssertEqual(duo.count, 100)
-
-        let plainNames = Set(plain.map { $0.id.replacingOccurrences(of: "stickies-", with: "") })
-        let duoNames = Set(duo.map { $0.id.replacingOccurrences(of: "stickies-duo-", with: "") })
-        XCTAssertEqual(plainNames, duoNames, "every drawing ships in both styles")
+    /// The source set also ships a single-lime `duo` form. It is deliberately
+    /// not imported: that green sits close enough to the mint accent to read as
+    /// a failed match rather than a second colour.
+    func testStickiesShipsOnlyTheFormThatDoesNotFightTheAccent() {
+        let stickies = ClearframeIconCatalog.icons(style: .stickies)
+        XCTAssertEqual(stickies.count, 100)
+        XCTAssertTrue(
+            stickies.allSatisfy { !$0.id.hasPrefix("stickies-duo-") },
+            "the lime form is withdrawn, not merely hidden"
+        )
 
         XCTAssertEqual(
             ClearframeIconCatalog.all.count,
-            104 + 200 + 1261,
+            104 + 100 + 1261,
             "one lookup has to answer for every style"
         )
         XCTAssertEqual(ClearframeIconCatalog.availableStyles, ClearframeIconStyle.allCases)
+    }
+
+    /// A folder saved while the lime form was offered keeps the drawing it
+    /// chose rather than silently dropping to the plain folder.
+    func testAFolderSavedWithTheWithdrawnFormKeepsItsDrawing() {
+        XCTAssertEqual(
+            ClearframeIconCatalog.resolvedIconID(iconID: "stickies-duo-mail", legacyEmoji: ""),
+            "stickies-mail"
+        )
+        XCTAssertEqual(
+            ClearframeIconCatalog.resolvedIconID(iconID: "stickies-duo-nothing-like-this", legacyEmoji: "📁"),
+            "folder",
+            "a withdrawn identifier with no surviving drawing still falls back"
+        )
     }
 
     /// The tint is the reason the Clearframe set names no colour. A licensed
     /// set carries its own, so the swatch row must not pretend otherwise.
     func testOnlyTheClearframeSetIsTintable() {
         XCTAssertTrue(ClearframeIconStyle.clearframe.isTintable)
-        XCTAssertFalse(ClearframeIconStyle.stickiesPlain.isTintable)
-        XCTAssertFalse(ClearframeIconStyle.stickiesDuo.isTintable)
+        XCTAssertFalse(ClearframeIconStyle.stickies.isTintable)
+        XCTAssertFalse(ClearframeIconStyle.emojiOne.isTintable)
 
         XCTAssertNil(ClearframeIconStyle.clearframe.attribution)
-        for style in [ClearframeIconStyle.stickiesPlain, .stickiesDuo] {
-            XCTAssertEqual(style.attribution, "Stickies by Streamline, CC BY 4.0")
-        }
+        XCTAssertEqual(ClearframeIconStyle.stickies.attribution, "Stickies by Streamline, CC BY 4.0")
     }
 
     /// The emoji set is the largest and the only one filed heuristically, so
@@ -238,9 +248,8 @@ final class ClearframeIconTests: XCTestCase {
     /// to actually sit in the box each icon declares — otherwise it would be
     /// silently cropped or floated off-centre.
     func testEveryStickiesIconStaysInsideTheBoxItDeclares() {
-        let stickies = ClearframeIconCatalog.icons(style: .stickiesPlain)
-            + ClearframeIconCatalog.icons(style: .stickiesDuo)
-        XCTAssertEqual(stickies.count, 200)
+        let stickies = ClearframeIconCatalog.icons(style: .stickies)
+        XCTAssertEqual(stickies.count, 100)
 
         var worst = (id: "", overshoot: 0.0)
         for icon in stickies {
@@ -261,7 +270,7 @@ final class ClearframeIconTests: XCTestCase {
         // be geometry the source clips away and this renderer would not.
         XCTAssertLessThanOrEqual(
             worst.overshoot,
-            ClearframeIconStyle.stickiesPlain.strokeWidth / 2,
+            ClearframeIconStyle.stickies.strokeWidth / 2,
             "\(worst.id) draws \(worst.overshoot) units outside its declared box"
         )
     }
@@ -270,9 +279,7 @@ final class ClearframeIconTests: XCTestCase {
     /// their own colours, which is exactly what the Clearframe set never does.
     func testStickiesArtworkCarriesItsOwnColours() {
         var seen = Set<String>()
-        let stickies = ClearframeIconCatalog.icons(style: .stickiesPlain)
-            + ClearframeIconCatalog.icons(style: .stickiesDuo)
-        for icon in stickies {
+        for icon in ClearframeIconCatalog.icons(style: .stickies) {
             guard let shapes = VectorPathParser.parse(icon.markup) else {
                 XCTFail("\(icon.id) failed to parse")
                 continue
@@ -287,7 +294,8 @@ final class ClearframeIconTests: XCTestCase {
         // with white shared. Anything else means a colour was misread.
         XCTAssertEqual(
             seen.sorted(),
-            ["00034a", "231f20", "48eeff", "9bff00", "ff52a1", "ffe236", "ffffff"]
+            ["231f20", "48eeff", "ff52a1", "ffe236", "ffffff"],
+            "the lime and navy of the withdrawn form are gone with it"
         )
 
         for icon in ClearframeIconCatalog.icons(style: .clearframe) {

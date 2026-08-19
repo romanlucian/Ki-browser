@@ -65,20 +65,18 @@ public struct VectorBox: Equatable, Sendable {
 ///
 /// Clearframe's own set is the default and the only tintable one: it is drawn
 /// in a single stroke weight with no colour of its own, which is exactly what
-/// lets a folder recolour it. The licensed Stickies sets carry their own
-/// colours, so a tint has nothing to act on — that is a property of the
-/// artwork, not a gap in the picker.
+/// lets a folder recolour it. The licensed sets carry their own colours, so a
+/// tint has nothing to act on — that is a property of the artwork, not a gap
+/// in the picker.
 public enum ClearframeIconStyle: String, CaseIterable, Sendable {
     case clearframe
-    case stickiesPlain
-    case stickiesDuo
+    case stickies
     case emojiOne
 
     public var title: String {
         switch self {
         case .clearframe: return "Clearframe"
-        case .stickiesPlain: return "Stickies"
-        case .stickiesDuo: return "Stickies Duo"
+        case .stickies: return "Stickies"
         case .emojiOne: return "Emoji"
         }
     }
@@ -88,8 +86,7 @@ public enum ClearframeIconStyle: String, CaseIterable, Sendable {
     public var subtitle: String {
         switch self {
         case .clearframe: return "Line icons you can tint"
-        case .stickiesPlain: return "Colourful, fixed colours"
-        case .stickiesDuo: return "Colourful with a shadow, fixed colours"
+        case .stickies: return "Colourful, fixed colours"
         case .emojiOne: return "Full-colour emoji, fixed colours"
         }
     }
@@ -99,7 +96,7 @@ public enum ClearframeIconStyle: String, CaseIterable, Sendable {
     public var strokeWidth: Double {
         switch self {
         case .clearframe: return 1.5
-        case .stickiesPlain, .stickiesDuo: return 1
+        case .stickies: return 1
         // The emoji set is filled artwork; the handful of strokes it does
         // carry name their own width, and one unit in a 64 box is the closest
         // equivalent of a hairline.
@@ -116,14 +113,14 @@ public enum ClearframeIconStyle: String, CaseIterable, Sendable {
     public var defaultLineCap: VectorShape.LineCap {
         switch self {
         case .clearframe: return .round
-        case .stickiesPlain, .stickiesDuo, .emojiOne: return .butt
+        case .stickies, .emojiOne: return .butt
         }
     }
 
     public var defaultLineJoin: VectorShape.LineJoin {
         switch self {
         case .clearframe: return .round
-        case .stickiesPlain, .stickiesDuo, .emojiOne: return .miter
+        case .stickies, .emojiOne: return .miter
         }
     }
 
@@ -135,8 +132,7 @@ public enum ClearframeIconStyle: String, CaseIterable, Sendable {
     public var identifierPrefix: String {
         switch self {
         case .clearframe: return ""
-        case .stickiesPlain: return "stickies-"
-        case .stickiesDuo: return "stickies-duo-"
+        case .stickies: return "stickies-"
         case .emojiOne: return "emoji-"
         }
     }
@@ -147,7 +143,7 @@ public enum ClearframeIconStyle: String, CaseIterable, Sendable {
         switch self {
         case .clearframe:
             return nil
-        case .stickiesPlain, .stickiesDuo:
+        case .stickies:
             return "Stickies by Streamline, CC BY 4.0"
         case .emojiOne:
             return "EmojiOne v1 by Emoji One, CC BY-SA 4.0"
@@ -276,9 +272,21 @@ public enum ClearframeIconCatalog {
         if let iconID {
             let trimmed = iconID.trimmingCharacters(in: .whitespacesAndNewlines)
             if index[trimmed] != nil { return trimmed }
+            // A folder saved while the single-lime Stickies form was offered
+            // keeps the drawing it chose, in the form that is still shipped.
+            // Dropping it to the plain folder instead would silently change a
+            // folder someone had already made a decision about.
+            if trimmed.hasPrefix(retiredStickiesPrefix) {
+                let plain = "stickies-" + trimmed.dropFirst(retiredStickiesPrefix.count)
+                if index[plain] != nil { return plain }
+            }
         }
         return Self.iconID(forLegacyEmoji: legacyEmoji)
     }
+
+    /// The prefix of the Stickies form that was withdrawn: its lime sat close
+    /// enough to the mint accent to read as a mismatch rather than a choice.
+    private static let retiredStickiesPrefix = "stickies-duo-"
 
     /// The closest icon for an emoji a folder was saved with. Covers every
     /// emoji the old folder editor offered, plus the ones people commonly typed
