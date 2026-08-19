@@ -289,11 +289,11 @@ struct BrowserE2ESmoke {
             try require(dataStore.bookmarks.count == 1, "bookmark control did not persist a local record")
             try require(dataStore.history.count == 1, "history control did not persist a completed visit")
             let programmingFolder = try requireValue(
-                dataStore.createBookmarkFolder(title: "Programming", emoji: "💻", parentID: nil),
+                dataStore.createBookmarkFolder(title: "Programming", iconID: "terminal", parentID: nil),
                 "bookmark organizer did not create a root folder"
             )
             let swiftFolder = try requireValue(
-                dataStore.createBookmarkFolder(title: "Swift", emoji: "🐦", parentID: programmingFolder.id),
+                dataStore.createBookmarkFolder(title: "Swift", iconID: "branch", parentID: programmingFolder.id),
                 "bookmark organizer did not create a nested folder"
             )
             dataStore.moveBookmark(dataStore.bookmarks[0], to: swiftFolder.id)

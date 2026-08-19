@@ -43,11 +43,11 @@ struct BookmarksHomePage: View {
         }
         .background(ClearframeTheme.bg0)
         .sheet(item: $editorRequest) { request in
-            BookmarkFolderEditor(request: request) { title, emoji in
+            BookmarkFolderEditor(request: request) { title, iconID in
                 if let folderID = request.folderID {
-                    store.updateBookmarkFolder(id: folderID, title: title, emoji: emoji)
+                    store.updateBookmarkFolder(id: folderID, title: title, iconID: iconID)
                 } else {
-                    _ = store.createBookmarkFolder(title: title, emoji: emoji, parentID: request.parentID)
+                    _ = store.createBookmarkFolder(title: title, iconID: iconID, parentID: request.parentID)
                 }
                 editorRequest = nil
             }
@@ -66,7 +66,7 @@ struct BookmarksHomePage: View {
             }
             Button("Cancel", role: .cancel) { pendingDeletion = nil }
         } message: { folder in
-            Text("\(folder.emoji) \(folder.title) contains saved items. Its bookmarks and subfolders will move to the parent folder; nothing will be deleted.")
+            Text("\(folder.title) contains saved items. Its bookmarks and subfolders will move to the parent folder; nothing will be deleted.")
         }
         .accessibilityLabel("All bookmarks")
     }
@@ -196,7 +196,7 @@ struct BookmarksHomePage: View {
     private func headerTitle(folder: BookmarkFolderRecord?) -> String {
         guard section == .bookmarks else { return "History" }
         guard let folder else { return "Bookmarks" }
-        return "\(folder.emoji) \(folder.title)"
+        return folder.title
     }
 
     private func headerDetail(folder: BookmarkFolderRecord?, stats: BookmarksHomeStats) -> String {
@@ -273,7 +273,7 @@ struct BookmarksHomePage: View {
                                 folderID: nil,
                                 parentID: folder.id,
                                 title: "",
-                                emoji: "📁"
+                                iconID: ClearframeIconCatalog.defaultIconID
                             )
                         },
                         rename: { presentRename(folder) },
@@ -287,7 +287,7 @@ struct BookmarksHomePage: View {
                             folderID: nil,
                             parentID: currentFolderID,
                             title: "",
-                            emoji: "📁"
+                            iconID: ClearframeIconCatalog.defaultIconID
                         )
                     }
                 }
@@ -454,7 +454,7 @@ struct BookmarksHomePage: View {
             folderID: folder.id,
             parentID: folder.parentID,
             title: folder.title,
-            emoji: folder.emoji
+            iconID: ClearframeIconGeometry.iconID(for: folder)
         )
     }
 
@@ -572,14 +572,14 @@ private struct BookmarksHomeStats {
     /// "🎨 Web Design › 💻 Code" for the folder itself.
     func pathLabel(for folderID: UUID) -> String {
         ancestors(of: folderID, includingSelf: true)
-            .map { "\($0.emoji) \($0.title)" }
+            .map(\.title)
             .joined(separator: " › ")
     }
 
     /// The same path without the folder itself; empty for a root folder.
     func parentPathLabel(for folderID: UUID) -> String {
         ancestors(of: folderID, includingSelf: false)
-            .map { "\($0.emoji) \($0.title)" }
+            .map(\.title)
             .joined(separator: " › ")
     }
 
@@ -596,7 +596,7 @@ private struct BookmarksHomeStats {
 }
 
 /// A folder as a stack of paper: two tilted sheets peeking out behind a
-/// frosted band, the folder's own emoji and title below, and the identity
+/// frosted band, the folder's own icon and title below, and the identity
 /// colors of its newest saved pages in the lower-left corner.
 private struct BookmarkFolderCard: View {
     let folder: BookmarkFolderRecord
@@ -630,7 +630,7 @@ private struct BookmarkFolderCard: View {
                 art
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 7) {
-                        Text(folder.emoji).font(.system(size: 14))
+                        BookmarkFolderIcon(folder: folder, size: 15).foregroundStyle(ClearframeTheme.textSecondary)
                         Text(folder.title)
                             .font(.system(size: 13, weight: .semibold))
                             .foregroundStyle(ClearframeTheme.textPrimary)
@@ -799,7 +799,7 @@ private struct BookmarksHomeFolderRow: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 10) {
-                Text(folder.emoji).font(.system(size: 14))
+                BookmarkFolderIcon(folder: folder, size: 15).foregroundStyle(ClearframeTheme.textSecondary)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(folder.title)
                         .font(.system(size: 12.5, weight: .semibold))

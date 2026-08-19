@@ -107,7 +107,7 @@ struct BookmarksBar: View {
                         folderID: folder.id,
                         parentID: folder.parentID,
                         title: folder.title,
-                        emoji: folder.emoji
+                        iconID: ClearframeIconGeometry.iconID(for: folder)
                     )
                 )
             },
@@ -281,9 +281,9 @@ struct BookmarksBar: View {
                     store.updateBookmark(id: bookmarkRequest.bookmarkID, title: title, url: url)
                 }
             case .folder(let folderRequest):
-                BookmarkFolderEditor(request: folderRequest) { title, emoji in
+                BookmarkFolderEditor(request: folderRequest) { title, iconID in
                     if let folderID = folderRequest.folderID {
-                        store.updateBookmarkFolder(id: folderID, title: title, emoji: emoji)
+                        store.updateBookmarkFolder(id: folderID, title: title, iconID: iconID)
                     }
                     editorRequest = nil
                 }
@@ -303,7 +303,7 @@ struct BookmarksBar: View {
             }
             Button("Cancel", role: .cancel) { pendingFolderDeletion = nil }
         } message: { folder in
-            Text("\(folder.emoji) \(folder.title) contains saved items. Its bookmarks and subfolders will move to the parent folder; nothing will be deleted.")
+            Text("\(folder.title) contains saved items. Its bookmarks and subfolders will move to the parent folder; nothing will be deleted.")
         }
     }
 

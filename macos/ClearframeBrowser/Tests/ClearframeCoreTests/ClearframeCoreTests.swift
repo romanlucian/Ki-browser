@@ -789,10 +789,10 @@ final class ClearframeCoreTests: XCTestCase {
     func testBookmarkFolderTreeMovesAndSafeDeletionPreserveSavedPages() throws {
         var collection = BookmarkCollection()
         let programming = try XCTUnwrap(
-            collection.createFolder(title: "Programming", emoji: "💻", parentID: nil)
+            collection.createFolder(title: "Programming", iconID: "terminal", parentID: nil)
         )
         let swift = try XCTUnwrap(
-            collection.createFolder(title: "Swift", emoji: "🐦", parentID: programming.id)
+            collection.createFolder(title: "Swift", iconID: "branch", parentID: programming.id)
         )
         let nestedBookmark = BookmarkRecord(
             title: "Swift documentation",
@@ -837,10 +837,10 @@ final class ClearframeCoreTests: XCTestCase {
     func testBookmarkBarQueriesSeparateTopLevelItemsFromNestedContents() throws {
         var collection = BookmarkCollection()
         let shopping = try XCTUnwrap(
-            collection.createFolder(title: "Shopping", emoji: "🛍️", parentID: nil)
+            collection.createFolder(title: "Shopping", iconID: "bag", parentID: nil)
         )
         let gifts = try XCTUnwrap(
-            collection.createFolder(title: "Gifts", emoji: "🎁", parentID: shopping.id)
+            collection.createFolder(title: "Gifts", iconID: "package", parentID: shopping.id)
         )
         let direct = BookmarkRecord(title: "Clearframe", url: "https://example.com/clearframe")
         let nested = BookmarkRecord(title: "Gift guide", url: "https://example.com/gifts", folderID: gifts.id)
@@ -856,7 +856,7 @@ final class ClearframeCoreTests: XCTestCase {
     func testAddingAnExistingBookmarkURLRehomesItWithoutDuplication() throws {
         var collection = BookmarkCollection()
         let design = try XCTUnwrap(
-            collection.createFolder(title: "Web Design", emoji: "🎨", parentID: nil)
+            collection.createFolder(title: "Web Design", iconID: "palette", parentID: nil)
         )
         let original = BookmarkRecord(title: "Reference", url: "https://example.com/reference")
         collection.addBookmark(original)
@@ -875,7 +875,7 @@ final class ClearframeCoreTests: XCTestCase {
     func testEditingABookmarkRenamesAndRepointsItWhileKeepingItsFolderAndDate() throws {
         var collection = BookmarkCollection()
         let design = try XCTUnwrap(
-            collection.createFolder(title: "Web Design", emoji: "🎨", parentID: nil)
+            collection.createFolder(title: "Web Design", iconID: "palette", parentID: nil)
         )
         let created = Date(timeIntervalSince1970: 1_700_000_000)
         let saved = BookmarkRecord(
@@ -956,19 +956,19 @@ final class ClearframeCoreTests: XCTestCase {
         XCTAssertEqual(collection.bookmarks.first?.title, "swift.org")
     }
 
-    func testBookmarkFolderBarLabelAlwaysContainsEmojiAndVisibleName() {
+    func testBookmarkFolderBarLabelIsThePlainTitleNowThatChipsDrawTheirOwnIcon() {
         let folder = BookmarkFolderRecord(title: "Photography References", emoji: "📷")
 
-        XCTAssertEqual(folder.barLabel, "📷 Photography References")
-        XCTAssertTrue(folder.barLabel.contains(folder.emoji))
-        XCTAssertTrue(folder.barLabel.contains(folder.title))
+        XCTAssertEqual(folder.barLabel, "Photography References")
+        XCTAssertEqual(folder.barLabel, folder.title)
+        XCTAssertFalse(folder.barLabel.contains(folder.emoji), "the icon is drawn beside the name, not inside it")
     }
 
     func testBookmarkDescendantCountsRollUpThroughADeepFolderChain() throws {
         var collection = BookmarkCollection()
-        let top = try XCTUnwrap(collection.createFolder(title: "Top", emoji: "📁", parentID: nil))
-        let middle = try XCTUnwrap(collection.createFolder(title: "Middle", emoji: "📁", parentID: top.id))
-        let bottom = try XCTUnwrap(collection.createFolder(title: "Bottom", emoji: "📁", parentID: middle.id))
+        let top = try XCTUnwrap(collection.createFolder(title: "Top", iconID: "folder", parentID: nil))
+        let middle = try XCTUnwrap(collection.createFolder(title: "Middle", iconID: "folder", parentID: top.id))
+        let bottom = try XCTUnwrap(collection.createFolder(title: "Bottom", iconID: "folder", parentID: middle.id))
         collection.addBookmark(BookmarkRecord(title: "Deep", url: "https://example.com/deep", folderID: bottom.id))
 
         let counts = collection.descendantCounts()
@@ -980,11 +980,11 @@ final class ClearframeCoreTests: XCTestCase {
 
     func testBookmarkDescendantCountsAggregateEveryBranchOfATree() throws {
         var collection = BookmarkCollection()
-        let work = try XCTUnwrap(collection.createFolder(title: "Work", emoji: "💼", parentID: nil))
-        let design = try XCTUnwrap(collection.createFolder(title: "Design", emoji: "🎨", parentID: work.id))
-        let code = try XCTUnwrap(collection.createFolder(title: "Code", emoji: "💻", parentID: work.id))
-        let swift = try XCTUnwrap(collection.createFolder(title: "Swift", emoji: "🐦", parentID: code.id))
-        let personal = try XCTUnwrap(collection.createFolder(title: "Personal", emoji: "❤️", parentID: nil))
+        let work = try XCTUnwrap(collection.createFolder(title: "Work", iconID: "briefcase", parentID: nil))
+        let design = try XCTUnwrap(collection.createFolder(title: "Design", iconID: "palette", parentID: work.id))
+        let code = try XCTUnwrap(collection.createFolder(title: "Code", iconID: "terminal", parentID: work.id))
+        let swift = try XCTUnwrap(collection.createFolder(title: "Swift", iconID: "branch", parentID: code.id))
+        let personal = try XCTUnwrap(collection.createFolder(title: "Personal", iconID: "heart", parentID: nil))
         collection.addBookmark(BookmarkRecord(title: "Brief", url: "https://example.com/brief", folderID: work.id))
         collection.addBookmark(BookmarkRecord(title: "Palette", url: "https://example.com/palette", folderID: design.id))
         collection.addBookmark(BookmarkRecord(title: "Docs", url: "https://swift.org/documentation/", folderID: swift.id))
@@ -1002,7 +1002,7 @@ final class ClearframeCoreTests: XCTestCase {
 
     func testBookmarkDescendantCountsReportZeroForAnEmptyFolder() throws {
         var collection = BookmarkCollection()
-        let empty = try XCTUnwrap(collection.createFolder(title: "Empty", emoji: "📁", parentID: nil))
+        let empty = try XCTUnwrap(collection.createFolder(title: "Empty", iconID: "folder", parentID: nil))
         collection.addBookmark(BookmarkRecord(title: "Elsewhere", url: "https://example.com/elsewhere", folderID: nil))
 
         XCTAssertEqual(collection.descendantCounts()[empty.id], BookmarkDescendantCounts())
@@ -1010,9 +1010,9 @@ final class ClearframeCoreTests: XCTestCase {
 
     func testBookmarkDescendantCountsCreditNestedBookmarksToEveryAncestor() throws {
         var collection = BookmarkCollection()
-        let root = try XCTUnwrap(collection.createFolder(title: "Root", emoji: "📁", parentID: nil))
-        let child = try XCTUnwrap(collection.createFolder(title: "Child", emoji: "📁", parentID: root.id))
-        let grandchild = try XCTUnwrap(collection.createFolder(title: "Grandchild", emoji: "📁", parentID: child.id))
+        let root = try XCTUnwrap(collection.createFolder(title: "Root", iconID: "folder", parentID: nil))
+        let child = try XCTUnwrap(collection.createFolder(title: "Child", iconID: "folder", parentID: root.id))
+        let grandchild = try XCTUnwrap(collection.createFolder(title: "Grandchild", iconID: "folder", parentID: child.id))
         collection.addBookmark(BookmarkRecord(title: "Root page", url: "https://example.com/root", folderID: root.id))
         collection.addBookmark(BookmarkRecord(title: "Child page", url: "https://example.com/child", folderID: child.id))
         collection.addBookmark(BookmarkRecord(title: "Leaf one", url: "https://example.com/leaf-1", folderID: grandchild.id))
