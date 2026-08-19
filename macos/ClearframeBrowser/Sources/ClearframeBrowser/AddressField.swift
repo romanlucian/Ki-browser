@@ -63,18 +63,39 @@ struct AddressField: NSViewRepresentable {
             field.placeholderString = placeholder
         }
 
+        // Both branches run a turn late, and the world can change in between —
+        // a keystroke can arrive, focus can come back. Each one re-reads the
+        // state it is acting on rather than trusting the state that scheduled
+        // it. Without that, a focus flag that dips false for a single frame
+        // schedules a resign that lands after focus is already back, which
+        // takes the keyboard away from someone mid-word and closes the
+        // suggestion list under them.
         let isFirstResponder = field.currentEditor() != nil
+        let coordinator = context.coordinator
         if isFocused, !isFirstResponder {
+            // What the field holds now, remembered before waiting a turn.
+            let textWhenScheduled = field.stringValue
             DispatchQueue.main.async {
-                guard let window = field.window else { return }
+                guard coordinator.parent.isFocused,
+                      field.currentEditor() == nil,
+                      let window = field.window else { return }
                 window.makeFirstResponder(field)
                 Coordinator.disableTextSubstitutions(in: field)
                 // Focusing the address bar means "type a new address", so the
-                // existing one is selected rather than appended to.
-                field.currentEditor()?.selectAll(nil)
+                // address already there is selected rather than appended to.
+                //
+                // Only if it is still the address that was there a turn ago.
+                // Someone reaching for ⌘L is already typing by the time this
+                // runs, and selecting everything at that point puts their next
+                // keystroke on top of the first one — which read as the field
+                // eating a letter and the suggestions flashing and vanishing.
+                if field.stringValue == textWhenScheduled {
+                    field.currentEditor()?.selectAll(nil)
+                }
             }
         } else if !isFocused, isFirstResponder {
             DispatchQueue.main.async {
+                guard !coordinator.parent.isFocused, !coordinator.isEditing else { return }
                 field.window?.makeFirstResponder(nil)
             }
         }
@@ -137,6 +158,7 @@ struct AddressField: NSViewRepresentable {
         func controlTextDidChange(_ notification: Notification) {
             guard let field = notification.object as? NSTextField else { return }
             let typed = field.stringValue
+
             if parent.typedText != typed { parent.typedText = typed }
 
             // A deletion is honoured exactly as made. Consuming the flag here
