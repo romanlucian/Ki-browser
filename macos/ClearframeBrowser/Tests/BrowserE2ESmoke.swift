@@ -623,6 +623,66 @@ struct BrowserE2ESmoke {
             try require((assistant.analysis?.content.summary.count ?? 0) > 80, "the ordinary article fixture produced an unexpectedly short summary")
             print("PASS structure default: the article fixture still analyzes straight to ready without a listing notice")
 
+            // File upload: WebKit only shows a file picker for a page if the UI
+            // delegate answers this request. Without it every <input type=file>
+            // is silently dead, so the wiring itself is what gets checked here;
+            // opening a real NSOpenPanel would block this suite.
+            try require(
+                session.responds(to: #selector(WKUIDelegate.webView(_:runOpenPanelWith:initiatedByFrame:completionHandler:))),
+                "the session did not answer WebKit's open-panel request, so file inputs would never show a picker"
+            )
+            print("PASS file upload: the session answers WebKit's open-panel request instead of leaving file inputs dead")
+
+            guard let find = workspace.selectedTab?.find else {
+                throw SmokeFailure.check("selected tab did not expose a find controller")
+            }
+            find.present()
+            try require(find.isPresented, "⌘F did not present the find bar for the selected tab")
+            find.query = "shade structures"
+            let phraseOnPage = await find.search(backwards: false, fromTop: true)
+            try require(
+                phraseOnPage == .matched && find.outcome == .matched,
+                "find in page did not match a phrase the fixture page contains"
+            )
+            find.query = "kumquat telemetry"
+            let phraseNotOnPage = await find.search(backwards: false, fromTop: true)
+            try require(
+                phraseNotOnPage == .noResults && find.outcome == .noResults,
+                "find in page claimed a match for text the fixture page does not contain"
+            )
+            find.close()
+            try require(!find.isPresented && find.outcome == .idle, "closing the find bar left a stale result behind")
+            print("PASS find in page: a phrase on the page matched, an absent phrase reported no results, and closing cleared the state")
+
+            try require(
+                session.pageZoom == BrowserSession.defaultPageZoom && session.webView.pageZoom == BrowserSession.defaultPageZoom,
+                "the tab did not start at actual size"
+            )
+            session.zoomIn()
+            let firstZoomStep = session.pageZoom
+            try require(firstZoomStep > BrowserSession.defaultPageZoom, "⌘+ did not zoom the page in")
+            try require(abs(session.webView.pageZoom - firstZoomStep) < 0.0001, "the zoom step never reached the web view")
+            session.zoomIn()
+            try require(session.pageZoom > firstZoomStep, "a second ⌘+ did not continue up the zoom steps")
+            session.zoomOut()
+            try require(session.pageZoom == firstZoomStep, "⌘− did not step back down to the previous zoom")
+            session.resetPageZoom()
+            try require(
+                session.pageZoom == BrowserSession.defaultPageZoom && session.webView.pageZoom == BrowserSession.defaultPageZoom,
+                "⌘0 did not restore actual size"
+            )
+            print("PASS page zoom: ⌘+ and ⌘− walked the zoom steps and ⌘0 restored actual size")
+
+            try require(session.canPrintPage, "a loaded web page did not report itself printable")
+            try require(workspace.canPrintSelectedPage, "Print was disabled while a real web page was open")
+            session.showStartPage()
+            let printUnavailableOnStartPage = await waitUntil { !workspace.canPrintSelectedPage }
+            try require(printUnavailableOnStartPage, "Print stayed available on the start surface, where there is no page to print")
+            try await loadDeterministicPage(in: session, localURL: fixtureURL)
+            let printAvailableAgain = await waitUntil { workspace.canPrintSelectedPage }
+            try require(printAvailableAgain, "Print did not become available again once a page finished loading")
+            print("PASS print availability: the Print command followed the loaded page and disabled itself on the start surface")
+
             workspace.toggleBookmarkForSelectedTab()
             try require(dataStore.bookmarks.count == 1, "bookmark was not saved")
             try require(dataStore.history.contains(where: { $0.url == localURL }), "completed visit was not recorded")

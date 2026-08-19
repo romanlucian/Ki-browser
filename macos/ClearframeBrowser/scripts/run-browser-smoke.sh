@@ -71,6 +71,7 @@ swiftc \
     "$PACKAGE_DIR/Sources/ClearframeBrowser/OnboardingController.swift" \
     "$PACKAGE_DIR/Sources/ClearframeBrowser/BrowserSession.swift" \
     "$PACKAGE_DIR/Sources/ClearframeBrowser/PageAssistantModel.swift" \
+    "$PACKAGE_DIR/Sources/ClearframeBrowser/PageFindController.swift" \
     "$PACKAGE_DIR/Sources/ClearframeBrowser/SearchSettingsStore.swift" \
     "$PACKAGE_DIR/Sources/ClearframeBrowser/ContentBlockingSettingsStore.swift" \
     "$PACKAGE_DIR/Sources/ClearframeBrowser/ContentRuleListProvider.swift" \

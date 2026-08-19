@@ -12,6 +12,7 @@ The native app provides:
 - multi-tab browsing with safe per-tab WebKit and assistant state, including ephemeral private tabs that are never restored or added to history;
 - local restoration of recent regular tabs, with lazy loading, corruption recovery, and an opt-out setting;
 - downloads with a user-selected destination plus an obvious toolbar panel for status, destination, cancel, reveal, and the Downloads folder;
+- the page basics people expect from any browser: file uploads through the standard macOS picker (including multiple files and, where a site asks for one, a folder), find in page (`⌘F`, with `⌘G` and `⇧⌘G` to step and Escape to close), printing the open page (`⌘P`), and per-tab page zoom (`⌘+`, `⌘−`, `⌘0`);
 - a visible Clearframe bookmarks bar below navigation, with horizontally scrollable top-level links, nested emoji-folder menus, current-page and saved-bookmark drag filing, fixed overflow access, and a locally persisted show/hide setting;
 - a full-page bookmarks home (the bar's All Bookmarks chip or ⌘⌥B) with visual folder cards, search across bookmarks and folder titles, drill-down into subfolders, and a local history view—all local only;
 - searchable local bookmarks organized into emoji-labeled nested folders, plus local history with clear/disable controls;
@@ -88,7 +89,7 @@ swift test
 ./scripts/run-browser-smoke.sh
 ```
 
-The smoke test uses a kernel-selected local fixture port and exercises a native SwiftUI window, launch/content focus, WebKit navigation, same-document SPA URL/title changes, popups, tabs, local search resolution, bookmark persistence and safe drag filing, download-panel state, history, session restore, visible-content filtering, open Shadow DOM extraction, local analysis, and exact evidence highlighting. It requires a logged-in desktop session; restricted/headless environments can block WebKit services.
+The smoke test uses a kernel-selected local fixture port and exercises a native SwiftUI window, launch/content focus, WebKit navigation, same-document SPA URL/title changes, popups, tabs, local search resolution, bookmark persistence and safe drag filing, download-panel state, history, session restore, visible-content filtering, open Shadow DOM extraction, local analysis, exact evidence highlighting, the file-upload panel wiring, find in page, page zoom, and print availability. It requires a logged-in desktop session; restricted/headless environments can block WebKit services.
 
 The Swift package separates the Foundation-only analysis/service contract (`ClearframeCore`) from the macOS-specific SwiftUI/WebKit interface (`ClearframeBrowser`). A shared JSON contract fixture is executed by both the Swift and JavaScript suites so language scoring, summaries, risk signals, Plain English, and reading-time behavior cannot drift silently. A future Windows app can reuse the language-neutral service contract and tests, but not the native SwiftUI/WebKit UI.
 
@@ -130,6 +131,8 @@ Clearframe presents Safari's user agent because it renders with WebKit, Safari's
 - AI output can omit context or be wrong.
 - Risk signals are heuristic and do not prove that a page is safe or malicious.
 - Tracker blocking uses a small, first-party curated list of common advertising and tracking domains—not a complete ad blocker. It does not stop first-party analytics, cookie-based tracking, browser fingerprinting, or CNAME-cloaked trackers, and WebKit never reports back which requests it blocked, so no per-page or running count exists anywhere in the UI. See [docs/content-blocking.md](docs/content-blocking.md).
+- Find in page reports whether the page still contains a match, not how many. WebKit's find API answers match or no match and returns no count or position, so the bar shows **No results** or shows nothing at all—never an invented "3 of 12".
+- Page zoom applies to the tab it was used in. It is not remembered per site, not shared between tabs, and not restored after a relaunch.
 - Clearframe can save downloads but does not scan their contents or provide a reputation verdict. It also does not inspect certificate details, network traffic, reputation databases, or hidden page behavior.
 - The download list is session-only in this version; saved files remain at the destination the user selected, and the toolbar panel can always open the local Downloads folder.
 - The bookmarks bar and folder organizer are local only. Native URL drag-and-drop creates or moves bookmarks into Unfiled or visible folders; it does not reorder items or move folders, and the existing Move menu remains the keyboard alternative. The organizer supports drops onto the folders currently visible in it, not closed submenu rows. There is no account, sync, or cloud backup. Hiding the bar does not delete bookmarks. Deleting a non-empty folder requires confirmation and rehomes its direct contents instead of deleting saved pages.

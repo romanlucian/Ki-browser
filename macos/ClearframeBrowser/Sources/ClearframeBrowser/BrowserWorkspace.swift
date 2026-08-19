@@ -16,6 +16,9 @@ final class BrowserTab: ObservableObject, Identifiable {
     let id: UUID
     let session: BrowserSession
     let assistant: PageAssistantModel
+    /// Find in page belongs to the tab, like its page does: two tabs searching
+    /// for different words do not share a bar or a result.
+    let find: PageFindController
     let isPrivate: Bool
     @Published private(set) var displayTitle: String
     @Published private(set) var lastActivatedAt: Date
@@ -46,8 +49,11 @@ final class BrowserTab: ObservableObject, Identifiable {
         self.isPrivate = isPrivate
         self.groupID = groupID
         assistant = PageAssistantModel()
+        // Built as a local first: the find controller needs the session's web
+        // view, and `self` cannot be read until every stored property is set.
+        let resolvedSession: BrowserSession
         if loadImmediately {
-            session = BrowserSession(
+            resolvedSession = BrowserSession(
                 downloadCenter: downloadCenter,
                 searchSettings: searchSettings,
                 initialURL: initialURL,
@@ -56,7 +62,7 @@ final class BrowserTab: ObservableObject, Identifiable {
                 favicons: favicons
             )
         } else {
-            session = BrowserSession(
+            resolvedSession = BrowserSession(
                 downloadCenter: downloadCenter,
                 searchSettings: searchSettings,
                 isPrivate: isPrivate,
@@ -65,6 +71,8 @@ final class BrowserTab: ObservableObject, Identifiable {
             )
             pendingRestoreURL = initialURL
         }
+        session = resolvedSession
+        find = PageFindController(webView: resolvedSession.webView)
 
         session.$pageTitle
             .dropFirst()
@@ -119,6 +127,7 @@ final class BrowserTab: ObservableObject, Identifiable {
     func teardown() {
         cancellables.removeAll()
         assistant.teardown()
+        find.teardown()
         session.teardown()
     }
 }
@@ -135,6 +144,10 @@ final class BrowserWorkspace: ObservableObject {
     /// from the strip; the strip clears it when the editor closes.
     @Published var pendingGroupEditorID: UUID?
     @Published var focusAddressRequest = 0
+    /// Whether the selected tab currently shows a page the Print command can
+    /// send to a printer. Republished from that tab's session so the menu item
+    /// disables itself on the start surfaces instead of offering a blank job.
+    @Published private(set) var canPrintSelectedPage = false
     @Published private(set) var bookmarkLibraryRequest = 0
     @Published private(set) var bookmarkFolderRequestID = UUID()
     private(set) var requestedBookmarkFolderParentID: UUID?
@@ -218,10 +231,27 @@ final class BrowserWorkspace: ObservableObject {
 
         tabs.forEach(configure)
         selectedTab?.activate()
+        observeSelectedPagePrintability()
     }
 
     deinit {
         persistenceTask?.cancel()
+    }
+
+    /// Follows the selection, then that tab's load state. Only the print
+    /// question is republished here; forwarding every session change would
+    /// redraw the whole window on each progress tick.
+    private func observeSelectedPagePrintability() {
+        $selectedTabID
+            .map { [weak self] id -> AnyPublisher<Bool, Never> in
+                guard let session = self?.tabs.first(where: { $0.id == id })?.session else {
+                    return Just(false).eraseToAnyPublisher()
+                }
+                return session.$loadState.map { $0 == .content }.eraseToAnyPublisher()
+            }
+            .switchToLatest()
+            .removeDuplicates()
+            .assign(to: &$canPrintSelectedPage)
     }
 
     var selectedTab: BrowserTab? {
@@ -607,6 +637,39 @@ final class BrowserWorkspace: ObservableObject {
 
     func requestAddressFocus() {
         focusAddressRequest += 1
+    }
+
+    // MARK: - Page menu commands
+
+    /// ⌘F, ⌘G, ⇧⌘G. Each acts on the tab in front, never on all of them.
+    func findInSelectedTab() {
+        selectedTab?.find.present()
+    }
+
+    func findNextInSelectedTab() {
+        selectedTab?.find.step(backwards: false)
+    }
+
+    func findPreviousInSelectedTab() {
+        selectedTab?.find.step(backwards: true)
+    }
+
+    /// ⌘+, ⌘−, ⌘0.
+    func zoomInSelectedTab() {
+        selectedTab?.session.zoomIn()
+    }
+
+    func zoomOutSelectedTab() {
+        selectedTab?.session.zoomOut()
+    }
+
+    func resetZoomInSelectedTab() {
+        selectedTab?.session.resetPageZoom()
+    }
+
+    /// ⌘P.
+    func printSelectedPage() {
+        selectedTab?.session.printPage()
     }
 
     func requestAddressFocusForAppActivation() {

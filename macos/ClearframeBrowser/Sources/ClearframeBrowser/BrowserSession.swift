@@ -42,6 +42,10 @@ final class BrowserSession: NSObject, ObservableObject {
     @Published private(set) var navigationVersion = 0
     @Published private(set) var loadState: BrowserLoadState = .startPage
     @Published private(set) var hasCommittedNavigation = false
+    /// Mirrors `webView.pageZoom` so the chrome and tests can read the current
+    /// step. Per tab, and deliberately not stored: a site's zoom is not
+    /// remembered between tabs or between launches.
+    @Published private(set) var pageZoom: CGFloat = BrowserSession.defaultPageZoom
 
     var onRequestNewTab: ((URL) -> Void)?
     var onCompletedVisit: ((String, String) -> Void)?
@@ -150,6 +154,61 @@ final class BrowserSession: NSObject, ObservableObject {
 
     func openAITool(_ tool: AIToolListing) {
         load(tool.officialURL, displayName: tool.name)
+    }
+
+    // MARK: - Page zoom
+
+    /// The steps ⌘+ and ⌘− walk. `1.0` is the unzoomed page and the value ⌘0
+    /// returns to.
+    static let pageZoomSteps: [CGFloat] = [0.5, 0.67, 0.8, 0.9, 1.0, 1.1, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0]
+    static let defaultPageZoom: CGFloat = 1.0
+
+    func zoomIn() {
+        setPageZoom(Self.pageZoomSteps.first { $0 > pageZoom } ?? pageZoom)
+    }
+
+    func zoomOut() {
+        setPageZoom(Self.pageZoomSteps.last { $0 < pageZoom } ?? pageZoom)
+    }
+
+    /// ⌘0.
+    func resetPageZoom() {
+        setPageZoom(Self.defaultPageZoom)
+    }
+
+    private func setPageZoom(_ value: CGFloat) {
+        pageZoom = value
+        webView.pageZoom = value
+    }
+
+    // MARK: - Printing
+
+    /// True only while a real web page is on screen. The AI guide, the
+    /// bookmarks home, and the error surfaces are app views, not documents, so
+    /// the Print command disables itself on them.
+    var canPrintPage: Bool { loadState == .content }
+
+    /// ⌘P. WebKit paginates the page the user is looking at; the print panel
+    /// runs as a sheet on the browser window when there is one.
+    func printPage() {
+        guard canPrintPage else { return }
+        let printInfo = NSPrintInfo.shared
+        let operation = webView.printOperation(with: printInfo)
+        operation.showsPrintPanel = true
+        operation.showsProgressPanel = true
+        // The operation's view has no frame of its own; without one WebKit
+        // paginates an empty rectangle and the job comes out blank.
+        operation.view?.frame = NSRect(
+            x: 0,
+            y: 0,
+            width: max(printInfo.paperSize.width - printInfo.leftMargin - printInfo.rightMargin, 1),
+            height: max(printInfo.paperSize.height - printInfo.topMargin - printInfo.bottomMargin, 1)
+        )
+        if let window = webView.window {
+            operation.runModal(for: window, delegate: nil, didRun: nil, contextInfo: nil)
+        } else {
+            operation.run()
+        }
     }
 
     func goBack() { webView.goBack() }
@@ -785,6 +844,37 @@ extension BrowserSession: WKUIDelegate {
         return nil
     }
 
+    /// Without this, every `<input type="file">` on the web is dead: no picker
+    /// appears and the page is never told anything happened. Private tabs are
+    /// no different — a file the user chose is a file the user chose.
+    func webView(
+        _ webView: WKWebView,
+        runOpenPanelWith parameters: WKOpenPanelParameters,
+        initiatedByFrame frame: WKFrameInfo,
+        completionHandler: @escaping ([URL]?) -> Void
+    ) {
+        // WebKit keeps the page's file input suspended until this handler is
+        // called, and dropping it deadlocks uploads for the rest of the
+        // session. Every path out of here — choose, cancel, no window — answers
+        // through one latch that fires exactly once.
+        let answer = OpenPanelAnswer(completionHandler)
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = parameters.allowsMultipleSelection
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = parameters.allowsDirectories
+        panel.canCreateDirectories = false
+        panel.prompt = "Choose"
+        panel.message = webView.url?.host.map { "Choose what to upload to \($0)." }
+            ?? "Choose what to upload to this page."
+        if let window = webView.window {
+            panel.beginSheetModal(for: window) { response in
+                answer.deliver(response == .OK ? panel.urls : nil)
+            }
+        } else {
+            answer.deliver(panel.runModal() == .OK ? panel.urls : nil)
+        }
+    }
+
     func webView(
         _ webView: WKWebView,
         runJavaScriptAlertPanelWithMessage message: String,
@@ -843,6 +933,23 @@ extension BrowserSession: WKUIDelegate {
         alert.informativeText = String(message.prefix(4_000))
         alert.alertStyle = .informational
         return alert
+    }
+}
+
+/// One-shot latch for WebKit's open-panel completion handler. WebKit treats a
+/// second call as a hard error and a missing call as a permanent stall, so the
+/// handler is released here once and then forgotten.
+private final class OpenPanelAnswer {
+    private var completionHandler: (([URL]?) -> Void)?
+
+    init(_ completionHandler: @escaping ([URL]?) -> Void) {
+        self.completionHandler = completionHandler
+    }
+
+    func deliver(_ urls: [URL]?) {
+        guard let completionHandler else { return }
+        self.completionHandler = nil
+        completionHandler(urls)
     }
 }
 

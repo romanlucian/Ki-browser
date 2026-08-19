@@ -78,6 +78,27 @@ struct ClearframeBrowserApp: App {
                 .keyboardShortcut("b", modifiers: [.command, .shift])
                 Button("Show Downloads") { workspace.downloads.isPanelPresented = true }
                     .keyboardShortcut("j", modifiers: [.command, .shift])
+                Divider()
+                // Find, zoom, and print all act on the page in front, so they
+                // live with the rest of the page commands. Each one reaches the
+                // selected tab only.
+                Button("Find in Page") { workspace.findInSelectedTab() }
+                    .keyboardShortcut("f", modifiers: [.command])
+                Button("Find Next") { workspace.findNextInSelectedTab() }
+                    .keyboardShortcut("g", modifiers: [.command])
+                Button("Find Previous") { workspace.findPreviousInSelectedTab() }
+                    .keyboardShortcut("g", modifiers: [.command, .shift])
+                Divider()
+                Button("Zoom In") { workspace.zoomInSelectedTab() }
+                    .keyboardShortcut("+", modifiers: [.command])
+                Button("Zoom Out") { workspace.zoomOutSelectedTab() }
+                    .keyboardShortcut("-", modifiers: [.command])
+                Button("Actual Size") { workspace.resetZoomInSelectedTab() }
+                    .keyboardShortcut("0", modifiers: [.command])
+                Divider()
+                Button("Print…") { workspace.printSelectedPage() }
+                    .keyboardShortcut("p", modifiers: [.command])
+                    .disabled(!workspace.canPrintSelectedPage)
             }
         }
 
