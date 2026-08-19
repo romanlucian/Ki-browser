@@ -58,6 +58,7 @@ swiftc \
     -module-name ClearframeE2ESmoke \
     -I "$BUILD_DIR/Modules" \
     "$PACKAGE_DIR/Sources/ClearframeBrowser/AIConfigurationStore.swift" \
+    "$PACKAGE_DIR/Sources/ClearframeBrowser/AddressField.swift" \
     "$PACKAGE_DIR/Sources/ClearframeBrowser/AIToolStartPage.swift" \
     "$PACKAGE_DIR/Sources/ClearframeBrowser/BrowserApplicationLifecycle.swift" \
     "$PACKAGE_DIR/Sources/ClearframeBrowser/BrowserDataStore.swift" \

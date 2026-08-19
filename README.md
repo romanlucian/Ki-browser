@@ -21,6 +21,7 @@ The native app provides:
 - site information on the address bar's lock/globe chip: the site's host, a connection state read from WebKit's own secure-content answer instead of the address scheme alone (so an HTTPS page that pulled part of itself over HTTP says so rather than showing a plain lock), the same per-site tracker-blocking switch, and **Remove this site's data**;
 - a **Site data** section in Settings listing every site holding data on this Mac with its own remove button, beside the existing all-at-once reset. Both surfaces name the *kinds* of data a site stored—cookies, cached files, local storage, and so on—and never a size or a cookie count, because WebKit reports neither;
 - explicit on-device voice input that fills the visible address/search field for review without automatic submission;
+- address-bar completion from this Mac's own history and bookmarks: typing a few letters finishes the address you have already been to, with the added part selected so the next keystroke replaces it. It offers only places already in this profile — never a guessed host, a popular-sites list, or anything fetched — completes to nothing when nothing matches, and stays silent entirely in private tabs;
 - a visible, locally persisted search-engine chooser for DuckDuckGo, Google, Bing, Brave Search, and Startpage;
 - a native new-tab AI guide with a small, locally defined catalog organized by everyday tasks;
 - a concise three-step first-run introduction covering Clearframe's promise, search choice, privacy boundary, AI home, and Analyze page workflow;

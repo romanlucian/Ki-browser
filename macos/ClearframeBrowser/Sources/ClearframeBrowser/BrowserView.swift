@@ -55,7 +55,7 @@ private struct BrowserTabContent: View {
     @State private var addressText: String
     @State private var showsAssistant = true
     @State private var showsLibrary = false
-    @FocusState private var addressFocused: Bool
+    @State private var addressFocused = false
 
     init(tab: BrowserTab, workspace: BrowserWorkspace) {
         self.tab = tab
@@ -219,7 +219,7 @@ private struct BrowserToolbar: View {
     @ObservedObject var downloads: DownloadCenter
     @ObservedObject var searchSettings: SearchSettingsStore
     @Binding var addressText: String
-    var addressFocused: FocusState<Bool>.Binding
+    @Binding var addressFocused: Bool
     @Binding var showsAssistant: Bool
     @Binding var showsLibrary: Bool
     /// Home always returns this tab to the AI guide surface, never to whatever
@@ -436,16 +436,18 @@ private struct BrowserToolbar: View {
 
             HStack(spacing: 8) {
                 ZStack(alignment: .leading) {
-                    TextField("Search \(searchSettings.selectedEngine.displayName) or enter a website", text: $addressText)
-                        .textFieldStyle(.plain)
-                        .focused(addressFocused)
-                        .frame(maxWidth: .infinity)
-                        .onSubmit { submitAddress() }
-                        .foregroundStyle(ClearframeTheme.textPrimary)
-                        // D11: the field stays mounted and keeps receiving
-                        // focus/typed input at all times; emphasis only
-                        // hides its text by opacity, never its identity.
-                        .opacity(showsHostEmphasis ? 0 : 1)
+                    AddressField(
+                        text: $addressText,
+                        isFocused: $addressFocused,
+                        placeholder: "Search \(searchSettings.selectedEngine.displayName) or enter a website",
+                        completion: addressCompletion,
+                        onSubmit: submitAddress
+                    )
+                    .frame(maxWidth: .infinity)
+                    // D11: the field stays mounted and keeps receiving
+                    // focus/typed input at all times; emphasis only
+                    // hides its text by opacity, never its identity.
+                    .opacity(showsHostEmphasis ? 0 : 1)
 
                     if showsHostEmphasis, let hostEmphasisText {
                         hostEmphasisText
@@ -466,7 +468,7 @@ private struct BrowserToolbar: View {
             .contentShape(Rectangle())
             .simultaneousGesture(
                 TapGesture().onEnded {
-                    addressFocused.wrappedValue = true
+                    addressFocused = true
                 }
             )
 
@@ -480,7 +482,7 @@ private struct BrowserToolbar: View {
             .foregroundStyle(ClearframeTheme.textSecondary)
             .help("Go")
 
-            if !addressFocused.wrappedValue {
+            if !addressFocused {
                 Text("⌘L")
                     .font(ClearframeTheme.metaFont)
                     .tracking(ClearframeTheme.metaTracking)
@@ -493,7 +495,7 @@ private struct BrowserToolbar: View {
         .background(ClearframeTheme.bg3, in: RoundedRectangle(cornerRadius: ClearframeTheme.radius9))
         .overlay(
             RoundedRectangle(cornerRadius: ClearframeTheme.radius9)
-                .stroke(addressFocused.wrappedValue ? ClearframeTheme.accent : ClearframeTheme.hairline2, lineWidth: 1)
+                .stroke(addressFocused ? ClearframeTheme.accent : ClearframeTheme.hairline2, lineWidth: 1)
         )
     }
 
@@ -505,7 +507,7 @@ private struct BrowserToolbar: View {
     }
 
     private var showsHostEmphasis: Bool {
-        !addressFocused.wrappedValue && hostEmphasisText != nil
+        !addressFocused && hostEmphasisText != nil
     }
 
     /// Splits the address into scheme/path (textTertiary) and host
@@ -536,11 +538,29 @@ private struct BrowserToolbar: View {
     }
 
     @MainActor
+    /// Finishes a typed address from this profile's own history and bookmarks.
+    ///
+    /// Nothing is suggested in a private tab. The private-tab promise is that
+    /// the tab leaves no trace, and quietly reading back everywhere the reader
+    /// has been would work against the spirit of it even though it writes
+    /// nothing down.
+    private func addressCompletion(_ typed: String) -> String? {
+        guard !session.isPrivate else { return nil }
+        return AddressCompletion.completion(for: typed, in: addressCandidates)
+    }
+
+    /// Rebuilt when history or bookmarks change rather than on every keystroke:
+    /// the store is `@ObservedObject`, so this recomputes with the view, and a
+    /// five-hundred-entry history is cheap to group.
+    private var addressCandidates: [AddressCandidate] {
+        AddressCompletion.candidates(history: dataStore.history, bookmarks: dataStore.bookmarks)
+    }
+
     private func submitAddress() {
         let destination = addressText
         voiceInput.stop()
         voiceInput.dismissStatus()
-        addressFocused.wrappedValue = false
+        addressFocused = false
         session.navigate(destination)
         DispatchQueue.main.async {
             session.webView.window?.makeFirstResponder(session.webView)
