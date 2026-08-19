@@ -21,6 +21,8 @@ enum BookmarkBarMetrics {
     /// stealing the row from everything saved after them.
     static let maximumItemWidth: CGFloat = 180
     static let labelFontSize: CGFloat = 12
+    /// A folder's mark, sized to match the site icons it sits beside.
+    static let folderIconSize: CGFloat = 13
 
     private static let labelFont = NSFont.systemFont(ofSize: labelFontSize, weight: .medium)
     /// Bar items re-render on every hover; measuring each label once keeps
@@ -506,7 +508,10 @@ private struct BookmarkFolderMenu: View {
     /// number is the name's real width, known before the first frame is drawn
     /// rather than fed back from a layout pass.
     private var chipWidth: CGFloat {
-        BookmarkBarMetrics.naturalWidth(label: folder.barLabel)
+        BookmarkBarMetrics.naturalWidth(
+            label: folder.title,
+            iconWidth: BookmarkBarMetrics.folderIconSize
+        )
     }
 
     @ViewBuilder
@@ -541,11 +546,14 @@ private struct BookmarkFolderMenu: View {
     /// a Menu — only the chevron goes. Never hit-tested, so every click and
     /// drag lands on the menu it decorates.
     private var chipLabel: some View {
-        Text(folder.barLabel)
-            .lineLimit(1)
-            .truncationMode(.tail)
+        HStack(spacing: BookmarkBarMetrics.iconGap) {
+            BookmarkFolderIcon(folder: folder, size: BookmarkBarMetrics.folderIconSize)
+            Text(folder.title)
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .font(.system(size: BookmarkBarMetrics.labelFontSize, weight: .medium))
+        }
             .foregroundStyle(isHovered ? ClearframeTheme.textPrimary : ClearframeTheme.textSecondary)
-            .font(.system(size: BookmarkBarMetrics.labelFontSize, weight: .medium))
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, BookmarkBarMetrics.itemPadding)
             .frame(width: chipWidth, height: BookmarkBarMetrics.itemHeight)

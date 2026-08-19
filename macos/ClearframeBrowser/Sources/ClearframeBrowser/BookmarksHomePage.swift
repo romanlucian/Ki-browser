@@ -569,7 +569,7 @@ private struct BookmarksHomeStats {
             .map { URL(string: $0.url)?.host ?? "" }
     }
 
-    /// "🎨 Web Design › 💻 Code" for the folder itself.
+    /// "Web Design › Code" for the folder itself.
     func pathLabel(for folderID: UUID) -> String {
         ancestors(of: folderID, includingSelf: true)
             .map(\.title)
