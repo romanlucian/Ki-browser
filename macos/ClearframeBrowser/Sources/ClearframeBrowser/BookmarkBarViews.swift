@@ -109,7 +109,8 @@ struct BookmarksBar: View {
                         folderID: folder.id,
                         parentID: folder.parentID,
                         title: folder.title,
-                        iconID: ClearframeIconGeometry.iconID(for: folder)
+                        iconID: ClearframeIconGeometry.iconID(for: folder),
+            colorID: folder.colorID,
                     )
                 )
             },
@@ -283,9 +284,9 @@ struct BookmarksBar: View {
                     store.updateBookmark(id: bookmarkRequest.bookmarkID, title: title, url: url)
                 }
             case .folder(let folderRequest):
-                BookmarkFolderEditor(request: folderRequest) { title, iconID in
+                BookmarkFolderEditor(request: folderRequest) { title, iconID, colorID in
                     if let folderID = folderRequest.folderID {
-                        store.updateBookmarkFolder(id: folderID, title: title, iconID: iconID)
+                        store.updateBookmarkFolder(id: folderID, title: title, iconID: iconID, colorID: colorID)
                     }
                     editorRequest = nil
                 }

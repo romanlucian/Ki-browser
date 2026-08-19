@@ -71,6 +71,7 @@ struct BookmarkFolderEditorRequest: Identifiable {
     let parentID: UUID?
     let title: String
     let iconID: String
+    let colorID: String?
 }
 
 struct BookmarkFolderDestination: Identifiable {
@@ -163,7 +164,8 @@ struct BookmarkOrganizerView: View {
                         folderID: nil,
                         parentID: currentFolderID,
                         title: "",
-                        iconID: ClearframeIconCatalog.defaultIconID
+                        iconID: ClearframeIconCatalog.defaultIconID,
+                        colorID: nil
                     )
                 } label: {
                     Label("New Folder", systemImage: "folder.badge.plus")
@@ -187,7 +189,8 @@ struct BookmarkOrganizerView: View {
                                     folderID: nil,
                                     parentID: folder.id,
                                     title: "",
-                                    iconID: ClearframeIconCatalog.defaultIconID
+                                    iconID: ClearframeIconCatalog.defaultIconID,
+                            colorID: nil,
                                 )
                             },
                             rename: {
@@ -195,7 +198,8 @@ struct BookmarkOrganizerView: View {
                                     folderID: folder.id,
                                     parentID: folder.parentID,
                                     title: folder.title,
-                                    iconID: ClearframeIconGeometry.iconID(for: folder)
+                                    iconID: ClearframeIconGeometry.iconID(for: folder),
+                                    colorID: folder.colorID,
                                 )
                             },
                             fileDroppedURL: { fileDroppedURL($0, to: folder) },
@@ -242,11 +246,11 @@ struct BookmarkOrganizerView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .sheet(item: $editorRequest) { request in
-            BookmarkFolderEditor(request: request) { title, iconID in
+            BookmarkFolderEditor(request: request) { title, iconID, colorID in
                 if let folderID = request.folderID {
-                    store.updateBookmarkFolder(id: folderID, title: title, iconID: iconID)
+                    store.updateBookmarkFolder(id: folderID, title: title, iconID: iconID, colorID: colorID)
                 } else {
-                    _ = store.createBookmarkFolder(title: title, iconID: iconID, parentID: request.parentID)
+                    _ = store.createBookmarkFolder(title: title, iconID: iconID, colorID: colorID, parentID: request.parentID)
                 }
                 editorRequest = nil
             }
@@ -457,17 +461,19 @@ struct BookmarkOrganizerRow: View {
 
 struct BookmarkFolderEditor: View {
     let request: BookmarkFolderEditorRequest
-    let save: (String, String) -> Void
+    let save: (String, String, String) -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var title: String
     @State private var iconID: String
+    @State private var color: ClearframeIconColor
     @State private var search = ""
 
-    init(request: BookmarkFolderEditorRequest, save: @escaping (String, String) -> Void) {
+    init(request: BookmarkFolderEditorRequest, save: @escaping (String, String, String) -> Void) {
         self.request = request
         self.save = save
         _title = State(initialValue: request.title)
         _iconID = State(initialValue: request.iconID)
+        _color = State(initialValue: ClearframeIconColor(id: request.colorID) ?? .mint)
     }
 
     /// Matches on the icon's own name and its category, so "work" finds the
@@ -496,11 +502,12 @@ struct BookmarkFolderEditor: View {
 
             HStack(spacing: 12) {
                 ClearframeIconView(iconID: iconID, size: 24)
-                    .foregroundStyle(ClearframeTheme.accent)
+                    .foregroundStyle(Color(color))
                     .frame(width: 40, height: 40)
                     .background(ClearframeTheme.bg3, in: RoundedRectangle(cornerRadius: ClearframeTheme.radius9))
                 TextField("Folder name", text: $title)
                     .textFieldStyle(.roundedBorder)
+                colorSwatches
             }
 
             Divider()
@@ -514,7 +521,7 @@ struct BookmarkFolderEditor: View {
                 Spacer()
                 Button("Cancel") { dismiss() }
                 Button("Save") {
-                    save(title, iconID)
+                    save(title, iconID, color.rawValue)
                     dismiss()
                 }
                 .buttonStyle(.borderedProminent)
@@ -523,6 +530,28 @@ struct BookmarkFolderEditor: View {
         }
         .padding(22)
         .frame(width: 470)
+    }
+
+    /// Four tints, not a colour well: the set holds together because it is
+    /// drawn in one of these.
+    private var colorSwatches: some View {
+        HStack(spacing: 6) {
+            ForEach(ClearframeIconColor.allCases, id: \.self) { swatch in
+                Button { color = swatch } label: {
+                    Circle()
+                        .fill(Color(swatch))
+                        .frame(width: 18, height: 18)
+                        .overlay {
+                            Circle()
+                                .stroke(ClearframeTheme.textPrimary, lineWidth: swatch == color ? 2 : 0)
+                        }
+                }
+                .buttonStyle(.plain)
+                .help(swatch.title)
+                .accessibilityLabel("\(swatch.title) icon colour")
+                .accessibilityAddTraits(swatch == color ? [.isButton, .isSelected] : .isButton)
+            }
+        }
     }
 
     private var iconGrid: some View {
@@ -563,10 +592,10 @@ struct BookmarkFolderEditor: View {
         let isSelected = icon.id == iconID
         return Button { iconID = icon.id } label: {
             ClearframeIconView(iconID: icon.id, size: 22)
-                .foregroundStyle(isSelected ? ClearframeTheme.onAccent : ClearframeTheme.textSecondary)
+                .foregroundStyle(isSelected ? ClearframeTheme.bg0 : Color(color))
                 .frame(width: 38, height: 38)
                 .background(
-                    isSelected ? ClearframeTheme.accent : ClearframeTheme.bg3,
+                    isSelected ? Color(color) : ClearframeTheme.bg3,
                     in: RoundedRectangle(cornerRadius: ClearframeTheme.radius6)
                 )
         }

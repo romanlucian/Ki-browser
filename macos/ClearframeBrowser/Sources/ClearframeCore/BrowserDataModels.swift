@@ -240,6 +240,9 @@ public struct BookmarkFolderRecord: Codable, Equatable, Identifiable, Sendable {
     /// The chosen Clearframe icon, or `nil` for a folder that predates the set
     /// or has never been edited since.
     public var iconID: String?
+    /// Which of the set's four tints this folder's icon draws in, or `nil` for
+    /// a folder that has never chosen one and takes the default.
+    public var colorID: String?
     public var parentID: UUID?
     public let createdAt: Date
 
@@ -248,6 +251,7 @@ public struct BookmarkFolderRecord: Codable, Equatable, Identifiable, Sendable {
         title: String,
         emoji: String = "📁",
         iconID: String? = nil,
+        colorID: String? = nil,
         parentID: UUID? = nil,
         createdAt: Date = Date()
     ) {
@@ -256,12 +260,13 @@ public struct BookmarkFolderRecord: Codable, Equatable, Identifiable, Sendable {
         let trimmedEmoji = emoji.trimmingCharacters(in: .whitespacesAndNewlines)
         self.emoji = trimmedEmoji.isEmpty ? "📁" : String(trimmedEmoji.prefix(1))
         self.iconID = Self.normalizedIconID(iconID)
+        self.colorID = ClearframeIconColor.normalizedID(colorID)
         self.parentID = parentID
         self.createdAt = createdAt
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, title, emoji, iconID, parentID, createdAt
+        case id, title, emoji, iconID, colorID, parentID, createdAt
     }
 
     /// Written the same way the tab-group migration is: a folder saved before
@@ -273,6 +278,7 @@ public struct BookmarkFolderRecord: Codable, Equatable, Identifiable, Sendable {
         title = try container.decode(String.self, forKey: .title)
         emoji = try container.decodeIfPresent(String.self, forKey: .emoji) ?? "📁"
         iconID = Self.normalizedIconID(try container.decodeIfPresent(String.self, forKey: .iconID))
+        colorID = ClearframeIconColor.normalizedID(try container.decodeIfPresent(String.self, forKey: .colorID))
         parentID = try container.decodeIfPresent(UUID.self, forKey: .parentID)
         createdAt = try container.decode(Date.self, forKey: .createdAt)
     }
@@ -282,6 +288,11 @@ public struct BookmarkFolderRecord: Codable, Equatable, Identifiable, Sendable {
     /// surface asks this rather than deciding for itself.
     public var resolvedIconID: String {
         ClearframeIconCatalog.resolvedIconID(iconID: iconID, legacyEmoji: emoji)
+    }
+
+    /// The tint this folder's icon draws in, falling back to the set's default.
+    public var resolvedColor: ClearframeIconColor {
+        ClearframeIconColor(id: colorID) ?? .mint
     }
 
     /// One indivisible label prevents compact native menus from collapsing the
@@ -329,11 +340,21 @@ public struct BookmarkCollection: Codable, Equatable, Sendable {
         bookmarks.contains { $0.folderID == folderID } || folders.contains { $0.parentID == folderID }
     }
 
-    public mutating func createFolder(title: String, iconID: String, parentID: UUID?) -> BookmarkFolderRecord? {
+    public mutating func createFolder(
+        title: String,
+        iconID: String,
+        colorID: String? = nil,
+        parentID: UUID?
+    ) -> BookmarkFolderRecord? {
         let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedTitle.isEmpty else { return nil }
         let safeParent = parentID.flatMap(folder(id:))?.id
-        let folder = BookmarkFolderRecord(title: trimmedTitle, iconID: iconID, parentID: safeParent)
+        let folder = BookmarkFolderRecord(
+            title: trimmedTitle,
+            iconID: iconID,
+            colorID: colorID,
+            parentID: safeParent
+        )
         folders.append(folder)
         return folder
     }
@@ -341,13 +362,14 @@ public struct BookmarkCollection: Codable, Equatable, Sendable {
     /// Renaming and re-icon-ing one folder. The folder's legacy `emoji` is left
     /// exactly as it was saved: choosing an icon adds a choice, it does not
     /// erase what came before.
-    public mutating func updateFolder(id: UUID, title: String, iconID: String) {
+    public mutating func updateFolder(id: UUID, title: String, iconID: String, colorID: String? = nil) {
         guard let index = folders.firstIndex(where: { $0.id == id }) else { return }
         let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedTitle.isEmpty else { return }
         folders[index].title = trimmedTitle
         let trimmedIconID = iconID.trimmingCharacters(in: .whitespacesAndNewlines)
         if !trimmedIconID.isEmpty { folders[index].iconID = trimmedIconID }
+        if let normalized = ClearframeIconColor.normalizedID(colorID) { folders[index].colorID = normalized }
     }
 
     /// Deletes only the folder record. Direct bookmarks and subfolders move to its

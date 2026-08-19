@@ -338,6 +338,60 @@ final class ClearframeIconTests: XCTestCase {
         XCTAssertEqual(VectorPathParser.parse(markup)?.count, 2)
     }
 
+    // MARK: - Colour
+
+    func testAFolderDrawsInMintUntilItChoosesAnotherTint() {
+        let untouched = BookmarkFolderRecord(title: "Reading", iconID: "book", parentID: nil)
+
+        XCTAssertNil(untouched.colorID, "a folder that never chose a tint stores nothing")
+        XCTAssertEqual(untouched.resolvedColor, .mint, "and draws in the set's own accent")
+    }
+
+    func testChoosingATintKeepsItAndRejectsOneTheSetDoesNotHave() {
+        let amber = BookmarkFolderRecord(title: "Invoices", iconID: "receipt", colorID: "amber", parentID: nil)
+        let nonsense = BookmarkFolderRecord(title: "Odd", iconID: "folder", colorID: "chartreuse", parentID: nil)
+
+        XCTAssertEqual(amber.resolvedColor, .amber)
+        XCTAssertNil(nonsense.colorID, "an unknown tint is refused rather than stored")
+        XCTAssertEqual(nonsense.resolvedColor, .mint)
+    }
+
+    func testTheFourTintsAreTheOnesTheArtworkWasDrawnAgainst() {
+        XCTAssertEqual(ClearframeIconColor.allCases.map(\.rawValue), ["mint", "grey", "amber", "blue"])
+        XCTAssertEqual(ClearframeIconColor.mint.hex, "66DB7D")
+        XCTAssertEqual(ClearframeIconColor.grey.hex, "8A8A94")
+        XCTAssertEqual(ClearframeIconColor.amber.hex, "E9B04C")
+        XCTAssertEqual(ClearframeIconColor.blue.hex, "5CA0F2")
+
+        let mint = ClearframeIconColor.mint.components
+        XCTAssertEqual(mint.red, 102.0 / 255, accuracy: 0.001)
+        XCTAssertEqual(mint.green, 219.0 / 255, accuracy: 0.001)
+        XCTAssertEqual(mint.blue, 125.0 / 255, accuracy: 0.001)
+    }
+
+    func testAFolderSavedBeforeTintsExistedStillDecodes() throws {
+        let legacy = Data("""
+        {"id":"\(UUID().uuidString)","title":"Old","emoji":"\u{1F3A8}","createdAt":0}
+        """.utf8)
+
+        let folder = try JSONDecoder().decode(BookmarkFolderRecord.self, from: legacy)
+
+        XCTAssertNil(folder.colorID)
+        XCTAssertEqual(folder.resolvedColor, .mint)
+        XCTAssertEqual(folder.resolvedIconID, "palette", "and still resolves its old emoji")
+    }
+
+    func testEditingAFolderCanChangeItsTintWithoutTouchingItsIcon() {
+        var collection = BookmarkCollection()
+        let folder = collection.createFolder(title: "Work", iconID: "briefcase", parentID: nil)
+        let id = try! XCTUnwrap(folder).id
+
+        collection.updateFolder(id: id, title: "Work", iconID: "briefcase", colorID: "blue")
+
+        XCTAssertEqual(collection.folder(id: id)?.resolvedColor, .blue)
+        XCTAssertEqual(collection.folder(id: id)?.resolvedIconID, "briefcase")
+    }
+
     // MARK: - Refusals
 
     func testMalformedMarkupIsRefusedRatherThanGuessedAt() {

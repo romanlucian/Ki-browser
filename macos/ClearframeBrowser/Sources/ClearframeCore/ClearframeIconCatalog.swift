@@ -228,3 +228,57 @@ public enum ClearframeIconCatalog {
         "\u{1F9FE}": "receipt"       // 🧾
     ]
 }
+
+/// The four tints the icon set was drawn against, in the artwork's own order.
+///
+/// Deliberately four, not a colour picker: the set is one stroke weight and
+/// one angle, and a folder that can be any colour stops reading as part of it.
+/// Mint is the default because it is the set's own accent.
+public enum ClearframeIconColor: String, CaseIterable, Sendable {
+    case mint
+    case grey
+    case amber
+    case blue
+
+    /// Straight from the design's palette row.
+    public var hex: String {
+        switch self {
+        case .mint: return "66DB7D"
+        case .grey: return "8A8A94"
+        case .amber: return "E9B04C"
+        case .blue: return "5CA0F2"
+        }
+    }
+
+    /// Red, green, and blue in 0...1, so the UI layer can build its own colour
+    /// value without this file importing one.
+    public var components: (red: Double, green: Double, blue: Double) {
+        let value = UInt32(hex, radix: 16) ?? 0
+        return (
+            Double((value >> 16) & 0xFF) / 255,
+            Double((value >> 8) & 0xFF) / 255,
+            Double(value & 0xFF) / 255
+        )
+    }
+
+    public var title: String {
+        switch self {
+        case .mint: return "Mint"
+        case .grey: return "Grey"
+        case .amber: return "Amber"
+        case .blue: return "Blue"
+        }
+    }
+
+    public init?(id: String?) {
+        guard let id, let color = ClearframeIconColor(rawValue: id.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()) else {
+            return nil
+        }
+        self = color
+    }
+
+    /// Keeps an unknown or blank stored value from shadowing the default.
+    public static func normalizedID(_ value: String?) -> String? {
+        ClearframeIconColor(id: value)?.rawValue
+    }
+}

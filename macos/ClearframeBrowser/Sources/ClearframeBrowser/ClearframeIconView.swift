@@ -101,12 +101,30 @@ enum ClearframeIconGeometry {
     }
 }
 
-/// A folder's icon at a given size, resolving the legacy-emoji fallback.
+/// A folder's icon at a given size, in the folder's own tint, resolving the
+/// legacy-emoji fallback. Pass `tinted: false` where the surrounding view
+/// already owns the colour — a selected row, say — so the icon can go quiet
+/// with its neighbours instead of shouting through them.
 struct BookmarkFolderIcon: View {
     let folder: BookmarkFolderRecord
     var size: CGFloat = 13
+    var tinted: Bool = true
 
     var body: some View {
-        ClearframeIconView(iconID: ClearframeIconGeometry.iconID(for: folder), size: size)
+        let icon = ClearframeIconView(iconID: ClearframeIconGeometry.iconID(for: folder), size: size)
+        if tinted {
+            icon.foregroundStyle(Color(folder.resolvedColor))
+        } else {
+            icon
+        }
+    }
+}
+
+extension Color {
+    /// The set's four tints, built from the palette the artwork was drawn
+    /// against rather than re-picked here.
+    init(_ iconColor: ClearframeIconColor) {
+        let rgb = iconColor.components
+        self.init(red: rgb.red, green: rgb.green, blue: rgb.blue)
     }
 }

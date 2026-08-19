@@ -356,10 +356,11 @@ private struct BrowserToolbar: View {
             presentFolderEditor(parentID: workspace.requestedBookmarkFolderParentID)
         }
         .sheet(item: $folderEditorRequest) { request in
-            BookmarkFolderEditor(request: request) { title, iconID in
+            BookmarkFolderEditor(request: request) { title, iconID, colorID in
                 _ = dataStore.createBookmarkFolder(
                     title: title,
                     iconID: iconID,
+                    colorID: colorID,
                     parentID: request.parentID
                 )
                 folderEditorRequest = nil
@@ -508,7 +509,8 @@ private struct BrowserToolbar: View {
             folderID: nil,
             parentID: parentID,
             title: "",
-            iconID: ClearframeIconCatalog.defaultIconID
+            iconID: ClearframeIconCatalog.defaultIconID,
+            colorID: nil
         )
     }
 

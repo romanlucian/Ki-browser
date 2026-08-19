@@ -43,11 +43,11 @@ struct BookmarksHomePage: View {
         }
         .background(ClearframeTheme.bg0)
         .sheet(item: $editorRequest) { request in
-            BookmarkFolderEditor(request: request) { title, iconID in
+            BookmarkFolderEditor(request: request) { title, iconID, colorID in
                 if let folderID = request.folderID {
-                    store.updateBookmarkFolder(id: folderID, title: title, iconID: iconID)
+                    store.updateBookmarkFolder(id: folderID, title: title, iconID: iconID, colorID: colorID)
                 } else {
-                    _ = store.createBookmarkFolder(title: title, iconID: iconID, parentID: request.parentID)
+                    _ = store.createBookmarkFolder(title: title, iconID: iconID, colorID: colorID, parentID: request.parentID)
                 }
                 editorRequest = nil
             }
@@ -273,7 +273,8 @@ struct BookmarksHomePage: View {
                                 folderID: nil,
                                 parentID: folder.id,
                                 title: "",
-                                iconID: ClearframeIconCatalog.defaultIconID
+                                iconID: ClearframeIconCatalog.defaultIconID,
+                            colorID: nil,
                             )
                         },
                         rename: { presentRename(folder) },
@@ -287,7 +288,8 @@ struct BookmarksHomePage: View {
                             folderID: nil,
                             parentID: currentFolderID,
                             title: "",
-                            iconID: ClearframeIconCatalog.defaultIconID
+                            iconID: ClearframeIconCatalog.defaultIconID,
+                            colorID: nil,
                         )
                     }
                 }
@@ -454,7 +456,8 @@ struct BookmarksHomePage: View {
             folderID: folder.id,
             parentID: folder.parentID,
             title: folder.title,
-            iconID: ClearframeIconGeometry.iconID(for: folder)
+            iconID: ClearframeIconGeometry.iconID(for: folder),
+            colorID: folder.colorID
         )
     }
 

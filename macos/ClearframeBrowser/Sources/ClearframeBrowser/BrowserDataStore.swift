@@ -186,16 +186,16 @@ final class BrowserDataStore: ObservableObject {
     }
 
     @discardableResult
-    func createBookmarkFolder(title: String, iconID: String, parentID: UUID?) -> BookmarkFolderRecord? {
+    func createBookmarkFolder(title: String, iconID: String, colorID: String? = nil, parentID: UUID?) -> BookmarkFolderRecord? {
         var collection = bookmarkCollection
-        let folder = collection.createFolder(title: title, iconID: iconID, parentID: parentID)
+        let folder = collection.createFolder(title: title, iconID: iconID, colorID: colorID, parentID: parentID)
         if folder != nil { apply(collection) }
         return folder
     }
 
-    func updateBookmarkFolder(id: UUID, title: String, iconID: String) {
+    func updateBookmarkFolder(id: UUID, title: String, iconID: String, colorID: String? = nil) {
         var collection = bookmarkCollection
-        collection.updateFolder(id: id, title: title, iconID: iconID)
+        collection.updateFolder(id: id, title: title, iconID: iconID, colorID: colorID)
         apply(collection)
     }
 
