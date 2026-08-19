@@ -16,11 +16,20 @@ import SwiftUI
 /// behaviour that makes an aggressive address bar infuriating.
 struct AddressField: NSViewRepresentable {
     @Binding var text: String
+    /// What the reader actually typed, before any completion was added. The
+    /// suggestion list matches on this: someone who typed "you" is looking for
+    /// everything about YouTube, not only what lives under the address the
+    /// field happened to finish for them.
+    @Binding var typedText: String
     @Binding var isFocused: Bool
     let placeholder: String
     /// The finished address for what has been typed, or `nil` for none.
     let completion: (String) -> String?
     let onSubmit: () -> Void
+    /// Moves the highlighted row in the suggestion list by one step. The list
+    /// is SwiftUI's, but the arrow keys belong to whoever has the keyboard,
+    /// and that is this field.
+    var onMoveSelection: ((Int) -> Void)? = nil
 
     func makeNSView(context: Context) -> NSTextField {
         let field = NSTextField(string: text)
@@ -128,6 +137,7 @@ struct AddressField: NSViewRepresentable {
         func controlTextDidChange(_ notification: Notification) {
             guard let field = notification.object as? NSTextField else { return }
             let typed = field.stringValue
+            if parent.typedText != typed { parent.typedText = typed }
 
             // A deletion is honoured exactly as made. Consuming the flag here
             // rather than on the keypress keeps one deletion from suppressing
@@ -194,6 +204,12 @@ struct AddressField: NSViewRepresentable {
                     return true
                 }
                 parent.isFocused = false
+                return true
+            case #selector(NSResponder.moveDown(_:)):
+                parent.onMoveSelection?(1)
+                return true
+            case #selector(NSResponder.moveUp(_:)):
+                parent.onMoveSelection?(-1)
                 return true
             case #selector(NSResponder.moveRight(_:)),
                  #selector(NSResponder.moveToEndOfLine(_:)):

@@ -192,4 +192,98 @@ final class AddressCompletionTests: XCTestCase {
             "the same history must complete the same way whatever order it arrives in"
         )
     }
+
+    // MARK: - The suggestion list
+
+    private func titled(_ url: String, _ title: String, visits: Int = 1, bookmarked: Bool = false) -> AddressCandidate {
+        AddressCandidate(
+            url: AddressCompletion.normalized(url),
+            title: title,
+            visits: visits,
+            lastVisit: Date(timeIntervalSince1970: 1_000),
+            isBookmarked: bookmarked
+        )
+    }
+
+    func testTheBestPlaceLeadsAndASearchAlwaysFollowsIt() {
+        let candidates = [
+            titled("https://youtube.com", "YouTube", visits: 20),
+            titled("https://youtube.com/watch?v=abc", "A video - YouTube", visits: 3)
+        ]
+        let rows = AddressCompletion.suggestions(for: "you", in: candidates)
+
+        XCTAssertEqual(rows.first?.url, "youtube.com", "the front door leads")
+        XCTAssertEqual(rows[1].kind, .search, "a way to search is always the second option")
+        XCTAssertEqual(rows[1].title, "you", "the search row offers what was typed")
+        XCTAssertEqual(rows.last?.url, "youtube.com/watch?v=abc")
+    }
+
+    /// Somewhere unvisited must still be reachable: the list can never be a
+    /// dead end just because history has nothing to say.
+    func testAPrefixMatchingNothingStillOffersASearch() {
+        let rows = AddressCompletion.suggestions(for: "kjhgfd", in: [titled("https://youtube.com", "YouTube")])
+
+        XCTAssertEqual(rows.count, 1)
+        XCTAssertEqual(rows.first?.kind, .search)
+        XCTAssertEqual(rows.first?.title, "kjhgfd")
+    }
+
+    func testNothingTypedShowsNothing() {
+        XCTAssertTrue(AddressCompletion.suggestions(for: "", in: [titled("https://a.com", "A")]).isEmpty)
+        XCTAssertTrue(AddressCompletion.suggestions(for: "  ", in: [titled("https://a.com", "A")]).isEmpty)
+    }
+
+    /// Typing a word from a page's name has to find it — that is most of what
+    /// the list is for, and it is the half inline completion cannot do.
+    func testAWordOfATitleFindsThePage() {
+        let candidates = [titled("https://example.com/recipes/42", "Garlic Chilli Oil Recipe")]
+        let rows = AddressCompletion.suggestions(for: "garlic", in: candidates)
+
+        XCTAssertEqual(rows.first?.url, "example.com/recipes/42")
+        XCTAssertEqual(rows.first?.title, "Garlic Chilli Oil Recipe")
+    }
+
+    func testAnAddressMatchOutranksATitleMatchWhichOutranksAMidAddressMatch() {
+        let candidates = [
+            titled("https://elsewhere.com/news", "News about mail", visits: 50),
+            titled("https://mail.com", "Mail", visits: 1),
+            titled("https://host.com/mail-archive", "Archive", visits: 90)
+        ]
+        let rows = AddressCompletion.suggestions(for: "mail", in: candidates).filter { $0.kind != .search }
+
+        XCTAssertEqual(rows.map(\.url), ["mail.com", "elsewhere.com/news", "host.com/mail-archive"],
+                       "address prefix, then title word, then anywhere in the address")
+    }
+
+    func testTheListIsCappedSoItCannotSwallowTheWindow() {
+        let candidates = (0..<40).map { titled("https://example.com/page\($0)", "Page \($0)") }
+        let rows = AddressCompletion.suggestions(for: "example", in: candidates, limit: 6)
+
+        XCTAssertEqual(rows.count, 6)
+        XCTAssertEqual(rows.filter { $0.kind == .search }.count, 1, "exactly one search row, however many places match")
+    }
+
+    func testARowCarriesWhetherItWasBookmarked() {
+        let rows = AddressCompletion.suggestions(
+            for: "you",
+            in: [titled("https://youtube.com", "YouTube", bookmarked: true)]
+        )
+
+        XCTAssertEqual(rows.first?.kind, .place(isBookmarked: true))
+    }
+
+    func testARowWithoutATitleFallsBackToItsAddress() {
+        let rows = AddressCompletion.suggestions(for: "you", in: [titled("https://youtube.com", "")])
+
+        XCTAssertEqual(rows.first?.title, "youtube.com", "a row must never render blank")
+    }
+
+    func testABookmarksOwnNameWinsOverWhateverThePageCalledItself() {
+        let candidates = AddressCompletion.candidates(
+            history: [HistoryRecord(title: "YouTube - random video page", url: "https://youtube.com")],
+            bookmarks: [BookmarkRecord(title: "Videos", url: "https://youtube.com")]
+        )
+
+        XCTAssertEqual(candidates.first?.title, "Videos")
+    }
 }

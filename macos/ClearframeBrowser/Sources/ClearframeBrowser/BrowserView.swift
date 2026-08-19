@@ -80,6 +80,9 @@ private struct BrowserTabContent: View {
                 showsLibrary: $showsLibrary,
                 goHome: { tab.goHome() }
             )
+            // The suggestion list hangs below the toolbar's own height; without
+            // this it would be painted under the web view.
+            .zIndex(1)
             if tab.isPrivate {
                 HStack(spacing: 7) {
                     Image(systemName: "eye.slash.fill")
@@ -189,6 +192,9 @@ private struct BrowserTabContent: View {
                 retry: { session.retry() },
                 goHome: { tab.goHome() }
             )
+            // The suggestion list hangs below the toolbar's own height; without
+            // this it would be painted under the web view.
+            .zIndex(1)
         // Only when the tab has nothing else to show — a new tab going
         // somewhere for the first time, or a retry after an error. Following a
         // link from a page leaves that page up, exactly as every other browser
@@ -227,6 +233,11 @@ private struct BrowserToolbar: View {
     let goHome: () -> Void
     @StateObject private var voiceInput = VoiceInputController()
     @State private var folderEditorRequest: BookmarkFolderEditorRequest?
+    /// Which suggestion row is highlighted. Row zero is the best answer, so
+    /// Return without touching the arrows does what the field already shows.
+    @State private var suggestionSelection = 0
+    /// What is in the field before completion finishes it.
+    @State private var addressTypedText = ""
     @Environment(\.scenePhase) private var scenePhase
 
     private var isBookmarked: Bool {
@@ -317,6 +328,7 @@ private struct BrowserToolbar: View {
             .padding(.horizontal, 10)
             .frame(height: 44)
             .background(ClearframeTheme.bg1)
+            .zIndex(1)
 
             if dataStore.showsBookmarksBar {
                 // No divider: the bar continues the toolbar's own bg1 plane
@@ -438,10 +450,12 @@ private struct BrowserToolbar: View {
                 ZStack(alignment: .leading) {
                     AddressField(
                         text: $addressText,
+                        typedText: $addressTypedText,
                         isFocused: $addressFocused,
                         placeholder: "Search \(searchSettings.selectedEngine.displayName) or enter a website",
                         completion: addressCompletion,
-                        onSubmit: submitAddress
+                        onSubmit: submitAddress,
+                        onMoveSelection: moveSuggestionSelection
                     )
                     .frame(maxWidth: .infinity)
                     // D11: the field stays mounted and keeps receiving
@@ -497,6 +511,59 @@ private struct BrowserToolbar: View {
             RoundedRectangle(cornerRadius: ClearframeTheme.radius9)
                 .stroke(addressFocused ? ClearframeTheme.accent : ClearframeTheme.hairline2, lineWidth: 1)
         )
+        // Hung off the pill so it lines up with the field it belongs to, and
+        // drawn outside the toolbar's own height so it floats over the page.
+        .overlay(alignment: .topLeading) {
+            if showsSuggestions {
+                AddressSuggestionsView(
+                    suggestions: addressSuggestions,
+                    selection: suggestionSelection,
+                    typed: addressText,
+                    engineName: searchSettings.selectedEngine.displayName,
+                    open: open(_:),
+                    hover: { suggestionSelection = $0 }
+                )
+                .offset(y: 36)
+                .transition(.opacity)
+            }
+        }
+        .onChange(of: addressText) { _, _ in suggestionSelection = 0 }
+        .onChange(of: addressFocused) { _, focused in
+            if !focused {
+                suggestionSelection = 0
+                addressTypedText = ""
+            }
+        }
+    }
+
+    private var showsSuggestions: Bool {
+        addressFocused && !addressSuggestions.isEmpty
+    }
+
+    /// The rows for what is in the field, from this profile alone.
+    private var addressSuggestions: [AddressSuggestion] {
+        guard !session.isPrivate else { return [] }
+        let query = addressTypedText.isEmpty ? addressText : addressTypedText
+        return AddressCompletion.suggestions(for: query, in: addressCandidates)
+    }
+
+    /// Arrow keys wrap, so holding one never dead-ends at an edge.
+    private func moveSuggestionSelection(_ step: Int) {
+        let count = addressSuggestions.count
+        guard count > 0 else { return }
+        suggestionSelection = ((suggestionSelection + step) % count + count) % count
+    }
+
+    /// Opens one row. A search row hands the typed text to the engine through
+    /// the same resolver the field uses, so there is one path to a search.
+    private func open(_ suggestion: AddressSuggestion) {
+        switch suggestion.kind {
+        case .search:
+            addressText = suggestion.title
+        case .place:
+            addressText = suggestion.url
+        }
+        submitAddress()
     }
 
     /// The pill's internal seams: shield | engine | address.
@@ -557,6 +624,15 @@ private struct BrowserToolbar: View {
     }
 
     private func submitAddress() {
+        // Row zero is the field's own text, so only a deliberate move down the
+        // list changes where Return goes.
+        if suggestionSelection > 0, suggestionSelection < addressSuggestions.count {
+            let chosen = addressSuggestions[suggestionSelection]
+            suggestionSelection = 0
+            open(chosen)
+            return
+        }
+        suggestionSelection = 0
         let destination = addressText
         voiceInput.stop()
         voiceInput.dismissStatus()
