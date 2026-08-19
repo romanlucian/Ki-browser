@@ -730,6 +730,29 @@ struct BrowserE2ESmoke {
             freshTab.teardown()
             print("PASS back/forward: a tab's start surface stays out of the back list, so Back never lands on it")
 
+            // Following a link must not cover the page being read. A tab with a
+            // page on screen keeps it while the next one loads — the progress
+            // bar carries that news — and only a tab with nothing to show gets
+            // the opening card.
+            let readingTab = BrowserSession(
+                downloadCenter: DownloadCenter(),
+                searchSettings: SearchSettingsStore(defaults: defaults)
+            )
+            try require(!readingTab.hasRenderedPage, "a new tab claimed to have a page on screen")
+            try await loadDeterministicPage(in: readingTab, localURL: fixtureURL)
+            try require(readingTab.hasRenderedPage, "a loaded page was not treated as being on screen")
+            readingTab.navigate(fixtureURL.deletingLastPathComponent().appendingPathComponent("second.html").absoluteString)
+            try require(
+                readingTab.hasRenderedPage,
+                "following a link dropped the page still on screen, so the opening card would cover it"
+            )
+            let arrived = await waitUntil { readingTab.loadState == .content && !readingTab.isLoading }
+            try require(arrived, "the second page did not finish loading")
+            readingTab.showStartPage()
+            try require(!readingTab.hasRenderedPage, "the start surface still claimed a page was on screen")
+            readingTab.teardown()
+            print("PASS link follow: a page stays on screen while the next one loads")
+
             // A mailto: link is not a web link, but refusing it must not take
             // away the page the reader is reading. The hand-off is injected so
             // this check never launches a real mail client.

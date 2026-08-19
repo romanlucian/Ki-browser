@@ -42,6 +42,11 @@ final class BrowserSession: NSObject, ObservableObject {
     @Published private(set) var navigationVersion = 0
     @Published private(set) var loadState: BrowserLoadState = .startPage
     @Published private(set) var hasCommittedNavigation = false
+    /// Whether the web view still holds a page from an earlier navigation.
+    /// While it does, following a link must leave it on screen: covering it
+    /// with a progress card is something no other browser does, and it hides
+    /// the page the reader was still reading.
+    @Published private(set) var hasRenderedPage = false
     /// Mirrors `webView.pageZoom` so the chrome and tests can read the current
     /// step. Per tab, and deliberately not stored: a site's zoom is not
     /// remembered between tabs or between launches.
@@ -258,6 +263,7 @@ final class BrowserSession: NSObject, ObservableObject {
 
     func showStartPage() {
         isShowingStartPage = true
+        hasRenderedPage = false
         lastRequestedURL = nil
         navigationDisplayName = nil
         hasCommittedNavigation = false
@@ -339,6 +345,7 @@ final class BrowserSession: NSObject, ObservableObject {
     /// back list grow instead of shrink.
     private func adoptStartPageEntry() {
         isShowingStartPage = true
+        hasRenderedPage = false
         lastRequestedURL = nil
         lastCommittedWebURL = nil
         navigationDisplayName = nil
@@ -802,6 +809,9 @@ extension BrowserSession: WKNavigationDelegate {
             adoptStartPageEntry()
         }
         hasCommittedNavigation = true
+        if let url = webView.url, WebURLPolicy.validatedURL(url) != nil {
+            hasRenderedPage = true
+        }
         if isShowingStartPage { loadState = .startPage }
         if let url = webView.url,
            let scheme = url.scheme?.lowercased(),

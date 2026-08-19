@@ -189,7 +189,11 @@ private struct BrowserTabContent: View {
                 retry: { session.retry() },
                 goHome: { tab.goHome() }
             )
-        case .loading where !session.hasCommittedNavigation:
+        // Only when the tab has nothing else to show — a new tab going
+        // somewhere for the first time, or a retry after an error. Following a
+        // link from a page leaves that page up, exactly as every other browser
+        // does; the progress bar is what says work is happening.
+        case .loading where !session.hasCommittedNavigation && !session.hasRenderedPage:
             VStack(spacing: 13) {
                 ProgressView().controlSize(.large)
                 Text(session.loadingTitle)
