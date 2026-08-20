@@ -127,6 +127,16 @@ private struct BrowserTabContent: View {
             }
         }
         .animation(.easeInOut(duration: 0.18), value: showsAssistant)
+        // A restored tab starts loading before this view exists, so the change
+        // that would have filled the address field has already happened by the
+        // time anything is watching for it. Reopening the browser then showed a
+        // fully loaded page above an empty address bar, which reads as the tab
+        // not having restored at all.
+        .onAppear {
+            if !addressFocused, addressText != session.currentURLString {
+                addressText = session.currentURLString
+            }
+        }
         .onChange(of: session.currentURLString) { _, newValue in
             if !addressFocused { addressText = newValue }
         }
