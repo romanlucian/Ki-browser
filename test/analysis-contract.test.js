@@ -68,3 +68,26 @@ test("shared contract: Plain English and reading time", () => {
     assert.equal(Math.max(1, Math.ceil(testCase.wordCount / 220)), testCase.expectedMinutes);
   }
 });
+
+test("shared contract: key points and claims are verbatim page text", () => {
+  for (const testCase of contract.evidenceCases) {
+    const page = extensionPage(testCase.page);
+    const result = summarizeLocally(page);
+    assert.ok(
+      result.keyPoints.length > 0 || result.claimsToCheck.length > 0,
+      `${testCase.id}: produced no key points or claims to verify`
+    );
+    for (const point of result.keyPoints) {
+      assert.ok(
+        testCase.page.text.includes(point),
+        `${testCase.id}: key point is not verbatim page text — ${point}`
+      );
+    }
+    for (const claim of result.claimsToCheck) {
+      assert.ok(
+        testCase.page.text.includes(claim),
+        `${testCase.id}: claim is not verbatim page text — ${claim}`
+      );
+    }
+  }
+});

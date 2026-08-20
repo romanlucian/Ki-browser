@@ -1151,6 +1151,30 @@ final class ClearframeCoreTests: XCTestCase {
         }
     }
 
+    func testLocalAnalysisContractKeyPointsAndClaimsAreVerbatimPageText() throws {
+        let contract = try localAnalysisContract()
+        for testCase in contract.evidenceCases {
+            let page = testCase.page
+            let content = LocalAnalysisEngine.summarize(page: page)
+            XCTAssertFalse(
+                content.keyPoints.isEmpty && content.claimsToCheck.isEmpty,
+                "\(testCase.id): produced no key points or claims to verify"
+            )
+            for point in content.keyPoints {
+                XCTAssertTrue(
+                    page.text.contains(point),
+                    "\(testCase.id): key point is not verbatim page text — \(point)"
+                )
+            }
+            for claim in content.claimsToCheck {
+                XCTAssertTrue(
+                    page.text.contains(claim),
+                    "\(testCase.id): claim is not verbatim page text — \(claim)"
+                )
+            }
+        }
+    }
+
     private func localAnalysisContract() throws -> LocalAnalysisContract {
         let url = try XCTUnwrap(
             Bundle.module.url(forResource: "local-analysis-contract", withExtension: "json")
@@ -1166,6 +1190,12 @@ private struct LocalAnalysisContract: Decodable {
     let riskCases: [RiskContractCase]
     let plainEnglishCases: [PlainEnglishContractCase]
     let readingTimeCases: [ReadingTimeContractCase]
+    let evidenceCases: [EvidenceContractCase]
+}
+
+private struct EvidenceContractCase: Decodable {
+    let id: String
+    let page: PageSnapshot
 }
 
 private struct TokenContractCase: Decodable {

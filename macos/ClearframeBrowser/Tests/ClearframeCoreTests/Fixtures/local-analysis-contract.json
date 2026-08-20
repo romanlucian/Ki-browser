@@ -264,5 +264,63 @@
     { "wordCount": 1, "expectedMinutes": 1 },
     { "wordCount": 220, "expectedMinutes": 1 },
     { "wordCount": 221, "expectedMinutes": 2 }
+  ],
+  "evidenceCases": [
+    {
+      "id": "headline-listing-has-no-terminal-punctuation",
+      "page": {
+        "title": "Daily news",
+        "url": "https://news.example/",
+        "hostname": "news.example",
+        "scheme": "https",
+        "language": "en",
+        "text": "Trump threatens Iran trade partners as strikes make way for economic pressure\nFamily of killed aid worker say she deserved more after investigation rejected\nVerstappen signs new Red Bull contract to stay in Formula One until 2030\nMagicians and margarine: ten of the funniest jokes from the Edinburgh fringe\nPremier League preview: Newcastle braced for a transitional season this year\nInstant classics, odd inspirations and barcodes: the best and worst kits seen\nSupreme Court rejects Verizon bid for a refund of its large regulatory fine\nVaccination rates fall again as exemptions continue to rise, new data shows\nFlight attendants raise the alarm that a large firm is buying location data\nAgainst all odds, a rocket company finally tugs its booster back into port\nPixel handset series review: is the magic finally starting to fade away now\nRegulator decides one gigabit per second is too fast for the new standard",
+        "wordCount": 160,
+        "hasPasswordField": false,
+        "formActions": []
+      }
+    },
+    {
+      "id": "documentation-block-ending-in-colon",
+      "page": {
+        "title": "Tutorial",
+        "url": "https://docs.example/tutorial",
+        "hostname": "docs.example",
+        "scheme": "https",
+        "language": "en",
+        "text": "Strings can be enclosed in single quotes or double quotes with the same result:\nIn the interactive interpreter, the output string is enclosed in quotes and special characters are escaped with backslashes.\nThe print function produces a more readable output, by omitting the enclosing quotes and by printing escaped and special characters.\nIf you do not want characters prefaced by a backslash to be interpreted as special characters, you can use raw strings by adding an r before the first quote.\nString literals can span multiple lines, and one way is using triple quotes so that line breaks are included automatically.",
+        "wordCount": 96,
+        "hasPasswordField": false,
+        "formActions": []
+      }
+    },
+    {
+      "id": "decimal-numbers-are-not-sentence-boundaries",
+      "page": {
+        "title": "Laptop",
+        "url": "https://shop.example/laptop",
+        "hostname": "shop.example",
+        "scheme": "https",
+        "language": "en",
+        "text": "The notebook is remarkably light at just 2.7 pounds and less than half an inch thin, according to the published specification sheet.\nBattery life is rated at 18.5 hours of video playback, which the manufacturer measured under a fixed brightness setting.\nThe display measures 13.6 inches diagonally and reaches 500 nits of sustained brightness in ordinary indoor conditions.\nStorage starts at 256 GB and the review unit shipped with 16 GB of unified memory installed at the factory.",
+        "wordCount": 88,
+        "hasPasswordField": false,
+        "formActions": []
+      }
+    },
+    {
+      "id": "devanagari-danda-terminates-sentences",
+      "page": {
+        "title": "भारत",
+        "url": "https://hi.example/bharat",
+        "hostname": "hi.example",
+        "scheme": "https",
+        "language": "hi",
+        "text": "भारत दक्षिण एशिया में स्थित एक विशाल देश है जिसकी जनसंख्या विश्व में सबसे अधिक है।\nयहाँ अनेक भाषाएँ बोली जाती हैं और प्रत्येक राज्य की अपनी सांस्कृतिक परंपरा है।\nदेश की अर्थव्यवस्था कृषि, उद्योग और सेवा क्षेत्र पर आधारित मानी जाती है।\nभारत की सीमाएँ अनेक देशों से मिलती हैं और इसके तीन ओर समुद्र स्थित है।",
+        "wordCount": 62,
+        "hasPasswordField": false,
+        "formActions": []
+      }
+    }
   ]
 }
