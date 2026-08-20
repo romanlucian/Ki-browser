@@ -89,5 +89,22 @@ test("shared contract: key points and claims are verbatim page text", () => {
         `${testCase.id}: claim is not verbatim page text — ${claim}`
       );
     }
+    // A verbatim sentence can still be cut in the wrong place: "2.7" is one number,
+    // not the end of one sentence and the start of another. Every occurrence must
+    // therefore not be followed by a digit on the page.
+    for (const sentence of [...result.keyPoints, ...result.claimsToCheck]) {
+      if (!sentence.endsWith(".")) continue;
+      let from = 0;
+      let at = testCase.page.text.indexOf(sentence, from);
+      while (at !== -1) {
+        const next = testCase.page.text[at + sentence.length];
+        assert.ok(
+          !(next && /\d/.test(next)),
+          `${testCase.id}: sentence ends inside a number — ${sentence}`
+        );
+        from = at + sentence.length;
+        at = testCase.page.text.indexOf(sentence, from);
+      }
+    }
   }
 });

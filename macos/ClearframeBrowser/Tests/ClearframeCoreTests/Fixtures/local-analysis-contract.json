@@ -8,7 +8,11 @@
         "care": 4,
         "son": 1
       },
-      "excluded": ["the", "and", "will"]
+      "excluded": [
+        "the",
+        "and",
+        "will"
+      ]
     },
     {
       "id": "french-language-filtering",
@@ -18,7 +22,12 @@
         "rapport": 1,
         "bibliothèque": 1
       },
-      "excluded": ["son", "une", "avec", "des"]
+      "excluded": [
+        "son",
+        "une",
+        "avec",
+        "des"
+      ]
     }
   ],
   "summaryCases": [
@@ -250,7 +259,9 @@
       "expected": {
         "score": 20,
         "level": "Caution",
-        "signalTitles": ["Remote-access request"]
+        "signalTitles": [
+          "Remote-access request"
+        ]
       }
     }
   ],
@@ -261,9 +272,18 @@
     }
   ],
   "readingTimeCases": [
-    { "wordCount": 1, "expectedMinutes": 1 },
-    { "wordCount": 220, "expectedMinutes": 1 },
-    { "wordCount": 221, "expectedMinutes": 2 }
+    {
+      "wordCount": 1,
+      "expectedMinutes": 1
+    },
+    {
+      "wordCount": 220,
+      "expectedMinutes": 1
+    },
+    {
+      "wordCount": 221,
+      "expectedMinutes": 2
+    }
   ],
   "evidenceCases": [
     {
@@ -288,8 +308,8 @@
         "hostname": "docs.example",
         "scheme": "https",
         "language": "en",
-        "text": "Strings can be enclosed in single quotes or double quotes with the same result:\nIn the interactive interpreter, the output string is enclosed in quotes and special characters are escaped with backslashes.\nThe print function produces a more readable output, by omitting the enclosing quotes and by printing escaped and special characters.\nIf you do not want characters prefaced by a backslash to be interpreted as special characters, you can use raw strings by adding an r before the first quote.\nString literals can span multiple lines, and one way is using triple quotes so that line breaks are included automatically.",
-        "wordCount": 96,
+        "text": "Python is an easy to learn, powerful programming language with efficient high-level data structures.\nStrings can be enclosed in single quotes or double quotes with exactly the same result:\nIn the interactive interpreter, the output string is enclosed in quotes and special characters are escaped with backslashes.\nThe print function produces a more readable output by omitting the enclosing quotes around the printed string.\nThere are two ways to avoid a backslash being read as an escape character:\nRaw strings are written by adding an r before the first quote of the string literal itself.\nString literals can span multiple lines in a single statement, and one common way is to use triple quotes.\nThe interpreter acts as a simple calculator and you can type an expression at it to see a result:\nDivision always returns a floating point number in Python 3 regardless of the operand types involved.\nThe equal sign is used to assign a value to a variable, and no result is displayed before the next prompt.",
+        "wordCount": 168,
         "hasPasswordField": false,
         "formActions": []
       }

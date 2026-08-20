@@ -1172,6 +1172,23 @@ final class ClearframeCoreTests: XCTestCase {
                     "\(testCase.id): claim is not verbatim page text — \(claim)"
                 )
             }
+            // A verbatim sentence can still be cut in the wrong place: "2.7" is one
+            // number, not the end of one sentence and the start of another. Every
+            // occurrence must therefore not be followed by a digit on the page.
+            for sentence in content.keyPoints + content.claimsToCheck {
+                guard sentence.hasSuffix(".") else { continue }
+                var searchStart = page.text.startIndex
+                while let found = page.text.range(
+                    of: sentence,
+                    range: searchStart..<page.text.endIndex
+                ) {
+                    if found.upperBound < page.text.endIndex,
+                       page.text[found.upperBound].isNumber {
+                        XCTFail("\(testCase.id): sentence ends inside a number — \(sentence)")
+                    }
+                    searchStart = found.upperBound
+                }
+            }
         }
     }
 
