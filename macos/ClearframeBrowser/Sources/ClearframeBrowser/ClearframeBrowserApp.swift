@@ -40,6 +40,10 @@ struct ClearframeBrowserApp: App {
         // in WindowChromeSupport.swift); there is no separate title bar row.
         .windowStyle(.hiddenTitleBar)
         .commands {
+            // SwiftUI's standard Window menu also binds ⌘W, so without this
+            // one keystroke has two owners. Clearframe is a single-window app;
+            // the traffic light still closes the window.
+            CommandGroup(replacing: .singleWindowList) {}
             CommandMenu("Tabs") {
                 Button("New Tab") { workspace.addTab() }
                     .keyboardShortcut("t", modifiers: [.command])
@@ -47,11 +51,23 @@ struct ClearframeBrowserApp: App {
                     .keyboardShortcut("n", modifiers: [.command, .shift])
                 Button("Close Current Tab") { workspace.closeSelectedTab() }
                     .keyboardShortcut("w", modifiers: [.command])
+                Button("Reopen Closed Tab") { workspace.reopenClosedTab() }
+                    .keyboardShortcut("t", modifiers: [.command, .shift])
+                    .disabled(!workspace.canReopenClosedTab)
+                Button("Duplicate Tab") { workspace.duplicateSelectedTab() }
                 Divider()
                 Button("Next Tab") { workspace.selectNextTab() }
                     .keyboardShortcut("]", modifiers: [.command, .shift])
                 Button("Previous Tab") { workspace.selectNextTab(direction: -1) }
                     .keyboardShortcut("[", modifiers: [.command, .shift])
+                // ⌘1-⌘8 pick that tab and ⌘9 picks the last one, matching
+                // Safari rather than counting to nine.
+                ForEach(1...9, id: \.self) { ordinal in
+                    Button(ordinal == 9 ? "Last Tab" : "Tab \(ordinal)") {
+                        workspace.selectTab(atOrdinal: ordinal)
+                    }
+                    .keyboardShortcut(KeyEquivalent(Character("\(ordinal)")), modifiers: [.command])
+                }
                 Divider()
                 // ⌃⌘P is the shortcut Chrome uses for the same action, so a
                 // switching user's fingers already know it.
