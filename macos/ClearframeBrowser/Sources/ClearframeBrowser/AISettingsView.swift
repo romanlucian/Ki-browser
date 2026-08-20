@@ -16,6 +16,8 @@ struct AISettingsView: View {
 
     var body: some View {
         Form {
+            DefaultBrowserSettingsSection()
+
             SearchEngineSettingsSection(settings: workspace.searchSettings)
 
             Section("Clearframe introduction") {
