@@ -95,7 +95,8 @@ struct TabStrip: View {
 
     private var animationSignature: String {
         let collapsedCount = workspace.tabGroups.filter(\.isCollapsed).count
-        return "\(workspace.tabs.count)-\(workspace.visibleTabs.count)-\(collapsedCount)-\(workspace.selectedTabID?.uuidString ?? "")"
+        let pinnedCount = workspace.tabs.filter(\.isPinned).count
+        return "\(workspace.tabs.count)-\(workspace.visibleTabs.count)-\(collapsedCount)-\(pinnedCount)-\(workspace.selectedTabID?.uuidString ?? "")"
     }
 
     // MARK: - Items
@@ -178,10 +179,15 @@ struct TabStrip: View {
                     addToNewGroup: { workspace.createGroup(withTabs: [tab.id]) },
                     addToGroup: { workspace.addTab(tab.id, toGroup: $0) },
                     removeFromGroup: { workspace.removeTabFromGroup(tab.id) },
+                    togglePin: { workspace.togglePin(tab.id) },
                     closeOthers: { workspace.closeOtherTabs(keeping: tab.id) }
-                )
+                ),
+                acceptDrop: { draggedID in
+                    guard let index = workspace.tabs.firstIndex(where: { $0.id == tab.id }) else { return }
+                    workspace.moveTab(draggedID, toIndex: index)
+                }
             )
-            .tabStripRole(.tab(isSelected: tab.id == workspace.selectedTabID))
+            .tabStripRole(tab.isPinned ? .pinnedTab : .tab(isSelected: tab.id == workspace.selectedTabID))
             .modifier(
                 GroupEnclosureBackground(
                     colorID: group?.colorID,
@@ -212,6 +218,7 @@ struct TabChipMenuActions {
     let addToNewGroup: () -> Void
     let addToGroup: (UUID) -> Void
     let removeFromGroup: () -> Void
+    let togglePin: () -> Void
     let closeOthers: () -> Void
 }
 
@@ -223,6 +230,10 @@ struct TabChip: View {
     let select: () -> Void
     let close: () -> Void
     let menu: TabChipMenuActions
+    /// Accepts a tab dragged onto this chip, dropping it at this chip's
+    /// current position in the strip. A thin caller of
+    /// `BrowserWorkspace.moveTab`, which owns every reorder invariant.
+    let acceptDrop: (UUID) -> Void
     @State private var isHovered = false
 
     init(
@@ -231,7 +242,8 @@ struct TabChip: View {
         groups: [TabGroupRecord],
         select: @escaping () -> Void,
         close: @escaping () -> Void,
-        menu: TabChipMenuActions
+        menu: TabChipMenuActions,
+        acceptDrop: @escaping (UUID) -> Void
     ) {
         self.tab = tab
         _session = ObservedObject(wrappedValue: tab.session)
@@ -240,6 +252,7 @@ struct TabChip: View {
         self.select = select
         self.close = close
         self.menu = menu
+        self.acceptDrop = acceptDrop
     }
 
     private var host: String {
@@ -256,13 +269,56 @@ struct TabChip: View {
 
     var body: some View {
         // The chip is told its width by the strip's layout; reading it back
-        // here is what drives progressive disclosure inside the chip.
+        // here is what drives progressive disclosure inside the chip. A
+        // pinned chip ignores that and always shows the same icon-only face.
         GeometryReader { proxy in
-            chip(density: TabChipDensity.forWidth(proxy.size.width))
-                .frame(width: proxy.size.width, height: proxy.size.height, alignment: .leading)
+            Group {
+                if tab.isPinned {
+                    pinnedChip
+                } else {
+                    chip(density: TabChipDensity.forWidth(proxy.size.width))
+                }
+            }
+            .frame(width: proxy.size.width, height: proxy.size.height, alignment: .leading)
         }
         .frame(height: TabStripMetrics.chipHeight)
         .contextMenu { menuContents }
+        // Drag to reorder: every tab is both a source and a destination, and
+        // `BrowserWorkspace.moveTab` — not this view — decides where a drop
+        // actually lands.
+        .draggable(tab.id.uuidString)
+        .dropDestination(for: String.self) { items, _ in
+            guard let raw = items.first, let draggedID = UUID(uuidString: raw) else { return false }
+            acceptDrop(draggedID)
+            return true
+        }
+    }
+
+    /// A pinned chip: the site icon, centered, at the fixed width
+    /// `TabStripLayout` gives every pinned tab — no title, no close button.
+    /// Its tooltip is the only place the title still shows.
+    private var pinnedChip: some View {
+        Button(action: select) {
+            leadingMark
+                .frame(maxWidth: .infinity, alignment: .center)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .frame(height: TabStripMetrics.chipHeight)
+        .background(
+            chipFill,
+            in: UnevenRoundedRectangle(topLeadingRadius: cornerRadius, topTrailingRadius: cornerRadius)
+        )
+        .overlay {
+            if isSelected {
+                TabChipTopBorder(cornerRadius: cornerRadius)
+                    .stroke(ClearframeTheme.hairline2, lineWidth: 1)
+            }
+        }
+        .onHover { isHovered = $0 }
+        .help(helpText)
+        .accessibilityLabel(tab.displayTitle)
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
 
     private func chip(density: TabChipDensity) -> some View {
@@ -368,17 +424,23 @@ struct TabChip: View {
         Button("New tab to the right", action: menu.newTabToRight)
         Button("Duplicate tab", action: menu.duplicate)
         Divider()
-        Button("Add tab to new group", action: menu.addToNewGroup)
-        let otherGroups = groups.filter { $0.id != tab.groupID }
-        if !otherGroups.isEmpty {
-            Menu("Add tab to group") {
-                ForEach(otherGroups) { group in
-                    Button(group.displayName) { menu.addToGroup(group.id) }
+        Button(tab.isPinned ? "Unpin tab" : "Pin tab", action: menu.togglePin)
+        // Pinning and grouping are two different ideas, and a pinned tab
+        // cannot belong to a group — so none of the group actions apply.
+        if !tab.isPinned {
+            Divider()
+            Button("Add tab to new group", action: menu.addToNewGroup)
+            let otherGroups = groups.filter { $0.id != tab.groupID }
+            if !otherGroups.isEmpty {
+                Menu("Add tab to group") {
+                    ForEach(otherGroups) { group in
+                        Button(group.displayName) { menu.addToGroup(group.id) }
+                    }
                 }
             }
-        }
-        if tab.groupID != nil {
-            Button("Remove tab from group", action: menu.removeFromGroup)
+            if tab.groupID != nil {
+                Button("Remove tab from group", action: menu.removeFromGroup)
+            }
         }
         Divider()
         Button("Close tab", action: close)

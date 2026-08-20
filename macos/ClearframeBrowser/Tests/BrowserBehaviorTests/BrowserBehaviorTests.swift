@@ -1700,6 +1700,203 @@ final class BrowserBehaviorTests: XCTestCase {
         XCTAssertTrue(reopened.showsDeveloperFeatures)
     }
 
+    // MARK: - Pinned tabs and reordering
+
+    private func pinnedLayout(of workspace: BrowserWorkspace) -> String {
+        workspace.tabs.map { $0.isPinned ? "P" : "u" }.joined()
+    }
+
+    func testPinningMovesATabAheadOfEveryUnpinnedTab() throws {
+        let workspace = try makeSurfaceTestWorkspace()
+        for index in 0..<3 { workspace.addTab(url: URL(string: "https://example.com/\(index)")) }
+        let last = try XCTUnwrap(workspace.tabs.last)
+
+        workspace.pinTab(last.id)
+
+        XCTAssertTrue(last.isPinned)
+        XCTAssertEqual(workspace.tabs.first?.id, last.id, "a pinned tab moves to the front")
+        XCTAssertEqual(pinnedLayout(of: workspace), "Puuu")
+    }
+
+    func testUnpinningReturnsTheTabAfterTheOnesStillPinned() throws {
+        let workspace = try makeSurfaceTestWorkspace()
+        for index in 0..<3 { workspace.addTab(url: URL(string: "https://example.com/\(index)")) }
+        let a = try XCTUnwrap(workspace.tabs.last)
+        let b = try XCTUnwrap(workspace.tabs.dropLast().last)
+        workspace.pinTab(a.id)
+        workspace.pinTab(b.id)
+        XCTAssertEqual(pinnedLayout(of: workspace), "PPuu")
+
+        workspace.unpinTab(a.id)
+
+        XCTAssertEqual(pinnedLayout(of: workspace), "Puuu", "the unpinned tab lands after the pinned run")
+        XCTAssertEqual(workspace.tabs.first?.id, b.id)
+    }
+
+    func testPinningAGroupedTabLeavesTheGroupAndKeepsItContiguous() throws {
+        let workspace = try makeSurfaceTestWorkspace()
+        for index in 0..<4 { workspace.addTab(url: URL(string: "https://example.com/\(index)")) }
+        let members = Array(workspace.tabs.suffix(3))
+        workspace.createGroup(withTabs: members.map(\.id))
+        let groupID = try XCTUnwrap(members.first?.groupID)
+        let middle = members[1]
+
+        workspace.pinTab(middle.id)
+
+        XCTAssertNil(middle.groupID, "pinning takes a tab out of its group")
+        XCTAssertTrue(middle.isPinned)
+        let groupPositions = workspace.tabs.enumerated()
+            .filter { $0.element.groupID == groupID }
+            .map(\.offset)
+        XCTAssertEqual(
+            groupPositions, Array(groupPositions.first!...groupPositions.last!),
+            "the group the tab left is still one unbroken run"
+        )
+    }
+
+    func testClosingOtherTabsKeepsThePinnedOnes() throws {
+        let workspace = try makeSurfaceTestWorkspace()
+        for index in 0..<4 { workspace.addTab(url: URL(string: "https://example.com/\(index)")) }
+        let pinned = try XCTUnwrap(workspace.tabs.last)
+        workspace.pinTab(pinned.id)
+        let keep = try XCTUnwrap(workspace.tabs.last(where: { !$0.isPinned }))
+
+        workspace.closeOtherTabs(keeping: keep.id)
+
+        XCTAssertTrue(
+            workspace.tabs.contains { $0.id == pinned.id },
+            "closing other tabs must not close a pinned one — that is what pinning is for"
+        )
+        XCTAssertTrue(workspace.tabs.contains { $0.id == keep.id })
+    }
+
+    func testAPinnedTabCannotBeDraggedIntoTheUnpinnedRun() throws {
+        let workspace = try makeSurfaceTestWorkspace()
+        for index in 0..<4 { workspace.addTab(url: URL(string: "https://example.com/\(index)")) }
+        let pinned = try XCTUnwrap(workspace.tabs.last)
+        workspace.pinTab(pinned.id)
+        XCTAssertEqual(pinnedLayout(of: workspace), "Puuuu")
+
+        workspace.moveTab(pinned.id, toIndex: 4)
+
+        XCTAssertEqual(workspace.tabs.first?.id, pinned.id, "it stays in the pinned run")
+        XCTAssertEqual(pinnedLayout(of: workspace), "Puuuu")
+    }
+
+    func testAnUnpinnedTabCannotBeDraggedAmongThePinnedOnes() throws {
+        let workspace = try makeSurfaceTestWorkspace()
+        for index in 0..<4 { workspace.addTab(url: URL(string: "https://example.com/\(index)")) }
+        let first = try XCTUnwrap(workspace.tabs.first)
+        let second = try XCTUnwrap(workspace.tabs.dropFirst().first)
+        workspace.pinTab(first.id)
+        workspace.pinTab(second.id)
+        XCTAssertEqual(pinnedLayout(of: workspace), "PPuuu")
+        let loose = try XCTUnwrap(workspace.tabs.last)
+
+        workspace.moveTab(loose.id, toIndex: 0)
+
+        XCTAssertEqual(pinnedLayout(of: workspace), "PPuuu", "the pinned run is not breached")
+        XCTAssertTrue(workspace.tabs[0].isPinned && workspace.tabs[1].isPinned)
+        XCTAssertEqual(workspace.tabs[2].id, loose.id, "it lands at the head of the unpinned run instead")
+    }
+
+    func testDroppingATabIntoAGroupDoesNotSplitThatGroup() throws {
+        let workspace = try makeSurfaceTestWorkspace()
+        for index in 0..<5 { workspace.addTab(url: URL(string: "https://example.com/\(index)")) }
+        let members = Array(workspace.tabs.suffix(3))
+        workspace.createGroup(withTabs: members.map(\.id))
+        let groupID = try XCTUnwrap(members.first?.groupID)
+        let outsider = try XCTUnwrap(workspace.tabs.first(where: { $0.groupID == nil }))
+        let middleOfGroup = try XCTUnwrap(workspace.tabs.firstIndex(where: { $0.id == members[1].id }))
+
+        workspace.moveTab(outsider.id, toIndex: middleOfGroup)
+
+        let positions = workspace.tabs.enumerated()
+            .filter { $0.element.groupID == groupID }
+            .map(\.offset)
+        XCTAssertFalse(positions.isEmpty)
+        XCTAssertEqual(
+            positions, Array(positions.first!...positions.last!),
+            "a drop inside a group must never leave that group in two pieces"
+        )
+    }
+
+    func testReorderingDoesNotChangeWhichTabIsSelected() throws {
+        let workspace = try makeSurfaceTestWorkspace()
+        for index in 0..<4 { workspace.addTab(url: URL(string: "https://example.com/\(index)")) }
+        let selected = try XCTUnwrap(workspace.selectedTabID)
+        let mover = try XCTUnwrap(workspace.tabs.first)
+
+        workspace.moveTab(mover.id, toIndex: workspace.tabs.count - 1)
+
+        XCTAssertEqual(workspace.selectedTabID, selected, "a reorder is not a selection change")
+    }
+
+    func testASavedSessionRestoresPinnedTabsAndTheirOrder() throws {
+        let suiteName = "clearframe.pinned.restore.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        addTeardownBlock { defaults.removePersistentDomain(forName: suiteName) }
+        let store = BrowserDataStore(defaults: defaults)
+        let pinned = BrowserTabRecord(
+            id: UUID(), url: "https://example.com/pinned", title: "Pinned",
+            lastActivatedAt: Date(), isPinned: true
+        )
+        let loose = BrowserTabRecord(
+            id: UUID(), url: "https://example.com/loose", title: "Loose",
+            lastActivatedAt: Date()
+        )
+        store.saveWorkspace(BrowserWorkspaceSnapshot(tabs: [pinned, loose], selectedTabID: loose.id))
+
+        let restored = try XCTUnwrap(store.loadWorkspace())
+
+        XCTAssertEqual(restored.tabs.first?.isPinned, true)
+        XCTAssertEqual(restored.tabs.last?.isPinned, false)
+    }
+
+    func testASessionSavedBeforePinningExistedStillRestoresUnpinned() throws {
+        let legacy = """
+        {"tabs":[{"id":"\(UUID().uuidString)","url":"https://example.com/old",        "title":"Old","lastActivatedAt":760000000}],"selectedTabID":null}
+        """
+        let snapshot = try JSONDecoder().decode(
+            BrowserWorkspaceSnapshot.self,
+            from: try XCTUnwrap(legacy.data(using: .utf8))
+        )
+
+        XCTAssertEqual(snapshot.tabs.count, 1)
+        XCTAssertEqual(
+            snapshot.tabs.first?.isPinned, false,
+            "a session saved before pinning existed restores exactly as it did then"
+        )
+    }
+
+    func testPinnedTabsAreReservedAtAFixedWidthBeforeTheRestShare() throws {
+        // 500 points across three tabs leaves them short of the 200-point cap,
+        // so the reservation genuinely changes the share. At a comfortable
+        // width both cases would simply hit the cap and prove nothing.
+        let twoPinned = 2 * TabStripMetrics.pinnedTabWidth + 2 * TabStripMetrics.spacing
+        let withPins = TabStripMetrics.resolve(
+            availableWidth: 500, tabCount: 3, hasSelectedTab: true, reservedWidth: twoPinned
+        )
+        let withoutPins = TabStripMetrics.resolve(
+            availableWidth: 500, tabCount: 3, hasSelectedTab: true
+        )
+        XCTAssertLessThan(
+            withPins.unselectedTabWidth, withoutPins.unselectedTabWidth,
+            "pinned tabs take their width off the top, leaving less for the rest"
+        )
+    }
+
+    func testAStripOfOnlyPinnedTabsResolvesWithoutDividingByZero() throws {
+        let resolution = TabStripMetrics.resolve(
+            availableWidth: 400,
+            tabCount: 0,
+            hasSelectedTab: false,
+            reservedWidth: 3 * TabStripMetrics.pinnedTabWidth
+        )
+        XCTAssertFalse(resolution.scrolls, "three pinned tabs fit in 400 points")
+        XCTAssertGreaterThan(resolution.contentWidth, 0)
+    }
+
     private func makeSurfaceTestWorkspace() throws -> BrowserWorkspace {
         let suiteName = "clearframe.startSurface.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))

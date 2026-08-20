@@ -24,6 +24,9 @@ enum TabStripMetrics {
     /// Icon plus close button plus padding: the narrowest a tab can be and
     /// still be operable.
     static let comfortableMinimumTabWidth: CGFloat = 54
+    /// A pinned tab's fixed width: room for the site icon alone, since a
+    /// pinned chip never shows a title or close button.
+    static let pinnedTabWidth: CGFloat = 44
     /// Chrome gives the active tab a larger share of the strip. 1.4 is enough
     /// to keep a title on the active tab when its neighbors are down to an
     /// icon, without making it look like a different control.
@@ -173,6 +176,11 @@ enum TabChipDensity: Equatable {
 enum TabStripItemRole: Equatable {
     /// A tab chip, which takes a share of the strip's width.
     case tab(isSelected: Bool)
+    /// A pinned tab chip: always `TabStripMetrics.pinnedTabWidth`, subtracted
+    /// from the available width before the unpinned tabs share what is left
+    /// — the same treatment `.fixed` group chips get, just at one shared
+    /// width instead of each chip's own natural size.
+    case pinnedTab
     /// A group chip, which keeps its natural width and is subtracted from what
     /// the tabs have to share.
     case fixed
@@ -228,10 +236,20 @@ struct TabStripLayout: Layout {
     private func resolve(_ subviews: Subviews) -> (widths: [CGFloat], contentWidth: CGFloat) {
         guard !subviews.isEmpty else { return ([], 0) }
         let roles = subviews.map { $0[TabStripItemRoleKey.self] }
+        // Group chips ask for their own natural width; pinned tabs all share
+        // the one fixed width; only a plain `.tab` has none of its own and
+        // waits for a share of what the other two leave behind.
         let fixedWidths = zip(subviews, roles).map { subview, role -> CGFloat in
-            role == .fixed ? subview.sizeThatFits(.unspecified).width.rounded(.up) : 0
+            switch role {
+            case .fixed: return subview.sizeThatFits(.unspecified).width.rounded(.up)
+            case .pinnedTab: return TabStripMetrics.pinnedTabWidth
+            case .tab: return 0
+            }
         }
-        let tabCount = roles.filter { $0 != .fixed }.count
+        let tabCount = roles.filter {
+            if case .tab = $0 { return true }
+            return false
+        }.count
         let reserved = fixedWidths.reduce(0, +) + spacing * CGFloat(fixedWidths.filter { $0 > 0 }.count)
         let resolution = TabStripMetrics.resolve(
             availableWidth: availableWidth,
@@ -245,14 +263,18 @@ struct TabStripLayout: Layout {
         widths.reserveCapacity(roles.count)
         for (index, role) in roles.enumerated() {
             switch role {
-            case .fixed:
+            case .fixed, .pinnedTab:
                 widths.append(fixedWidths[index])
             case .tab(let isSelected):
                 widths.append(isSelected ? resolution.selectedTabWidth : resolution.unselectedTabWidth)
             }
         }
-        // The reserved figure already counts one gap per fixed item, so the
-        // content width only needs the gaps between the remaining items.
+        // The reserved figure already counts one gap per fixed/pinned item,
+        // so the content width only needs the gaps between the remaining
+        // items — `tabCount` here is unpinned tabs only, and a strip that is
+        // entirely pinned tabs and group chips resolves with `tabCount == 0`,
+        // which `TabStripMetrics.resolve` already handles without dividing
+        // by anything.
         let total = widths.reduce(0, +) + spacing * CGFloat(max(0, widths.count - 1))
         return (widths, total)
     }

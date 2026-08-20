@@ -26,6 +26,10 @@ final class BrowserTab: ObservableObject, Identifiable {
     /// The tab group this tab belongs to. `BrowserWorkspace` owns every write
     /// so grouped tabs stay contiguous in the strip.
     @Published fileprivate(set) var groupID: UUID?
+    /// Whether this tab is pinned. `BrowserWorkspace` owns every write so the
+    /// pinned run stays left of the unpinned one and a pinned tab never ends
+    /// up in a group — see `BrowserWorkspace.pinTab`/`unpinTab`.
+    @Published fileprivate(set) var isPinned: Bool
 
     private var pendingRestoreURL: URL?
     private var cancellables: Set<AnyCancellable> = []
@@ -40,6 +44,7 @@ final class BrowserTab: ObservableObject, Identifiable {
         searchSettings: SearchSettingsStore,
         isPrivate: Bool = false,
         groupID: UUID? = nil,
+        isPinned: Bool = false,
         contentBlocking: ContentRuleListProvider? = nil,
         favicons: FaviconStore? = nil,
         webFeatures: WebFeatureSettingsStore? = nil,
@@ -50,6 +55,7 @@ final class BrowserTab: ObservableObject, Identifiable {
         self.lastActivatedAt = lastActivatedAt
         self.isPrivate = isPrivate
         self.groupID = groupID
+        self.isPinned = isPinned
         assistant = PageAssistantModel()
         // Built as a local first: the find controller needs the session's web
         // view, and `self` cannot be read until every stored property is set.
@@ -114,7 +120,8 @@ final class BrowserTab: ObservableObject, Identifiable {
             url: liveURL ?? pendingRestoreURL?.absoluteString,
             title: displayTitle,
             lastActivatedAt: lastActivatedAt,
-            groupID: groupID
+            groupID: groupID,
+            isPinned: isPinned
         )
     }
 
@@ -263,6 +270,7 @@ final class BrowserWorkspace: ObservableObject {
                     downloadCenter: resolvedDownloads,
                     searchSettings: resolvedSearchSettings,
                     groupID: record.groupID,
+                    isPinned: record.isPinned,
                     contentBlocking: resolvedContentBlocking,
                     favicons: resolvedFavicons
                 )
@@ -351,7 +359,10 @@ final class BrowserWorkspace: ObservableObject {
 
     /// "New tab to the right". The new tab inherits the anchor's group, so
     /// opening a tab next to a grouped one lands inside that group instead of
-    /// splitting its run in two.
+    /// splitting its run in two. A new tab is never pinned, so one opened
+    /// beside a pinned anchor lands just outside the pinned run rather than
+    /// inside it — `enforcePinnedTabsPrecedeUnpinnedTabs` is what guarantees
+    /// that instead of a special case here.
     func addTab(after anchorID: UUID) {
         guard let anchorIndex = tabs.firstIndex(where: { $0.id == anchorID }) else {
             addTab()
@@ -361,6 +372,7 @@ final class BrowserWorkspace: ObservableObject {
         let tab = makeTab(url: nil, isPrivate: anchor.isPrivate)
         tab.groupID = anchor.groupID
         tabs.insert(tab, at: anchorIndex + 1)
+        enforcePinnedTabsPrecedeUnpinnedTabs()
         configure(tab)
         selectTab(tab.id)
         schedulePersistence()
@@ -415,6 +427,9 @@ final class BrowserWorkspace: ObservableObject {
         }
         let index = min(max(closed.index, 0), tabs.count)
         tabs.insert(tab, at: index)
+        // A reopened tab is never pinned, but the position it held can now
+        // fall inside a pinned run that grew after it closed.
+        enforcePinnedTabsPrecedeUnpinnedTabs()
         configure(tab)
         if let groupID = tab.groupID { regatherGroupRun(groupID) }
         selectTab(tab.id)
@@ -446,13 +461,17 @@ final class BrowserWorkspace: ObservableObject {
 
     /// Opens the same address in a new tab beside this one. WebKit exposes no
     /// public way to copy a tab's back/forward list, so the copy starts fresh.
+    /// The copy matches the original's pinned state, so duplicating a pinned
+    /// tab stays in the pinned run right beside it instead of jumping past it.
     func duplicateTab(_ id: UUID) {
         guard let index = tabs.firstIndex(where: { $0.id == id }) else { return }
         let original = tabs[index]
         let url = WebURLPolicy.validatedURL(original.session.currentURLString)
         let copy = makeTab(url: url, isPrivate: original.isPrivate)
         copy.groupID = original.groupID
+        copy.isPinned = original.isPinned
         tabs.insert(copy, at: index + 1)
+        enforcePinnedTabsPrecedeUnpinnedTabs()
         configure(copy)
         selectTab(copy.id)
         schedulePersistence()
@@ -475,11 +494,15 @@ final class BrowserWorkspace: ObservableObject {
         closeTab(selectedTabID)
     }
 
-    /// Closes everything except `id`, which is left selected. The always-one-tab
-    /// invariant in `closeTab` still holds because `id` is never closed.
+    /// Closes everything except `id`, which is left selected — and every
+    /// pinned tab, which stays open no matter which tab was kept, since
+    /// staying open through exactly this kind of cleanup is the point of
+    /// pinning it. The always-one-tab invariant in `closeTab` still holds
+    /// because `id` is never closed.
     func closeOtherTabs(keeping id: UUID) {
         guard tabs.contains(where: { $0.id == id }) else { return }
-        for other in tabs.map(\.id) where other != id {
+        let closableIDs = tabs.filter { $0.id != id && !$0.isPinned }.map(\.id)
+        for other in closableIDs {
             closeTab(other)
         }
         selectTab(id)
@@ -518,10 +541,12 @@ final class BrowserWorkspace: ObservableObject {
     }
 
     /// Creates a group around existing tabs and pulls them together so the
-    /// group occupies one unbroken run of the strip.
+    /// group occupies one unbroken run of the strip. Pinned tabs are never
+    /// eligible: pinning and grouping are two different ways of organizing
+    /// the strip, and a pinned tab already left any group it was in.
     @discardableResult
     func createGroup(withTabs tabIDs: [UUID], title: String = "", colorID: String? = nil) -> TabGroupRecord? {
-        let members = tabIDs.compactMap { id in tabs.first { $0.id == id } }
+        let members = tabIDs.compactMap { id in tabs.first { $0.id == id && !$0.isPinned } }
         guard !members.isEmpty else { return nil }
         let record = TabGroupRecord(
             title: title,
@@ -548,9 +573,10 @@ final class BrowserWorkspace: ObservableObject {
 
     /// Moves a tab into an existing group, parking it at the end of that
     /// group's run. Adding to a collapsed group opens the group: a tab the
-    /// user just filed should not disappear.
+    /// user just filed should not disappear. A pinned tab is never eligible.
     func addTab(_ tabID: UUID, toGroup groupID: UUID) {
         guard let tab = tabs.first(where: { $0.id == tabID }),
+              !tab.isPinned,
               group(groupID) != nil,
               tab.groupID != groupID else { return }
         let lastMemberIndex = tabs.lastIndex { $0.groupID == groupID }
@@ -706,6 +732,88 @@ final class BrowserWorkspace: ObservableObject {
         let target = current < index ? index : index + 1
         reordered.insert(tab, at: min(max(target, 0), reordered.count))
         tabs = reordered
+    }
+
+    // MARK: - Pinned tabs
+
+    /// Pins a tab. Pinning and grouping are two different ways of organizing
+    /// the strip, so a pinned tab leaves its group — the old group is pulled
+    /// back into one run rather than left split — and cannot be added to a
+    /// group while pinned (`createGroup`/`addTab(_:toGroup:)` already refuse
+    /// it; the chip's context menu hides those items too).
+    func pinTab(_ id: UUID) {
+        guard let tab = tabs.first(where: { $0.id == id }), !tab.isPinned else { return }
+        let previousGroupID = tab.groupID
+        tab.groupID = nil
+        tab.isPinned = true
+        enforcePinnedTabsPrecedeUnpinnedTabs()
+        if let previousGroupID { regatherGroupRun(previousGroupID) }
+        pruneEmptyGroups()
+        schedulePersistence()
+    }
+
+    /// Unpins a tab, returning it to the start of the unpinned run — the
+    /// other side of the same boundary `pinTab` moves a tab to.
+    func unpinTab(_ id: UUID) {
+        guard let tab = tabs.first(where: { $0.id == id }), tab.isPinned else { return }
+        tab.isPinned = false
+        enforcePinnedTabsPrecedeUnpinnedTabs()
+        schedulePersistence()
+    }
+
+    /// "Pin tab" / "Unpin tab" in the chip's context menu.
+    func togglePin(_ id: UUID) {
+        guard let tab = tabs.first(where: { $0.id == id }) else { return }
+        tab.isPinned ? unpinTab(id) : pinTab(id)
+    }
+
+    /// The single place that keeps the strip's ordering invariant: every
+    /// pinned tab sits ahead of every unpinned one. A stable partition, so a
+    /// tab already on the correct side of the boundary keeps its position —
+    /// only a genuine violation (pinning, unpinning, or a tab inserted or
+    /// reopened on the wrong side of a pinned run) reshuffles anything.
+    private func enforcePinnedTabsPrecedeUnpinnedTabs() {
+        guard let firstUnpinnedIndex = tabs.firstIndex(where: { !$0.isPinned }),
+              let lastPinnedIndex = tabs.lastIndex(where: { $0.isPinned }),
+              lastPinnedIndex > firstUnpinnedIndex else { return }
+        tabs = tabs.filter(\.isPinned) + tabs.filter { !$0.isPinned }
+    }
+
+    // MARK: - Reordering
+
+    /// Reorders one tab by drag. Every invariant the strip promises lives
+    /// here — the drag gesture itself is a thin caller — so it is testable
+    /// without a window.
+    ///
+    /// - Parameter toIndex: where to drop the tab, as a position in the strip
+    ///   *before* the move ("put it where the tab currently at this index
+    ///   is"). Clamped into range, then onto the correct side of the pinned
+    ///   boundary. Any group the raw move would otherwise split — either the
+    ///   dragged tab's own, pulled away from its siblings, or a different
+    ///   group it landed in the middle of — is pulled back together with the
+    ///   same `regatherGroupRun` a group edit already uses.
+    /// - Returns: whether the tab actually moved.
+    @discardableResult
+    func moveTab(_ id: UUID, toIndex: Int) -> Bool {
+        guard let sourceIndex = tabs.firstIndex(where: { $0.id == id }), tabs.count > 1 else { return false }
+        let tab = tabs[sourceIndex]
+        var target = min(max(toIndex, 0), tabs.count - 1)
+
+        // Invariant: a pinned tab can only land among pinned tabs, and an
+        // unpinned tab only among unpinned ones — the two runs never cross.
+        let pinnedCount = tabs.filter(\.isPinned).count
+        target = tab.isPinned ? min(target, max(pinnedCount - 1, 0)) : max(target, pinnedCount)
+        guard target != sourceIndex else { return false }
+
+        let landingGroupID = tabs[target].groupID
+        let afterIndex = sourceIndex < target ? target : target - 1
+        placeTab(tab, afterIndex: afterIndex)
+
+        if let ownGroupID = tab.groupID { regatherGroupRun(ownGroupID) }
+        if let landingGroupID, landingGroupID != tab.groupID { regatherGroupRun(landingGroupID) }
+
+        schedulePersistence()
+        return true
     }
 
     /// Builds the tab a `window.open()` popup will live in and hands its web
