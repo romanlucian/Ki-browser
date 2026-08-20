@@ -230,13 +230,14 @@ final class BrowserWorkspace: ObservableObject {
 
         if let restored = resolvedDataStore.loadWorkspace(), !restored.tabs.isEmpty {
             let selectedID = restored.selectedTabID ?? restored.tabs.first?.id
+            let reloadEverything = resolvedDataStore.reloadsRestoredTabs
             tabGroups = restored.groups
             tabs = restored.tabs.map { record in
                 BrowserTab(
                     id: record.id,
                     title: record.title,
                     initialURL: record.restorableURL,
-                    loadImmediately: record.id == selectedID,
+                    loadImmediately: reloadEverything || record.id == selectedID,
                     lastActivatedAt: record.lastActivatedAt,
                     downloadCenter: resolvedDownloads,
                     searchSettings: resolvedSearchSettings,

@@ -7,6 +7,7 @@ struct AISettingsView: View {
     @EnvironmentObject private var workspace: BrowserWorkspace
     @EnvironmentObject private var onboarding: OnboardingController
     @AppStorage("clearframe.restoreTabs") private var restoresTabs = true
+    @AppStorage("clearframe.reloadRestoredTabs") private var reloadsRestoredTabs = false
     @AppStorage("clearframe.saveHistory") private var savesHistory = true
     @State private var showsResetConfirmation = false
     @State private var isResettingBrowserData = false
@@ -41,6 +42,11 @@ struct AISettingsView: View {
             Section("Browser privacy") {
                 Toggle("Restore open tabs when Clearframe starts", isOn: $restoresTabs)
                 Text("When enabled, Clearframe stores only each open tab’s current URL and title in this Mac user profile. Page contents and assistant results are not restored.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Toggle("Load every restored tab at start", isOn: $reloadsRestoredTabs)
+                    .disabled(!restoresTabs)
+                Text("Off by default, as in other browsers: the tab you were on loads, and the rest load the first time you open them. They are all there with their names and site icons either way. Turning this on opens every page at start, which costs a burst of network and memory in exchange for pages already loaded when you get to them.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Toggle("Save browsing history on this Mac", isOn: $savesHistory)

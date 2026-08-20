@@ -20,12 +20,16 @@ final class BrowserDataStore: ObservableObject {
     private let historyKey = "clearframe.history.v1"
     private let workspaceKey = "clearframe.workspace.v1"
     private let restoreTabsKey = "clearframe.restoreTabs"
+    private let reloadRestoredTabsKey = "clearframe.reloadRestoredTabs"
     private let saveHistoryKey = "clearframe.saveHistory"
     private let showsBookmarksBarKey = "clearframe.showBookmarksBar"
     private let maximumHistoryItems = 500
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
+        if defaults.object(forKey: reloadRestoredTabsKey) == nil {
+            defaults.set(false, forKey: reloadRestoredTabsKey)
+        }
         if defaults.object(forKey: restoreTabsKey) == nil {
             defaults.set(true, forKey: restoreTabsKey)
         }
@@ -71,6 +75,17 @@ final class BrowserDataStore: ObservableObject {
 
     var restoresTabs: Bool {
         defaults.bool(forKey: restoreTabsKey)
+    }
+
+    /// Whether every restored tab loads its page at start, rather than the
+    /// selected one loading and the rest waiting to be opened.
+    ///
+    /// Off by default, which is what every mainstream browser does: a window
+    /// of twelve restored tabs would otherwise mean twelve page loads nobody
+    /// asked for, competing for the network on the slowest minute of the day.
+    /// The tabs and their icons are there either way.
+    var reloadsRestoredTabs: Bool {
+        defaults.bool(forKey: reloadRestoredTabsKey)
     }
 
     func loadWorkspace() -> BrowserWorkspaceSnapshot? {
