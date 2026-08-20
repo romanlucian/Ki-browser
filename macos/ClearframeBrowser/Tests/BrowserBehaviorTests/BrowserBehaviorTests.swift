@@ -512,6 +512,91 @@ final class BrowserBehaviorTests: XCTestCase {
         XCTAssertEqual(blocking.provider.registeredWebViewCount, 0)
     }
 
+    /// Evidence Mode finds a key point by searching the live page for that exact text.
+    /// Real pages put reading text outside article prose - a Hacker News title lives in
+    /// a span inside a td - and the matcher used to search only h1-h3, p, li and
+    /// blockquote, so it found nothing there even when the sentence was verbatim.
+    @MainActor
+    func testEvidenceScriptFindsTitleInsideTableSpanAndToleratesTrailingStop() async throws {
+        let html = """
+        <html><body style="margin:0">
+          <table width="100%"><tr>
+            <td class="title" style="display:block;width:600px;height:40px">
+              <span class="titleline"><a href="https://example.com">A tale of two compilers</a></span>
+            </td>
+          </tr></table>
+          <p style="width:600px;height:40px">Ordinary prose that already matched before this change.</p>
+        </body></html>
+        """
+        let webView = WKWebView(frame: .init(x: 0, y: 0, width: 900, height: 600))
+        try await Self.loadForEvidence(html, into: webView)
+
+        let prose = try XCTUnwrap(
+            BrowserSession.evidenceScript(for: "Ordinary prose that already matched before this change.")
+        )
+        let foundProse = try await Self.runEvidence(prose, in: webView)
+        XCTAssertTrue(foundProse, "a paragraph must still match - this guards the widened selector")
+
+        let inSpan = try XCTUnwrap(BrowserSession.evidenceScript(for: "A tale of two compilers"))
+        let foundInSpan = try await Self.runEvidence(inSpan, in: webView)
+        XCTAssertTrue(foundInSpan, "a title inside a span in a td must be findable")
+
+        let withStop = try XCTUnwrap(BrowserSession.evidenceScript(for: "A tale of two compilers."))
+        let foundWithStop = try await Self.runEvidence(withStop, in: webView)
+        XCTAssertTrue(foundWithStop, "a trailing stop the page does not have must not block a match")
+    }
+
+    /// Stripping a trailing stop must never turn a miss into a confident wrong
+    /// highlight. "The senator denied the report." is not on a page that says "denied
+    /// the reporters access", and claiming otherwise would put words in the page's
+    /// mouth under a label that says this is extracted page text.
+    @MainActor
+    func testEvidenceScriptRefusesAMidWordMatchAndAnOversizedContainer() async throws {
+        let html = """
+        <html><body style="margin:0"><div id="page-root">
+          <p style="width:600px;height:40px">The senator denied the reporters access to the hearing room.</p>
+          <span style="display:block;width:600px;height:40px">First half of a split sentence</span>
+          <span style="display:block;width:600px;height:40px">and the second half of it.</span>
+        </div></body></html>
+        """
+        let webView = WKWebView(frame: .init(x: 0, y: 0, width: 900, height: 600))
+        try await Self.loadForEvidence(html, into: webView)
+
+        let midWord = try XCTUnwrap(BrowserSession.evidenceScript(for: "The senator denied the report."))
+        let foundMidWord = try await Self.runEvidence(midWord, in: webView)
+        XCTAssertFalse(foundMidWord, "a match inside a longer word must not count as evidence")
+
+        let spanning = try XCTUnwrap(
+            BrowserSession.evidenceScript(for: "First half of a split sentence and the second half of it.")
+        )
+        let foundSpanning = try await Self.runEvidence(spanning, in: webView)
+        XCTAssertFalse(foundSpanning, "a sentence spanning two elements must miss, not outline their wrapper")
+    }
+
+    @MainActor
+    private static func loadForEvidence(_ html: String, into webView: WKWebView) async throws {
+        webView.loadHTMLString(html, baseURL: URL(string: "https://example.test/"))
+        for _ in 0..<120 {
+            try? await Task.sleep(nanoseconds: 50_000_000)
+            // innerText and getBoundingClientRect both need layout, and an offscreen
+            // web view lays out asynchronously. Wait for a real element to have a box,
+            // not just for readyState.
+            let ready = try? await webView.evaluateJavaScript(
+                "document.readyState === 'complete' && [...document.querySelectorAll('p,span,td')].length > 0 && [...document.querySelectorAll('p,span,td')].every(e => e.getBoundingClientRect().height > 0)"
+            )
+            if (ready as? Bool) == true { return }
+        }
+        throw NSError(domain: "BrowserBehaviorTests", code: 1, userInfo: [
+            NSLocalizedDescriptionKey: "test page never finished laying out"
+        ])
+    }
+
+    @MainActor
+    private static func runEvidence(_ script: String, in webView: WKWebView) async throws -> Bool {
+        let value = try await webView.evaluateJavaScript(script)
+        return (value as? Bool) ?? false
+    }
+
     func testShieldStateMapsProviderStatusAndPerSiteExceptionForAllFiveStates() {
         XCTAssertEqual(ShieldState.make(status: .active(ruleCount: 2), hostDisabled: false), .activeForSite)
         XCTAssertEqual(ShieldState.activeForSite.statusLine, "On for this site")

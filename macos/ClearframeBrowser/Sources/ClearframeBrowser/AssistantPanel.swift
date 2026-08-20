@@ -257,9 +257,13 @@ struct AssistantPanel: View {
                                             .padding(8)
                                             .frame(maxWidth: .infinity, alignment: .leading)
                                             .background(Color.green.opacity(0.10), in: RoundedRectangle(cornerRadius: 7))
+                                        // A miss has several causes — the page moved on,
+                                        // the text sits in an element the highlighter
+                                        // cannot reach — and Clearframe does not know
+                                        // which. Say what happened, not why.
                                         Text(model.evidenceWasFoundOnPage
                                              ? "Highlighted in the page. This is extracted page text, not an AI citation."
-                                             : "Shown here from the extracted page text. The live page changed or could not be highlighted.")
+                                             : "This is extracted page text. Clearframe could not locate it in the live page.")
                                             .font(.caption2)
                                             .foregroundStyle(.secondary)
                                     }

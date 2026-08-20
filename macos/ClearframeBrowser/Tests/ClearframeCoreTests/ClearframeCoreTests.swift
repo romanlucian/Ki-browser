@@ -1151,6 +1151,47 @@ final class ClearframeCoreTests: XCTestCase {
         }
     }
 
+    func testLocalAnalysisContractKeyPointsAndClaimsAreVerbatimPageText() throws {
+        let contract = try localAnalysisContract()
+        for testCase in contract.evidenceCases {
+            let page = testCase.page
+            let content = LocalAnalysisEngine.summarize(page: page)
+            XCTAssertFalse(
+                content.keyPoints.isEmpty && content.claimsToCheck.isEmpty,
+                "\(testCase.id): produced no key points or claims to verify"
+            )
+            for point in content.keyPoints {
+                XCTAssertTrue(
+                    page.text.contains(point),
+                    "\(testCase.id): key point is not verbatim page text — \(point)"
+                )
+            }
+            for claim in content.claimsToCheck {
+                XCTAssertTrue(
+                    page.text.contains(claim),
+                    "\(testCase.id): claim is not verbatim page text — \(claim)"
+                )
+            }
+            // A verbatim sentence can still be cut in the wrong place: "2.7" is one
+            // number, not the end of one sentence and the start of another. Every
+            // occurrence must therefore not be followed by a digit on the page.
+            for sentence in content.keyPoints + content.claimsToCheck {
+                guard sentence.hasSuffix(".") else { continue }
+                var searchStart = page.text.startIndex
+                while let found = page.text.range(
+                    of: sentence,
+                    range: searchStart..<page.text.endIndex
+                ) {
+                    if found.upperBound < page.text.endIndex,
+                       page.text[found.upperBound].isNumber {
+                        XCTFail("\(testCase.id): sentence ends inside a number — \(sentence)")
+                    }
+                    searchStart = found.upperBound
+                }
+            }
+        }
+    }
+
     private func localAnalysisContract() throws -> LocalAnalysisContract {
         let url = try XCTUnwrap(
             Bundle.module.url(forResource: "local-analysis-contract", withExtension: "json")
@@ -1166,6 +1207,12 @@ private struct LocalAnalysisContract: Decodable {
     let riskCases: [RiskContractCase]
     let plainEnglishCases: [PlainEnglishContractCase]
     let readingTimeCases: [ReadingTimeContractCase]
+    let evidenceCases: [EvidenceContractCase]
+}
+
+private struct EvidenceContractCase: Decodable {
+    let id: String
+    let page: PageSnapshot
 }
 
 private struct TokenContractCase: Decodable {

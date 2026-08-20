@@ -36,7 +36,17 @@ public enum LocalAnalysisEngine {
     private static let listingProseMassPercent = 10
     private static let longBlockCharacters = 220
     private static let longCJKBlockCharacters = 100
-    private static let blockEndings: Set<Character> = [".", "!", "?", "…", "。", "！", "？", ":", ";"]
+    /// Sentence terminators Clearframe recognises. Latin and CJK stops, plus the
+    /// Devanagari danda and double danda, the Urdu full stop, and the Arabic question
+    /// mark. A script whose terminator is missing here reads as one endless sentence,
+    /// which also makes its pages look unpunctuated to `assessStructure`.
+    private static let sentenceEndings: Set<Character> = [
+        ".", "!", "?", "。", "！", "？", "।", "॥", "۔", "؟"
+    ]
+
+    private static let blockEndings: Set<Character> = [
+        ".", "!", "?", "…", "。", "！", "？", ":", ";", "।", "॥", "۔", "؟"
+    ]
 
     private static let plainReplacements: [(String, String)] = [
         ("approximately", "about"),
@@ -55,10 +65,8 @@ public enum LocalAnalysisEngine {
     ]
 
     public static func summarize(page: PageSnapshot) -> PageAnalysisContent {
-        let source = normalizeReadingBlocks(
-            removeRepeatedMediaInterfaceText(page.text.isEmpty ? "" : page.text)
-        )
-        let sentences = deduplicated(splitSentences(source))
+        let source = removeRepeatedMediaInterfaceText(page.text.isEmpty ? "" : page.text)
+        let sentences = deduplicated(sentencesFromReadingBlocks(source))
 
         guard !sentences.isEmpty else {
             return PageAnalysisContent(summary: "", keyPoints: [], claimsToCheck: [])
@@ -158,11 +166,20 @@ public enum LocalAnalysisEngine {
     public static func splitSentences(_ value: String) -> [String] {
         var sentences: [String] = []
         var current = ""
-        let endings: Set<Character> = [".", "!", "?", "。", "！", "？"]
+        let characters = Array(normalize(value))
 
-        for character in normalize(value) {
+        for (index, character) in characters.enumerated() {
             current.append(character)
-            if endings.contains(character) {
+            if sentenceEndings.contains(character) {
+                // "2.7" is a single number, not the end of one sentence and the start
+                // of another. Only a period between two digits is ambiguous this way.
+                if character == ".",
+                   index > 0,
+                   index + 1 < characters.count,
+                   characters[index - 1].isNumber,
+                   characters[index + 1].isNumber {
+                    continue
+                }
                 let sentence = normalize(current)
                 if isUsefulSentenceLength(sentence) {
                     sentences.append(sentence)
@@ -213,20 +230,13 @@ public enum LocalAnalysisEngine {
             .joined(separator: " ")
     }
 
-    /// The browser extractor separates rendered reading blocks with newlines. Treat
-    /// each block as a sentence boundary when the page omitted punctuation so that
-    /// unrelated headlines and metadata are not fused into one oversized point.
-    private static func normalizeReadingBlocks(_ value: String) -> String {
-        let blocks = value.components(separatedBy: .newlines)
-            .map(normalize)
-            .filter { !$0.isEmpty }
-        guard blocks.count > 1 else { return normalize(value) }
-
-        let endings: Set<Character> = [".", "!", "?", "。", "！", "？", ":", ";"]
-        return blocks.map { block in
-            guard let last = block.last, !endings.contains(last) else { return block }
-            return block + "."
-        }.joined(separator: " ")
+    /// The browser extractor separates rendered reading blocks with newlines, and a
+    /// block boundary is a sentence boundary. Splitting per block keeps unrelated
+    /// headlines from fusing into one oversized point without inventing terminal
+    /// punctuation — an invented character would leave the sentence unfindable on the
+    /// live page, which is exactly what Evidence Mode searches for.
+    private static func sentencesFromReadingBlocks(_ value: String) -> [String] {
+        value.components(separatedBy: .newlines).flatMap { splitSentences($0) }
     }
 
     /// Embedded media players sometimes expose repeated accessibility controls through

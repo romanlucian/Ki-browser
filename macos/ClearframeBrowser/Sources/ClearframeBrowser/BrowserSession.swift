@@ -422,13 +422,33 @@ final class BrowserSession: NSObject, ObservableObject {
     /// Assistant always keeps the extracted source text as the reliable fallback.
     func revealEvidence(_ text: String, expectedNavigationVersion: Int? = nil) async -> Bool {
         if let expectedNavigationVersion, expectedNavigationVersion != navigationVersion { return false }
-        guard !text.isEmpty,
-              let data = try? JSONEncoder().encode(text),
-              let quoted = String(data: data, encoding: .utf8) else { return false }
-        let script = """
+        guard !text.isEmpty, let script = Self.evidenceScript(for: text) else { return false }
+        return await runEvidenceScript(script, expectedNavigationVersion: expectedNavigationVersion)
+    }
+
+    /// The evidence highlighter, built as one script so a test can run it against any
+    /// web view. Candidate elements go beyond article prose because real pages put
+    /// reading text in table cells, definition lists and spans - Hacker News titles live
+    /// in a span inside a td, where searching only h1-h3/p/li/blockquote found nothing
+    /// even when the sentence was verbatim.
+    ///
+    /// Shortest match wins, but that alone is not enough: when a sentence spans two
+    /// sibling elements the shortest element containing it is the wrapper around both,
+    /// and on a fallback-extracted page that wrapper is the whole document. Outlining
+    /// half the page and reporting success is worse than an honest miss, so a candidate
+    /// far larger than the sentence is rejected outright.
+    static func evidenceScript(for text: String) -> String? {
+        guard let data = try? JSONEncoder().encode(text),
+              let quoted = String(data: data, encoding: .utf8) else { return nil }
+        return """
         (() => {
-          const needle = \(quoted).replace(/\\s+/g, ' ').trim();
-          if (!needle || !document.body) return false;
+          const raw = \(quoted).replace(/\\s+/g, ' ').trim();
+          // The engine no longer invents terminal punctuation, but a needle can still
+          // carry a stop the page renders differently. Try it as written, then once
+          // more without a trailing terminator.
+          const needles = [raw, raw.replace(/[.!?。！？।॥۔؟]+$/u, '').trim()]
+            .filter((value, index, all) => value && all.indexOf(value) === index);
+          if (!needles.length || !document.body) return false;
           const clean = value => (value || '').replace(/\\s+/g, ' ').trim();
           const visible = element => {
             const style = getComputedStyle(element);
@@ -441,12 +461,37 @@ final class BrowserSession: NSObject, ObservableObject {
           roots.forEach(root => root.querySelectorAll('[data-clearframe-evidence]').forEach(element => {
             element.removeAttribute('data-clearframe-evidence');
           }));
-          const matches = roots.flatMap(root => [...root.querySelectorAll('h1,h2,h3,p,li,blockquote')])
+          const candidates = roots
+            .flatMap(root => [...root.querySelectorAll('h1,h2,h3,h4,p,li,blockquote,td,th,dd,dt,figcaption,a,span')])
             .filter(visible)
             .map(element => ({ element, value: clean(element.innerText || element.textContent) }))
-            .filter(candidate => candidate.value.length > 0 && candidate.value.includes(needle))
+            .filter(candidate => candidate.value.length > 0)
             .sort((left, right) => left.value.length - right.value.length);
-          const match = matches[0];
+          // An element far longer than the sentence is a container, not the sentence's
+          // own element. Highlighting it would outline a whole region and still report
+          // success.
+          const withinScale = (candidate, attempt) => candidate.value.length <= attempt.length * 6 + 400;
+          // The match must end on a word boundary. Without this, "denied the report"
+          // matches inside "denied the reporters access", and the panel would claim the
+          // page says something it does not.
+          const endsCleanly = (candidate, attempt) => {
+            let at = candidate.value.indexOf(attempt);
+            while (at !== -1) {
+              const next = candidate.value[at + attempt.length];
+              if (!next || !/[\\p{L}\\p{N}]/u.test(next)) return true;
+              at = candidate.value.indexOf(attempt, at + 1);
+            }
+            return false;
+          };
+          let needle = needles[0];
+          let match = null;
+          for (const attempt of needles) {
+            match = candidates.find(candidate =>
+              candidate.value.includes(attempt) &&
+              withinScale(candidate, attempt) &&
+              endsCleanly(candidate, attempt));
+            if (match) { needle = attempt; break; }
+          }
           if (!match) return false;
           const root = match.element.getRootNode();
           const styleHost = root === document ? (document.head || document.documentElement) : root;
@@ -498,6 +543,9 @@ final class BrowserSession: NSObject, ObservableObject {
           return true;
         })()
         """
+    }
+
+    private func runEvidenceScript(_ script: String, expectedNavigationVersion: Int?) async -> Bool {
         do {
             let value: Any = try await withCheckedThrowingContinuation { continuation in
                 webView.evaluateJavaScript(script) { value, error in

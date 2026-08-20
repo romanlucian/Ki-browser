@@ -29,7 +29,17 @@ const CJK_PATTERN = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Scr
 // Structure thresholds calibrated on live English and Romanian section fronts and
 // articles. Simplified Chinese has no listing measurement yet; only the shorter CJK
 // block length follows the analyzer's existing CJK-aware precedent.
-const BLOCK_ENDING_PATTERN = /[.!?…。！？:;]$/u;
+// Sentence terminators Clearframe recognises. Latin and CJK stops, plus the Devanagari
+// danda and double danda, the Urdu full stop, and the Arabic question mark. A script
+// whose terminator is missing here reads as one endless sentence, which also makes its
+// pages look unpunctuated to assessStructure.
+const SENTENCE_ENDING_CHARACTERS = new Set([
+  ".", "!", "?", "。", "！", "？", "।", "॥", "۔", "؟"
+]);
+// Mirrors Swift's Character.isNumber, which covers Nd, Nl and No — Devanagari and
+// full-width digits included. Not \d, which is ASCII only.
+const NUMERIC_PATTERN = /\p{N}/u;
+const BLOCK_ENDING_PATTERN = /[.!?…。！？:;।॥۔؟]$/u;
 const MINIMUM_LISTING_BLOCKS = 12;
 const LISTING_END_PUNCTUATION_PERCENT = 60;
 const LISTING_PROSE_MASS_PERCENT = 10;
@@ -56,12 +66,42 @@ export function normalizeText(value = "") {
   return value.replace(/\s+/g, " ").trim();
 }
 
+function isUsefulSentenceLength(sentence) {
+  const minimum = CJK_PATTERN.test(sentence) ? 12 : 35;
+  return sentence.length >= minimum && sentence.length <= 520;
+}
+
 export function splitSentences(value = "") {
-  return (
-    normalizeText(value).match(/[^.!?。！？]+[.!?。！？]+|[^.!?。！？]+$/g) || []
-  )
-    .map((sentence) => normalizeText(sentence))
-    .filter((sentence) => sentence.length >= (CJK_PATTERN.test(sentence) ? 12 : 35) && sentence.length <= 520);
+  const characters = [...normalizeText(value)];
+  const sentences = [];
+  let current = "";
+
+  for (let index = 0; index < characters.length; index += 1) {
+    const character = characters[index];
+    current += character;
+    if (!SENTENCE_ENDING_CHARACTERS.has(character)) continue;
+    // "2.7" is a single number, not the end of one sentence and the start of
+    // another. Only a period between two digits is ambiguous this way.
+    // \p{N}, not \d: Swift's Character.isNumber is true for every Unicode numeric,
+    // so an ASCII-only test here would split "२.५" and "２.７" in this runtime while
+    // the Swift engine kept them whole. The two must agree character for character.
+    if (
+      character === "." &&
+      index > 0 &&
+      index + 1 < characters.length &&
+      NUMERIC_PATTERN.test(characters[index - 1]) &&
+      NUMERIC_PATTERN.test(characters[index + 1])
+    ) {
+      continue;
+    }
+    const sentence = normalizeText(current);
+    if (isUsefulSentenceLength(sentence)) sentences.push(sentence);
+    current = "";
+  }
+
+  const remainder = normalizeText(current);
+  if (isUsefulSentenceLength(remainder)) sentences.push(remainder);
+  return sentences;
 }
 
 export function tokenize(value = "", language = "") {
@@ -87,10 +127,13 @@ export function tokenize(value = "", language = "") {
   return result;
 }
 
-function normalizeReadingBlocks(value = "") {
-  const blocks = value.split(/\r?\n/).map(normalizeText).filter(Boolean);
-  if (blocks.length <= 1) return normalizeText(value);
-  return blocks.map((block) => /[.!?。！？:;]$/u.test(block) ? block : `${block}.`).join(" ");
+// The browser extractor separates rendered reading blocks with newlines, and a block
+// boundary is a sentence boundary. Splitting per block keeps unrelated headlines from
+// fusing into one oversized point without inventing terminal punctuation — an invented
+// character would leave the sentence unfindable on the live page, which is exactly what
+// Evidence Mode searches for.
+function sentencesFromReadingBlocks(value = "") {
+  return value.split(/\r?\n/).flatMap((block) => splitSentences(block));
 }
 
 function removeRepeatedMediaInterfaceText(value = "") {
@@ -143,10 +186,8 @@ function selectSentences(scored, count) {
 }
 
 export function summarizeLocally(page) {
-  const source = normalizeReadingBlocks(
-    removeRepeatedMediaInterfaceText(page.text || page.description || "")
-  );
-  const sentences = splitSentences(source);
+  const source = removeRepeatedMediaInterfaceText(page.text || page.description || "");
+  const sentences = sentencesFromReadingBlocks(source);
 
   if (!sentences.length) {
     return {

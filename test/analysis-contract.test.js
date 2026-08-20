@@ -68,3 +68,43 @@ test("shared contract: Plain English and reading time", () => {
     assert.equal(Math.max(1, Math.ceil(testCase.wordCount / 220)), testCase.expectedMinutes);
   }
 });
+
+test("shared contract: key points and claims are verbatim page text", () => {
+  for (const testCase of contract.evidenceCases) {
+    const page = extensionPage(testCase.page);
+    const result = summarizeLocally(page);
+    assert.ok(
+      result.keyPoints.length > 0 || result.claimsToCheck.length > 0,
+      `${testCase.id}: produced no key points or claims to verify`
+    );
+    for (const point of result.keyPoints) {
+      assert.ok(
+        testCase.page.text.includes(point),
+        `${testCase.id}: key point is not verbatim page text — ${point}`
+      );
+    }
+    for (const claim of result.claimsToCheck) {
+      assert.ok(
+        testCase.page.text.includes(claim),
+        `${testCase.id}: claim is not verbatim page text — ${claim}`
+      );
+    }
+    // A verbatim sentence can still be cut in the wrong place: "2.7" is one number,
+    // not the end of one sentence and the start of another. Every occurrence must
+    // therefore not be followed by a digit on the page.
+    for (const sentence of [...result.keyPoints, ...result.claimsToCheck]) {
+      if (!sentence.endsWith(".")) continue;
+      let from = 0;
+      let at = testCase.page.text.indexOf(sentence, from);
+      while (at !== -1) {
+        const next = testCase.page.text[at + sentence.length];
+        assert.ok(
+          !(next && /\d/.test(next)),
+          `${testCase.id}: sentence ends inside a number — ${sentence}`
+        );
+        from = at + sentence.length;
+        at = testCase.page.text.indexOf(sentence, from);
+      }
+    }
+  }
+});

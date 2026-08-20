@@ -8,7 +8,11 @@
         "care": 4,
         "son": 1
       },
-      "excluded": ["the", "and", "will"]
+      "excluded": [
+        "the",
+        "and",
+        "will"
+      ]
     },
     {
       "id": "french-language-filtering",
@@ -18,7 +22,12 @@
         "rapport": 1,
         "bibliothèque": 1
       },
-      "excluded": ["son", "une", "avec", "des"]
+      "excluded": [
+        "son",
+        "une",
+        "avec",
+        "des"
+      ]
     }
   ],
   "summaryCases": [
@@ -135,6 +144,27 @@
           "Only the night route will lose a departure, according to a footnote in the same document."
         ]
       }
+    },
+    {
+      "id": "devanagari-decimal-is-not-a-sentence-boundary",
+      "page": {
+        "title": "जनसंख्या",
+        "url": "https://hi.example/jansankhya",
+        "hostname": "hi.example",
+        "scheme": "https",
+        "language": "hi",
+        "text": "भारत की जनसंख्या पिछले दशक में २.५ प्रतिशत बढ़ी और यह वृद्धि अब भी लगातार जारी है।\nनई रिपोर्ट के अनुसार शहरी क्षेत्रों में यह दर १.८ प्रतिशत रही जो ग्रामीण दर से कम है।\nविशेषज्ञों का मानना है कि आने वाले वर्षों में यह अंतर और अधिक स्पष्ट रूप से दिखाई देगा।\nसरकार ने इस विषय पर एक विस्तृत अध्ययन कराने की घोषणा की है जिसकी रिपोर्ट अगले वर्ष आएगी।",
+        "wordCount": 71,
+        "hasPasswordField": false,
+        "formActions": []
+      },
+      "expected": {
+        "summary": "भारत की जनसंख्या पिछले दशक में २.५ प्रतिशत बढ़ी और यह वृद्धि अब भी लगातार जारी है। नई रिपोर्ट के अनुसार शहरी क्षेत्रों में यह दर १.८ प्रतिशत रही जो ग्रामीण दर से कम है। विशेषज्ञों का मानना है कि आने वाले वर्षों में यह अंतर और अधिक स्पष्ट रूप से दिखाई देगा।",
+        "keyPoints": [
+          "सरकार ने इस विषय पर एक विस्तृत अध्ययन कराने की घोषणा की है जिसकी रिपोर्ट अगले वर्ष आएगी।"
+        ],
+        "claimsToCheck": []
+      }
     }
   ],
   "structureCases": [
@@ -250,7 +280,9 @@
       "expected": {
         "score": 20,
         "level": "Caution",
-        "signalTitles": ["Remote-access request"]
+        "signalTitles": [
+          "Remote-access request"
+        ]
       }
     }
   ],
@@ -261,8 +293,75 @@
     }
   ],
   "readingTimeCases": [
-    { "wordCount": 1, "expectedMinutes": 1 },
-    { "wordCount": 220, "expectedMinutes": 1 },
-    { "wordCount": 221, "expectedMinutes": 2 }
+    {
+      "wordCount": 1,
+      "expectedMinutes": 1
+    },
+    {
+      "wordCount": 220,
+      "expectedMinutes": 1
+    },
+    {
+      "wordCount": 221,
+      "expectedMinutes": 2
+    }
+  ],
+  "evidenceCases": [
+    {
+      "id": "headline-listing-has-no-terminal-punctuation",
+      "page": {
+        "title": "Daily news",
+        "url": "https://news.example/",
+        "hostname": "news.example",
+        "scheme": "https",
+        "language": "en",
+        "text": "Trump threatens Iran trade partners as strikes make way for economic pressure\nFamily of killed aid worker say she deserved more after investigation rejected\nVerstappen signs new Red Bull contract to stay in Formula One until 2030\nMagicians and margarine: ten of the funniest jokes from the Edinburgh fringe\nPremier League preview: Newcastle braced for a transitional season this year\nInstant classics, odd inspirations and barcodes: the best and worst kits seen\nSupreme Court rejects Verizon bid for a refund of its large regulatory fine\nVaccination rates fall again as exemptions continue to rise, new data shows\nFlight attendants raise the alarm that a large firm is buying location data\nAgainst all odds, a rocket company finally tugs its booster back into port\nPixel handset series review: is the magic finally starting to fade away now\nRegulator decides one gigabit per second is too fast for the new standard",
+        "wordCount": 160,
+        "hasPasswordField": false,
+        "formActions": []
+      }
+    },
+    {
+      "id": "documentation-block-ending-in-colon",
+      "page": {
+        "title": "Tutorial",
+        "url": "https://docs.example/tutorial",
+        "hostname": "docs.example",
+        "scheme": "https",
+        "language": "en",
+        "text": "Python is an easy to learn, powerful programming language with efficient high-level data structures.\nStrings can be enclosed in single quotes or double quotes with exactly the same result:\nIn the interactive interpreter, the output string is enclosed in quotes and special characters are escaped with backslashes.\nThe print function produces a more readable output by omitting the enclosing quotes around the printed string.\nThere are two ways to avoid a backslash being read as an escape character:\nRaw strings are written by adding an r before the first quote of the string literal itself.\nString literals can span multiple lines in a single statement, and one common way is to use triple quotes.\nThe interpreter acts as a simple calculator and you can type an expression at it to see a result:\nDivision always returns a floating point number in Python 3 regardless of the operand types involved.\nThe equal sign is used to assign a value to a variable, and no result is displayed before the next prompt.",
+        "wordCount": 168,
+        "hasPasswordField": false,
+        "formActions": []
+      }
+    },
+    {
+      "id": "decimal-numbers-are-not-sentence-boundaries",
+      "page": {
+        "title": "Laptop",
+        "url": "https://shop.example/laptop",
+        "hostname": "shop.example",
+        "scheme": "https",
+        "language": "en",
+        "text": "The notebook is remarkably light at just 2.7 pounds and less than half an inch thin, according to the published specification sheet.\nBattery life is rated at 18.5 hours of video playback, which the manufacturer measured under a fixed brightness setting.\nThe display measures 13.6 inches diagonally and reaches 500 nits of sustained brightness in ordinary indoor conditions.\nStorage starts at 256 GB and the review unit shipped with 16 GB of unified memory installed at the factory.",
+        "wordCount": 88,
+        "hasPasswordField": false,
+        "formActions": []
+      }
+    },
+    {
+      "id": "devanagari-danda-terminates-sentences",
+      "page": {
+        "title": "भारत",
+        "url": "https://hi.example/bharat",
+        "hostname": "hi.example",
+        "scheme": "https",
+        "language": "hi",
+        "text": "भारत दक्षिण एशिया में स्थित एक विशाल देश है जिसकी जनसंख्या विश्व में सबसे अधिक है।\nयहाँ अनेक भाषाएँ बोली जाती हैं और प्रत्येक राज्य की अपनी सांस्कृतिक परंपरा है।\nदेश की अर्थव्यवस्था कृषि, उद्योग और सेवा क्षेत्र पर आधारित मानी जाती है।\nभारत की सीमाएँ अनेक देशों से मिलती हैं और इसके तीन ओर समुद्र स्थित है।",
+        "wordCount": 62,
+        "hasPasswordField": false,
+        "formActions": []
+      }
+    }
   ]
 }
