@@ -174,6 +174,7 @@ struct TabStrip: View {
                 close: { workspace.closeTab(tab.id) },
                 menu: TabChipMenuActions(
                     newTabToRight: { workspace.addTab(after: tab.id) },
+                    duplicate: { workspace.duplicateTab(tab.id) },
                     addToNewGroup: { workspace.createGroup(withTabs: [tab.id]) },
                     addToGroup: { workspace.addTab(tab.id, toGroup: $0) },
                     removeFromGroup: { workspace.removeTabFromGroup(tab.id) },
@@ -207,6 +208,7 @@ struct TabStrip: View {
 
 struct TabChipMenuActions {
     let newTabToRight: () -> Void
+    let duplicate: () -> Void
     let addToNewGroup: () -> Void
     let addToGroup: (UUID) -> Void
     let removeFromGroup: () -> Void
@@ -364,6 +366,7 @@ struct TabChip: View {
     @ViewBuilder
     private var menuContents: some View {
         Button("New tab to the right", action: menu.newTabToRight)
+        Button("Duplicate tab", action: menu.duplicate)
         Divider()
         Button("Add tab to new group", action: menu.addToNewGroup)
         let otherGroups = groups.filter { $0.id != tab.groupID }

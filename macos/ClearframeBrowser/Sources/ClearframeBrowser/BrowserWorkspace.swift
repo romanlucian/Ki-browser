@@ -42,6 +42,7 @@ final class BrowserTab: ObservableObject, Identifiable {
         groupID: UUID? = nil,
         contentBlocking: ContentRuleListProvider? = nil,
         favicons: FaviconStore? = nil,
+        webFeatures: WebFeatureSettingsStore? = nil,
         adoptingPopupConfiguration popupConfiguration: WKWebViewConfiguration? = nil
     ) {
         self.id = id
@@ -63,6 +64,7 @@ final class BrowserTab: ObservableObject, Identifiable {
                 isPrivate: isPrivate,
                 contentBlocking: contentBlocking,
                 favicons: favicons,
+                webFeatures: webFeatures,
                 adoptingPopupConfiguration: popupConfiguration
             )
         } else if loadImmediately {
@@ -191,6 +193,22 @@ final class BrowserWorkspace: ObservableObject {
     /// Site icons captured during real visits, shared by every tab so a site
     /// is fetched at most once per run (see `FaviconStore` for the policy).
     let favicons: FaviconStore
+    /// HTTPS upgrading and the Web Inspector switch, shared so a change in
+    /// Settings reaches tabs that are already open.
+    let webFeatures: WebFeatureSettingsStore
+
+    /// A tab that was closed and can be brought back. Deliberately in memory
+    /// only: a closed tab reappearing after a relaunch is a surprise, and for
+    /// a private tab it would be a leak. Private tabs are never recorded.
+    struct ClosedTab: Equatable {
+        let url: String
+        let title: String
+        let index: Int
+        let groupID: UUID?
+    }
+
+    private(set) var closedTabs: [ClosedTab] = []
+    private static let closedTabLimit = 10
 
     private var tabSubscriptions: [UUID: AnyCancellable] = [:]
     private var downloadSubscription: AnyCancellable?
@@ -203,7 +221,8 @@ final class BrowserWorkspace: ObservableObject {
         downloads: DownloadCenter? = nil,
         searchSettings: SearchSettingsStore? = nil,
         contentBlocking: ContentRuleListProvider? = nil,
-        favicons: FaviconStore? = nil
+        favicons: FaviconStore? = nil,
+        webFeatures: WebFeatureSettingsStore? = nil
     ) {
         let resolvedDataStore = dataStore ?? BrowserDataStore()
         let resolvedDownloads = downloads ?? DownloadCenter()
@@ -213,6 +232,8 @@ final class BrowserWorkspace: ObservableObject {
         let resolvedContentBlocking = contentBlocking
             ?? ContentRuleListProvider(settings: ContentBlockingSettingsStore())
         let resolvedFavicons = favicons ?? FaviconStore()
+        let resolvedWebFeatures = webFeatures ?? WebFeatureSettingsStore()
+        self.webFeatures = resolvedWebFeatures
         self.dataStore = resolvedDataStore
         self.downloads = resolvedDownloads
         self.searchSettings = resolvedSearchSettings
@@ -348,7 +369,7 @@ final class BrowserWorkspace: ObservableObject {
     func selectTab(_ id: UUID) {
         guard let tab = tabs.first(where: { $0.id == id }) else { return }
         // A tab the strip is hiding cannot be the active one: choosing one
-        // from ⌘1-9, a popup, or a menu opens its group back up.
+        // from ⌘1-⌘9, a popup, or a menu opens its group back up.
         if let groupID = tab.groupID { setCollapsed(false, forGroup: groupID) }
         selectedTabID = id
         selectedTab?.activate()
@@ -359,6 +380,7 @@ final class BrowserWorkspace: ObservableObject {
         guard let index = tabs.firstIndex(where: { $0.id == id }) else { return }
         let wasSelected = selectedTabID == id
         let removed = tabs.remove(at: index)
+        rememberClosedTab(removed, atIndex: index)
         tabSubscriptions.removeValue(forKey: id)
         removed.teardown()
 
@@ -378,6 +400,74 @@ final class BrowserWorkspace: ObservableObject {
         // strip with no active tab.
         if let groupID = selectedTab?.groupID { setCollapsed(false, forGroup: groupID) }
         schedulePersistence()
+    }
+
+    var canReopenClosedTab: Bool { !closedTabs.isEmpty }
+
+    /// Brings back the most recently closed tab at the position it held, and
+    /// back into its group when that group still exists.
+    func reopenClosedTab() {
+        guard !closedTabs.isEmpty else { return }
+        let closed = closedTabs.removeFirst()
+        let tab = makeTab(url: WebURLPolicy.validatedURL(closed.url), isPrivate: false)
+        if let groupID = closed.groupID, group(groupID) != nil {
+            tab.groupID = groupID
+        }
+        let index = min(max(closed.index, 0), tabs.count)
+        tabs.insert(tab, at: index)
+        configure(tab)
+        if let groupID = tab.groupID { regatherGroupRun(groupID) }
+        selectTab(tab.id)
+        schedulePersistence()
+    }
+
+    private func rememberClosedTab(_ tab: BrowserTab, atIndex index: Int) {
+        // A private tab leaves no trace anywhere else; it must not leave one here.
+        guard !tab.isPrivate else { return }
+        let url = tab.session.currentURLString
+        guard WebURLPolicy.validatedURL(url) != nil else { return }
+        closedTabs.insert(
+            ClosedTab(url: url, title: tab.session.pageTitle, index: index, groupID: tab.groupID),
+            at: 0
+        )
+        if closedTabs.count > Self.closedTabLimit {
+            closedTabs.removeLast(closedTabs.count - Self.closedTabLimit)
+        }
+    }
+
+    /// ⌘1-⌘8 select that tab; ⌘9 selects the last one however many are open,
+    /// which is what Safari does and what a switching user's fingers expect.
+    func selectTab(atOrdinal ordinal: Int) {
+        guard !tabs.isEmpty else { return }
+        let index = ordinal >= 9 ? tabs.count - 1 : ordinal - 1
+        guard tabs.indices.contains(index) else { return }
+        selectTab(tabs[index].id)
+    }
+
+    /// Opens the same address in a new tab beside this one. WebKit exposes no
+    /// public way to copy a tab's back/forward list, so the copy starts fresh.
+    func duplicateTab(_ id: UUID) {
+        guard let index = tabs.firstIndex(where: { $0.id == id }) else { return }
+        let original = tabs[index]
+        let url = WebURLPolicy.validatedURL(original.session.currentURLString)
+        let copy = makeTab(url: url, isPrivate: original.isPrivate)
+        copy.groupID = original.groupID
+        tabs.insert(copy, at: index + 1)
+        configure(copy)
+        selectTab(copy.id)
+        schedulePersistence()
+    }
+
+    /// The inspector switch is a live property, so a change in Settings should
+    /// reach the tabs already open rather than only the next one.
+    func applyDeveloperFeatureSetting() {
+        let enabled = webFeatures.showsDeveloperFeatures
+        for tab in tabs { tab.session.webView.isInspectable = enabled }
+    }
+
+    func duplicateSelectedTab() {
+        guard let selectedTabID else { return }
+        duplicateTab(selectedTabID)
     }
 
     func closeSelectedTab() {
@@ -644,7 +734,8 @@ final class BrowserWorkspace: ObservableObject {
             searchSettings: searchSettings,
             isPrivate: isPrivate,
             contentBlocking: contentBlocking,
-            favicons: favicons
+            favicons: favicons,
+            webFeatures: webFeatures
         )
     }
 

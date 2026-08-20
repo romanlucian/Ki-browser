@@ -77,6 +77,7 @@ swiftc \
     "$PACKAGE_DIR/Sources/ClearframeBrowser/PageFindController.swift" \
     "$PACKAGE_DIR/Sources/ClearframeBrowser/SearchSettingsStore.swift" \
     "$PACKAGE_DIR/Sources/ClearframeBrowser/ContentBlockingSettingsStore.swift" \
+    "$PACKAGE_DIR/Sources/ClearframeBrowser/WebFeatureSettingsStore.swift" \
     "$PACKAGE_DIR/Sources/ClearframeBrowser/ContentRuleListProvider.swift" \
     "$PACKAGE_DIR/Sources/ClearframeBrowser/VoiceInputController.swift" \
     "$PACKAGE_DIR/Sources/ClearframeBrowser/BrowserWorkspace.swift" \

@@ -13,6 +13,8 @@ The native app provides:
 - local restoration of recent regular tabs, with lazy loading, corruption recovery, and an opt-out setting;
 - downloads with a user-selected destination plus an obvious toolbar panel for status, destination, cancel, reveal, and the Downloads folder;
 - the page basics people expect from any browser: file uploads through the standard macOS picker (including multiple files and, where a site asks for one, a folder), find in page (`⌘F`, with `⌘G` and `⇧⌘G` to step and Escape to close), printing the open page (`⌘P`), and per-tab page zoom (`⌘+`, `⌘−`, `⌘0`);
+- the tab habits people arrive with: reopen the tab you just closed (`⇧⌘T`), jump straight to a tab with `⌘1`–`⌘8` and to the last one with `⌘9`, and duplicate the page you are on. Closed tabs are remembered for the current run only, and a private tab is never remembered at all;
+- navigations upgraded to HTTPS where the host is known to support it, and an optional **Show features for web developers** switch that lets Safari's Develop menu attach the Web Inspector to a Clearframe page;
 - a visible Clearframe bookmarks bar below navigation, with horizontally scrollable top-level links, nested emoji-folder menus, current-page and saved-bookmark drag filing, fixed overflow access, and a locally persisted show/hide setting;
 - a full-page bookmarks home (the bar's All Bookmarks chip or ⌘⌥B) with visual folder cards, search across bookmarks and folder titles, drill-down into subfolders, and a local history view—all local only;
 - searchable local bookmarks organized into emoji-labeled nested folders, plus local history with clear/disable controls;

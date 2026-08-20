@@ -41,6 +41,35 @@ struct AISettingsView: View {
                     .foregroundStyle(.secondary)
             }
 
+            Section("Connection") {
+                Toggle(
+                    "Use HTTPS when a site is known to support it",
+                    isOn: Binding(
+                        get: { workspace.webFeatures.upgradesToHTTPS },
+                        set: { workspace.webFeatures.setUpgradesToHTTPS($0) }
+                    )
+                )
+                Text("Upgrades the address you are opening when WebKit already knows that host serves HTTPS. It applies to tabs you open from now on, and it upgrades the page request itself — it does not promise that everything the page then loads is encrypted.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section("Advanced") {
+                Toggle(
+                    "Show features for web developers",
+                    isOn: Binding(
+                        get: { workspace.webFeatures.showsDeveloperFeatures },
+                        set: {
+                            workspace.webFeatures.setShowsDeveloperFeatures($0)
+                            workspace.applyDeveloperFeatureSetting()
+                        }
+                    )
+                )
+                Text("Lets Safari's Develop menu attach the Web Inspector to pages open in Clearframe, so you can examine a page the way you would in Safari. Off by default. Changing it applies to tabs that are already open.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
             Section("Browser privacy") {
                 Toggle("Restore open tabs when Clearframe starts", isOn: $restoresTabs)
                 Text("When enabled, Clearframe stores only each open tab’s current URL and title in this Mac user profile. Page contents and assistant results are not restored.")

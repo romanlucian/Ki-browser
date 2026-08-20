@@ -1564,6 +1564,142 @@ final class BrowserBehaviorTests: XCTestCase {
         return nil
     }
 
+    // MARK: - Wave 1 browser basics
+
+    func testClosingATabRecordsItSoItCanBeReopenedWhereItWas() throws {
+        let workspace = try makeSurfaceTestWorkspace()
+        workspace.addTab(url: URL(string: "https://example.com/one"))
+        workspace.addTab(url: URL(string: "https://example.com/two"))
+        workspace.addTab(url: URL(string: "https://example.com/three"))
+        let middle = try XCTUnwrap(workspace.tabs.first { $0.session.currentURLString.contains("two") })
+        let middleIndex = try XCTUnwrap(workspace.tabs.firstIndex(where: { $0.id == middle.id }))
+
+        XCTAssertFalse(workspace.canReopenClosedTab, "nothing has been closed yet")
+        workspace.closeTab(middle.id)
+
+        XCTAssertTrue(workspace.canReopenClosedTab)
+        workspace.reopenClosedTab()
+
+        let restored = try XCTUnwrap(workspace.tabs.firstIndex { $0.session.currentURLString.contains("two") })
+        XCTAssertEqual(restored, middleIndex, "the tab comes back where it was, not at the end")
+        XCTAssertFalse(workspace.canReopenClosedTab, "reopening consumes the record")
+    }
+
+    func testAClosedPrivateTabIsNeverRecorded() throws {
+        let workspace = try makeSurfaceTestWorkspace()
+        workspace.addTab(url: URL(string: "https://example.com/regular"))
+        workspace.addTab(url: URL(string: "https://example.com/secret"), isPrivate: true)
+        let priv = try XCTUnwrap(workspace.tabs.first { $0.isPrivate })
+
+        workspace.closeTab(priv.id)
+
+        XCTAssertFalse(
+            workspace.canReopenClosedTab,
+            "a private tab leaves no trace anywhere else and must leave none here"
+        )
+    }
+
+    func testTheClosedTabListStopsAtTenSoItCannotGrowForever() throws {
+        let workspace = try makeSurfaceTestWorkspace()
+        for index in 0..<14 {
+            workspace.addTab(url: URL(string: "https://example.com/page\(index)"))
+        }
+        let closable = workspace.tabs.filter { !$0.session.currentURLString.isEmpty }.map(\.id)
+        for id in closable.prefix(13) { workspace.closeTab(id) }
+
+        XCTAssertEqual(workspace.closedTabs.count, 10)
+        XCTAssertTrue(
+            workspace.closedTabs.first?.url.contains("page") ?? false,
+            "the most recently closed tab is first"
+        )
+    }
+
+    func testReopeningRejoinsTheGroupWhenItStillExists() throws {
+        let workspace = try makeSurfaceTestWorkspace()
+        workspace.addTab(url: URL(string: "https://example.com/grouped"))
+        let tab = try XCTUnwrap(workspace.tabs.first { $0.session.currentURLString.contains("grouped") })
+        workspace.addTab(url: URL(string: "https://example.com/other"))
+        let other = try XCTUnwrap(workspace.tabs.first { $0.session.currentURLString.contains("other") })
+        workspace.createGroup(withTabs: [tab.id, other.id])
+        let groupID = try XCTUnwrap(tab.groupID)
+
+        workspace.closeTab(tab.id)
+        workspace.reopenClosedTab()
+
+        let restored = try XCTUnwrap(workspace.tabs.first { $0.session.currentURLString.contains("grouped") })
+        XCTAssertEqual(restored.groupID, groupID, "the tab returns to the group it came from")
+    }
+
+    func testCommandNineSelectsTheLastTabAndNotTheNinth() throws {
+        let workspace = try makeSurfaceTestWorkspace()
+        for index in 0..<4 {
+            workspace.addTab(url: URL(string: "https://example.com/tab\(index)"))
+        }
+        let last = try XCTUnwrap(workspace.tabs.last)
+
+        workspace.selectTab(atOrdinal: 9)
+        XCTAssertEqual(workspace.selectedTabID, last.id, "Command-9 means last, as it does in Safari")
+
+        workspace.selectTab(atOrdinal: 2)
+        XCTAssertEqual(workspace.selectedTabID, workspace.tabs[1].id, "Command-2 means the second tab")
+
+        let previous = workspace.selectedTabID
+        workspace.selectTab(atOrdinal: 8)
+        XCTAssertEqual(workspace.selectedTabID, previous, "an ordinal past the end changes nothing")
+    }
+
+    func testSelectingAnOrdinalOpensACollapsedGroupSoTheTabIsVisible() throws {
+        let workspace = try makeSurfaceTestWorkspace()
+        workspace.addTab(url: URL(string: "https://example.com/inside"))
+        let inside = try XCTUnwrap(workspace.tabs.first { $0.session.currentURLString.contains("inside") })
+        workspace.addTab(url: URL(string: "https://example.com/outside"))
+        workspace.createGroup(withTabs: [inside.id])
+        let groupID = try XCTUnwrap(inside.groupID)
+        workspace.selectTab(try XCTUnwrap(workspace.tabs.first { $0.groupID == nil }).id)
+        workspace.toggleCollapse(groupID: groupID)
+        XCTAssertEqual(workspace.group(groupID)?.isCollapsed, true)
+
+        let ordinal = try XCTUnwrap(workspace.tabs.firstIndex(where: { $0.id == inside.id })) + 1
+        workspace.selectTab(atOrdinal: ordinal)
+
+        XCTAssertEqual(workspace.selectedTabID, inside.id)
+        XCTAssertEqual(workspace.group(groupID)?.isCollapsed, false, "a hidden tab cannot be the active one")
+    }
+
+    func testDuplicatingATabPlacesTheCopyBesideItAndKeepsItsGroup() throws {
+        let workspace = try makeSurfaceTestWorkspace()
+        workspace.addTab(url: URL(string: "https://example.com/original"))
+        let original = try XCTUnwrap(workspace.tabs.first { $0.session.currentURLString.contains("original") })
+        workspace.createGroup(withTabs: [original.id])
+        let originalIndex = try XCTUnwrap(workspace.tabs.firstIndex(where: { $0.id == original.id }))
+        let countBefore = workspace.tabs.count
+
+        workspace.duplicateTab(original.id)
+
+        XCTAssertEqual(workspace.tabs.count, countBefore + 1)
+        let copy = workspace.tabs[originalIndex + 1]
+        XCTAssertNotEqual(copy.id, original.id)
+        XCTAssertEqual(copy.groupID, original.groupID, "the copy stays in the same group")
+        XCTAssertEqual(workspace.selectedTabID, copy.id, "the copy takes focus")
+    }
+
+    func testWebFeatureSettingsPersistAcrossStoreInstances() throws {
+        let suiteName = "clearframe.webfeatures.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        addTeardownBlock { defaults.removePersistentDomain(forName: suiteName) }
+
+        let store = WebFeatureSettingsStore(defaults: defaults)
+        XCTAssertTrue(store.upgradesToHTTPS, "HTTPS upgrading is on unless turned off")
+        XCTAssertFalse(store.showsDeveloperFeatures, "the inspector stays off until asked for")
+
+        store.setUpgradesToHTTPS(false)
+        store.setShowsDeveloperFeatures(true)
+
+        let reopened = WebFeatureSettingsStore(defaults: defaults)
+        XCTAssertFalse(reopened.upgradesToHTTPS)
+        XCTAssertTrue(reopened.showsDeveloperFeatures)
+    }
+
     private func makeSurfaceTestWorkspace() throws -> BrowserWorkspace {
         let suiteName = "clearframe.startSurface.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))

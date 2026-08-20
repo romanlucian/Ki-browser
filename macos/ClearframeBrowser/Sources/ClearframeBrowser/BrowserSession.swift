@@ -94,6 +94,7 @@ final class BrowserSession: NSObject, ObservableObject {
         isPrivate: Bool = false,
         contentBlocking: ContentRuleListProvider? = nil,
         favicons: FaviconStore? = nil,
+        webFeatures: WebFeatureSettingsStore? = nil,
         adoptingPopupConfiguration popupConfiguration: WKWebViewConfiguration? = nil
     ) {
         self.downloadCenter = downloadCenter
@@ -112,6 +113,10 @@ final class BrowserSession: NSObject, ObservableObject {
             // Ask for the page Safari would get: same engine, same capabilities.
             configuration.applicationNameForUserAgent = BrowserUserAgent.applicationName
             configuration.preferences.isElementFullscreenEnabled = true
+            // Where a host is known to support HTTPS, take it. This upgrades
+            // the navigation only; it is not a promise that every subresource
+            // the page then loads is encrypted.
+            configuration.upgradeKnownHostsToHTTPS = webFeatures?.upgradesToHTTPS ?? true
         }
         webView = WKWebView(frame: .zero, configuration: configuration)
         super.init()
@@ -122,6 +127,9 @@ final class BrowserSession: NSObject, ObservableObject {
         // window forces dark on everything inside it, so without this a site
         // would be told the Mac prefers dark even when it is set to light.
         // Pages follow the Mac, and keep following it when it changes.
+        // Off unless the person turned it on in Settings; it lets Safari's
+        // Develop menu attach the Web Inspector to this page.
+        webView.isInspectable = webFeatures?.showsDeveloperFeatures ?? false
         webView.appearance = NSApp.effectiveAppearance
         webView.navigationDelegate = self
         webView.uiDelegate = self
