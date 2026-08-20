@@ -80,6 +80,7 @@ The initial local evidence reveal is delivered; the broader citation-grade exper
 ## Privacy and security boundaries
 
 - Analyze Page runs only after an explicit click and is local by default.
+- Key points and claims are verbatim page text and never carry a character the page lacks, so Evidence Mode can highlight them. The shared contract's `evidenceCases` enforce this in both runtimes. Deterministic coverage is English, Romanian, French, and Simplified Chinese, plus Devanagari, Urdu and Arabic sentence terminators; Armenian and Thai are not covered.
 - Opening a page never silently uploads it to an AI provider.
 - Optional online AI is separately enabled, visibly triggered, and uses a user-owned prototype key. Analysis sends only the source title, hostname, declared language, and truncated extracted text—not the full URL, query, fragment, cookies, form values, or history. Do not ship a shared client key.
 - Never sell browsing history. History, bookmarks, and recent-tab metadata remain local with user controls.

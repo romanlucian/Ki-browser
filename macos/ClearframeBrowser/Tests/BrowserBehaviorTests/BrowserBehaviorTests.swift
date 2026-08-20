@@ -546,6 +546,33 @@ final class BrowserBehaviorTests: XCTestCase {
         XCTAssertTrue(foundWithStop, "a trailing stop the page does not have must not block a match")
     }
 
+    /// Stripping a trailing stop must never turn a miss into a confident wrong
+    /// highlight. "The senator denied the report." is not on a page that says "denied
+    /// the reporters access", and claiming otherwise would put words in the page's
+    /// mouth under a label that says this is extracted page text.
+    @MainActor
+    func testEvidenceScriptRefusesAMidWordMatchAndAnOversizedContainer() async throws {
+        let html = """
+        <html><body style="margin:0"><div id="page-root">
+          <p style="width:600px;height:40px">The senator denied the reporters access to the hearing room.</p>
+          <span style="display:block;width:600px;height:40px">First half of a split sentence</span>
+          <span style="display:block;width:600px;height:40px">and the second half of it.</span>
+        </div></body></html>
+        """
+        let webView = WKWebView(frame: .init(x: 0, y: 0, width: 900, height: 600))
+        try await Self.loadForEvidence(html, into: webView)
+
+        let midWord = try XCTUnwrap(BrowserSession.evidenceScript(for: "The senator denied the report."))
+        let foundMidWord = try await Self.runEvidence(midWord, in: webView)
+        XCTAssertFalse(foundMidWord, "a match inside a longer word must not count as evidence")
+
+        let spanning = try XCTUnwrap(
+            BrowserSession.evidenceScript(for: "First half of a split sentence and the second half of it.")
+        )
+        let foundSpanning = try await Self.runEvidence(spanning, in: webView)
+        XCTAssertFalse(foundSpanning, "a sentence spanning two elements must miss, not outline their wrapper")
+    }
+
     @MainActor
     private static func loadForEvidence(_ html: String, into webView: WKWebView) async throws {
         webView.loadHTMLString(html, baseURL: URL(string: "https://example.test/"))
@@ -555,7 +582,7 @@ final class BrowserBehaviorTests: XCTestCase {
             // web view lays out asynchronously. Wait for a real element to have a box,
             // not just for readyState.
             let ready = try? await webView.evaluateJavaScript(
-                "document.readyState === 'complete' && !!document.querySelector('p') && document.querySelector('p').getBoundingClientRect().height > 0 && document.querySelector('span.titleline').getBoundingClientRect().height > 0"
+                "document.readyState === 'complete' && [...document.querySelectorAll('p,span,td')].length > 0 && [...document.querySelectorAll('p,span,td')].every(e => e.getBoundingClientRect().height > 0)"
             )
             if (ready as? Bool) == true { return }
         }

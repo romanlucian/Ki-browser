@@ -36,6 +36,9 @@ const CJK_PATTERN = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Scr
 const SENTENCE_ENDING_CHARACTERS = new Set([
   ".", "!", "?", "。", "！", "？", "।", "॥", "۔", "؟"
 ]);
+// Mirrors Swift's Character.isNumber, which covers Nd, Nl and No — Devanagari and
+// full-width digits included. Not \d, which is ASCII only.
+const NUMERIC_PATTERN = /\p{N}/u;
 const BLOCK_ENDING_PATTERN = /[.!?…。！？:;।॥۔؟]$/u;
 const MINIMUM_LISTING_BLOCKS = 12;
 const LISTING_END_PUNCTUATION_PERCENT = 60;
@@ -79,12 +82,15 @@ export function splitSentences(value = "") {
     if (!SENTENCE_ENDING_CHARACTERS.has(character)) continue;
     // "2.7" is a single number, not the end of one sentence and the start of
     // another. Only a period between two digits is ambiguous this way.
+    // \p{N}, not \d: Swift's Character.isNumber is true for every Unicode numeric,
+    // so an ASCII-only test here would split "२.५" and "２.７" in this runtime while
+    // the Swift engine kept them whole. The two must agree character for character.
     if (
       character === "." &&
       index > 0 &&
       index + 1 < characters.length &&
-      /\d/.test(characters[index - 1]) &&
-      /\d/.test(characters[index + 1])
+      NUMERIC_PATTERN.test(characters[index - 1]) &&
+      NUMERIC_PATTERN.test(characters[index + 1])
     ) {
       continue;
     }
