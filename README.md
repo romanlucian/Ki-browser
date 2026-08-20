@@ -165,6 +165,7 @@ Clearframe presents Safari's user agent because it renders with WebKit, Safari's
 - [Tracker blocking](docs/content-blocking.md)
 - [Privacy and safety notes](docs/privacy-and-safety.md)
 - [2026 market research](docs/market-research.md)
+- [Browser feature research and gap analysis](docs/browser-feature-research.md)
 - [Cross-platform page-intelligence contract](docs/page-intelligence-contract.md)
 - [Voice-first product and technical direction](docs/voice-first-spec.md)
 - [Programmer browser side concept](docs/programmer-browser-concept.md)
