@@ -241,7 +241,7 @@ struct TabChip: View {
     }
 
     private var host: String {
-        URL(string: session.currentURLString)?.host ?? ""
+        tab.iconHost
     }
 
     private var cornerRadius: CGFloat {

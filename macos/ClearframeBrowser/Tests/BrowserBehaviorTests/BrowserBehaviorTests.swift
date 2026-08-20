@@ -316,11 +316,20 @@ final class BrowserBehaviorTests: XCTestCase {
         let store = BrowserDataStore(defaults: defaults)
         let blocking = try Self.makeTestContentBlocking(defaults: defaults)
         defer { blocking.removeStore() }
+        // The reset under test erases captured site icons from disk. Without a
+        // directory of its own the workspace builds a `FaviconStore` pointing at
+        // the real profile, and running this test deleted whatever icons the
+        // person running it had collected. Every other store here is already
+        // isolated; this one has to be too.
+        let iconDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("clearframe.favicons.\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: iconDirectory) }
         let workspace = BrowserWorkspace(
             dataStore: store,
             downloads: DownloadCenter(),
             searchSettings: SearchSettingsStore(defaults: defaults),
-            contentBlocking: blocking.provider
+            contentBlocking: blocking.provider,
+            favicons: FaviconStore(directory: iconDirectory, fetch: Self.forbiddenFaviconFetcher)
         )
         _ = store.addBookmark(title: "Saved", url: "https://example.com/saved", folderID: nil)
         store.recordVisit(title: "Visited", url: "https://example.com/visited")
@@ -331,6 +340,13 @@ final class BrowserBehaviorTests: XCTestCase {
 
         await workspace.resetLocalBrowsingData()
 
+        // The icons it erased were the ones it was given. Asserting this is
+        // what keeps the reset pointed at a directory the test owns rather
+        // than at whatever profile happens to be on the machine running it.
+        XCTAssertFalse(
+            FileManager.default.fileExists(atPath: iconDirectory.path),
+            "the reset must erase the icon directory it was handed"
+        )
         XCTAssertTrue(store.bookmarks.isEmpty)
         XCTAssertTrue(store.bookmarkFolders.isEmpty)
         XCTAssertTrue(store.history.isEmpty)

@@ -116,6 +116,20 @@ final class BrowserTab: ObservableObject, Identifiable {
         )
     }
 
+    /// The host whose icon this tab should show.
+    ///
+    /// A restored tab knows where it is going before it has been there, and its
+    /// icon — if there is one — was already captured on a real visit. Reading
+    /// the pending address lets the strip show that cached icon straight away
+    /// instead of a grey square, without loading the page and without fetching
+    /// anything: it is a cache read, not a request.
+    var iconHost: String {
+        if let host = URL(string: session.currentURLString)?.host, !host.isEmpty {
+            return host
+        }
+        return pendingRestoreURL?.host ?? ""
+    }
+
     func activate() {
         lastActivatedAt = Date()
         if let pendingRestoreURL {
