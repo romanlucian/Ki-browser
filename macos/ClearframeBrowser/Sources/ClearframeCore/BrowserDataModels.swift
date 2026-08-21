@@ -100,22 +100,33 @@ public struct BrowserTabRecord: Codable, Equatable, Identifiable, Sendable {
     /// The group this tab belonged to, or `nil` for an ungrouped tab. Older
     /// saved sessions have no such key at all and restore ungrouped.
     public let groupID: UUID?
+    /// Whether this tab was pinned. Older saved sessions have no such key at
+    /// all and restore unpinned, same as `groupID`.
+    public let isPinned: Bool
 
-    public init(id: UUID, url: String?, title: String, lastActivatedAt: Date, groupID: UUID? = nil) {
+    public init(
+        id: UUID,
+        url: String?,
+        title: String,
+        lastActivatedAt: Date,
+        groupID: UUID? = nil,
+        isPinned: Bool = false
+    ) {
         self.id = id
         self.url = url
         self.title = title
         self.lastActivatedAt = lastActivatedAt
         self.groupID = groupID
+        self.isPinned = isPinned
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, url, title, lastActivatedAt, groupID
+        case id, url, title, lastActivatedAt, groupID, isPinned
     }
 
     /// Written out the same way the legacy bookmark `folderID` migration is:
-    /// a record saved before tab groups existed decodes cleanly and simply
-    /// has no group.
+    /// a record saved before tab groups or pinning existed decodes cleanly
+    /// and simply has no group and is not pinned.
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(UUID.self, forKey: .id)
@@ -123,6 +134,7 @@ public struct BrowserTabRecord: Codable, Equatable, Identifiable, Sendable {
         title = try container.decode(String.self, forKey: .title)
         lastActivatedAt = try container.decode(Date.self, forKey: .lastActivatedAt)
         groupID = try container.decodeIfPresent(UUID.self, forKey: .groupID)
+        isPinned = try container.decodeIfPresent(Bool.self, forKey: .isPinned) ?? false
     }
 
     public var restorableURL: URL? {
@@ -133,7 +145,14 @@ public struct BrowserTabRecord: Codable, Equatable, Identifiable, Sendable {
     /// This record with a different group reference, used when normalization
     /// has to drop a group a tab still points at.
     public func withGroupID(_ groupID: UUID?) -> BrowserTabRecord {
-        BrowserTabRecord(id: id, url: url, title: title, lastActivatedAt: lastActivatedAt, groupID: groupID)
+        BrowserTabRecord(
+            id: id,
+            url: url,
+            title: title,
+            lastActivatedAt: lastActivatedAt,
+            groupID: groupID,
+            isPinned: isPinned
+        )
     }
 }
 

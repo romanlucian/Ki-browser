@@ -4,12 +4,49 @@ import SwiftUI
 /// The tab strip: grouped and ungrouped tabs sharing one row of width, a
 /// new-tab button, and the tab counter.
 ///
+/// Where each chip currently sits, in the strip's own coordinate space, so a
+/// drop can be resolved by position rather than by whichever view claimed it.
+struct TabChipFramesKey: PreferenceKey {
+    static var defaultValue: [UUID: CGRect] = [:]
+    static func reduce(value: inout [UUID: CGRect], nextValue: () -> [UUID: CGRect]) {
+        value.merge(nextValue(), uniquingKeysWith: { _, new in new })
+    }
+}
+
 /// Width is distributed by `TabStripLayout`/`TabStripMetrics` rather than
 /// fixed per chip, so narrowing the window compresses the tabs the way Chrome
 /// and Safari do instead of pushing them out of reach.
 struct TabStrip: View {
+    static let dropSpace = "clearframe.tabStrip"
+    @State private var chipFrames: [UUID: CGRect] = [:]
+    @StateObject private var windowHolder = BrowserWindowHolder()
+    @State private var windowDragOrigin: CGPoint?
+    @State private var windowDragStartMouse: CGPoint?
+
     @ObservedObject var workspace: BrowserWorkspace
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// The chip a drop at `point` lands on. A point inside a chip means that
+    /// chip; a point in the spacing gap between chips, before the first chip,
+    /// or in the open strip past the last one snaps to the nearest chip by
+    /// horizontal distance, so releasing a hair off a chip — or at either end
+    /// of the strip — still reorders instead of silently doing nothing.
+    /// Horizontal only: the strip is one row, and a drop a few points above
+    /// or below a chip still means that chip. Ties — including frames that
+    /// momentarily overlap mid-animation — resolve to the leftmost chip, so
+    /// the answer never depends on dictionary order.
+    static func chipID(at point: CGPoint, in frames: [UUID: CGRect]) -> UUID? {
+        func distance(to frame: CGRect) -> CGFloat {
+            max(frame.minX - point.x, point.x - frame.maxX, 0)
+        }
+        return frames.min { lhs, rhs in
+            let l = distance(to: lhs.value)
+            let r = distance(to: rhs.value)
+            if l != r { return l < r }
+            if lhs.value.minX != rhs.value.minX { return lhs.value.minX < rhs.value.minX }
+            return lhs.key.uuidString < rhs.key.uuidString
+        }?.key
+    }
 
     private var tabCountLabel: String {
         workspace.tabs.count == 1 ? "1 TAB" : "\(workspace.tabs.count) TABS"
@@ -21,11 +58,12 @@ struct TabStrip: View {
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            // Sits behind everything below; SwiftUI routes clicks on the
-            // chips/button/pill in front of it before this ever sees them.
+            // Draws nothing and receives nothing: it exists to hold on to
+            // the window and turn AppKit's own dragging off. Moving the
+            // window is `windowDragGesture`'s job — see `WindowDragArea`.
             // Explicit fill: a representable with no intrinsic size should
             // not be left to guess the strip's bounds.
-            WindowDragArea()
+            WindowDragArea(holder: windowHolder)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
             HStack(alignment: .bottom, spacing: 8) {
@@ -73,12 +111,52 @@ struct TabStrip: View {
             // leaves floating at the top-left of the window content.
             .padding(.leading, 78)
             .padding(.trailing, Self.horizontalInset)
+            .coordinateSpace(name: Self.dropSpace)
+            .onPreferenceChange(TabChipFramesKey.self) { chipFrames = $0 }
             // The chips are bottom-aligned: their lower edge is the toolbar's
             // top edge, which is what lets the active chip merge into it.
             .padding(.top, Self.topInset - TabStripMetrics.groupEnclosureLift)
         }
         .frame(height: Self.topInset + TabStripMetrics.chipHeight)
         .background(ClearframeTheme.bg2)
+        .contentShape(Rectangle())
+        // Empty strip background behaves like a title bar. This is the
+        // outermost gesture in the strip, so a press that starts on a chip is
+        // claimed by the chip's own gesture and never reaches here.
+        .gesture(windowDragGesture)
+        .onTapGesture(count: 2) { windowHolder.window?.performZoom(nil) }
+    }
+
+    /// Moves the window with the pointer. AppKit's own window dragging is off
+    /// — see `WindowDragArea` for why it has to be — so the strip does it.
+    ///
+    /// The pointer is read from `NSEvent.mouseLocation` rather than the
+    /// gesture's own translation. A gesture reports movement relative to the
+    /// window, and this gesture moves that window: the two chase each other and
+    /// the window ends up crawling at a fraction of the pointer's speed.
+    /// Screen coordinates are absolute, so the window tracks the pointer
+    /// exactly. They share the same axes as `frame.origin`, so no flip either.
+    private var windowDragGesture: some Gesture {
+        DragGesture(minimumDistance: 2, coordinateSpace: .global)
+            .onChanged { _ in
+                guard let window = windowHolder.window else { return }
+                let mouse = NSEvent.mouseLocation
+                if windowDragOrigin == nil {
+                    windowDragOrigin = window.frame.origin
+                    windowDragStartMouse = mouse
+                }
+                guard let origin = windowDragOrigin, let start = windowDragStartMouse else { return }
+                window.setFrameOrigin(
+                    CGPoint(
+                        x: origin.x + (mouse.x - start.x),
+                        y: origin.y + (mouse.y - start.y)
+                    )
+                )
+            }
+            .onEnded { _ in
+                windowDragOrigin = nil
+                windowDragStartMouse = nil
+            }
     }
 
     private static let topInset: CGFloat = 7
@@ -95,7 +173,11 @@ struct TabStrip: View {
 
     private var animationSignature: String {
         let collapsedCount = workspace.tabGroups.filter(\.isCollapsed).count
-        return "\(workspace.tabs.count)-\(workspace.visibleTabs.count)-\(collapsedCount)-\(workspace.selectedTabID?.uuidString ?? "")"
+        let pinnedCount = workspace.tabs.filter(\.isPinned).count
+        // Tab order belongs in the signature so a reorder slides the
+        // neighbours aside instead of snapping them into place.
+        let order = workspace.tabs.map { $0.id.uuidString.prefix(4) }.joined()
+        return "\(workspace.tabs.count)-\(workspace.visibleTabs.count)-\(collapsedCount)-\(pinnedCount)-\(order)-\(workspace.selectedTabID?.uuidString ?? "")"
     }
 
     // MARK: - Items
@@ -178,10 +260,20 @@ struct TabStrip: View {
                     addToNewGroup: { workspace.createGroup(withTabs: [tab.id]) },
                     addToGroup: { workspace.addTab(tab.id, toGroup: $0) },
                     removeFromGroup: { workspace.removeTabFromGroup(tab.id) },
+                    togglePin: { workspace.togglePin(tab.id) },
                     closeOthers: { workspace.closeOtherTabs(keeping: tab.id) }
-                )
+                ),
+                // Where the pointer is, not where it started: the chip
+                // under it is the slot this tab should occupy now.
+                dragMoved: { location in
+                    guard let targetID = Self.chipID(at: location, in: chipFrames),
+                          targetID != tab.id,
+                          let index = workspace.tabs.firstIndex(where: { $0.id == targetID })
+                    else { return }
+                    _ = workspace.moveTab(tab.id, toIndex: index)
+                }
             )
-            .tabStripRole(.tab(isSelected: tab.id == workspace.selectedTabID))
+            .tabStripRole(tab.isPinned ? .pinnedTab : .tab(isSelected: tab.id == workspace.selectedTabID))
             .modifier(
                 GroupEnclosureBackground(
                     colorID: group?.colorID,
@@ -212,6 +304,7 @@ struct TabChipMenuActions {
     let addToNewGroup: () -> Void
     let addToGroup: (UUID) -> Void
     let removeFromGroup: () -> Void
+    let togglePin: () -> Void
     let closeOthers: () -> Void
 }
 
@@ -223,6 +316,9 @@ struct TabChip: View {
     let select: () -> Void
     let close: () -> Void
     let menu: TabChipMenuActions
+    /// Fires continuously while this chip is dragged, with the pointer in the
+    /// strip's coordinate space.
+    let dragMoved: (CGPoint) -> Void
     @State private var isHovered = false
 
     init(
@@ -231,7 +327,8 @@ struct TabChip: View {
         groups: [TabGroupRecord],
         select: @escaping () -> Void,
         close: @escaping () -> Void,
-        menu: TabChipMenuActions
+        menu: TabChipMenuActions,
+        dragMoved: @escaping (CGPoint) -> Void
     ) {
         self.tab = tab
         _session = ObservedObject(wrappedValue: tab.session)
@@ -240,6 +337,7 @@ struct TabChip: View {
         self.select = select
         self.close = close
         self.menu = menu
+        self.dragMoved = dragMoved
     }
 
     private var host: String {
@@ -256,13 +354,85 @@ struct TabChip: View {
 
     var body: some View {
         // The chip is told its width by the strip's layout; reading it back
-        // here is what drives progressive disclosure inside the chip.
+        // here is what drives progressive disclosure inside the chip. A
+        // pinned chip ignores that and always shows the same icon-only face.
         GeometryReader { proxy in
-            chip(density: TabChipDensity.forWidth(proxy.size.width))
-                .frame(width: proxy.size.width, height: proxy.size.height, alignment: .leading)
+            Group {
+                if tab.isPinned {
+                    pinnedChip
+                } else {
+                    chip(density: TabChipDensity.forWidth(proxy.size.width))
+                }
+            }
+            .frame(width: proxy.size.width, height: proxy.size.height, alignment: .leading)
         }
         .frame(height: TabStripMetrics.chipHeight)
         .contextMenu { menuContents }
+        // Direct pointer tracking, not `.draggable`. SwiftUI's draggable runs
+        // through the system drag-and-drop session, which waits for a
+        // press-and-hold and plays a lift animation before anything moves —
+        // beside Chrome that reads as broken. The whole chip is the handle,
+        // padding and icon included, rather than the sliver beneath the title
+        // a Button used to leave over. Reordering happens live while dragging,
+        // as it does in every other browser, rather than only on release.
+        .contentShape(Rectangle())
+        .gesture(selectOrDragGesture)
+        .background(
+            GeometryReader { proxy in
+                Color.clear.preference(
+                    key: TabChipFramesKey.self,
+                    value: [tab.id: proxy.frame(in: .named(TabStrip.dropSpace))]
+                )
+            }
+        )
+    }
+
+    /// One gesture for both jobs. `minimumDistance: 0` means the press is
+    /// tracked from the first pixel, so a drag begins immediately instead of
+    /// waiting the way the system drag-and-drop session did. Whether it was a
+    /// click or a drag is decided on release, by how far the pointer actually
+    /// travelled.
+    private var selectOrDragGesture: some Gesture {
+        DragGesture(minimumDistance: 0, coordinateSpace: .named(TabStrip.dropSpace))
+            .onChanged { value in
+                guard abs(value.translation.width) > 4 else { return }
+                dragMoved(value.location)
+            }
+            .onEnded { value in
+                if abs(value.translation.width) <= 4 { select() }
+            }
+    }
+
+    /// A pinned chip: the site icon, centered, at the fixed width
+    /// `TabStripLayout` gives every pinned tab — no title, no close button.
+    /// Its tooltip is the only place the title still shows. Selecting and
+    /// dragging are the outer chip's, so a pinned tab reorders like any other.
+    private var pinnedChip: some View {
+        // Known gap: a pinned chip reaches assistive technology as a button
+        // carrying its title as a hint (`help`) rather than as its name.
+        // Taking the whole chip as the drag handle makes SwiftUI collapse it
+        // into one element, and every way of setting a label tried so far — on
+        // the chip, on the icon, and through `accessibilityRepresentation` —
+        // is dropped. The tab is reachable and announced; it just leads with
+        // "button" instead of the site. Worth another look.
+        leadingMark
+            .accessibilityAddTraits(isSelected ? [.isSelected] : [])
+            .accessibilityAction { select() }
+            .accessibilityAction(named: "Close tab") { close() }
+            .frame(maxWidth: .infinity, alignment: .center)
+            .frame(height: TabStripMetrics.chipHeight)
+        .background(
+            chipFill,
+            in: UnevenRoundedRectangle(topLeadingRadius: cornerRadius, topTrailingRadius: cornerRadius)
+        )
+        .overlay {
+            if isSelected {
+                TabChipTopBorder(cornerRadius: cornerRadius)
+                    .stroke(ClearframeTheme.hairline2, lineWidth: 1)
+            }
+        }
+        .onHover { isHovered = $0 }
+        .help(helpText)
     }
 
     private func chip(density: TabChipDensity) -> some View {
@@ -274,24 +444,24 @@ struct TabChip: View {
                 closeButton
                     .frame(maxWidth: .infinity)
             } else {
-                Button(action: select) {
-                    HStack(spacing: density.contentSpacing) {
-                        leadingMark
-                        if density.showsTitle {
-                            Text(tab.displayTitle)
-                                .font(.system(size: 12.5, weight: isSelected ? .semibold : .medium))
-                                .foregroundStyle(isSelected ? ClearframeTheme.textPrimary : ClearframeTheme.textSecondary)
-                                .lineLimit(1)
-                                .truncationMode(.tail)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                        }
+                // Deliberately not a Button. A SwiftUI Button on macOS
+                // consumes press-and-drag outright, so no ancestor gesture —
+                // not even a high-priority one — ever sees a drag that starts
+                // on it, and the tab could not be reordered by grabbing the
+                // part of it a person actually aims at. Selecting and dragging
+                // both belong to the outer chip instead.
+                HStack(spacing: density.contentSpacing) {
+                    leadingMark
+                    if density.showsTitle {
+                        Text(tab.displayTitle)
+                            .font(.system(size: 12.5, weight: isSelected ? .semibold : .medium))
+                            .foregroundStyle(isSelected ? ClearframeTheme.textPrimary : ClearframeTheme.textSecondary)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                     }
-                    .frame(maxWidth: .infinity, alignment: density.showsTitle ? .leading : .center)
-                    .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel(tab.displayTitle)
-                .accessibilityAddTraits(isSelected ? [.isSelected] : [])
+                .frame(maxWidth: .infinity, alignment: density.showsTitle ? .leading : .center)
 
                 if showsCloseButton(density: density) {
                     closeButton
@@ -341,7 +511,9 @@ struct TabChip: View {
                 .foregroundStyle(.purple)
                 .frame(width: 13, height: 13)
         } else {
-            SiteIconView(host: host)
+            // A pinned chip has no title beside the icon, so the icon carries
+            // the name; everywhere else it stays decorative.
+            SiteIconView(host: host, accessibilityName: tab.isPinned ? tab.displayTitle : nil)
         }
     }
 
@@ -368,17 +540,23 @@ struct TabChip: View {
         Button("New tab to the right", action: menu.newTabToRight)
         Button("Duplicate tab", action: menu.duplicate)
         Divider()
-        Button("Add tab to new group", action: menu.addToNewGroup)
-        let otherGroups = groups.filter { $0.id != tab.groupID }
-        if !otherGroups.isEmpty {
-            Menu("Add tab to group") {
-                ForEach(otherGroups) { group in
-                    Button(group.displayName) { menu.addToGroup(group.id) }
+        Button(tab.isPinned ? "Unpin tab" : "Pin tab", action: menu.togglePin)
+        // Pinning and grouping are two different ideas, and a pinned tab
+        // cannot belong to a group — so none of the group actions apply.
+        if !tab.isPinned {
+            Divider()
+            Button("Add tab to new group", action: menu.addToNewGroup)
+            let otherGroups = groups.filter { $0.id != tab.groupID }
+            if !otherGroups.isEmpty {
+                Menu("Add tab to group") {
+                    ForEach(otherGroups) { group in
+                        Button(group.displayName) { menu.addToGroup(group.id) }
+                    }
                 }
             }
-        }
-        if tab.groupID != nil {
-            Button("Remove tab from group", action: menu.removeFromGroup)
+            if tab.groupID != nil {
+                Button("Remove tab from group", action: menu.removeFromGroup)
+            }
         }
         Divider()
         Button("Close tab", action: close)
