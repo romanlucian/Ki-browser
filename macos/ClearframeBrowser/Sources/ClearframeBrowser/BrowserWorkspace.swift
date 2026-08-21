@@ -218,6 +218,9 @@ final class BrowserWorkspace: ObservableObject {
     private static let closedTabLimit = 10
 
     private var tabSubscriptions: [UUID: AnyCancellable] = [:]
+    /// Whether this window's tabs are the ones written back as the saved
+    /// session. Only the window that restored it writes to it.
+    private let persistsSession: Bool
     private var downloadSubscription: AnyCancellable?
     private var dataStoreSubscription: AnyCancellable?
     private var contentBlockingSubscription: AnyCancellable?
@@ -229,8 +232,16 @@ final class BrowserWorkspace: ObservableObject {
         searchSettings: SearchSettingsStore? = nil,
         contentBlocking: ContentRuleListProvider? = nil,
         favicons: FaviconStore? = nil,
-        webFeatures: WebFeatureSettingsStore? = nil
+        webFeatures: WebFeatureSettingsStore? = nil,
+        /// Only the first window takes the saved session. A second window
+        /// restoring the same tabs would show them twice and then race the
+        /// first one writing the session back.
+        restoresSession: Bool = true,
+        /// A tab dragged out of another window. It arrives alive, so this
+        /// window opens showing that page rather than a blank one.
+        adopting: BrowserTab? = nil
     ) {
+        self.persistsSession = restoresSession
         let resolvedDataStore = dataStore ?? BrowserDataStore()
         let resolvedDownloads = downloads ?? DownloadCenter()
         let resolvedSearchSettings = searchSettings ?? SearchSettingsStore()
@@ -256,7 +267,14 @@ final class BrowserWorkspace: ObservableObject {
             self?.objectWillChange.send()
         }
 
-        if let restored = resolvedDataStore.loadWorkspace(), !restored.tabs.isEmpty {
+        if let adopting {
+            // Its group belongs to the window it came from.
+            adopting.groupID = nil
+            tabs = [adopting]
+            selectedTabID = adopting.id
+        } else if restoresSession,
+                  let restored = resolvedDataStore.loadWorkspace(),
+                  !restored.tabs.isEmpty {
             let selectedID = restored.selectedTabID ?? restored.tabs.first?.id
             let reloadEverything = resolvedDataStore.reloadsRestoredTabs
             tabGroups = restored.groups
@@ -385,6 +403,79 @@ final class BrowserWorkspace: ObservableObject {
         if let groupID = tab.groupID { setCollapsed(false, forGroup: groupID) }
         selectedTabID = id
         selectedTab?.activate()
+        schedulePersistence()
+    }
+
+    /// A workspace built on the services the whole application shares, so a
+    /// second window sees the same bookmarks, history, downloads and site
+    /// icons as the first.
+    convenience init(services: BrowserServices, restoresSession: Bool, adopting: BrowserTab? = nil) {
+        self.init(
+            dataStore: services.dataStore,
+            downloads: services.downloads,
+            searchSettings: services.searchSettings,
+            contentBlocking: services.contentBlocking,
+            favicons: services.favicons,
+            webFeatures: services.webFeatures,
+            restoresSession: restoresSession,
+            adopting: adopting
+        )
+        services.register(self)
+    }
+
+    /// Whether a tab can leave this window. The last one cannot: pulling it
+    /// out would close this window to open an identical one, which is why
+    /// Chrome moves the window instead.
+    var canDetachTab: Bool { tabs.count > 1 }
+
+    /// Takes a tab out of this window and hands it back **alive**. Unlike
+    /// `closeTab` it is not torn down and not remembered as closed, because it
+    /// is not closing — it keeps its session, and with it its web view, its
+    /// scroll position and its back/forward list, ready to be shown in
+    /// another window.
+    ///
+    /// The caller must give the returned tab to another workspace. A tab
+    /// dropped on the floor here takes its web view with it.
+    /// - Parameter evenIfLast: allowed when the tab is going to another
+    ///   window rather than to a new one. The window it leaves is then empty
+    ///   and the caller closes it, which is what dropping a lone tab into
+    ///   another window means.
+    func detachTab(_ id: UUID, evenIfLast: Bool = false) -> BrowserTab? {
+        guard evenIfLast || canDetachTab,
+              let index = tabs.firstIndex(where: { $0.id == id })
+        else { return nil }
+        let wasSelected = selectedTabID == id
+        let tab = tabs.remove(at: index)
+        tabSubscriptions.removeValue(forKey: id)
+        // The group stays with the window that owns it.
+        tab.groupID = nil
+        if tabs.isEmpty {
+            selectedTabID = nil
+        } else if wasSelected {
+            let nextIndex = min(index, tabs.count - 1)
+            selectedTabID = tabs[nextIndex].id
+            tabs[nextIndex].activate()
+        }
+        pruneEmptyGroups()
+        if let groupID = selectedTab?.groupID { setCollapsed(false, forGroup: groupID) }
+        schedulePersistence()
+        return tab
+    }
+
+    /// Takes in a tab detached from another window, at `index` if the strip
+    /// has a position in mind — a drop lands where the pointer was — or at the
+    /// end otherwise. The pinned run still comes first, so a pinned tab
+    /// arriving lands inside it and an unpinned one lands after it.
+    func adopt(_ tab: BrowserTab, at index: Int? = nil) {
+        guard !tabs.contains(where: { $0.id == tab.id }) else { return }
+        tab.groupID = nil
+        let pinnedCount = tabs.filter(\.isPinned).count
+        var target = index ?? (tab.isPinned ? pinnedCount : tabs.count)
+        target = tab.isPinned ? min(target, pinnedCount) : max(target, pinnedCount)
+        tabs.insert(tab, at: min(max(target, 0), tabs.count))
+        configure(tab)
+        selectedTabID = tab.id
+        tab.activate()
         schedulePersistence()
     }
 
@@ -979,6 +1070,7 @@ final class BrowserWorkspace: ObservableObject {
     }
 
     func persistNow() {
+        guard persistsSession else { return }
         let persistentTabs = tabs.filter { !$0.isPrivate }
         let persistentSelection = persistentTabs.contains(where: { $0.id == selectedTabID })
             ? selectedTabID

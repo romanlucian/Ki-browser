@@ -53,7 +53,7 @@ Do not switch rendering engines now. CEF remains a future gated path for demonst
 
 ## Delivered version-1 capabilities
 
-- Standalone native window with startup activation and address-field focus.
+- Standalone native windows with startup activation and address-field focus. Each window keeps its own tabs and selection while sharing bookmarks, history, downloads, site icons, tracker rules, and settings; menu commands act on the window in front. A tab can be dragged out of the strip, up or down, into a window of its own, carrying its live web view so the page keeps its scroll position and back/forward list. Only the first window restores the saved session, and only that window's tabs are written back — a torn-off window's tabs are not restored after a relaunch.
 - Explicit on-device voice-input shell with visible status and review-before-submit behavior.
 - Independent tabs, safe close/teardown, safe popup routing, external HTTP/HTTPS opening, tab keyboard commands, and ephemeral private tabs.
 - Local restoration of up to 12 recent regular-tab URLs/titles with lazy loading, corruption recovery, and an opt-out; private tabs are excluded.

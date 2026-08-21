@@ -2162,3 +2162,321 @@ final class TabStripDropResolutionTests: XCTestCase {
         XCTAssertEqual(workspace.tabs.map(\.id), [ids[2], ids[0], ids[1]])
     }
 }
+
+/// Moving a tab from one window to another. `detachTab` and `adopt` are the
+/// two halves of dragging a tab out of the strip: the drag itself lives in
+/// AppKit's event dispatch, which no test here can drive, but everything the
+/// gesture asks the workspace to do is checked below.
+@MainActor
+final class TabDetachAndAdoptTests: XCTestCase {
+    func testDetachingRemovesTheTabAndHandsItBackAlive() throws {
+        let (workspace, teardown) = try Self.makeWorkspace(tabs: 3)
+        defer { teardown() }
+        let ids = workspace.tabs.map(\.id)
+        let session = workspace.tabs[1].session
+
+        let detached = try XCTUnwrap(workspace.detachTab(ids[1]))
+
+        XCTAssertEqual(detached.id, ids[1])
+        XCTAssertEqual(workspace.tabs.map(\.id), [ids[0], ids[2]])
+        // The same session object, which is what carries the web view — and so
+        // the page's scroll position and its back/forward list — into the new
+        // window instead of reloading it from the address.
+        XCTAssertTrue(detached.session === session)
+    }
+
+    /// A closed tab can be reopened; a moved one has not gone anywhere, so
+    /// offering to reopen it would put a second copy on screen.
+    func testDetachingDoesNotRecordTheTabAsClosed() throws {
+        let (workspace, teardown) = try Self.makeWorkspace(tabs: 2)
+        defer { teardown() }
+        let id = workspace.tabs[1].id
+        XCTAssertFalse(workspace.canReopenClosedTab)
+
+        _ = workspace.detachTab(id)
+
+        XCTAssertFalse(workspace.canReopenClosedTab)
+    }
+
+    /// Pulling the only tab out would close this window to open an identical
+    /// one. Chrome moves the window instead, and so does the strip.
+    func testTheLastTabInAWindowCannotBeDetached() throws {
+        let (workspace, teardown) = try Self.makeWorkspace(tabs: 1)
+        defer { teardown() }
+        XCTAssertEqual(workspace.tabs.count, 1)
+        XCTAssertFalse(workspace.canDetachTab)
+
+        XCTAssertNil(workspace.detachTab(workspace.tabs[0].id))
+        XCTAssertEqual(workspace.tabs.count, 1)
+    }
+
+    func testDetachingTheSelectedTabSelectsAnother() throws {
+        let (workspace, teardown) = try Self.makeWorkspace(tabs: 3)
+        defer { teardown() }
+        let ids = workspace.tabs.map(\.id)
+        workspace.selectTab(ids[1])
+        XCTAssertEqual(workspace.selectedTabID, ids[1])
+
+        _ = workspace.detachTab(ids[1])
+
+        XCTAssertNotNil(workspace.selectedTabID)
+        XCTAssertNotEqual(workspace.selectedTabID, ids[1])
+        XCTAssertTrue(workspace.tabs.contains { $0.id == workspace.selectedTabID })
+    }
+
+    /// The group belongs to the window it was made in, so a tab that leaves
+    /// arrives ungrouped rather than referring to a group that is not there.
+    func testADetachedTabLeavesItsGroupBehind() throws {
+        let (workspace, teardown) = try Self.makeWorkspace(tabs: 3)
+        defer { teardown() }
+        let ids = workspace.tabs.map(\.id)
+        workspace.createGroup(withTabs: [ids[0], ids[1]])
+        XCTAssertNotNil(workspace.tabs.first { $0.id == ids[1] }?.groupID)
+
+        let detached = try XCTUnwrap(workspace.detachTab(ids[1]))
+
+        XCTAssertNil(detached.groupID)
+    }
+
+    func testAdoptingPlacesTheTabAndSelectsIt() throws {
+        let (source, tearDownSource) = try Self.makeWorkspace(tabs: 2)
+        defer { tearDownSource() }
+        let (destination, tearDownDestination) = try Self.makeWorkspace(tabs: 2)
+        defer { tearDownDestination() }
+        let moved = try XCTUnwrap(source.detachTab(source.tabs[1].id))
+        let existing = destination.tabs.map(\.id)
+
+        destination.adopt(moved)
+
+        XCTAssertEqual(destination.tabs.map(\.id), existing + [moved.id])
+        XCTAssertEqual(destination.selectedTabID, moved.id)
+    }
+
+    func testAdoptingAtAnIndexDropsTheTabThere() throws {
+        let (source, tearDownSource) = try Self.makeWorkspace(tabs: 2)
+        defer { tearDownSource() }
+        let (destination, tearDownDestination) = try Self.makeWorkspace(tabs: 3)
+        defer { tearDownDestination() }
+        let moved = try XCTUnwrap(source.detachTab(source.tabs[1].id))
+        let existing = destination.tabs.map(\.id)
+
+        destination.adopt(moved, at: 1)
+
+        XCTAssertEqual(destination.tabs.map(\.id), [existing[0], moved.id, existing[1], existing[2]])
+    }
+
+    /// The pinned run still comes first. An unpinned tab dropped over the
+    /// pinned tabs lands after them rather than splitting them.
+    func testAnAdoptedUnpinnedTabLandsAfterThePinnedRun() throws {
+        let (source, tearDownSource) = try Self.makeWorkspace(tabs: 2)
+        defer { tearDownSource() }
+        let (destination, tearDownDestination) = try Self.makeWorkspace(tabs: 3)
+        defer { tearDownDestination() }
+        destination.pinTab(destination.tabs[0].id)
+        destination.pinTab(destination.tabs[1].id)
+        let moved = try XCTUnwrap(source.detachTab(source.tabs[1].id))
+        XCTAssertFalse(moved.isPinned)
+
+        destination.adopt(moved, at: 0)
+
+        let index = try XCTUnwrap(destination.tabs.firstIndex { $0.id == moved.id })
+        XCTAssertEqual(index, 2, "an unpinned tab must not land inside the pinned run")
+        XCTAssertTrue(destination.tabs.prefix(2).allSatisfy(\.isPinned))
+    }
+
+    func testAPinnedTabStaysPinnedWhenItMovesWindow() throws {
+        let (source, tearDownSource) = try Self.makeWorkspace(tabs: 2)
+        defer { tearDownSource() }
+        let (destination, tearDownDestination) = try Self.makeWorkspace(tabs: 2)
+        defer { tearDownDestination() }
+        source.pinTab(source.tabs[0].id)
+        let pinnedID = try XCTUnwrap(source.tabs.first { $0.isPinned }).id
+
+        let moved = try XCTUnwrap(source.detachTab(pinnedID))
+        destination.adopt(moved)
+
+        XCTAssertTrue(moved.isPinned)
+        XCTAssertEqual(destination.tabs.first?.id, moved.id, "a pinned tab belongs at the front")
+    }
+
+    func testAdoptingTheSameTabTwiceDoesNothingTheSecondTime() throws {
+        let (source, tearDownSource) = try Self.makeWorkspace(tabs: 2)
+        defer { tearDownSource() }
+        let (destination, tearDownDestination) = try Self.makeWorkspace(tabs: 1)
+        defer { tearDownDestination() }
+        let moved = try XCTUnwrap(source.detachTab(source.tabs[1].id))
+
+        destination.adopt(moved)
+        let after = destination.tabs.map(\.id)
+        destination.adopt(moved)
+
+        XCTAssertEqual(destination.tabs.map(\.id), after)
+    }
+
+    /// Only the window that restored the saved session writes it back. A
+    /// second window doing so would replace the session with its own tabs.
+    func testAWindowThatDidNotRestoreTheSessionDoesNotOverwriteIt() throws {
+        let suiteName = "clearframe.detach.persist.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let blocking = try BrowserBehaviorTests.makeTestContentBlocking(defaults: defaults)
+        defer { blocking.removeStore() }
+        let dataStore = BrowserDataStore(defaults: defaults)
+
+        let primary = BrowserWorkspace(
+            dataStore: dataStore,
+            downloads: DownloadCenter(),
+            searchSettings: SearchSettingsStore(defaults: defaults),
+            contentBlocking: blocking.provider
+        )
+        primary.addTab(url: URL(string: "https://kept.example")!)
+        primary.persistNow()
+        let saved = try XCTUnwrap(dataStore.loadWorkspace())
+
+        let secondary = BrowserWorkspace(
+            dataStore: dataStore,
+            downloads: DownloadCenter(),
+            searchSettings: SearchSettingsStore(defaults: defaults),
+            contentBlocking: blocking.provider,
+            restoresSession: false
+        )
+        secondary.addTab(url: URL(string: "https://transient.example")!)
+        secondary.persistNow()
+
+        let reloaded = try XCTUnwrap(dataStore.loadWorkspace())
+        XCTAssertEqual(reloaded.tabs.map(\.id), saved.tabs.map(\.id))
+    }
+
+    /// A window opened around a torn-off tab shows that page and nothing else
+    /// — in particular it does not also restore the first window's tabs.
+    func testAWindowOpenedAroundATabShowsOnlyThatTab() throws {
+        let (source, tearDownSource) = try Self.makeWorkspace(tabs: 3)
+        defer { tearDownSource() }
+        let moved = try XCTUnwrap(source.detachTab(source.tabs[1].id))
+
+        let suiteName = "clearframe.detach.adopting.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let blocking = try BrowserBehaviorTests.makeTestContentBlocking(defaults: defaults)
+        defer { blocking.removeStore() }
+
+        let torn = BrowserWorkspace(
+            dataStore: BrowserDataStore(defaults: defaults),
+            downloads: DownloadCenter(),
+            searchSettings: SearchSettingsStore(defaults: defaults),
+            contentBlocking: blocking.provider,
+            restoresSession: false,
+            adopting: moved
+        )
+
+        XCTAssertEqual(torn.tabs.map(\.id), [moved.id])
+        XCTAssertEqual(torn.selectedTabID, moved.id)
+        XCTAssertFalse(torn.canDetachTab, "the only tab in a new window cannot be torn out again")
+    }
+
+    private static func makeWorkspace(tabs count: Int) throws -> (BrowserWorkspace, () -> Void) {
+        let suiteName = "clearframe.detach.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        let blocking = try BrowserBehaviorTests.makeTestContentBlocking(defaults: defaults)
+        let workspace = BrowserWorkspace(
+            dataStore: BrowserDataStore(defaults: defaults),
+            downloads: DownloadCenter(),
+            searchSettings: SearchSettingsStore(defaults: defaults),
+            contentBlocking: blocking.provider
+        )
+        while workspace.tabs.count > 1, let last = workspace.tabs.last {
+            workspace.closeTab(last.id)
+        }
+        while workspace.tabs.count < count { workspace.addTab() }
+        return (workspace, {
+            blocking.removeStore()
+            defaults.removePersistentDomain(forName: suiteName)
+        })
+    }
+}
+
+/// Dropping a tab into a window that already has tabs, which is what happens
+/// when a drag is released over another window's strip.
+@MainActor
+final class TabMergeBetweenWindowsTests: XCTestCase {
+    /// The whole point of the merge: the window a lone tab leaves is empty,
+    /// so `detachTab` has to allow it and the strip closes that window.
+    func testTheLastTabCanLeaveWhenItIsJoiningAnotherWindow() throws {
+        let (source, tearDownSource) = try Self.makeWorkspace(tabs: 1)
+        defer { tearDownSource() }
+        let (destination, tearDownDestination) = try Self.makeWorkspace(tabs: 2)
+        defer { tearDownDestination() }
+        let id = source.tabs[0].id
+        XCTAssertFalse(source.canDetachTab)
+
+        let moved = try XCTUnwrap(source.detachTab(id, evenIfLast: true))
+        destination.adopt(moved)
+
+        XCTAssertTrue(source.tabs.isEmpty)
+        XCTAssertNil(source.selectedTabID, "an emptied window has nothing to select")
+        XCTAssertEqual(destination.tabs.count, 3)
+        XCTAssertEqual(destination.selectedTabID, moved.id)
+    }
+
+    /// Without `evenIfLast` the guard still holds, so a plain tear-off never
+    /// empties the window it came from.
+    func testALoneTabStillCannotBeTornIntoAWindowOfItsOwn() throws {
+        let (workspace, teardown) = try Self.makeWorkspace(tabs: 1)
+        defer { teardown() }
+        XCTAssertNil(workspace.detachTab(workspace.tabs[0].id))
+        XCTAssertEqual(workspace.tabs.count, 1)
+    }
+
+    func testATabMergedInKeepsItsLiveSession() throws {
+        let (source, tearDownSource) = try Self.makeWorkspace(tabs: 2)
+        defer { tearDownSource() }
+        let (destination, tearDownDestination) = try Self.makeWorkspace(tabs: 1)
+        defer { tearDownDestination() }
+        let session = source.tabs[1].session
+
+        let moved = try XCTUnwrap(source.detachTab(source.tabs[1].id))
+        destination.adopt(moved)
+
+        let landed = try XCTUnwrap(destination.tabs.first { $0.id == moved.id })
+        XCTAssertTrue(landed.session === session)
+    }
+
+    /// A tab moved out and then back again must not leave a stale copy in
+    /// either window.
+    func testATabCanBeMovedBackToTheWindowItCameFrom() throws {
+        let (first, tearDownFirst) = try Self.makeWorkspace(tabs: 2)
+        defer { tearDownFirst() }
+        let (second, tearDownSecond) = try Self.makeWorkspace(tabs: 1)
+        defer { tearDownSecond() }
+        let travellerID = first.tabs[1].id
+
+        let out = try XCTUnwrap(first.detachTab(travellerID))
+        second.adopt(out)
+        let back = try XCTUnwrap(second.detachTab(travellerID))
+        first.adopt(back)
+
+        XCTAssertEqual(first.tabs.filter { $0.id == travellerID }.count, 1)
+        XCTAssertFalse(second.tabs.contains { $0.id == travellerID })
+        XCTAssertEqual(second.tabs.count, 1)
+    }
+
+    private static func makeWorkspace(tabs count: Int) throws -> (BrowserWorkspace, () -> Void) {
+        let suiteName = "clearframe.merge.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        let blocking = try BrowserBehaviorTests.makeTestContentBlocking(defaults: defaults)
+        let workspace = BrowserWorkspace(
+            dataStore: BrowserDataStore(defaults: defaults),
+            downloads: DownloadCenter(),
+            searchSettings: SearchSettingsStore(defaults: defaults),
+            contentBlocking: blocking.provider
+        )
+        while workspace.tabs.count > 1, let last = workspace.tabs.last {
+            workspace.closeTab(last.id)
+        }
+        while workspace.tabs.count < count { workspace.addTab() }
+        return (workspace, {
+            blocking.removeStore()
+            defaults.removePersistentDomain(forName: suiteName)
+        })
+    }
+}
