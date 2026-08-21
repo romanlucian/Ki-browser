@@ -1920,7 +1920,7 @@ final class BrowserBehaviorTests: XCTestCase {
 
     /// A provider backed by a throwaway rule store and a two-domain list, so
     /// tests never touch the shared WebKit store or pay for the shipped list.
-    private static func makeTestContentBlocking(
+    fileprivate static func makeTestContentBlocking(
         defaults: UserDefaults,
         domains: [String] = ["metrics.example", "tracker.example"]
     ) throws -> TestContentBlocking {
@@ -2039,5 +2039,126 @@ private struct FailingProvider: PageIntelligenceProviding {
 
     func translate(text: String, sourceLanguage: String, targetLanguage: String) async throws -> String {
         throw PageIntelligenceError.remoteFailure("Deliberate provider failure")
+    }
+}
+
+/// The drop-resolution half of tab reordering. `TabStrip.chipID(at:in:)` is
+/// what turns a pointer position into the tab a drag has landed on, and it is
+/// the part a unit test can reach: the gesture that feeds it lives in AppKit's
+/// event dispatch, which no test here can drive.
+@MainActor
+final class TabStripDropResolutionTests: XCTestCase {
+    private let a = UUID(), b = UUID(), c = UUID()
+
+    /// Chips 120pt wide with 8pt gaps, laid out left to right.
+    private var frames: [UUID: CGRect] {
+        [
+            a: CGRect(x: 0, y: 0, width: 120, height: 32),
+            b: CGRect(x: 128, y: 0, width: 120, height: 32),
+            c: CGRect(x: 256, y: 0, width: 120, height: 32),
+        ]
+    }
+
+    func testAPointInsideAChipResolvesToThatChip() {
+        XCTAssertEqual(TabStrip.chipID(at: CGPoint(x: 60, y: 16), in: frames), a)
+        XCTAssertEqual(TabStrip.chipID(at: CGPoint(x: 190, y: 16), in: frames), b)
+        XCTAssertEqual(TabStrip.chipID(at: CGPoint(x: 300, y: 16), in: frames), c)
+    }
+
+    func testAPointInTheGapBetweenChipsSnapsToTheNearerOne() {
+        // The gap runs 120...128. 122 is nearer a's trailing edge, 126 nearer b's.
+        XCTAssertEqual(TabStrip.chipID(at: CGPoint(x: 122, y: 16), in: frames), a)
+        XCTAssertEqual(TabStrip.chipID(at: CGPoint(x: 126, y: 16), in: frames), b)
+    }
+
+    func testAPointPastEitherEndOfTheStripStillResolves() {
+        XCTAssertEqual(TabStrip.chipID(at: CGPoint(x: -500, y: 16), in: frames), a)
+        XCTAssertEqual(TabStrip.chipID(at: CGPoint(x: 5_000, y: 16), in: frames), c)
+    }
+
+    /// A drag runs along one row; drifting above or below the strip must not
+    /// change which tab the pointer is over.
+    func testVerticalDriftDoesNotChangeTheAnswer() {
+        for y in [-400.0, -1.0, 16.0, 33.0, 400.0] {
+            XCTAssertEqual(TabStrip.chipID(at: CGPoint(x: 190, y: y), in: frames), b, "y=\(y)")
+        }
+    }
+
+    /// Mid-animation the frames briefly overlap. The answer has to come from
+    /// the geometry, not from whatever order the dictionary happens to be in.
+    func testOverlappingFramesResolveToTheLeftmostAndAreStable() {
+        let overlapping: [UUID: CGRect] = [
+            a: CGRect(x: 100, y: 0, width: 120, height: 32),
+            b: CGRect(x: 100, y: 0, width: 120, height: 32),
+        ]
+        let answers = (0..<50).map { _ in TabStrip.chipID(at: CGPoint(x: 150, y: 16), in: overlapping) }
+        XCTAssertEqual(Set(answers).count, 1, "resolution must not depend on dictionary order")
+    }
+
+    func testAnEmptyStripResolvesToNothing() {
+        XCTAssertNil(TabStrip.chipID(at: CGPoint(x: 10, y: 10), in: [:]))
+    }
+
+    /// Three unpinned tabs in a throwaway defaults suite, plus the cleanup the
+    /// suite and the rule-list store both need.
+    private static func makeStripWorkspace() throws -> (BrowserWorkspace, () -> Void) {
+        let suiteName = "clearframe.tabstrip.drop.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        let blocking = try BrowserBehaviorTests.makeTestContentBlocking(defaults: defaults)
+        let workspace = BrowserWorkspace(
+            dataStore: BrowserDataStore(defaults: defaults),
+            downloads: DownloadCenter(),
+            searchSettings: SearchSettingsStore(defaults: defaults),
+            contentBlocking: blocking.provider
+        )
+        while workspace.tabs.count > 1, let last = workspace.tabs.last {
+            workspace.closeTab(last.id)
+        }
+        while workspace.tabs.count < 3 { workspace.addTab() }
+        return (workspace, {
+            blocking.removeStore()
+            defaults.removePersistentDomain(forName: suiteName)
+        })
+    }
+
+    /// End to end over the two pieces the gesture actually calls: resolve the
+    /// chip under the pointer, then ask the workspace to move the dragged tab
+    /// there. Dragging the first tab onto the third must land it third.
+    func testResolvingADropAndMovingTheTabReordersTheStrip() throws {
+        let (workspace, teardown) = try Self.makeStripWorkspace()
+        defer { teardown() }
+        let ids = workspace.tabs.map(\.id)
+        guard ids.count >= 3 else { return XCTFail("expected three tabs, got \(ids.count)") }
+
+        let laid: [UUID: CGRect] = [
+            ids[0]: CGRect(x: 0, y: 0, width: 120, height: 32),
+            ids[1]: CGRect(x: 128, y: 0, width: 120, height: 32),
+            ids[2]: CGRect(x: 256, y: 0, width: 120, height: 32),
+        ]
+        let target = TabStrip.chipID(at: CGPoint(x: 300, y: 16), in: laid)
+        XCTAssertEqual(target, ids[2])
+
+        let index = workspace.tabs.firstIndex { $0.id == target }
+        XCTAssertEqual(index, 2)
+        XCTAssertTrue(workspace.moveTab(ids[0], toIndex: index!))
+        XCTAssertEqual(workspace.tabs.map(\.id), [ids[1], ids[2], ids[0]])
+    }
+
+    /// The same path in the other direction — the user asked for both.
+    func testDraggingTheLastTabLeftwardsReordersTheStrip() throws {
+        let (workspace, teardown) = try Self.makeStripWorkspace()
+        defer { teardown() }
+        let ids = workspace.tabs.map(\.id)
+        guard ids.count >= 3 else { return XCTFail("expected three tabs, got \(ids.count)") }
+
+        let laid: [UUID: CGRect] = [
+            ids[0]: CGRect(x: 0, y: 0, width: 120, height: 32),
+            ids[1]: CGRect(x: 128, y: 0, width: 120, height: 32),
+            ids[2]: CGRect(x: 256, y: 0, width: 120, height: 32),
+        ]
+        let target = TabStrip.chipID(at: CGPoint(x: 40, y: 16), in: laid)
+        XCTAssertEqual(target, ids[0])
+        XCTAssertTrue(workspace.moveTab(ids[2], toIndex: 0))
+        XCTAssertEqual(workspace.tabs.map(\.id), [ids[2], ids[0], ids[1]])
     }
 }

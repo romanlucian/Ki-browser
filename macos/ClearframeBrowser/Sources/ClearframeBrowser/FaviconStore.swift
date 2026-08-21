@@ -334,15 +334,27 @@ extension EnvironmentValues {
 struct SiteIconView: View {
     let host: String
     var size: CGFloat = ClearframeTheme.siteIconSize
+    /// Decorative by default: the icon sits beside a title that already says
+    /// which site this is, so announcing it again is noise. A caller that
+    /// shows the icon *instead* of a title — a pinned tab — passes the name
+    /// here, so the icon is not hidden outright. Note that the name does not
+    /// currently survive as the element's label from a pinned chip; see
+    /// `TabChip.pinnedChip`.
+    var accessibilityName: String?
     @Environment(\.faviconStore) private var store
 
-    init(host: String, size: CGFloat = ClearframeTheme.siteIconSize) {
+    init(host: String, size: CGFloat = ClearframeTheme.siteIconSize, accessibilityName: String? = nil) {
         self.host = host
         self.size = size
+        self.accessibilityName = accessibilityName
     }
 
-    init(urlString: String, size: CGFloat = ClearframeTheme.siteIconSize) {
-        self.init(host: URL(string: urlString)?.host ?? "", size: size)
+    init(urlString: String, size: CGFloat = ClearframeTheme.siteIconSize, accessibilityName: String? = nil) {
+        self.init(
+            host: URL(string: urlString)?.host ?? "",
+            size: size,
+            accessibilityName: accessibilityName
+        )
     }
 
     var body: some View {
@@ -354,7 +366,8 @@ struct SiteIconView: View {
             }
         }
         .frame(width: size, height: size)
-        .accessibilityHidden(true)
+        .accessibilityHidden(accessibilityName == nil)
+        .accessibilityLabel(accessibilityName ?? "")
     }
 }
 
