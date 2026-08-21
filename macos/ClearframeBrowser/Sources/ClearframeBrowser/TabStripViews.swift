@@ -13,21 +13,52 @@ struct TabDragUpdate {
     let translation: CGSize
 
     /// How far a press may wander and still count as a click rather than a
-    /// drag. Small enough that a deliberate pull is never mistaken for a tap,
-    /// large enough to survive the shake of a real hand on a trackpad.
-    static let slop: CGFloat = 4
-    /// How far out of the strip a tab must travel, up or down, before it means
-    /// "into its own window". A chip is 34pt tall, so this is comfortably
-    /// clear of it: dragging along the strip never trips it by accident.
-    static let tearOffDistance: CGFloat = 44
+    /// drag, measured as a straight-line distance in any direction — the same
+    /// rule and the same 10pt as Chrome's `kMinimumDragDistance`, which is
+    /// forgiving enough for a real hand on a trackpad.
+    static let dragStartDistance: CGFloat = 10
+
+    /// How far the pointer must travel sideways after one reorder before
+    /// another is allowed. Chrome's `kHorizontalMoveThreshold`, 16 DIPs, and
+    /// for the same reason: without it a chip resting on a boundary swaps back
+    /// and forth with every tremor.
+    static let reorderGate: CGFloat = 16
+
+    /// How far above or below the row of chips the pointer goes before the tab
+    /// means "into its own window". Chrome's `kVerticalDetachMagnetism`, and
+    /// like Chrome it is measured from the strip itself rather than from
+    /// wherever the press began — grabbing a tab near its bottom edge should
+    /// not mean a shorter pull than grabbing it near the top.
+    static let detachMagnetism: CGFloat = 15
 
     var isTap: Bool {
-        abs(translation.width) <= Self.slop && abs(translation.height) <= Self.slop
+        hypot(translation.width, translation.height) <= Self.dragStartDistance
     }
 
-    /// True once the pointer has left the strip vertically, in either
-    /// direction — Chrome tears a tab out downwards or upwards alike.
-    var hasLeftStrip: Bool { abs(translation.height) > Self.tearOffDistance }
+    /// Whether the press has travelled far enough to be a drag at all.
+    var hasStartedDragging: Bool { !isTap }
+
+    /// True once the pointer has left the row of chips, in either direction —
+    /// Chrome tears a tab out downwards or upwards alike.
+    func hasLeftStrip(row: CGRect) -> Bool {
+        location.y < row.minY - Self.detachMagnetism || location.y > row.maxY + Self.detachMagnetism
+    }
+}
+
+/// The chip currently in hand, and how far it has been pulled from the slot
+/// the layout gave it.
+///
+/// Without this a dragged chip stays pinned in its slot and only the order
+/// changes underneath it: nothing moves until the pointer has crossed a whole
+/// tab, and then everything jumps at once. Carrying the offset lets the chip
+/// follow the pointer the way Chrome's does, so the drag reads as continuous.
+struct TabChipDragState: Equatable {
+    let id: UUID
+    /// Where the pointer took hold, measured from the chip's centre, so the
+    /// chip does not leap under the cursor the instant a drag begins.
+    let grabOffset: CGFloat
+    /// How far the chip is drawn from its slot, right now.
+    var offset: CGFloat
 }
 
 /// Where each chip currently sits, in the strip's own coordinate space, so a
@@ -45,6 +76,13 @@ struct TabChipFramesKey: PreferenceKey {
 struct TabStrip: View {
     static let dropSpace = "clearframe.tabStrip"
     @State private var chipFrames: [UUID: CGRect] = [:]
+    @State private var dragState: TabChipDragState?
+    /// Where the pointer was when this drag last reordered anything, so the
+    /// next reorder has to earn it — see `TabDragUpdate.reorderGate`.
+    @State private var lastReorderX: CGFloat?
+    /// Set once a drag has already torn its tab out, so the release that ends
+    /// the same gesture does not try to tear it out a second time.
+    @State private var dragToreOff = false
     @StateObject private var windowHolder = BrowserWindowHolder()
     @Environment(\.openWindow) private var openWindow
     @State private var windowDragOrigin: CGPoint?
@@ -169,7 +207,7 @@ struct TabStrip: View {
         guard let (target, targetWindow) = services.dropTarget(
             at: NSEvent.mouseLocation,
             excluding: workspace,
-            stripHeight: Self.topInset + TabStripMetrics.chipHeight
+            stripHeight: Self.stripHeight
         ) else { return false }
         // Two windows in different profiles are two different sets of logins.
         // Dropping a tab across that line would leave it showing one profile's
@@ -194,7 +232,7 @@ struct TabStrip: View {
     /// so the page keeps its scroll position and its back/forward list rather
     /// than reloading from the address.
     @MainActor
-    private func tearOff(_ tabID: UUID) {
+    private func tearOff(_ tabID: UUID, followingPointer: Bool = false) {
         guard let tab = workspace.detachTab(tabID) else { return }
         let pointer = NSEvent.mouseLocation
         // Offset so the new window's own strip lands under the pointer rather
@@ -206,7 +244,8 @@ struct TabStrip: View {
         services.markNextWindow(profileID: workspace.profileID)
         services.handOff(
             tab: tab,
-            windowTopLeft: CGPoint(x: pointer.x - Self.tearOffPointerInset, y: pointer.y + Self.topInset)
+            windowTopLeft: CGPoint(x: pointer.x - Self.tearOffPointerInset, y: pointer.y + Self.topInset),
+            followsPointer: followingPointer
         )
         openWindow(id: ClearframeBrowserApp.browserWindowID)
         // If no window came to claim it, the tab would be gone along with the
@@ -255,6 +294,10 @@ struct TabStrip: View {
             .onChanged { _ in moveWindowWithPointer() }
             .onEnded { _ in endWindowDrag() }
     }
+
+    /// The strip's own height: the band a drop has to land in for a tab to
+    /// join that window.
+    static var stripHeight: CGFloat { topInset + TabStripMetrics.chipHeight }
 
     private static let topInset: CGFloat = 7
     private static let horizontalInset: CGFloat = 12
@@ -363,30 +406,85 @@ struct TabStrip: View {
                     canMoveToNewWindow: workspace.canDetachTab
                 ),
                 dragChanged: { update in
-                    guard !update.hasLeftStrip else {
-                        // Pulled clear of the strip. With nothing to tear off
-                        // — one tab, one window — the window follows the
-                        // pointer instead, which is what Chrome does.
-                        if !workspace.canDetachTab { moveWindowWithPointer() }
+                    guard let slot = chipFrames[tab.id] else { return }
+                    guard !update.hasLeftStrip(row: slot) else {
+                        dragState = nil
+                        // With nothing to tear off — one tab, one window — the
+                        // window itself follows the pointer, as Chrome does.
+                        guard workspace.canDetachTab else {
+                            moveWindowWithPointer()
+                            return
+                        }
+                        // Otherwise the tab leaves now, mid-gesture, and the
+                        // window it becomes follows the pointer for the rest of
+                        // the drag. Waiting for the button to come up is what
+                        // made tearing out feel like a delayed result rather
+                        // than something happening in your hand.
+                        guard !dragToreOff else { return }
+                        dragToreOff = true
+                        tearOff(tab.id, followingPointer: true)
                         return
                     }
-                    // Where the pointer is, not where it started: the chip
-                    // under it is the slot this tab should occupy now.
-                    guard abs(update.translation.width) > TabDragUpdate.slop,
-                          let targetID = Self.chipID(at: update.location, in: chipFrames),
+                    // Measured against the chip's slot each time rather than
+                    // accumulated, so the offset re-bases itself the moment a
+                    // reorder moves that slot instead of jumping a tab's width.
+                    let grab = dragState?.id == tab.id
+                        ? dragState?.grabOffset ?? 0
+                        : (update.location.x - update.translation.width) - slot.midX
+                    let offset = update.location.x - slot.midX - grab
+                    dragState = TabChipDragState(id: tab.id, grabOffset: grab, offset: offset)
+
+                    // The chip's own centre decides, not the pointer's. Waiting
+                    // for the pointer to reach the next chip means dragging a
+                    // whole tab's width before anything happens; the chip's
+                    // centre reaches it in half that, and keeps reaching the
+                    // next one as it travels.
+                    //
+                    // The gate is what keeps that from becoming jitter: after a
+                    // reorder the pointer has to travel again before the next
+                    // one, scaled down when tabs are narrow so a compressed
+                    // strip stays as responsive as a roomy one.
+                    guard update.hasStartedDragging else { return }
+                    let gate = TabDragUpdate.reorderGate
+                        * min(1, slot.width / TabStripMetrics.maximumTabWidth)
+                    if let last = lastReorderX, abs(update.location.x - last) < gate { return }
+                    guard let targetID = Self.chipID(
+                              at: CGPoint(x: slot.midX + offset, y: slot.midY),
+                              in: chipFrames
+                          ),
                           targetID != tab.id,
                           let index = workspace.tabs.firstIndex(where: { $0.id == targetID })
                     else { return }
-                    _ = workspace.moveTab(tab.id, toIndex: index)
+                    if workspace.moveTab(tab.id, toIndex: index) {
+                        lastReorderX = update.location.x
+                    }
                 },
                 dragEnded: { update in
                     endWindowDrag()
-                    guard update.hasLeftStrip else { return }
+                    let row = chipFrames[tab.id] ?? .zero
+                    let alreadyGone = dragToreOff
+                    dragState = nil
+                    lastReorderX = nil
+                    dragToreOff = false
+                    // The tab left mid-drag and its new window has been
+                    // following the pointer; that window decides what the
+                    // release means, not this strip.
+                    guard !alreadyGone, update.hasLeftStrip(row: row) else { return }
                     // Let go over another window's strip? Then the tab joins
                     // that window. Otherwise it gets a window of its own.
                     if !dropIntoAnotherWindow(tab.id) { tearOff(tab.id) }
                 }
             )
+            // Drawn where the pointer has it, above the chips sliding past
+            // underneath. `offset` moves the drawing only, so the layout keeps
+            // giving this tab a slot and the reorder maths stays honest.
+            .offset(x: dragState?.id == tab.id ? dragState?.offset ?? 0 : 0)
+            .zIndex(dragState?.id == tab.id ? 1 : 0)
+            // The chip in hand tracks the pointer exactly; animating it would
+            // put it behind the cursor, which is the lag being fixed here. Its
+            // neighbours still slide, because their movement comes from the
+            // layout rather than from this offset.
+            .animation(nil, value: dragState)
             .tabStripRole(tab.isPinned ? .pinnedTab : .tab(isSelected: tab.id == workspace.selectedTabID))
             .modifier(
                 GroupEnclosureBackground(

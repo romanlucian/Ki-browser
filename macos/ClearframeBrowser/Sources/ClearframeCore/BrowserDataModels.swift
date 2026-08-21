@@ -218,23 +218,37 @@ public struct BookmarkRecord: Codable, Equatable, Identifiable, Sendable {
     public let url: String
     public let createdAt: Date
     public var folderID: UUID?
+    /// Where this sits among the bookmarks beside it, so a bar can be put in
+    /// the order somebody actually wants rather than the order things happened
+    /// to be saved.
+    ///
+    /// Optional because it did not exist before bookmarks could be reordered.
+    /// A record saved then decodes with nothing here, and `BookmarkCollection`
+    /// fills it in from the order those bookmarks were already being shown in —
+    /// newest first — so nobody's bar rearranges itself on upgrade.
+    public var position: Int?
 
     public init(
         id: UUID = UUID(),
         title: String,
         url: String,
         createdAt: Date = Date(),
-        folderID: UUID? = nil
+        folderID: UUID? = nil,
+        position: Int? = nil
     ) {
         self.id = id
         self.title = title
         self.url = url
         self.createdAt = createdAt
         self.folderID = folderID
+        self.position = position
     }
 
+    // Listed explicitly, so a field added to the struct and not added here is
+    // silently dropped on the way to disk. `position` was, until a round-trip
+    // test caught it.
     private enum CodingKeys: String, CodingKey {
-        case id, title, url, createdAt, folderID
+        case id, title, url, createdAt, folderID, position
     }
 
     public init(from decoder: Decoder) throws {
@@ -244,6 +258,9 @@ public struct BookmarkRecord: Codable, Equatable, Identifiable, Sendable {
         url = try container.decode(String.self, forKey: .url)
         createdAt = try container.decode(Date.self, forKey: .createdAt)
         folderID = try container.decodeIfPresent(UUID.self, forKey: .folderID)
+        // Absent in anything saved before bookmarks could be reordered; the
+        // collection fills it in from the order they were already shown in.
+        position = try container.decodeIfPresent(Int.self, forKey: .position)
     }
 }
 
@@ -337,6 +354,7 @@ public struct BookmarkCollection: Codable, Equatable, Sendable {
         self.folders = folders
         self.bookmarks = bookmarks
         normalizeReferences()
+        assignMissingPositions()
     }
 
     public func folders(in parentID: UUID?) -> [BookmarkFolderRecord] {
@@ -345,10 +363,21 @@ public struct BookmarkCollection: Codable, Equatable, Sendable {
             .sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
     }
 
+    /// The bookmarks in a folder, in the order they should be shown.
+    ///
+    /// Every record carries a position by the time it gets here — `init`
+    /// assigns one to anything saved before positions existed — so this is a
+    /// plain sort. `createdAt` remains the tie-breaker, which is what keeps two
+    /// records that somehow share a position from swapping about at random.
     public func bookmarks(in folderID: UUID?) -> [BookmarkRecord] {
         bookmarks
             .filter { $0.folderID == folderID }
-            .sorted { $0.createdAt > $1.createdAt }
+            .sorted { lhs, rhs in
+                let left = lhs.position ?? Int.max
+                let right = rhs.position ?? Int.max
+                if left != right { return left < right }
+                return lhs.createdAt > rhs.createdAt
+            }
     }
 
     public func folder(id: UUID) -> BookmarkFolderRecord? {
@@ -410,6 +439,13 @@ public struct BookmarkCollection: Codable, Equatable, Sendable {
             safeBookmark.folderID = nil
         }
         bookmarks.removeAll { $0.id == safeBookmark.id || $0.url == safeBookmark.url }
+        // A new bookmark joins the end of its folder, the way Chrome adds one.
+        // It used to appear first, which made sense when order came from
+        // recency; now that a bar can be arranged by hand, something new
+        // jumping to the front would shuffle what somebody put in place.
+        if safeBookmark.position == nil {
+            safeBookmark.position = bookmarks(in: safeBookmark.folderID).count
+        }
         bookmarks.insert(safeBookmark, at: 0)
     }
 
@@ -452,7 +488,62 @@ public struct BookmarkCollection: Codable, Equatable, Sendable {
     public mutating func moveBookmark(id: UUID, to folderID: UUID?) {
         guard let index = bookmarks.firstIndex(where: { $0.id == id }) else { return }
         let safeFolder = folderID.flatMap(folder(id:))?.id
+        let destinationChanged = bookmarks[index].folderID != safeFolder
         bookmarks[index].folderID = safeFolder
+        // Arriving in a new folder means arriving at its end, not keeping a
+        // position that belonged to the folder it left.
+        if destinationChanged {
+            bookmarks[index].position = (bookmarks(in: safeFolder).count)
+            renumber(folderID: safeFolder)
+        }
+    }
+
+    /// Puts a bookmark at `index` among its siblings, moving the rest aside.
+    ///
+    /// Indices are clamped rather than rejected: a drop past the end of a bar
+    /// means the end of the bar, which is what the person doing the dropping
+    /// meant.
+    public mutating func moveBookmark(id: UUID, toIndex index: Int) {
+        guard let record = bookmarks.first(where: { $0.id == id }) else { return }
+        var siblings = bookmarks(in: record.folderID)
+        guard let current = siblings.firstIndex(where: { $0.id == id }) else { return }
+        let target = min(max(index, 0), siblings.count - 1)
+        guard target != current else { return }
+        let moving = siblings.remove(at: current)
+        siblings.insert(moving, at: target)
+        for (offset, sibling) in siblings.enumerated() {
+            guard let slot = bookmarks.firstIndex(where: { $0.id == sibling.id }) else { continue }
+            bookmarks[slot].position = offset
+        }
+    }
+
+    /// Gives a position to anything saved before positions existed, using the
+    /// order those bookmarks were already being shown in — newest first — so an
+    /// upgrade does not rearrange somebody's bar under them.
+    private mutating func assignMissingPositions() {
+        let folderIDs = Set(bookmarks.map(\.folderID))
+        for folderID in folderIDs where bookmarks.contains(where: { $0.folderID == folderID && $0.position == nil }) {
+            let ordered = bookmarks
+                .filter { $0.folderID == folderID }
+                .sorted { lhs, rhs in
+                    let left = lhs.position ?? Int.max
+                    let right = rhs.position ?? Int.max
+                    if left != right { return left < right }
+                    return lhs.createdAt > rhs.createdAt
+                }
+            for (offset, record) in ordered.enumerated() {
+                guard let slot = bookmarks.firstIndex(where: { $0.id == record.id }) else { continue }
+                bookmarks[slot].position = offset
+            }
+        }
+    }
+
+    /// Closes the gaps in one folder's numbering after something left it.
+    private mutating func renumber(folderID: UUID?) {
+        for (offset, record) in bookmarks(in: folderID).enumerated() {
+            guard let slot = bookmarks.firstIndex(where: { $0.id == record.id }) else { continue }
+            bookmarks[slot].position = offset
+        }
     }
 
     private mutating func normalizeReferences() {

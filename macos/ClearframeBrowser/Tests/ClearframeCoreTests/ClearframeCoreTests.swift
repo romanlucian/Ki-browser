@@ -953,13 +953,21 @@ final class ClearframeCoreTests: XCTestCase {
             )
         }
 
-        XCTAssertEqual(collection.bookmarks, [saved], "a refused edit changes nothing at all")
+        // `saved` was built before it went into the collection, which is what
+        // gives a bookmark its position; comparing against what the collection
+        // holds keeps this about the edit being refused.
+        let stored = try XCTUnwrap(collection.bookmarks.first)
+        XCTAssertEqual(stored.id, saved.id)
+        XCTAssertEqual(stored.title, saved.title)
+        XCTAssertEqual(stored.url, saved.url)
+        XCTAssertEqual(collection.bookmarks.count, 1, "a refused edit changes nothing at all")
 
         XCTAssertFalse(
             collection.updateBookmark(id: UUID(), title: "Ghost", url: "https://example.com/ghost"),
             "an unknown bookmark is not silently created"
         )
-        XCTAssertEqual(collection.bookmarks, [saved])
+        XCTAssertEqual(collection.bookmarks.count, 1)
+        XCTAssertEqual(collection.bookmarks.first?.id, saved.id)
     }
 
     func testEditingABookmarkOntoAnAddressAlreadySavedLeavesOneRecord() throws {
@@ -1255,4 +1263,142 @@ private struct PlainEnglishContractCase: Decodable {
 private struct ReadingTimeContractCase: Decodable {
     let wordCount: Int
     let expectedMinutes: Int
+}
+
+/// Bookmarks in the order somebody put them, rather than the order they
+/// happened to be saved in.
+final class BookmarkOrderingTests: XCTestCase {
+    private func bookmark(_ title: String, minutesAgo: Int) -> BookmarkRecord {
+        BookmarkRecord(
+            title: title,
+            url: "https://\(title.lowercased()).example",
+            createdAt: Date(timeIntervalSince1970: 1_000_000 - Double(minutesAgo * 60))
+        )
+    }
+
+    /// The upgrade that must not surprise anybody: records saved before
+    /// positions existed keep the order they were already being shown in,
+    /// which was newest first.
+    func testBookmarksSavedBeforeOrderingKeepTheOrderTheyWereShownIn() {
+        let collection = BookmarkCollection(bookmarks: [
+            bookmark("Oldest", minutesAgo: 300),
+            bookmark("Newest", minutesAgo: 1),
+            bookmark("Middle", minutesAgo: 100),
+        ])
+        XCTAssertEqual(
+            collection.bookmarks(in: nil).map(\.title),
+            ["Newest", "Middle", "Oldest"]
+        )
+        XCTAssertTrue(
+            collection.bookmarks.allSatisfy { $0.position != nil },
+            "everything gains a position on load, so later sorting is not guesswork"
+        )
+    }
+
+    func testABookmarkCanBeMovedAlongTheBar() {
+        var collection = BookmarkCollection(bookmarks: [
+            bookmark("A", minutesAgo: 1),
+            bookmark("B", minutesAgo: 2),
+            bookmark("C", minutesAgo: 3),
+        ])
+        let c = collection.bookmarks(in: nil)[2]
+
+        collection.moveBookmark(id: c.id, toIndex: 0)
+
+        XCTAssertEqual(collection.bookmarks(in: nil).map(\.title), ["C", "A", "B"])
+    }
+
+    func testMovingRightwardsLandsWhereItWasDropped() {
+        var collection = BookmarkCollection(bookmarks: [
+            bookmark("A", minutesAgo: 1),
+            bookmark("B", minutesAgo: 2),
+            bookmark("C", minutesAgo: 3),
+        ])
+        let a = collection.bookmarks(in: nil)[0]
+
+        collection.moveBookmark(id: a.id, toIndex: 2)
+
+        XCTAssertEqual(collection.bookmarks(in: nil).map(\.title), ["B", "C", "A"])
+    }
+
+    /// A drop past the end means the end, rather than nothing happening.
+    func testAnIndexPastTheEndClampsInsteadOfFailing() {
+        var collection = BookmarkCollection(bookmarks: [
+            bookmark("A", minutesAgo: 1),
+            bookmark("B", minutesAgo: 2),
+        ])
+        let a = collection.bookmarks(in: nil)[0]
+
+        collection.moveBookmark(id: a.id, toIndex: 99)
+        XCTAssertEqual(collection.bookmarks(in: nil).map(\.title), ["B", "A"])
+
+        collection.moveBookmark(id: a.id, toIndex: -5)
+        XCTAssertEqual(collection.bookmarks(in: nil).map(\.title), ["A", "B"])
+    }
+
+    func testTheOrderSurvivesBeingSavedAndLoaded() throws {
+        var collection = BookmarkCollection(bookmarks: [
+            bookmark("A", minutesAgo: 1),
+            bookmark("B", minutesAgo: 2),
+            bookmark("C", minutesAgo: 3),
+        ])
+        let c = collection.bookmarks(in: nil)[2]
+        collection.moveBookmark(id: c.id, toIndex: 0)
+
+        let data = try JSONEncoder().encode(collection.bookmarks)
+        let decoded = BookmarkCollection(bookmarks: try JSONDecoder().decode([BookmarkRecord].self, from: data))
+
+        XCTAssertEqual(decoded.bookmarks(in: nil).map(\.title), ["C", "A", "B"])
+    }
+
+    /// A new bookmark joins the end, the way Chrome adds one. Arriving at the
+    /// front would shuffle an arrangement somebody made by hand.
+    func testANewBookmarkJoinsTheEndOfItsFolder() {
+        var collection = BookmarkCollection(bookmarks: [
+            bookmark("A", minutesAgo: 1),
+            bookmark("B", minutesAgo: 2),
+        ])
+        collection.addBookmark(BookmarkRecord(title: "New", url: "https://new.example"))
+
+        XCTAssertEqual(collection.bookmarks(in: nil).map(\.title), ["A", "B", "New"])
+    }
+
+    /// Ordering is per folder: moving inside one leaves the other alone.
+    func testEachFolderIsOrderedIndependently() {
+        let folder = BookmarkFolderRecord(title: "Work", emoji: "📁")
+        var collection = BookmarkCollection(folders: [folder], bookmarks: [
+            bookmark("Loose1", minutesAgo: 1),
+            bookmark("Loose2", minutesAgo: 2),
+        ])
+        collection.addBookmark(
+            BookmarkRecord(title: "Filed1", url: "https://filed1.example", folderID: folder.id)
+        )
+        collection.addBookmark(
+            BookmarkRecord(title: "Filed2", url: "https://filed2.example", folderID: folder.id)
+        )
+        let filed2 = try? XCTUnwrap(collection.bookmarks(in: folder.id).last)
+
+        collection.moveBookmark(id: filed2!.id, toIndex: 0)
+
+        XCTAssertEqual(collection.bookmarks(in: folder.id).map(\.title), ["Filed2", "Filed1"])
+        XCTAssertEqual(collection.bookmarks(in: nil).map(\.title), ["Loose1", "Loose2"])
+    }
+
+    /// A bookmark dragged into a folder arrives at that folder's end rather
+    /// than keeping a position that belonged to where it came from.
+    func testMovingIntoAFolderPutsItAtThatFoldersEnd() {
+        let folder = BookmarkFolderRecord(title: "Work", emoji: "📁")
+        var collection = BookmarkCollection(folders: [folder], bookmarks: [
+            bookmark("Loose", minutesAgo: 1),
+        ])
+        collection.addBookmark(
+            BookmarkRecord(title: "Filed", url: "https://filed.example", folderID: folder.id)
+        )
+        let loose = collection.bookmarks(in: nil)[0]
+
+        collection.moveBookmark(id: loose.id, to: folder.id)
+
+        XCTAssertEqual(collection.bookmarks(in: folder.id).map(\.title), ["Filed", "Loose"])
+        XCTAssertTrue(collection.bookmarks(in: nil).isEmpty)
+    }
 }

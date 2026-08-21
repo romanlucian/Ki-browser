@@ -158,8 +158,15 @@ final class BrowserBehaviorTests: XCTestCase {
         defer { TestSuiteCleanup.destroy(suiteName, defaults: defaults) }
         let key = "clearframe.bookmarks.v1"
         let corrupt = Data("not valid bookmark JSON".utf8)
-        let expected = [BookmarkRecord(title: "Recovered", url: "https://example.com/recovered")]
-        let backup = try JSONEncoder().encode(expected)
+        // Saved without a position, as records were before bookmarks could be
+        // reordered; loading gives it one, which is the migration doing its job.
+        let saved = [BookmarkRecord(title: "Recovered", url: "https://example.com/recovered")]
+        let expected = saved.map { record -> BookmarkRecord in
+            var positioned = record
+            positioned.position = 0
+            return positioned
+        }
+        let backup = try JSONEncoder().encode(saved)
         defaults.set(corrupt, forKey: key)
         defaults.set(backup, forKey: "\(key).lastKnownGood")
 
@@ -172,6 +179,9 @@ final class BrowserBehaviorTests: XCTestCase {
             [BookmarkRecord].self,
             from: XCTUnwrap(defaults.data(forKey: key))
         )
+        // Recovery restores from the backup and writes the loaded collection
+        // back, so what lands in the primary key is the migrated form: the
+        // record it kept, now carrying the position it was given on load.
         XCTAssertEqual(restoredPrimary, expected)
     }
 
@@ -3085,5 +3095,80 @@ final class ProfileErasureTests: XCTestCase {
         // preferences are still readable afterwards.
         XCTAssertEqual(ProfileStorage.defaults(for: BrowserProfileRecord.defaultID), UserDefaults.standard)
         XCTAssertNotNil(UserDefaults.standard)
+    }
+}
+
+/// The thresholds that decide what a press means. The numbers come from
+/// Chromium's own tab-drag code, so that a hand used to Chrome finds the same
+/// gesture here.
+@MainActor
+final class TabDragThresholdTests: XCTestCase {
+    private func update(dx: CGFloat, dy: CGFloat, at point: CGPoint = .zero) -> TabDragUpdate {
+        TabDragUpdate(location: point, translation: CGSize(width: dx, height: dy))
+    }
+
+    /// Chrome's `kMinimumDragDistance` is 10, measured in any direction rather
+    /// than per axis: a diagonal wander of 8 across and 8 down is 11 away, and
+    /// is a drag.
+    func testAPressBecomesADragAtTenPointsInAnyDirection() {
+        XCTAssertTrue(update(dx: 6, dy: 0).isTap)
+        XCTAssertTrue(update(dx: 0, dy: 9).isTap)
+        XCTAssertTrue(update(dx: 6, dy: 6).isTap, "8.5 away is still a click")
+        XCTAssertFalse(update(dx: 11, dy: 0).isTap)
+        XCTAssertFalse(update(dx: 8, dy: 8).isTap, "11.3 away is a drag")
+        XCTAssertEqual(update(dx: 11, dy: 0).hasStartedDragging, true)
+    }
+
+    /// Measured from the row of chips, not from where the press began, so
+    /// grabbing a tab low does not mean a shorter pull than grabbing it high.
+    func testTearingOutIsMeasuredFromTheStripNotThePress() {
+        let row = CGRect(x: 0, y: 8, width: 120, height: 34)
+
+        // Inside the row, and inside the sticky band just outside it.
+        XCTAssertFalse(update(dx: 0, dy: 0, at: CGPoint(x: 60, y: 20)).hasLeftStrip(row: row))
+        XCTAssertFalse(update(dx: 0, dy: 0, at: CGPoint(x: 60, y: 50)).hasLeftStrip(row: row))
+        XCTAssertFalse(update(dx: 0, dy: 0, at: CGPoint(x: 60, y: -5)).hasLeftStrip(row: row))
+
+        // Clear of it, below and above alike.
+        XCTAssertTrue(update(dx: 0, dy: 0, at: CGPoint(x: 60, y: 60)).hasLeftStrip(row: row))
+        XCTAssertTrue(update(dx: 0, dy: 0, at: CGPoint(x: 60, y: -10)).hasLeftStrip(row: row))
+    }
+
+    /// A long sideways drag along the strip must never tear a tab out, however
+    /// far it travels.
+    func testDraggingAlongTheStripNeverTearsOut() {
+        let row = CGRect(x: 0, y: 8, width: 120, height: 34)
+        for x in stride(from: CGFloat(0), through: 900, by: 60) {
+            XCTAssertFalse(
+                update(dx: x, dy: 0, at: CGPoint(x: x, y: 25)).hasLeftStrip(row: row),
+                "x=\(x) is along the row, not out of it"
+            )
+        }
+    }
+
+    func testTheThresholdsAreTheOnesChromeUses() {
+        XCTAssertEqual(TabDragUpdate.dragStartDistance, 10, "Chromium kMinimumDragDistance")
+        XCTAssertEqual(TabDragUpdate.reorderGate, 16, "Chromium kHorizontalMoveThreshold")
+        XCTAssertEqual(TabDragUpdate.detachMagnetism, 15, "Chromium kVerticalDetachMagnetism")
+    }
+
+    /// The dragged chip is drawn from its slot, so a reorder that moves the
+    /// slot re-bases the offset instead of the chip leaping a tab's width.
+    func testTheDraggedChipIsDrawnRelativeToItsCurrentSlot() {
+        // Grabbed 20pt right of centre; pointer now 50pt right of centre.
+        let grab: CGFloat = 20
+        let slotBefore = CGRect(x: 0, y: 0, width: 120, height: 34)
+        let pointer: CGFloat = slotBefore.midX + 50
+        let offsetBefore = pointer - slotBefore.midX - grab
+        XCTAssertEqual(offsetBefore, 30)
+
+        // The reorder moves the slot a full tab to the right; the same pointer
+        // now sits nearer that slot's centre, so the drawn offset shrinks
+        // rather than the chip jumping.
+        let slotAfter = slotBefore.offsetBy(dx: 128, dy: 0)
+        let offsetAfter = pointer - slotAfter.midX - grab
+        XCTAssertEqual(offsetAfter, offsetBefore - 128)
+        XCTAssertEqual(slotBefore.midX + offsetBefore, slotAfter.midX + offsetAfter,
+                       "the chip stays under the pointer across a reorder")
     }
 }

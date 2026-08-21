@@ -63,5 +63,18 @@ final class WindowCaptureView: NSView {
         if let window, let topLeft = BrowserServices.shared.takeWindowTopLeftAwaitingWindow() {
             window.setFrameTopLeftPoint(topLeft)
         }
+        // Torn out with the button still down: this window is the rest of that
+        // gesture. Started on the next turn of the run loop so the window is on
+        // screen before it begins moving.
+        if let window, BrowserServices.shared.takeNextWindowFollowsPointer() {
+            let workspace = self.workspace
+            DispatchQueue.main.async {
+                TornWindowDrag.follow(
+                    window: window,
+                    workspace: workspace,
+                    stripHeight: TabStrip.stripHeight
+                )
+            }
+        }
     }
 }

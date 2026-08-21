@@ -99,8 +99,48 @@ struct BookmarksBar: View {
             openInNewTab: openInNewTabAction,
             edit: { editorRequest = .bookmark(BookmarkEditorRequest(bookmark: $0)) },
             move: { store.moveBookmark($0, to: $1) },
-            delete: { store.removeBookmark($0) }
+            delete: { store.removeBookmark($0) },
+            dropAtPlace: { url, target in placeDroppedURL(url, before: target) }
         )
+    }
+
+    /// Puts a dragged address where it was dropped on the bar.
+    ///
+    /// An address already saved moves to that place. One arriving from
+    /// somewhere else — the address field's own chip, a link from a page — is
+    /// saved into the same folder as the bookmark it landed on and takes that
+    /// place, rather than going to the end where it would have to be found and
+    /// dragged back.
+    private func placeDroppedURL(_ url: URL, before target: BookmarkRecord) -> Bool {
+        guard let normalized = BookmarkURLPolicy.validatedURL(url.absoluteString) else { return false }
+        let siblings = store.bookmarks(in: target.folderID)
+        guard let index = siblings.firstIndex(where: { $0.id == target.id }) else { return false }
+
+        if let existing = store.bookmarks.first(where: { $0.url == normalized.absoluteString }) {
+            guard existing.id != target.id else { return false }
+            if existing.folderID != target.folderID {
+                store.moveBookmark(existing, to: target.folderID)
+            }
+            store.moveBookmark(existing.id, toIndex: index)
+            let moved = store.bookmarks.first { $0.id == existing.id } ?? existing
+            reportDrop(
+                BookmarkDropResult(bookmark: moved, disposition: .moved),
+                folderName: folderName(target.folderID)
+            )
+            return true
+        }
+
+        guard let result = fileDroppedURL(url, target.folderID),
+              let saved = store.bookmarks.first(where: { $0.url == normalized.absoluteString })
+        else { return false }
+        store.moveBookmark(saved.id, toIndex: index)
+        reportDrop(result, folderName: folderName(target.folderID))
+        return true
+    }
+
+    private func folderName(_ folderID: UUID?) -> String {
+        guard let folderID else { return "Unfiled" }
+        return store.bookmarkFolders.first { $0.id == folderID }?.title ?? "Unfiled"
     }
 
     private var folderActions: BookmarkBarFolderActions {
@@ -384,6 +424,10 @@ private struct BookmarkBarLinkActions {
     let edit: (BookmarkRecord) -> Void
     let move: (BookmarkRecord, UUID?) -> Void
     let delete: (BookmarkRecord) -> Void
+    /// Drops a dragged address at this bookmark's place in the bar, so the bar
+    /// can be put in the order somebody wants rather than the order things
+    /// were saved. Reports whether it landed.
+    let dropAtPlace: (URL, BookmarkRecord) -> Bool
 }
 
 /// The same, for the bar's folder chips.
@@ -436,6 +480,7 @@ private struct BookmarkBarLink: View {
     let destinations: [BookmarkFolderDestination]
     let actions: BookmarkBarLinkActions
     @State private var isHovered = false
+    @State private var isDropTargeted = false
 
     private static let iconWidth: CGFloat = ClearframeTheme.siteIconSize
 
@@ -476,8 +521,23 @@ private struct BookmarkBarLink: View {
         .buttonStyle(.plain)
         .fixedSize()
         .onHover { isHovered = $0 }
+        // Dropping one bookmark on another puts it in that place. The same
+        // drag that files a bookmark into a folder therefore also arranges the
+        // bar, rather than there being two different gestures to learn.
+        .dropDestination(for: URL.self) { urls, _ in
+            guard let url = urls.first else { return false }
+            return actions.dropAtPlace(url, bookmark)
+        } isTargeted: { isDropTargeted = $0 }
+        .overlay(alignment: .leading) {
+            if isDropTargeted {
+                RoundedRectangle(cornerRadius: 1)
+                    .fill(ClearframeTheme.accent)
+                    .frame(width: 2)
+                    .padding(.vertical, 4)
+            }
+        }
         .help("Open \(bookmark.title) — \(bookmark.url)")
-        .accessibilityHint("Opens this bookmark in the current tab. Drag it onto a visible folder to move it. Secondary-click for edit, move, and delete.")
+        .accessibilityHint("Opens this bookmark in the current tab. Drag it along the bar to reorder it, or onto a visible folder to move it into it. Secondary-click for edit, move, and delete.")
         .contextMenu {
             BookmarkLinkMenuItems(
                 bookmark: bookmark,

@@ -204,9 +204,22 @@ final class BrowserServices {
         return true
     }
 
-    func handOff(tab: BrowserTab, windowTopLeft: CGPoint?) {
+    /// Set when a tab is torn out mid-gesture, with the mouse still down. The
+    /// window that opens then follows the pointer for the rest of the drag
+    /// rather than appearing where the pointer happened to be and stopping —
+    /// which is what Chrome does, and the difference between a tear-out that
+    /// feels immediate and one that feels like a delayed result.
+    private var nextWindowFollowsPointer = false
+
+    func handOff(tab: BrowserTab, windowTopLeft: CGPoint?, followsPointer: Bool = false) {
         tabAwaitingWindow = tab
         originAwaitingWindow = windowTopLeft
+        nextWindowFollowsPointer = followsPointer
+    }
+
+    func takeNextWindowFollowsPointer() -> Bool {
+        defer { nextWindowFollowsPointer = false }
+        return nextWindowFollowsPointer
     }
 
     /// Taken exactly once, by the next window to open.

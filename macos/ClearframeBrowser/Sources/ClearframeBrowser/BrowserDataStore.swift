@@ -220,6 +220,14 @@ final class BrowserDataStore: ObservableObject {
         apply(collection)
     }
 
+    /// Puts a bookmark at a given place among the ones beside it, which is
+    /// what dragging one along the bar means.
+    func moveBookmark(_ id: UUID, toIndex index: Int) {
+        var collection = bookmarkCollection
+        collection.moveBookmark(id: id, toIndex: index)
+        apply(collection)
+    }
+
     func moveBookmark(_ bookmark: BookmarkRecord, to folderID: UUID?) {
         var collection = bookmarkCollection
         collection.moveBookmark(id: bookmark.id, to: folderID)
