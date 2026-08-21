@@ -44,6 +44,12 @@ enum BookmarkMenuCopy {
         "Open all (\(count))"
     }
 
+    /// "Open all (11) in new window", the way Chrome words it, so the count is
+    /// visible before committing to eleven tabs.
+    static func openAll(count: Int, in destination: String) -> String {
+        "Open all (\(count)) in \(destination)"
+    }
+
     /// Shown in place of "Add current page" when the page is already filed in
     /// this exact folder, so the menu never offers a move that does nothing.
     static let currentPageAlreadyHere = "Current page is in this folder"
@@ -167,6 +173,10 @@ struct BookmarkLinkMenuItems: View {
     let destinations: [BookmarkFolderDestination]
     let open: () -> Void
     let openInNewTab: () -> Void
+    /// Absent on surfaces that do not offer windows — the bookmarks home
+    /// opens pages in tabs of the window it is already in.
+    var openInNewWindow: (() -> Void)?
+    var openInPrivateWindow: (() -> Void)?
     let edit: () -> Void
     let move: (UUID?) -> Void
     let delete: () -> Void
@@ -174,6 +184,12 @@ struct BookmarkLinkMenuItems: View {
     var body: some View {
         Button("Open", action: open)
         Button("Open in new tab", action: openInNewTab)
+        if let openInNewWindow {
+            Button("Open in new window", action: openInNewWindow)
+        }
+        if let openInPrivateWindow {
+            Button("Open in private window", action: openInPrivateWindow)
+        }
         Divider()
         Button("Edit…", action: edit)
         Button("Copy address") { BookmarkClipboard.copyAddress(bookmark.url) }
@@ -205,6 +221,8 @@ struct BookmarkFolderMenuItems: View {
     let bookmarkCount: Int
     let currentPage: CurrentPageBookmarkState?
     let openAll: () -> Void
+    var openAllInNewWindow: (() -> Void)?
+    var openAllInPrivateWindow: (() -> Void)?
     let addCurrentPage: () -> Void
     let newSubfolder: () -> Void
     let rename: () -> Void
@@ -215,6 +233,14 @@ struct BookmarkFolderMenuItems: View {
     var body: some View {
         Button(BookmarkMenuCopy.openAll(count: bookmarkCount), action: openAll)
             .disabled(bookmarkCount == 0)
+        if let openAllInNewWindow {
+            Button(BookmarkMenuCopy.openAll(count: bookmarkCount, in: "new window"), action: openAllInNewWindow)
+                .disabled(bookmarkCount == 0)
+        }
+        if let openAllInPrivateWindow {
+            Button(BookmarkMenuCopy.openAll(count: bookmarkCount, in: "private window"), action: openAllInPrivateWindow)
+                .disabled(bookmarkCount == 0)
+        }
         Divider()
         if let currentPage, currentPage.canSave {
             if currentPage.isSaved && currentPage.savedFolderID == folder.id {

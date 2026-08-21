@@ -11,6 +11,8 @@ struct BookmarkMenuContents: View {
     @ObservedObject var store: BrowserDataStore
     let parentID: UUID?
     let open: (URL) -> Void
+    /// The menu bar has no environment to read this from.
+    var favicons: FaviconStore?
 
     private var folders: [BookmarkFolderRecord] { store.bookmarkFolders(in: parentID) }
     private var bookmarks: [BookmarkRecord] { store.bookmarks(in: parentID) }
@@ -20,17 +22,30 @@ struct BookmarkMenuContents: View {
             Text("Empty")
         } else {
             ForEach(folders) { folder in
-                Menu(BookmarkMenuTitle.short(folder.title)) {
-                    BookmarkMenuContents(store: store, parentID: folder.id, open: open)
+                Menu {
+                    BookmarkMenuContents(
+                        store: store,
+                        parentID: folder.id,
+                        open: open,
+                        favicons: favicons
+                    )
+                } label: {
+                    Label(BookmarkMenuTitle.short(folder.title), systemImage: "folder")
                 }
             }
             if !folders.isEmpty && !bookmarks.isEmpty { Divider() }
             ForEach(bookmarks) { bookmark in
-                Button(BookmarkMenuTitle.short(bookmark.title)) {
+                Button {
                     // The same boundary as everywhere else: a saved record
                     // that is not a web address is not opened.
                     guard let url = WebURLPolicy.validatedURL(bookmark.url) else { return }
                     open(url)
+                } label: {
+                    BookmarkMenuRow(
+                        title: BookmarkMenuTitle.short(bookmark.title),
+                        url: bookmark.url,
+                        store: favicons
+                    )
                 }
             }
         }

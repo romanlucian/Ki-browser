@@ -175,16 +175,27 @@ struct ClearframeBrowserApp: App {
                     Text("No bookmarks yet")
                 } else {
                     ForEach(folders) { folder in
-                        Menu(BookmarkMenuTitle.short(folder.title)) {
-                            BookmarkMenuContents(store: dataStore, parentID: folder.id) { url in
-                                focusedWorkspace?.addTab(url: url)
-                            }
+                        Menu {
+                            BookmarkMenuContents(
+                                store: dataStore,
+                                parentID: folder.id,
+                                open: { focusedWorkspace?.addTab(url: $0) },
+                                favicons: BrowserServices.shared.favicons
+                            )
+                        } label: {
+                            Label(BookmarkMenuTitle.short(folder.title), systemImage: "folder")
                         }
                     }
                     ForEach(unfiled) { bookmark in
-                        Button(BookmarkMenuTitle.short(bookmark.title)) {
+                        Button {
                             guard let url = WebURLPolicy.validatedURL(bookmark.url) else { return }
                             focusedWorkspace?.addTab(url: url)
+                        } label: {
+                            BookmarkMenuRow(
+                                title: BookmarkMenuTitle.short(bookmark.title),
+                                url: bookmark.url,
+                                store: BrowserServices.shared.favicons
+                            )
                         }
                     }
                 }
@@ -345,13 +356,23 @@ private struct BrowserWindow: View {
             && adopted == nil
             && profileID == services.profiles.currentProfileID
             && services.claimSessionRestore()
-        return BrowserWorkspace(
+        let workspace = BrowserWorkspace(
             services: services,
             restoresSession: restores,
             adopting: isPrivate ? nil : adopted,
             isPrivate: isPrivate,
             profileID: profileID
         )
+        // Opened to show something — one bookmark, or a folder's worth. The
+        // blank tab a new window starts with is replaced rather than left
+        // sitting in front of them.
+        let pages = services.takeURLsAwaitingWindow()
+        if !pages.isEmpty {
+            let blank = workspace.tabs.first
+            pages.forEach { workspace.addTab(url: $0) }
+            if let blank, workspace.tabs.count > pages.count { workspace.closeTab(blank.id) }
+        }
+        return workspace
     }
 
     var body: some View {

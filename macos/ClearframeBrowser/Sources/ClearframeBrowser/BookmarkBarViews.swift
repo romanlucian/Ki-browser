@@ -60,6 +60,7 @@ enum BookmarkBarMetrics {
 }
 
 struct BookmarksBar: View {
+    @Environment(\.openWindow) private var openWindow
     @ObservedObject var store: BrowserDataStore
     let currentPageURL: String
     let currentBookmark: BookmarkRecord?
@@ -100,6 +101,8 @@ struct BookmarksBar: View {
             edit: { editorRequest = .bookmark(BookmarkEditorRequest(bookmark: $0)) },
             move: { store.moveBookmark($0, to: $1) },
             delete: { store.removeBookmark($0) },
+            openInNewWindow: { BookmarkWindowOpener.open([$0.url], isPrivate: false, using: openWindow) },
+            openInPrivateWindow: { BookmarkWindowOpener.open([$0.url], isPrivate: true, using: openWindow) },
             dropAtPlace: { url, target in placeDroppedURL(url, before: target) }
         )
     }
@@ -146,6 +149,20 @@ struct BookmarksBar: View {
     private var folderActions: BookmarkBarFolderActions {
         BookmarkBarFolderActions(
             openAll: openAll(in:),
+            openAllInNewWindow: { folder in
+                BookmarkWindowOpener.open(
+                    store.bookmarks(in: folder.id).map(\.url),
+                    isPrivate: false,
+                    using: openWindow
+                )
+            },
+            openAllInPrivateWindow: { folder in
+                BookmarkWindowOpener.open(
+                    store.bookmarks(in: folder.id).map(\.url),
+                    isPrivate: true,
+                    using: openWindow
+                )
+            },
             addCurrentPage: addCurrentPage,
             newSubfolder: newFolder,
             rename: { folder in
@@ -424,6 +441,8 @@ private struct BookmarkBarLinkActions {
     let edit: (BookmarkRecord) -> Void
     let move: (BookmarkRecord, UUID?) -> Void
     let delete: (BookmarkRecord) -> Void
+    let openInNewWindow: (BookmarkRecord) -> Void
+    let openInPrivateWindow: (BookmarkRecord) -> Void
     /// Drops a dragged address at this bookmark's place in the bar, so the bar
     /// can be put in the order somebody wants rather than the order things
     /// were saved. Reports whether it landed.
@@ -433,6 +452,8 @@ private struct BookmarkBarLinkActions {
 /// The same, for the bar's folder chips.
 private struct BookmarkBarFolderActions {
     let openAll: (BookmarkFolderRecord) -> Void
+    let openAllInNewWindow: (BookmarkFolderRecord) -> Void
+    let openAllInPrivateWindow: (BookmarkFolderRecord) -> Void
     let addCurrentPage: (UUID?) -> Void
     let newSubfolder: (UUID?) -> Void
     let rename: (BookmarkFolderRecord) -> Void
@@ -544,6 +565,8 @@ private struct BookmarkBarLink: View {
                 destinations: destinations,
                 open: { actions.open(bookmark.url) },
                 openInNewTab: { actions.openInNewTab(bookmark.url) },
+                openInNewWindow: { actions.openInNewWindow(bookmark) },
+                openInPrivateWindow: { actions.openInPrivateWindow(bookmark) },
                 edit: { actions.edit(bookmark) },
                 move: { actions.move(bookmark, $0) },
                 delete: { actions.delete(bookmark) }
@@ -662,6 +685,8 @@ private struct BookmarkFolderMenu: View {
             bookmarkCount: directBookmarks.count,
             currentPage: currentPage,
             openAll: { actions.openAll(folder) },
+            openAllInNewWindow: { actions.openAllInNewWindow(folder) },
+            openAllInPrivateWindow: { actions.openAllInPrivateWindow(folder) },
             addCurrentPage: { actions.addCurrentPage(folder.id) },
             newSubfolder: { actions.newSubfolder(folder.id) },
             rename: { actions.rename(folder) },
@@ -713,7 +738,9 @@ private struct BookmarkFolderMenuContents: View {
             }
             if !childFolders.isEmpty && !bookmarks.isEmpty { Divider() }
             ForEach(bookmarks) { bookmark in
-                Button { open(bookmark.url) } label: { Label(bookmark.title, systemImage: "bookmark") }
+                Button { open(bookmark.url) } label: {
+                    BookmarkMenuRow(title: bookmark.title, url: bookmark.url)
+                }
             }
         }
         Divider()

@@ -222,6 +222,22 @@ final class BrowserServices {
         return nextWindowFollowsPointer
     }
 
+    /// Pages the window being opened should show. "Open in new window" and
+    /// "Open all in new window" both come through here: `openWindow` carries no
+    /// arguments, so what to open is left for the new window to collect.
+    private var urlsAwaitingWindow: [URL] = []
+
+    func openInNextWindow(_ urls: [URL], profileID: UUID, isPrivate: Bool) {
+        urlsAwaitingWindow = urls
+        markNextWindow(profileID: profileID)
+        if isPrivate { markNextWindowPrivate() }
+    }
+
+    func takeURLsAwaitingWindow() -> [URL] {
+        defer { urlsAwaitingWindow = [] }
+        return urlsAwaitingWindow
+    }
+
     /// Taken exactly once, by the next window to open.
     func takeTabAwaitingWindow() -> BrowserTab? {
         defer { tabAwaitingWindow = nil }
