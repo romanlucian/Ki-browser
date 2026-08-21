@@ -575,3 +575,56 @@ public struct HistoryRecord: Codable, Equatable, Identifiable, Sendable {
         self.visitedAt = visitedAt
     }
 }
+
+/// One profile: a separate person, or a separate part of one person's life,
+/// with its own logins, bookmarks, history, site icons and per-site
+/// exceptions. Two profiles signed into the same website do not see each
+/// other's session.
+///
+/// Foundation-only, like the rest of this file: which colour the badge draws
+/// in and where the data actually sits are the macOS layer's business. This
+/// record carries only what has to survive a relaunch.
+public struct BrowserProfileRecord: Codable, Equatable, Identifiable, Sendable {
+    /// The profile that existed before profiles did. It keeps the app's
+    /// original stores — the standard preferences, the original icon folder,
+    /// the default WebKit data store — so that bookmarks, history and logins
+    /// saved before this feature are not stranded behind a new identifier.
+    public static let defaultID = UUID(uuidString: "00000000-0000-0000-0000-0000C1EA4F00")!
+
+    public let id: UUID
+    public var name: String
+    /// One of `TabGroupRecord.colorIDs`, so profiles and tab groups draw from
+    /// the same palette rather than two that drift apart.
+    public var colorID: String
+
+    public var isDefault: Bool { id == Self.defaultID }
+
+    public init(id: UUID = UUID(), name: String, colorID: String = TabGroupRecord.colorIDs[1]) {
+        self.id = id
+        self.name = name
+        self.colorID = colorID
+    }
+
+    /// The one or two letters shown when a profile has no picture, taken from
+    /// the start of each of the first two words — "Lucian Roman" reads LR, and
+    /// a single word gives its first letter.
+    public var initials: String {
+        let words = name
+            .components(separatedBy: .whitespacesAndNewlines)
+            .filter { !$0.isEmpty }
+        let letters = words.prefix(2).compactMap { $0.first.map(String.init) }
+        let joined = letters.joined().uppercased()
+        return joined.isEmpty ? "?" : joined
+    }
+
+    /// A name that is actually a name. Blank input would give a menu item with
+    /// nothing in it and a badge with no letters.
+    public static func sanitizedName(_ value: String, fallback: String = "Profile") -> String {
+        let collapsed = value
+            .components(separatedBy: .whitespacesAndNewlines)
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+        let trimmed = String(collapsed.prefix(40))
+        return trimmed.isEmpty ? fallback : trimmed
+    }
+}

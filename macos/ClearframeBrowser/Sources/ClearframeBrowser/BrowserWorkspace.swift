@@ -48,6 +48,7 @@ final class BrowserTab: ObservableObject, Identifiable {
         contentBlocking: ContentRuleListProvider? = nil,
         favicons: FaviconStore? = nil,
         webFeatures: WebFeatureSettingsStore? = nil,
+        websiteDataStore: WKWebsiteDataStore? = nil,
         adoptingPopupConfiguration popupConfiguration: WKWebViewConfiguration? = nil
     ) {
         self.id = id
@@ -71,6 +72,7 @@ final class BrowserTab: ObservableObject, Identifiable {
                 contentBlocking: contentBlocking,
                 favicons: favicons,
                 webFeatures: webFeatures,
+                websiteDataStore: websiteDataStore,
                 adoptingPopupConfiguration: popupConfiguration
             )
         } else if loadImmediately {
@@ -80,7 +82,9 @@ final class BrowserTab: ObservableObject, Identifiable {
                 initialURL: initialURL,
                 isPrivate: isPrivate,
                 contentBlocking: contentBlocking,
-                favicons: favicons
+                favicons: favicons,
+                webFeatures: webFeatures,
+                websiteDataStore: websiteDataStore
             )
         } else {
             resolvedSession = BrowserSession(
@@ -88,7 +92,9 @@ final class BrowserTab: ObservableObject, Identifiable {
                 searchSettings: searchSettings,
                 isPrivate: isPrivate,
                 contentBlocking: contentBlocking,
-                favicons: favicons
+                favicons: favicons,
+                webFeatures: webFeatures,
+                websiteDataStore: websiteDataStore
             )
             pendingRestoreURL = initialURL
         }
@@ -208,6 +214,12 @@ final class BrowserWorkspace: ObservableObject {
     /// HTTPS upgrading and the Web Inspector switch, shared so a change in
     /// Settings reaches tabs that are already open.
     let webFeatures: WebFeatureSettingsStore
+    /// The profile this window belongs to. A window keeps it for life:
+    /// swapping a live window's cookie store underneath its open pages would
+    /// mean tearing down every web view in it.
+    let profileID: UUID
+    /// This profile's cookies and logins, handed to every ordinary tab.
+    private let websiteDataStore: WKWebsiteDataStore?
 
     /// A tab that was closed and can be brought back. Deliberately in memory
     /// only: a closed tab reappearing after a relaunch is a surprise, and for
@@ -251,8 +263,12 @@ final class BrowserWorkspace: ObservableObject {
         /// A tab dragged out of another window. It arrives alive, so this
         /// window opens showing that page rather than a blank one.
         adopting: BrowserTab? = nil,
-        isPrivate: Bool = false
+        isPrivate: Bool = false,
+        profileID: UUID = BrowserProfileRecord.defaultID,
+        websiteDataStore: WKWebsiteDataStore? = nil
     ) {
+        self.profileID = profileID
+        self.websiteDataStore = websiteDataStore
         self.isPrivate = isPrivate
         self.persistsSession = restoresSession && !isPrivate
         let resolvedDataStore = dataStore ?? BrowserDataStore()
@@ -305,7 +321,9 @@ final class BrowserWorkspace: ObservableObject {
                     groupID: record.groupID,
                     isPinned: record.isPinned,
                     contentBlocking: resolvedContentBlocking,
-                    favicons: resolvedFavicons
+                    favicons: resolvedFavicons,
+                    webFeatures: resolvedWebFeatures,
+                    websiteDataStore: websiteDataStore
                 )
             }
             selectedTabID = tabs.contains(where: { $0.id == selectedID }) ? selectedID : tabs.first?.id
@@ -319,7 +337,9 @@ final class BrowserWorkspace: ObservableObject {
                 searchSettings: resolvedSearchSettings,
                 isPrivate: isPrivate,
                 contentBlocking: resolvedContentBlocking,
-                favicons: resolvedFavicons
+                favicons: resolvedFavicons,
+                webFeatures: resolvedWebFeatures,
+                websiteDataStore: websiteDataStore
             )
             tabs = [tab]
             selectedTabID = tab.id
@@ -428,22 +448,30 @@ final class BrowserWorkspace: ObservableObject {
     /// A workspace built on the services the whole application shares, so a
     /// second window sees the same bookmarks, history, downloads and site
     /// icons as the first.
+    /// A workspace for one window, in one profile. Bookmarks, history, site
+    /// icons, per-site exceptions and logins come from that profile; the
+    /// download list, the search choice and the WebKit switches are shared by
+    /// all of them.
     convenience init(
         services: BrowserServices,
         restoresSession: Bool,
         adopting: BrowserTab? = nil,
-        isPrivate: Bool = false
+        isPrivate: Bool = false,
+        profileID: UUID
     ) {
+        let profile = services.services(for: profileID)
         self.init(
-            dataStore: services.dataStore,
+            dataStore: profile.dataStore,
             downloads: services.downloads,
             searchSettings: services.searchSettings,
-            contentBlocking: services.contentBlocking,
-            favicons: services.favicons,
+            contentBlocking: profile.contentBlocking,
+            favicons: profile.favicons,
             webFeatures: services.webFeatures,
             restoresSession: restoresSession,
             adopting: adopting,
-            isPrivate: isPrivate
+            isPrivate: isPrivate,
+            profileID: profileID,
+            websiteDataStore: profile.websiteDataStore
         )
         services.register(self)
     }
@@ -959,7 +987,8 @@ final class BrowserWorkspace: ObservableObject {
             isPrivate: isPrivate,
             contentBlocking: contentBlocking,
             favicons: favicons,
-            webFeatures: webFeatures
+            webFeatures: webFeatures,
+            websiteDataStore: websiteDataStore
         )
     }
 

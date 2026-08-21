@@ -16,6 +16,12 @@ Dates are commit dates. Test counts are the totals at the end of each period, ve
 - Multiple windows. Each keeps its own tabs and selection; bookmarks, history, downloads, site icons, tracker rules, and settings stay shared. Menu commands act on the window in front rather than on a single app-wide workspace. New Window (⌘N) and Close Window (⇧⌘W) appear in a File menu the app did not have before.
 - A tab can be dragged out of the strip, upwards or downwards, into a window of its own, and the same move is on the tab's menu as "Move tab to new window". The tab carries its live web view across, so the page keeps its scroll position and its back/forward list instead of reloading. Dragging the last tab in a window moves the window, as Chrome does. Only the first window restores the saved session and only its tabs are written back; a torn-off window's tabs are not restored after a relaunch.
 
+**Profiles**
+- Profiles. Each one owns its bookmarks, history, saved session, site icons, per-site tracker exceptions, and — through its own `WKWebsiteDataStore` — its logins: two profiles signed into the same site do not see each other's session. The download list, the search choice and the WebKit switches stay shared.
+- The profile that existed before this feature keeps the application's original stores, so bookmarks, history and signed-in sessions saved beforehand are not stranded behind a new identifier. It cannot be deleted; there has to be somewhere for a window to open.
+- A window belongs to one profile for life. Choosing a profile opens a window in it rather than swapping the one in front, because a window's open pages are bound to their profile's cookies. For the same reason a tab dragged out of a window stays in its profile, and a drop into a window of a different profile is declined rather than silently rehomed.
+- Deleting a profile removes its bookmarks, history, site icons, exceptions and logins from the Mac, after saying so and defaulting to cancel. Downloaded files are left alone.
+
 **Menus**
 - A File menu, which the app did not have: New Window, Open File…, Close Window, Save Page As…, and Share Page…. Opening a file is a separate door from opening an address — `WebURLPolicy` still refuses local schemes for links, typed addresses, popups, bookmarks and restored tabs, and a local page is kept out of both history and the saved session.
 - Save Page As… writes a web archive of what the page is currently showing, rather than re-fetching the address.

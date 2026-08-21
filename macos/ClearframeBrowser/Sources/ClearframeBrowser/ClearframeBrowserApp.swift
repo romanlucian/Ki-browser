@@ -13,6 +13,9 @@ struct ClearframeBrowserApp: App {
     @Environment(\.openWindow) private var openWindow
     /// The History and Bookmarks menus list what is actually saved.
     private var dataStore: BrowserDataStore { BrowserServices.shared.dataStore }
+    /// The Profiles menu lists what exists and ticks the window in front, so
+    /// it has to be rebuilt when either changes.
+    @ObservedObject private var profiles = BrowserServices.shared.profiles
 
     var body: some Scene {
         WindowGroup("Clearframe", id: Self.browserWindowID) {
@@ -186,6 +189,23 @@ struct ClearframeBrowserApp: App {
                     }
                 }
             }
+            // Choosing a profile opens a window in it rather than swapping the
+            // one in front: a window's pages are bound to their profile's
+            // cookies, and changing that underneath them would mean tearing
+            // every one of them down.
+            CommandMenu("Profiles") {
+                ForEach(profiles.profiles) { profile in
+                    Button(Self.profileMenuTitle(profile, focused: focusedWorkspace?.profileID)) {
+                        openWindow(inProfile: profile.id)
+                    }
+                }
+                Divider()
+                Button("New Profile…") { addProfile() }
+                Button("Rename This Profile…") { renameFocusedProfile() }
+                    .disabled(focusedWorkspace == nil)
+                Button("Delete This Profile…") { deleteFocusedProfile() }
+                    .disabled(!(focusedWorkspace.map { profiles.canDelete($0.profileID) } ?? false))
+            }
             CommandMenu("Page") {
                 // ⌘R is the most-used key in a browser and ⌘[ / ⌘] are the
                 // macOS history pair. ⇧⌘[ and ⇧⌘] already switch tabs; these
@@ -236,6 +256,56 @@ struct ClearframeBrowserApp: App {
         openWindow(id: Self.browserWindowID)
     }
 
+    /// A tick beside the profile the window in front belongs to, the way
+    /// Chrome marks the one in use.
+    static func profileMenuTitle(_ profile: BrowserProfileRecord, focused: UUID?) -> String {
+        profile.id == focused ? "✓ \(profile.name)" : "    \(profile.name)"
+    }
+
+    @MainActor
+    private func openWindow(inProfile profileID: UUID) {
+        let services = BrowserServices.shared
+        services.profiles.setCurrent(profileID)
+        services.markNextWindow(profileID: profileID)
+        openWindow(id: Self.browserWindowID)
+    }
+
+    @MainActor
+    private func addProfile() {
+        guard let name = ProfilePrompts.askForName(
+            title: "New profile",
+            message: "A profile keeps its own bookmarks, history, site icons and signed-in sessions. Nothing is shared with your other profiles except downloads and your search choice.",
+            initial: ""
+        ) else { return }
+        let created = BrowserServices.shared.profiles.addProfile(name: name)
+        openWindow(inProfile: created.id)
+    }
+
+    @MainActor
+    private func renameFocusedProfile() {
+        guard let profileID = focusedWorkspace?.profileID,
+              let current = profiles.profile(profileID),
+              let name = ProfilePrompts.askForName(
+                  title: "Rename profile",
+                  message: "This changes the name only. Its bookmarks, history and signed-in sessions stay as they are.",
+                  initial: current.name
+              )
+        else { return }
+        profiles.rename(profileID, to: name)
+    }
+
+    @MainActor
+    private func deleteFocusedProfile() {
+        guard let profileID = focusedWorkspace?.profileID,
+              let profile = profiles.profile(profileID),
+              profiles.canDelete(profileID),
+              ProfilePrompts.confirmDeletion(of: profile.name)
+        else { return }
+        BrowserServices.shared.discardServices(for: profileID)
+        profiles.deleteProfile(profileID)
+        NSApplication.shared.keyWindow?.performClose(nil)
+    }
+
     /// A window whose every tab is private. The flag is left for the scene to
     /// pick up, the same way a torn-off tab is.
     @MainActor
@@ -268,12 +338,19 @@ private struct BrowserWindow: View {
         // also restore the session; otherwise the first window's tabs appear
         // in it too.
         let isPrivate = services.takeNextWindowIsPrivate()
-        let restores = !isPrivate && adopted == nil && services.claimSessionRestore()
+        let profileID = services.takeNextWindowProfileID()
+        // Only the first window of the profile that owns the saved session
+        // restores it.
+        let restores = !isPrivate
+            && adopted == nil
+            && profileID == services.profiles.currentProfileID
+            && services.claimSessionRestore()
         return BrowserWorkspace(
             services: services,
             restoresSession: restores,
             adopting: isPrivate ? nil : adopted,
-            isPrivate: isPrivate
+            isPrivate: isPrivate,
+            profileID: profileID
         )
     }
 

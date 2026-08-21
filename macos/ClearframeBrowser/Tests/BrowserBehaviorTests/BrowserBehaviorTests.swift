@@ -4,6 +4,30 @@ import WebKit
 import XCTest
 @testable import ClearframeBrowser
 
+/// Removing a test's preference suite as thoroughly as a test process can.
+///
+/// `removePersistentDomain(forName:)` empties the domain but leaves an empty
+/// `.plist` behind in ~/Library/Preferences, and a suite per test adds up: the
+/// machine this was developed on had accumulated several thousand of them.
+///
+/// Deleting the file helps but does not settle it — `cfprefsd` writes an empty
+/// one back when the still-live `UserDefaults` object is flushed at exit, so a
+/// full run still leaves a few dozen behind. Emptying the domain is what
+/// matters for correctness; the files are inert. The real fix is one suite for
+/// the whole bundle rather than one per test, which is a wider change than it
+/// looks. Until then, `find ~/Library/Preferences -name 'clearframe.*-*.plist'
+/// -delete` clears the accumulation.
+@MainActor
+enum TestSuiteCleanup {
+    static func destroy(_ suiteName: String, defaults: UserDefaults) {
+        defaults.removePersistentDomain(forName: suiteName)
+        guard let library = FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask).first
+        else { return }
+        let plist = library.appendingPathComponent("Preferences/\(suiteName).plist")
+        try? FileManager.default.removeItem(at: plist)
+    }
+}
+
 @MainActor
 final class BrowserBehaviorTests: XCTestCase {
     func testNavigationCancelsAnInFlightAnalysisWithoutRestoringStaleResults() async {
@@ -107,7 +131,7 @@ final class BrowserBehaviorTests: XCTestCase {
     func testProviderDefaultMigratesOnlyNonCustomizedModelSettings() throws {
         let suiteName = "clearframe.provider.default-migration.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
-        defer { defaults.removePersistentDomain(forName: suiteName) }
+        defer { TestSuiteCleanup.destroy(suiteName, defaults: defaults) }
         let keychain = KeychainStore(
             service: "clearframe.tests.\(UUID().uuidString)",
             account: "unused"
@@ -131,7 +155,7 @@ final class BrowserBehaviorTests: XCTestCase {
     func testDataStoreRestoresLastKnownGoodBookmarksAndPreservesCorruptBytes() throws {
         let suiteName = "clearframe.persistence.recovery.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
-        defer { defaults.removePersistentDomain(forName: suiteName) }
+        defer { TestSuiteCleanup.destroy(suiteName, defaults: defaults) }
         let key = "clearframe.bookmarks.v1"
         let corrupt = Data("not valid bookmark JSON".utf8)
         let expected = [BookmarkRecord(title: "Recovered", url: "https://example.com/recovered")]
@@ -154,7 +178,7 @@ final class BrowserBehaviorTests: XCTestCase {
     func testDataStoreDoesNotOverwriteUnreadableBookmarksWhenNoBackupExists() throws {
         let suiteName = "clearframe.persistence.unreadable.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
-        defer { defaults.removePersistentDomain(forName: suiteName) }
+        defer { TestSuiteCleanup.destroy(suiteName, defaults: defaults) }
         let key = "clearframe.bookmarks.v1"
         let corrupt = Data("unreadable".utf8)
         defaults.set(corrupt, forKey: key)
@@ -170,7 +194,7 @@ final class BrowserBehaviorTests: XCTestCase {
     func testBrowserSessionRejectsUnsafeMainNavigationInputs() throws {
         let suiteName = "clearframe.navigation.policy.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
-        defer { defaults.removePersistentDomain(forName: suiteName) }
+        defer { TestSuiteCleanup.destroy(suiteName, defaults: defaults) }
         let session = BrowserSession(
             downloadCenter: DownloadCenter(),
             searchSettings: SearchSettingsStore(defaults: defaults)
@@ -198,7 +222,7 @@ final class BrowserBehaviorTests: XCTestCase {
     func testAPopupSessionAdoptsWebKitsConfigurationAndLeavesTheFirstNavigationToIt() throws {
         let suiteName = "clearframe.popup.adoption.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
-        defer { defaults.removePersistentDomain(forName: suiteName) }
+        defer { TestSuiteCleanup.destroy(suiteName, defaults: defaults) }
 
         let openerConfiguration = WKWebViewConfiguration()
         openerConfiguration.applicationNameForUserAgent = "AdoptedPopupProbe"
@@ -229,7 +253,7 @@ final class BrowserBehaviorTests: XCTestCase {
     func testAPopupRequestOpensATabThatAdoptsTheReturnedWebView() throws {
         let suiteName = "clearframe.popup.tab.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
-        defer { defaults.removePersistentDomain(forName: suiteName) }
+        defer { TestSuiteCleanup.destroy(suiteName, defaults: defaults) }
         let blocking = try Self.makeTestContentBlocking(defaults: defaults)
         defer { blocking.removeStore() }
         let workspace = BrowserWorkspace(
@@ -255,7 +279,7 @@ final class BrowserBehaviorTests: XCTestCase {
     func testAPopupWithNoAddressYetStillOpensATab() throws {
         let suiteName = "clearframe.popup.blank.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
-        defer { defaults.removePersistentDomain(forName: suiteName) }
+        defer { TestSuiteCleanup.destroy(suiteName, defaults: defaults) }
         let blocking = try Self.makeTestContentBlocking(defaults: defaults)
         defer { blocking.removeStore() }
         let workspace = BrowserWorkspace(
@@ -275,7 +299,7 @@ final class BrowserBehaviorTests: XCTestCase {
     func testPrivateTabsUseEphemeralStorageAndAreNeverRestored() throws {
         let suiteName = "clearframe.private.tabs.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
-        defer { defaults.removePersistentDomain(forName: suiteName) }
+        defer { TestSuiteCleanup.destroy(suiteName, defaults: defaults) }
         let store = BrowserDataStore(defaults: defaults)
         let blocking = try Self.makeTestContentBlocking(defaults: defaults)
         defer { blocking.removeStore() }
@@ -312,7 +336,7 @@ final class BrowserBehaviorTests: XCTestCase {
     func testClearLocalBrowsingDataResetsRecordsAndKeepsOneCleanTab() async throws {
         let suiteName = "clearframe.data.reset.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
-        defer { defaults.removePersistentDomain(forName: suiteName) }
+        defer { TestSuiteCleanup.destroy(suiteName, defaults: defaults) }
         let store = BrowserDataStore(defaults: defaults)
         let blocking = try Self.makeTestContentBlocking(defaults: defaults)
         defer { blocking.removeStore() }
@@ -362,7 +386,7 @@ final class BrowserBehaviorTests: XCTestCase {
     func testContentBlockingSettingsPersistTheGlobalSwitchAndSiteExceptions() throws {
         let suiteName = "clearframe.contentBlocking.settings.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
-        defer { defaults.removePersistentDomain(forName: suiteName) }
+        defer { TestSuiteCleanup.destroy(suiteName, defaults: defaults) }
 
         let settings = ContentBlockingSettingsStore(defaults: defaults)
         XCTAssertTrue(settings.isEnabled, "tracker blocking is on by default")
@@ -433,7 +457,7 @@ final class BrowserBehaviorTests: XCTestCase {
     func testContentRuleListProviderCompilesOnceAndAppliesToRegisteredWebViews() async throws {
         let suiteName = "clearframe.contentBlocking.provider.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
-        defer { defaults.removePersistentDomain(forName: suiteName) }
+        defer { TestSuiteCleanup.destroy(suiteName, defaults: defaults) }
         let blocking = try Self.makeTestContentBlocking(defaults: defaults)
         defer { blocking.removeStore() }
         let provider = blocking.provider
@@ -496,7 +520,7 @@ final class BrowserBehaviorTests: XCTestCase {
     func testBrowserSessionRegistersItsWebViewWithTheContentBlockerUntilTeardown() async throws {
         let suiteName = "clearframe.contentBlocking.session.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
-        defer { defaults.removePersistentDomain(forName: suiteName) }
+        defer { TestSuiteCleanup.destroy(suiteName, defaults: defaults) }
         let blocking = try Self.makeTestContentBlocking(defaults: defaults)
         defer { blocking.removeStore() }
         await blocking.provider.refresh()
@@ -793,7 +817,7 @@ final class BrowserBehaviorTests: XCTestCase {
     func testTabsStartOnTheAIGuideSurfaceAndRestoredTabsStayThere() throws {
         let suiteName = "clearframe.startSurface.default.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
-        defer { defaults.removePersistentDomain(forName: suiteName) }
+        defer { TestSuiteCleanup.destroy(suiteName, defaults: defaults) }
         let store = BrowserDataStore(defaults: defaults)
         let record = BrowserTabRecord(
             id: UUID(),
@@ -893,7 +917,7 @@ final class BrowserBehaviorTests: XCTestCase {
     func testDataStoreForwardsRolledUpFolderCountsForTheBookmarksHome() throws {
         let suiteName = "clearframe.bookmarks.counts.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
-        defer { defaults.removePersistentDomain(forName: suiteName) }
+        defer { TestSuiteCleanup.destroy(suiteName, defaults: defaults) }
         let store = BrowserDataStore(defaults: defaults)
         let work = try XCTUnwrap(store.createBookmarkFolder(title: "Work", iconID: "briefcase", parentID: nil))
         let code = try XCTUnwrap(store.createBookmarkFolder(title: "Code", iconID: "terminal", parentID: work.id))
@@ -910,7 +934,7 @@ final class BrowserBehaviorTests: XCTestCase {
     func testDataStoreSavesAnEditedBookmarkAndRefusesAnUnsafeAddress() throws {
         let suiteName = "clearframe.bookmarks.edit.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
-        defer { defaults.removePersistentDomain(forName: suiteName) }
+        defer { TestSuiteCleanup.destroy(suiteName, defaults: defaults) }
         let store = BrowserDataStore(defaults: defaults)
         let design = try XCTUnwrap(store.createBookmarkFolder(title: "Web Design", iconID: "palette", parentID: nil))
         let saved = try XCTUnwrap(
@@ -1339,7 +1363,7 @@ final class BrowserBehaviorTests: XCTestCase {
     func testTabGroupsSurviveASavedSessionAndRestoreCollapsedTabsOpen() throws {
         let suiteName = "clearframe.tabGroups.restore.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
-        defer { defaults.removePersistentDomain(forName: suiteName) }
+        defer { TestSuiteCleanup.destroy(suiteName, defaults: defaults) }
         let store = BrowserDataStore(defaults: defaults)
         let blocking = try Self.makeTestContentBlocking(defaults: defaults)
         defer { blocking.removeStore() }
@@ -1388,7 +1412,7 @@ final class BrowserBehaviorTests: XCTestCase {
     private func makeTabGroupWorkspace() throws -> BrowserWorkspace {
         let suiteName = "clearframe.tabGroups.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
-        addTeardownBlock { defaults.removePersistentDomain(forName: suiteName) }
+        addTeardownBlock { TestSuiteCleanup.destroy(suiteName, defaults: defaults) }
         let blocking = try Self.makeTestContentBlocking(defaults: defaults)
         addTeardownBlock { blocking.removeStore() }
         return BrowserWorkspace(
@@ -1686,7 +1710,7 @@ final class BrowserBehaviorTests: XCTestCase {
     func testWebFeatureSettingsPersistAcrossStoreInstances() throws {
         let suiteName = "clearframe.webfeatures.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
-        addTeardownBlock { defaults.removePersistentDomain(forName: suiteName) }
+        addTeardownBlock { TestSuiteCleanup.destroy(suiteName, defaults: defaults) }
 
         let store = WebFeatureSettingsStore(defaults: defaults)
         XCTAssertTrue(store.upgradesToHTTPS, "HTTPS upgrading is on unless turned off")
@@ -1835,7 +1859,7 @@ final class BrowserBehaviorTests: XCTestCase {
     func testASavedSessionRestoresPinnedTabsAndTheirOrder() throws {
         let suiteName = "clearframe.pinned.restore.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
-        addTeardownBlock { defaults.removePersistentDomain(forName: suiteName) }
+        addTeardownBlock { TestSuiteCleanup.destroy(suiteName, defaults: defaults) }
         let store = BrowserDataStore(defaults: defaults)
         let pinned = BrowserTabRecord(
             id: UUID(), url: "https://example.com/pinned", title: "Pinned",
@@ -1900,7 +1924,7 @@ final class BrowserBehaviorTests: XCTestCase {
     private func makeSurfaceTestWorkspace() throws -> BrowserWorkspace {
         let suiteName = "clearframe.startSurface.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
-        addTeardownBlock { defaults.removePersistentDomain(forName: suiteName) }
+        addTeardownBlock { TestSuiteCleanup.destroy(suiteName, defaults: defaults) }
         let blocking = try Self.makeTestContentBlocking(defaults: defaults)
         addTeardownBlock { blocking.removeStore() }
         return BrowserWorkspace(
@@ -2117,7 +2141,7 @@ final class TabStripDropResolutionTests: XCTestCase {
         while workspace.tabs.count < 3 { workspace.addTab() }
         return (workspace, {
             blocking.removeStore()
-            defaults.removePersistentDomain(forName: suiteName)
+            TestSuiteCleanup.destroy(suiteName, defaults: defaults)
         })
     }
 
@@ -2318,7 +2342,7 @@ final class TabDetachAndAdoptTests: XCTestCase {
     func testAWindowThatDidNotRestoreTheSessionDoesNotOverwriteIt() throws {
         let suiteName = "clearframe.detach.persist.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
-        defer { defaults.removePersistentDomain(forName: suiteName) }
+        defer { TestSuiteCleanup.destroy(suiteName, defaults: defaults) }
         let blocking = try BrowserBehaviorTests.makeTestContentBlocking(defaults: defaults)
         defer { blocking.removeStore() }
         let dataStore = BrowserDataStore(defaults: defaults)
@@ -2356,7 +2380,7 @@ final class TabDetachAndAdoptTests: XCTestCase {
 
         let suiteName = "clearframe.detach.adopting.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
-        defer { defaults.removePersistentDomain(forName: suiteName) }
+        defer { TestSuiteCleanup.destroy(suiteName, defaults: defaults) }
         let blocking = try BrowserBehaviorTests.makeTestContentBlocking(defaults: defaults)
         defer { blocking.removeStore() }
 
@@ -2390,7 +2414,7 @@ final class TabDetachAndAdoptTests: XCTestCase {
         while workspace.tabs.count < count { workspace.addTab() }
         return (workspace, {
             blocking.removeStore()
-            defaults.removePersistentDomain(forName: suiteName)
+            TestSuiteCleanup.destroy(suiteName, defaults: defaults)
         })
     }
 }
@@ -2476,7 +2500,7 @@ final class TabMergeBetweenWindowsTests: XCTestCase {
         while workspace.tabs.count < count { workspace.addTab() }
         return (workspace, {
             blocking.removeStore()
-            defaults.removePersistentDomain(forName: suiteName)
+            TestSuiteCleanup.destroy(suiteName, defaults: defaults)
         })
     }
 }
@@ -2580,7 +2604,7 @@ final class LocalFileOpeningTests: XCTestCase {
     func testALocalPageIsNotWrittenIntoTheSavedSession() throws {
         let suiteName = "clearframe.localfile.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
-        defer { defaults.removePersistentDomain(forName: suiteName) }
+        defer { TestSuiteCleanup.destroy(suiteName, defaults: defaults) }
         let blocking = try BrowserBehaviorTests.makeTestContentBlocking(defaults: defaults)
         defer { blocking.removeStore() }
         let dataStore = BrowserDataStore(defaults: defaults)
@@ -2623,7 +2647,7 @@ final class LocalFileOpeningTests: XCTestCase {
         )
         return (workspace, {
             blocking.removeStore()
-            defaults.removePersistentDomain(forName: suiteName)
+            TestSuiteCleanup.destroy(suiteName, defaults: defaults)
         })
     }
 }
@@ -2719,7 +2743,7 @@ final class PrivateWindowTests: XCTestCase {
     func testAPrivateWindowNeverWritesTheSavedSession() throws {
         let suiteName = "clearframe.private.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
-        defer { defaults.removePersistentDomain(forName: suiteName) }
+        defer { TestSuiteCleanup.destroy(suiteName, defaults: defaults) }
         let blocking = try BrowserBehaviorTests.makeTestContentBlocking(defaults: defaults)
         defer { blocking.removeStore() }
         let dataStore = BrowserDataStore(defaults: defaults)
@@ -2754,7 +2778,7 @@ final class PrivateWindowTests: XCTestCase {
     func testAPrivateWindowDoesNotRestoreASavedSession() throws {
         let suiteName = "clearframe.private.restore.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
-        defer { defaults.removePersistentDomain(forName: suiteName) }
+        defer { TestSuiteCleanup.destroy(suiteName, defaults: defaults) }
         let blocking = try BrowserBehaviorTests.makeTestContentBlocking(defaults: defaults)
         defer { blocking.removeStore() }
         let dataStore = BrowserDataStore(defaults: defaults)
@@ -2811,7 +2835,217 @@ final class PrivateWindowTests: XCTestCase {
         )
         return (workspace, {
             blocking.removeStore()
-            defaults.removePersistentDomain(forName: suiteName)
+            TestSuiteCleanup.destroy(suiteName, defaults: defaults)
         })
+    }
+}
+
+/// Profiles: the list, its rules, and where each one's data lives.
+@MainActor
+final class ProfileStoreTests: XCTestCase {
+    private func makeStore() throws -> (ProfileStore, () -> Void) {
+        let suiteName = "clearframe.profiles.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        return (ProfileStore(defaults: defaults), {
+            TestSuiteCleanup.destroy(suiteName, defaults: defaults)
+        })
+    }
+
+    /// Someone upgrading has bookmarks, history and logins already. They must
+    /// land in a profile, not be stranded behind a new identifier.
+    func testAFreshInstallStartsWithTheOriginalProfile() throws {
+        let (store, teardown) = try makeStore()
+        defer { teardown() }
+        XCTAssertEqual(store.profiles.count, 1)
+        XCTAssertTrue(store.profiles[0].isDefault)
+        XCTAssertEqual(store.currentProfileID, BrowserProfileRecord.defaultID)
+    }
+
+    /// The point of the original profile: it reads the app's existing stores
+    /// rather than a suite of its own.
+    func testTheOriginalProfileKeepsTheApplicationsOwnStores() {
+        XCTAssertEqual(
+            ProfileStorage.defaults(for: BrowserProfileRecord.defaultID),
+            UserDefaults.standard
+        )
+        XCTAssertEqual(
+            ProfileStorage.faviconDirectory(for: BrowserProfileRecord.defaultID),
+            FaviconStore.defaultDirectory
+        )
+    }
+
+    /// Every other profile is genuinely somewhere else, which is what keeps
+    /// two of them signed into the same site apart.
+    func testEveryOtherProfileGetsItsOwnPlaces() throws {
+        let (store, teardown) = try makeStore()
+        defer { teardown() }
+        let work = store.addProfile(name: "Work")
+        defer { ProfileStorage.erase(profileID: work.id) }
+
+        XCTAssertNotEqual(ProfileStorage.defaults(for: work.id), UserDefaults.standard)
+        XCTAssertNotEqual(
+            ProfileStorage.faviconDirectory(for: work.id),
+            FaviconStore.defaultDirectory
+        )
+        XCTAssertTrue(ProfileStorage.suiteName(for: work.id).contains(work.id.uuidString))
+    }
+
+    func testProfilesSurviveARelaunch() throws {
+        let suiteName = "clearframe.profiles.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { TestSuiteCleanup.destroy(suiteName, defaults: defaults) }
+
+        let first = ProfileStore(defaults: defaults)
+        let zincoo = first.addProfile(name: "Zincoo")
+        defer { ProfileStorage.erase(profileID: zincoo.id) }
+        first.setCurrent(zincoo.id)
+
+        let reopened = ProfileStore(defaults: defaults)
+        XCTAssertEqual(reopened.profiles.map(\.id), first.profiles.map(\.id))
+        XCTAssertEqual(reopened.currentProfileID, zincoo.id)
+    }
+
+    /// There has to be somewhere to open a window, and the original profile
+    /// holds the data from before profiles existed.
+    func testTheOriginalProfileCannotBeDeleted() throws {
+        let (store, teardown) = try makeStore()
+        defer { teardown() }
+        XCTAssertFalse(store.canDelete(BrowserProfileRecord.defaultID))
+        store.deleteProfile(BrowserProfileRecord.defaultID)
+        XCTAssertEqual(store.profiles.count, 1)
+    }
+
+    func testDeletingAProfileMovesTheCurrentOneSomewhereReal() throws {
+        let (store, teardown) = try makeStore()
+        defer { teardown() }
+        let temporary = store.addProfile(name: "Temporary")
+        store.setCurrent(temporary.id)
+        XCTAssertEqual(store.currentProfileID, temporary.id)
+
+        store.deleteProfile(temporary.id)
+
+        XCTAssertFalse(store.profiles.contains { $0.id == temporary.id })
+        XCTAssertTrue(store.profiles.contains { $0.id == store.currentProfileID })
+    }
+
+    func testANameIsAlwaysSomethingYouCanRead() {
+        XCTAssertEqual(BrowserProfileRecord.sanitizedName("   "), "Profile")
+        XCTAssertEqual(BrowserProfileRecord.sanitizedName("  Work   Mail "), "Work Mail")
+        XCTAssertLessThanOrEqual(
+            BrowserProfileRecord.sanitizedName(String(repeating: "x", count: 200)).count,
+            40
+        )
+    }
+
+    func testInitialsComeFromTheFirstTwoWords() {
+        XCTAssertEqual(BrowserProfileRecord(name: "Lucian Roman").initials, "LR")
+        XCTAssertEqual(BrowserProfileRecord(name: "Zincoo").initials, "Z")
+        XCTAssertEqual(BrowserProfileRecord(name: "  ").initials, "?")
+    }
+
+    func testNewProfilesTakeUnusedColours() throws {
+        let (store, teardown) = try makeStore()
+        defer { teardown() }
+        let a = store.addProfile(name: "A")
+        let b = store.addProfile(name: "B")
+        defer {
+            ProfileStorage.erase(profileID: a.id)
+            ProfileStorage.erase(profileID: b.id)
+        }
+        XCTAssertNotEqual(a.colorID, b.colorID)
+        XCTAssertNotEqual(a.colorID, store.profiles[0].colorID)
+    }
+
+    /// The tick in the Profiles menu marks the window in front, not the
+    /// profile new windows would use.
+    func testTheMenuTicksTheProfileOfTheWindowInFront() {
+        let profile = BrowserProfileRecord(name: "Work")
+        let ticked = ClearframeBrowserApp.profileMenuTitle(profile, focused: profile.id)
+        let plain = ClearframeBrowserApp.profileMenuTitle(profile, focused: UUID())
+        XCTAssertTrue(ticked.hasPrefix("✓"))
+        XCTAssertFalse(plain.hasPrefix("✓"))
+        XCTAssertTrue(ticked.contains("Work"))
+        XCTAssertTrue(plain.contains("Work"))
+    }
+}
+
+/// A window belongs to a profile, and its bookmarks and history come from it.
+@MainActor
+final class ProfileSeparationTests: XCTestCase {
+    private func makeWorkspace(profileID: UUID) throws -> (BrowserWorkspace, () -> Void) {
+        let defaults = ProfileStorage.defaults(for: profileID)
+        let blocking = try BrowserBehaviorTests.makeTestContentBlocking(defaults: defaults)
+        let workspace = BrowserWorkspace(
+            dataStore: BrowserDataStore(defaults: defaults),
+            downloads: DownloadCenter(),
+            searchSettings: SearchSettingsStore(defaults: defaults),
+            contentBlocking: blocking.provider,
+            profileID: profileID
+        )
+        return (workspace, { blocking.removeStore() })
+    }
+
+    /// The whole promise: a bookmark saved in one profile is not in the other.
+    func testBookmarksDoNotCrossBetweenProfiles() throws {
+        let work = UUID(), personal = UUID()
+        defer {
+            ProfileStorage.erase(profileID: work)
+            ProfileStorage.erase(profileID: personal)
+        }
+        let (workWorkspace, tearDownWork) = try makeWorkspace(profileID: work)
+        defer { tearDownWork() }
+        let (personalWorkspace, tearDownPersonal) = try makeWorkspace(profileID: personal)
+        defer { tearDownPersonal() }
+
+        _ = workWorkspace.dataStore.addBookmark(
+            title: "Invoices",
+            url: "https://invoices.example",
+            folderID: nil
+        )
+
+        XCTAssertTrue(workWorkspace.dataStore.bookmarks.contains { $0.url == "https://invoices.example" })
+        XCTAssertFalse(personalWorkspace.dataStore.bookmarks.contains { $0.url == "https://invoices.example" })
+    }
+
+    func testHistoryDoesNotCrossBetweenProfiles() throws {
+        let work = UUID(), personal = UUID()
+        defer {
+            ProfileStorage.erase(profileID: work)
+            ProfileStorage.erase(profileID: personal)
+        }
+        let (workWorkspace, tearDownWork) = try makeWorkspace(profileID: work)
+        defer { tearDownWork() }
+        let (personalWorkspace, tearDownPersonal) = try makeWorkspace(profileID: personal)
+        defer { tearDownPersonal() }
+
+        workWorkspace.dataStore.recordVisit(title: "Invoices", url: "https://invoices.example")
+
+        XCTAssertTrue(workWorkspace.dataStore.history.contains { $0.url == "https://invoices.example" })
+        XCTAssertFalse(personalWorkspace.dataStore.history.contains { $0.url == "https://invoices.example" })
+    }
+
+    /// Each profile's saved session is its own, so opening a window in one
+    /// does not restore another's tabs.
+    func testSavedSessionsDoNotCrossBetweenProfiles() throws {
+        let work = UUID(), personal = UUID()
+        defer {
+            ProfileStorage.erase(profileID: work)
+            ProfileStorage.erase(profileID: personal)
+        }
+        let (workWorkspace, tearDownWork) = try makeWorkspace(profileID: work)
+        defer { tearDownWork() }
+        workWorkspace.addTab(url: URL(string: "https://invoices.example")!)
+        workWorkspace.persistNow()
+
+        XCTAssertNotNil(BrowserDataStore(defaults: ProfileStorage.defaults(for: work)).loadWorkspace())
+        XCTAssertNil(BrowserDataStore(defaults: ProfileStorage.defaults(for: personal)).loadWorkspace())
+    }
+
+    func testAWorkspaceRemembersWhichProfileItBelongsTo() throws {
+        let work = UUID()
+        defer { ProfileStorage.erase(profileID: work) }
+        let (workspace, teardown) = try makeWorkspace(profileID: work)
+        defer { teardown() }
+        XCTAssertEqual(workspace.profileID, work)
     }
 }

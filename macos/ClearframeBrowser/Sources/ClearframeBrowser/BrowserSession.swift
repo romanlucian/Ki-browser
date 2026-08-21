@@ -95,6 +95,9 @@ final class BrowserSession: NSObject, ObservableObject {
         contentBlocking: ContentRuleListProvider? = nil,
         favicons: FaviconStore? = nil,
         webFeatures: WebFeatureSettingsStore? = nil,
+        /// The profile's cookies and logins. Left unset, the app's default
+        /// store — which is where anything saved before profiles existed is.
+        websiteDataStore: WKWebsiteDataStore? = nil,
         adoptingPopupConfiguration popupConfiguration: WKWebViewConfiguration? = nil
     ) {
         self.downloadCenter = downloadCenter
@@ -109,7 +112,12 @@ final class BrowserSession: NSObject, ObservableObject {
         // the opener's data store and user agent, so nothing here overrides it.
         let configuration = popupConfiguration ?? WKWebViewConfiguration()
         if popupConfiguration == nil {
-            configuration.websiteDataStore = isPrivate ? .nonPersistent() : .default()
+            // A private tab is ephemeral whatever profile it belongs to; an
+            // ordinary one gets its profile's store, which is what keeps two
+            // profiles signed into the same site apart.
+            configuration.websiteDataStore = isPrivate
+                ? .nonPersistent()
+                : (websiteDataStore ?? .default())
             // Ask for the page Safari would get: same engine, same capabilities.
             configuration.applicationNameForUserAgent = BrowserUserAgent.applicationName
             configuration.preferences.isElementFullscreenEnabled = true

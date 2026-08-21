@@ -171,6 +171,13 @@ struct TabStrip: View {
             excluding: workspace,
             stripHeight: Self.topInset + TabStripMetrics.chipHeight
         ) else { return false }
+        // Two windows in different profiles are two different sets of logins.
+        // Dropping a tab across that line would leave it showing one profile's
+        // session inside another's window, so the drop is declined and the tab
+        // gets a window of its own instead.
+        guard target.profileID == workspace.profileID, target.isPrivate == workspace.isPrivate else {
+            return false
+        }
         let wasLastTab = !workspace.canDetachTab
         guard let tab = workspace.detachTab(tabID, evenIfLast: true) else { return false }
         target.adopt(tab)
@@ -193,6 +200,10 @@ struct TabStrip: View {
         // Offset so the new window's own strip lands under the pointer rather
         // than its top-left corner, which would put the tab somewhere else.
         let services = BrowserServices.shared
+        // The new window belongs to the same profile: the tab's web view is
+        // bound to that profile's cookies, and a window claiming a different
+        // one would be lying about whose session is on screen.
+        services.markNextWindow(profileID: workspace.profileID)
         services.handOff(
             tab: tab,
             windowTopLeft: CGPoint(x: pointer.x - Self.tearOffPointerInset, y: pointer.y + Self.topInset)

@@ -1,5 +1,7 @@
 import AppKit
+import ClearframeCore
 import Foundation
+import WebKit
 
 /// The parts of the browser that belong to the application rather than to any
 /// one window: bookmarks and history, the download list, the search choice,
@@ -16,12 +18,63 @@ final class BrowserServices {
     /// list and the same cookie/website data behind it.
     static let shared = BrowserServices()
 
-    let dataStore: BrowserDataStore
+    // Shared by every profile: where files land, which search engine the
+    // address bar uses, and the WebKit switches. Separating these would mean a
+    // download starting in one window and appearing in none.
     let downloads: DownloadCenter
     let searchSettings: SearchSettingsStore
-    let contentBlocking: ContentRuleListProvider
-    let favicons: FaviconStore
     let webFeatures: WebFeatureSettingsStore
+
+    /// The profiles, and which one new windows open in.
+    let profiles: ProfileStore
+
+    /// Built once per profile and kept, because a profile's rule list should
+    /// compile once and its icon cache should be one cache.
+    private var perProfile: [UUID: ProfileServices] = [:]
+
+    /// Everything one profile owns. Two profiles signed into the same site do
+    /// not see each other's session, because these are genuinely separate
+    /// stores rather than one store with a label on it.
+    @MainActor
+    final class ProfileServices {
+        let profileID: UUID
+        let dataStore: BrowserDataStore
+        let favicons: FaviconStore
+        let contentBlocking: ContentRuleListProvider
+        let websiteDataStore: WKWebsiteDataStore
+
+        init(profileID: UUID) {
+            self.profileID = profileID
+            let defaults = ProfileStorage.defaults(for: profileID)
+            dataStore = BrowserDataStore(defaults: defaults)
+            favicons = FaviconStore(directory: ProfileStorage.faviconDirectory(for: profileID))
+            contentBlocking = ContentRuleListProvider(
+                settings: ContentBlockingSettingsStore(defaults: defaults)
+            )
+            websiteDataStore = ProfileStorage.websiteDataStore(for: profileID)
+        }
+    }
+
+    func services(for profileID: UUID) -> ProfileServices {
+        if let existing = perProfile[profileID] { return existing }
+        let built = ProfileServices(profileID: profileID)
+        perProfile[profileID] = built
+        return built
+    }
+
+    /// Forgets a deleted profile's services so nothing keeps writing to
+    /// stores that are being erased.
+    func discardServices(for profileID: UUID) {
+        perProfile.removeValue(forKey: profileID)
+    }
+
+    // The profile new windows open in. Settings edits that profile's
+    // bookmarks bar and blocking exceptions, the way a browser with profiles
+    // does — those belong to a profile, not to the application.
+    var currentServices: ProfileServices { services(for: profiles.currentProfileID) }
+    var dataStore: BrowserDataStore { currentServices.dataStore }
+    var contentBlocking: ContentRuleListProvider { currentServices.contentBlocking }
+    var favicons: FaviconStore { currentServices.favicons }
 
     /// A tab in mid-air: removed from the window it was dragged out of and
     /// waiting for the window being opened to take it. SwiftUI's `openWindow`
@@ -33,6 +86,20 @@ final class BrowserServices {
     /// it. Read as a top-left because the window's height is not known until
     /// it exists.
     private var originAwaitingWindow: CGPoint?
+
+    /// Which profile the window being opened belongs to, left for the scene
+    /// to pick up. `openWindow` carries no arguments, so this is how a choice
+    /// made in the Profiles menu reaches the window it opens.
+    private var nextWindowProfileID: UUID?
+
+    func markNextWindow(profileID: UUID) { nextWindowProfileID = profileID }
+
+    /// Taken once, by the next window. Falls back to the current profile, so
+    /// an ordinary New Window opens where the person last was.
+    func takeNextWindowProfileID() -> UUID {
+        defer { nextWindowProfileID = nil }
+        return nextWindowProfileID ?? profiles.currentProfileID
+    }
 
     /// Set when New Private Window is chosen, and taken by the window that
     /// opens next. `openWindow` carries no arguments of its own, so this is
@@ -118,20 +185,15 @@ final class BrowserServices {
     }
 
     init(
-        dataStore: BrowserDataStore? = nil,
         downloads: DownloadCenter? = nil,
         searchSettings: SearchSettingsStore? = nil,
-        contentBlocking: ContentRuleListProvider? = nil,
-        favicons: FaviconStore? = nil,
-        webFeatures: WebFeatureSettingsStore? = nil
+        webFeatures: WebFeatureSettingsStore? = nil,
+        profiles: ProfileStore? = nil
     ) {
-        self.dataStore = dataStore ?? BrowserDataStore()
         self.downloads = downloads ?? DownloadCenter()
         self.searchSettings = searchSettings ?? SearchSettingsStore()
-        self.contentBlocking = contentBlocking
-            ?? ContentRuleListProvider(settings: ContentBlockingSettingsStore())
-        self.favicons = favicons ?? FaviconStore()
         self.webFeatures = webFeatures ?? WebFeatureSettingsStore()
+        self.profiles = profiles ?? ProfileStore()
     }
 
     /// The first workspace to ask takes the saved session; later ones start
