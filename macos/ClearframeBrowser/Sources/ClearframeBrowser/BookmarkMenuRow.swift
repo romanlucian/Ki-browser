@@ -21,20 +21,31 @@ struct BookmarkMenuRow: View {
 
     var body: some View {
         if let icon = cachedIcon {
-            Label {
-                Text(title)
-            } icon: {
-                Image(nsImage: icon)
-                    .resizable()
-                    .frame(width: ClearframeTheme.siteIconSize, height: ClearframeTheme.siteIconSize)
-            }
+            Label { Text(title) } icon: { Image(nsImage: icon) }
         } else {
             Label(title, systemImage: "globe")
         }
     }
 
+    /// The site's icon at the size a menu row wants.
+    ///
+    /// Sized on the image rather than with a frame around it: a menu row is an
+    /// `NSMenuItem`, which takes the image's own size and pays no attention to
+    /// SwiftUI layout. A stored favicon is often 64 or 128 points square, so
+    /// without this the icons come out several times the height of the text.
     private var cachedIcon: NSImage? {
-        guard let host = URL(string: url)?.host, !host.isEmpty else { return nil }
-        return (store ?? environmentStore)?.icon(forHost: host)
+        guard let host = URL(string: url)?.host, !host.isEmpty,
+              let stored = (store ?? environmentStore)?.icon(forHost: host),
+              let sized = stored.copy() as? NSImage
+        else { return nil }
+        // A copy, because the original belongs to the cache and is drawn
+        // elsewhere at its own size. Setting `size` re-describes the image
+        // rather than redrawing it, so the full-resolution representation is
+        // still what gets rendered.
+        sized.size = NSSize(
+            width: ClearframeTheme.siteIconSize,
+            height: ClearframeTheme.siteIconSize
+        )
+        return sized
     }
 }

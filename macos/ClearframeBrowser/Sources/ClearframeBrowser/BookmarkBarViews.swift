@@ -141,6 +141,21 @@ struct BookmarksBar: View {
         return true
     }
 
+    /// Puts a dragged folder where the folder it was dropped on sits. A folder
+    /// only moves among its own siblings: dropping one from inside a folder
+    /// onto a folder on the bar would be a move to a different level, which is
+    /// what the Move menu is for.
+    private func placeDroppedFolder(_ draggedID: UUID, before target: BookmarkFolderRecord) -> Bool {
+        guard draggedID != target.id,
+              let dragged = store.bookmarkFolders.first(where: { $0.id == draggedID }),
+              dragged.parentID == target.parentID
+        else { return false }
+        let siblings = store.bookmarkFolders(in: target.parentID)
+        guard let index = siblings.firstIndex(where: { $0.id == target.id }) else { return false }
+        store.moveFolder(draggedID, toIndex: index)
+        return true
+    }
+
     private func folderName(_ folderID: UUID?) -> String {
         guard let folderID else { return "Unfiled" }
         return store.bookmarkFolders.first { $0.id == folderID }?.title ?? "Unfiled"
@@ -148,6 +163,7 @@ struct BookmarksBar: View {
 
     private var folderActions: BookmarkBarFolderActions {
         BookmarkBarFolderActions(
+            reorder: { dragged, target in placeDroppedFolder(dragged, before: target) },
             openAll: openAll(in:),
             openAllInNewWindow: { folder in
                 BookmarkWindowOpener.open(
@@ -435,6 +451,19 @@ private enum BookmarksBarEditorRequest: Identifiable {
 
 /// What every bar bookmark can do, gathered once in `BookmarksBar` so each
 /// item's menu drives exactly the same code.
+/// Makes a folder chip draggable without changing what it looks like.
+private struct DraggableFolder: ViewModifier {
+    let folder: BookmarkFolderRecord
+
+    func body(content: Content) -> some View {
+        if let payload = BookmarkDragPayload.folderURL(folder.id) {
+            content.draggable(payload)
+        } else {
+            content
+        }
+    }
+}
+
 private struct BookmarkBarLinkActions {
     let open: (String) -> Void
     let openInNewTab: (String) -> Void
@@ -451,6 +480,9 @@ private struct BookmarkBarLinkActions {
 
 /// The same, for the bar's folder chips.
 private struct BookmarkBarFolderActions {
+    /// Puts the dragged folder where the one it was dropped on sits. Reports
+    /// whether it landed.
+    let reorder: (UUID, BookmarkFolderRecord) -> Bool
     let openAll: (BookmarkFolderRecord) -> Void
     let openAllInNewWindow: (BookmarkFolderRecord) -> Void
     let openAllInPrivateWindow: (BookmarkFolderRecord) -> Void
@@ -546,7 +578,10 @@ private struct BookmarkBarLink: View {
         // drag that files a bookmark into a folder therefore also arranges the
         // bar, rather than there being two different gestures to learn.
         .dropDestination(for: URL.self) { urls, _ in
-            guard let url = urls.first else { return false }
+            // A folder dropped on a bookmark is declined: folders and saved
+            // pages are two rows on this bar, and a folder's place is among
+            // the other folders.
+            guard let url = urls.first, BookmarkDragPayload.folderID(from: url) == nil else { return false }
             return actions.dropAtPlace(url, bookmark)
         } isTargeted: { isDropTargeted = $0 }
         .overlay(alignment: .leading) {
@@ -638,8 +673,15 @@ private struct BookmarkFolderMenu: View {
             .menuIndicator(.hidden)
             .fixedSize()
             .onHover { isHovered = $0 }
+            .modifier(DraggableFolder(folder: folder))
             .dropDestination(for: URL.self) { urls, _ in
-                guard let url = urls.first, let result = fileDroppedURL(url, folder.id) else { return false }
+                guard let url = urls.first else { return false }
+                // A folder landing on a folder means "put it here"; anything
+                // else means "file this page in this folder".
+                if let dragged = BookmarkDragPayload.folderID(from: url) {
+                    return actions.reorder(dragged, folder)
+                }
+                guard let result = fileDroppedURL(url, folder.id) else { return false }
                 reportDrop(result, folder.title)
                 return true
             } isTargeted: { isDropTargeted = $0 }
@@ -648,9 +690,16 @@ private struct BookmarkFolderMenu: View {
             .accessibilityHint("Opens this folder. Drop a page link or saved bookmark here to file it in this folder. Secondary-click for folder actions.")
             .contextMenu { folderMenuItems }
         } else {
-            Menu(folder.barLabel) { menuContents }
-                .help("Open \(folder.title) folder")
-                .accessibilityLabel("\(folder.title) bookmark folder")
+            // A subfolder inside a dropdown. It carries a folder mark for the
+            // same reason the saved pages beside it carry their site icons:
+            // a column of bare text gives the eye nothing to sort by.
+            Menu {
+                menuContents
+            } label: {
+                Label(folder.barLabel, systemImage: "folder")
+            }
+            .help("Open \(folder.title) folder")
+            .accessibilityLabel("\(folder.title) bookmark folder")
         }
     }
 

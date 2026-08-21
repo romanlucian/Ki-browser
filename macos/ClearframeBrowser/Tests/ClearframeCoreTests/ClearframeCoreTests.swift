@@ -1402,3 +1402,77 @@ final class BookmarkOrderingTests: XCTestCase {
         XCTAssertTrue(collection.bookmarks(in: nil).isEmpty)
     }
 }
+
+/// Folders in the order somebody put them, rather than alphabetically.
+final class BookmarkFolderOrderingTests: XCTestCase {
+    private func folder(_ title: String) -> BookmarkFolderRecord {
+        BookmarkFolderRecord(title: title)
+    }
+
+    /// The upgrade that must not surprise anybody: folders saved before
+    /// positions existed keep the order they were being shown in, by name.
+    func testFoldersSavedBeforeOrderingKeepTheirAlphabeticalOrder() {
+        let collection = BookmarkCollection(folders: [
+            folder("Work"), folder("Art"), folder("Music"),
+        ])
+        XCTAssertEqual(collection.folders(in: nil).map(\.title), ["Art", "Music", "Work"])
+        XCTAssertTrue(collection.folders.allSatisfy { $0.position != nil })
+    }
+
+    func testAFolderCanBeMovedAlongTheBar() {
+        var collection = BookmarkCollection(folders: [
+            folder("Art"), folder("Music"), folder("Work"),
+        ])
+        let work = collection.folders(in: nil)[2]
+
+        collection.moveFolder(id: work.id, toIndex: 0)
+
+        XCTAssertEqual(collection.folders(in: nil).map(\.title), ["Work", "Art", "Music"])
+    }
+
+    /// Once arranged by hand, the order stops being alphabetical and stays
+    /// where it was put.
+    func testAnArrangedOrderIsNotResortedByName() {
+        var collection = BookmarkCollection(folders: [
+            folder("Art"), folder("Music"), folder("Work"),
+        ])
+        let work = collection.folders(in: nil)[2]
+        collection.moveFolder(id: work.id, toIndex: 0)
+
+        let data = try? JSONEncoder().encode(collection.folders)
+        let reloaded = BookmarkCollection(
+            folders: (try? JSONDecoder().decode([BookmarkFolderRecord].self, from: data ?? Data())) ?? []
+        )
+
+        XCTAssertEqual(reloaded.folders(in: nil).map(\.title), ["Work", "Art", "Music"])
+    }
+
+    func testANewFolderJoinsTheEndRatherThanItsAlphabeticalPlace() {
+        var collection = BookmarkCollection(folders: [folder("Art"), folder("Work")])
+        _ = collection.createFolder(title: "Music", iconID: "folder", parentID: nil)
+
+        XCTAssertEqual(collection.folders(in: nil).map(\.title), ["Art", "Work", "Music"])
+    }
+
+    func testSubfoldersAreOrderedWithinTheirOwnFolder() {
+        var collection = BookmarkCollection(folders: [folder("Parent")])
+        let parent = collection.folders(in: nil)[0]
+        _ = collection.createFolder(title: "One", iconID: "folder", parentID: parent.id)
+        _ = collection.createFolder(title: "Two", iconID: "folder", parentID: parent.id)
+        let two = collection.folders(in: parent.id)[1]
+
+        collection.moveFolder(id: two.id, toIndex: 0)
+
+        XCTAssertEqual(collection.folders(in: parent.id).map(\.title), ["Two", "One"])
+        XCTAssertEqual(collection.folders(in: nil).map(\.title), ["Parent"])
+    }
+
+    func testAnIndexPastTheEndClamps() {
+        var collection = BookmarkCollection(folders: [folder("Art"), folder("Work")])
+        let art = collection.folders(in: nil)[0]
+
+        collection.moveFolder(id: art.id, toIndex: 99)
+
+        XCTAssertEqual(collection.folders(in: nil).map(\.title), ["Work", "Art"])
+    }
+}

@@ -281,6 +281,10 @@ public struct BookmarkFolderRecord: Codable, Equatable, Identifiable, Sendable {
     public var colorID: String?
     public var parentID: UUID?
     public let createdAt: Date
+    /// Where this folder sits among the folders beside it. Absent in anything
+    /// saved before folders could be reordered; `BookmarkCollection` fills it
+    /// in from the order they were already being shown in, which was by name.
+    public var position: Int?
 
     public init(
         id: UUID = UUID(),
@@ -289,9 +293,11 @@ public struct BookmarkFolderRecord: Codable, Equatable, Identifiable, Sendable {
         iconID: String? = nil,
         colorID: String? = nil,
         parentID: UUID? = nil,
-        createdAt: Date = Date()
+        createdAt: Date = Date(),
+        position: Int? = nil
     ) {
         self.id = id
+        self.position = position
         self.title = title.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedEmoji = emoji.trimmingCharacters(in: .whitespacesAndNewlines)
         self.emoji = trimmedEmoji.isEmpty ? "📁" : String(trimmedEmoji.prefix(1))
@@ -302,7 +308,10 @@ public struct BookmarkFolderRecord: Codable, Equatable, Identifiable, Sendable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, title, emoji, iconID, colorID, parentID, createdAt
+        // Listed explicitly, so a field added to the struct and not added here
+        // is silently dropped on the way to disk — see `BookmarkRecord`, where
+        // exactly that happened.
+        case id, title, emoji, iconID, colorID, parentID, createdAt, position
     }
 
     /// Written the same way the tab-group migration is: a folder saved before
@@ -317,6 +326,7 @@ public struct BookmarkFolderRecord: Codable, Equatable, Identifiable, Sendable {
         colorID = ClearframeIconColor.normalizedID(try container.decodeIfPresent(String.self, forKey: .colorID))
         parentID = try container.decodeIfPresent(UUID.self, forKey: .parentID)
         createdAt = try container.decode(Date.self, forKey: .createdAt)
+        position = try container.decodeIfPresent(Int.self, forKey: .position)
     }
 
     /// The icon this folder draws, wherever it appears: its own choice first,
@@ -357,10 +367,34 @@ public struct BookmarkCollection: Codable, Equatable, Sendable {
         assignMissingPositions()
     }
 
+    /// The folders under a parent, in the order they should be shown.
+    ///
+    /// Name remains the tie-breaker, which is what keeps two folders that
+    /// somehow share a position from swapping about between launches.
     public func folders(in parentID: UUID?) -> [BookmarkFolderRecord] {
         folders
             .filter { $0.parentID == parentID }
-            .sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
+            .sorted { lhs, rhs in
+                let left = lhs.position ?? Int.max
+                let right = rhs.position ?? Int.max
+                if left != right { return left < right }
+                return lhs.title.localizedCaseInsensitiveCompare(rhs.title) == .orderedAscending
+            }
+    }
+
+    /// Puts a folder at `index` among its siblings, moving the rest aside.
+    public mutating func moveFolder(id: UUID, toIndex index: Int) {
+        guard let record = folders.first(where: { $0.id == id }) else { return }
+        var siblings = folders(in: record.parentID)
+        guard let current = siblings.firstIndex(where: { $0.id == id }) else { return }
+        let target = min(max(index, 0), siblings.count - 1)
+        guard target != current else { return }
+        let moving = siblings.remove(at: current)
+        siblings.insert(moving, at: target)
+        for (offset, sibling) in siblings.enumerated() {
+            guard let slot = folders.firstIndex(where: { $0.id == sibling.id }) else { continue }
+            folders[slot].position = offset
+        }
     }
 
     /// The bookmarks in a folder, in the order they should be shown.
@@ -397,11 +431,15 @@ public struct BookmarkCollection: Codable, Equatable, Sendable {
         let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedTitle.isEmpty else { return nil }
         let safeParent = parentID.flatMap(folder(id:))?.id
+        // A new folder joins the end of the row it belongs to, for the same
+        // reason a new bookmark does: an order somebody arranged should not be
+        // rearranged by the next thing they make.
         let folder = BookmarkFolderRecord(
             title: trimmedTitle,
             iconID: iconID,
             colorID: colorID,
-            parentID: safeParent
+            parentID: safeParent,
+            position: folders(in: safeParent).count
         )
         folders.append(folder)
         return folder
@@ -521,6 +559,22 @@ public struct BookmarkCollection: Codable, Equatable, Sendable {
     /// order those bookmarks were already being shown in — newest first — so an
     /// upgrade does not rearrange somebody's bar under them.
     private mutating func assignMissingPositions() {
+        let parentIDs = Set(folders.map(\.parentID))
+        for parentID in parentIDs where folders.contains(where: { $0.parentID == parentID && $0.position == nil }) {
+            let ordered = folders
+                .filter { $0.parentID == parentID }
+                .sorted { lhs, rhs in
+                    let left = lhs.position ?? Int.max
+                    let right = rhs.position ?? Int.max
+                    if left != right { return left < right }
+                    return lhs.title.localizedCaseInsensitiveCompare(rhs.title) == .orderedAscending
+                }
+            for (offset, record) in ordered.enumerated() {
+                guard let slot = folders.firstIndex(where: { $0.id == record.id }) else { continue }
+                folders[slot].position = offset
+            }
+        }
+
         let folderIDs = Set(bookmarks.map(\.folderID))
         for folderID in folderIDs where bookmarks.contains(where: { $0.folderID == folderID && $0.position == nil }) {
             let ordered = bookmarks

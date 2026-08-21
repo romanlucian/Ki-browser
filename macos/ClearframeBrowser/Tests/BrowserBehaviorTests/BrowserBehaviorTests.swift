@@ -3172,3 +3172,31 @@ final class TabDragThresholdTests: XCTestCase {
                        "the chip stays under the pointer across a reorder")
     }
 }
+
+/// What a folder looks like while it is being dragged.
+@MainActor
+final class BookmarkDragPayloadTests: XCTestCase {
+    func testAFolderTravelsAsItsOwnKindOfAddress() throws {
+        let id = UUID()
+        let url = try XCTUnwrap(BookmarkDragPayload.folderURL(id))
+        XCTAssertEqual(BookmarkDragPayload.folderID(from: url), id)
+    }
+
+    /// The reason for a scheme of its own: a folder reference dropped where
+    /// bookmarks are saved must not become one.
+    func testAFolderReferenceIsNeverSaveableAsAPage() throws {
+        let url = try XCTUnwrap(BookmarkDragPayload.folderURL(UUID()))
+        XCTAssertNil(WebURLPolicy.validatedURL(url.absoluteString))
+        XCTAssertNil(BookmarkURLPolicy.validatedURL(url.absoluteString))
+    }
+
+    func testAPageIsNotMistakenForAFolder() throws {
+        let page = try XCTUnwrap(URL(string: "https://example.com/page"))
+        XCTAssertNil(BookmarkDragPayload.folderID(from: page))
+    }
+
+    func testRubbishInThatSchemeIsRefusedRatherThanGuessed() throws {
+        let url = try XCTUnwrap(URL(string: "clearframe-folder://not-a-uuid"))
+        XCTAssertNil(BookmarkDragPayload.folderID(from: url))
+    }
+}
