@@ -94,6 +94,19 @@ swift test
 ./scripts/run-browser-smoke.sh
 ```
 
+Tests that need isolated storage each make their own `UserDefaults` suite.
+Teardown empties the domain, but macOS writes an empty `.plist` back as the
+test process exits, so a full run leaves roughly eighty files in
+`~/Library/Preferences`. They are inert, and they accumulate. To clear them:
+
+```bash
+./scripts/clean-test-preferences.sh
+```
+
+It removes only files matching `clearframe.<name>.<uuid>.plist` and refuses
+anything beginning `com.clearframe`, which is where the app's own settings and
+each profile's bookmarks and history actually live.
+
 The smoke test uses a kernel-selected local fixture port and exercises a native SwiftUI window, launch/content focus, WebKit navigation, same-document SPA URL/title changes, popups, tabs, local search resolution, bookmark persistence and safe drag filing, download-panel state, history, session restore, visible-content filtering, open Shadow DOM extraction, local analysis, exact evidence highlighting, the file-upload panel wiring, find in page, page zoom, and print availability. It requires a logged-in desktop session; restricted/headless environments can block WebKit services.
 
 The Swift package separates the Foundation-only analysis/service contract (`ClearframeCore`) from the macOS-specific SwiftUI/WebKit interface (`ClearframeBrowser`). A shared JSON contract fixture is executed by both the Swift and JavaScript suites so language scoring, summaries, risk signals, Plain English, and reading-time behavior cannot drift silently. A future Windows app can reuse the language-neutral service contract and tests, but not the native SwiftUI/WebKit UI.

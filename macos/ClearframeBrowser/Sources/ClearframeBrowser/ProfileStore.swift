@@ -149,7 +149,16 @@ enum ProfileStorage {
     /// Removes everything a deleted profile owned.
     static func erase(profileID: UUID) {
         guard profileID != BrowserProfileRecord.defaultID else { return }
-        UserDefaults.standard.removePersistentDomain(forName: suiteName(for: profileID))
+        let suite = suiteName(for: profileID)
+        UserDefaults.standard.removePersistentDomain(forName: suite)
+        // Emptying the domain leaves the file it lived in behind, named after
+        // the profile. A deleted profile should not leave its name on disk,
+        // so the file goes too.
+        if let library = FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask).first {
+            try? FileManager.default.removeItem(
+                at: library.appendingPathComponent("Preferences/\(suite).plist")
+            )
+        }
         if let directory = faviconDirectory(for: profileID) {
             try? FileManager.default.removeItem(at: directory)
         }

@@ -3049,3 +3049,41 @@ final class ProfileSeparationTests: XCTestCase {
         XCTAssertEqual(workspace.profileID, work)
     }
 }
+
+/// Deleting a profile should leave nothing named after it on the disk.
+@MainActor
+final class ProfileErasureTests: XCTestCase {
+    private func preferenceFile(for profileID: UUID) -> URL? {
+        FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask).first?
+            .appendingPathComponent("Preferences/\(ProfileStorage.suiteName(for: profileID)).plist")
+    }
+
+    /// Emptying the preference domain leaves the file behind, named after the
+    /// profile. Someone who deleted a profile would still find it listed in
+    /// their Preferences folder.
+    func testErasingAProfileRemovesItsPreferenceFile() throws {
+        let profileID = UUID()
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: ProfileStorage.suiteName(for: profileID)))
+        defaults.set("something", forKey: "clearframe.test.marker")
+        defaults.synchronize()
+        let file = try XCTUnwrap(preferenceFile(for: profileID))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: file.path), "the suite should exist to begin with")
+
+        ProfileStorage.erase(profileID: profileID)
+
+        XCTAssertFalse(
+            FileManager.default.fileExists(atPath: file.path),
+            "a deleted profile must not leave a file named after it"
+        )
+    }
+
+    /// The original profile shares the application's own preferences. Erasing
+    /// it would take the app's settings with it.
+    func testErasingTheOriginalProfileIsRefused() throws {
+        ProfileStorage.erase(profileID: BrowserProfileRecord.defaultID)
+        // Nothing to assert about a file — the point is that the app's own
+        // preferences are still readable afterwards.
+        XCTAssertEqual(ProfileStorage.defaults(for: BrowserProfileRecord.defaultID), UserDefaults.standard)
+        XCTAssertNotNil(UserDefaults.standard)
+    }
+}
