@@ -224,8 +224,14 @@ final class BrowserWorkspace: ObservableObject {
 
     private var tabSubscriptions: [UUID: AnyCancellable] = [:]
     /// Whether this window's tabs are the ones written back as the saved
-    /// session. Only the window that restored it writes to it.
+    /// session. Only the window that restored it writes to it, and a private
+    /// window never does.
     private let persistsSession: Bool
+    /// A private window: every tab it opens is private, so they share the
+    /// ephemeral WebKit store, leave no history, and are not written to the
+    /// saved session. Opening a normal tab from here is deliberately not
+    /// possible — a window is one thing or the other, as it is in Safari.
+    let isPrivate: Bool
     private var downloadSubscription: AnyCancellable?
     private var dataStoreSubscription: AnyCancellable?
     private var contentBlockingSubscription: AnyCancellable?
@@ -244,9 +250,11 @@ final class BrowserWorkspace: ObservableObject {
         restoresSession: Bool = true,
         /// A tab dragged out of another window. It arrives alive, so this
         /// window opens showing that page rather than a blank one.
-        adopting: BrowserTab? = nil
+        adopting: BrowserTab? = nil,
+        isPrivate: Bool = false
     ) {
-        self.persistsSession = restoresSession
+        self.isPrivate = isPrivate
+        self.persistsSession = restoresSession && !isPrivate
         let resolvedDataStore = dataStore ?? BrowserDataStore()
         let resolvedDownloads = downloads ?? DownloadCenter()
         let resolvedSearchSettings = searchSettings ?? SearchSettingsStore()
@@ -272,12 +280,14 @@ final class BrowserWorkspace: ObservableObject {
             self?.objectWillChange.send()
         }
 
-        if let adopting {
+        // A private window opens blank: it adopts nothing and restores
+        // nothing, because neither would be private.
+        if !isPrivate, let adopting {
             // Its group belongs to the window it came from.
             adopting.groupID = nil
             tabs = [adopting]
             selectedTabID = adopting.id
-        } else if restoresSession,
+        } else if !isPrivate, restoresSession,
                   let restored = resolvedDataStore.loadWorkspace(),
                   !restored.tabs.isEmpty {
             let selectedID = restored.selectedTabID ?? restored.tabs.first?.id
@@ -307,6 +317,7 @@ final class BrowserWorkspace: ObservableObject {
             let tab = BrowserTab(
                 downloadCenter: resolvedDownloads,
                 searchSettings: resolvedSearchSettings,
+                isPrivate: isPrivate,
                 contentBlocking: resolvedContentBlocking,
                 favicons: resolvedFavicons
             )
@@ -372,8 +383,11 @@ final class BrowserWorkspace: ObservableObject {
 
     var canCloseTab: Bool { !tabs.isEmpty }
 
-    func addTab(url: URL? = nil, select: Bool = true, isPrivate: Bool = false) {
-        let tab = makeTab(url: url, isPrivate: isPrivate)
+    /// - Parameter isPrivate: left unset, a tab is as private as its window.
+    ///   A private window has no way to open a normal tab, which is the point
+    ///   of it being a window rather than a tab.
+    func addTab(url: URL? = nil, select: Bool = true, isPrivate: Bool? = nil) {
+        let tab = makeTab(url: url, isPrivate: isPrivate ?? self.isPrivate)
         tabs.append(tab)
         configure(tab)
         if select { selectTab(tab.id) }
@@ -414,7 +428,12 @@ final class BrowserWorkspace: ObservableObject {
     /// A workspace built on the services the whole application shares, so a
     /// second window sees the same bookmarks, history, downloads and site
     /// icons as the first.
-    convenience init(services: BrowserServices, restoresSession: Bool, adopting: BrowserTab? = nil) {
+    convenience init(
+        services: BrowserServices,
+        restoresSession: Bool,
+        adopting: BrowserTab? = nil,
+        isPrivate: Bool = false
+    ) {
         self.init(
             dataStore: services.dataStore,
             downloads: services.downloads,
@@ -423,7 +442,8 @@ final class BrowserWorkspace: ObservableObject {
             favicons: services.favicons,
             webFeatures: services.webFeatures,
             restoresSession: restoresSession,
-            adopting: adopting
+            adopting: adopting,
+            isPrivate: isPrivate
         )
         services.register(self)
     }
@@ -1076,6 +1096,33 @@ final class BrowserWorkspace: ObservableObject {
                 }
             }
         )
+    }
+
+    /// Writes the page in front out as a PDF, after the person names it.
+    func exportSelectedPageAsPDF(status: @escaping (String) -> Void = { _ in }) {
+        guard let tab = selectedTab, tab.session.canPrintPage else { return }
+        let session = tab.session
+        PageFileCommands.exportPDF(
+            named: tab.displayTitle,
+            renderedBy: { finished in session.makePDF(completion: finished) },
+            completion: { result in
+                switch result {
+                case .success(let url): status("Exported to \(url.lastPathComponent).")
+                case .failure(let error): status("Could not export this page: \(error.localizedDescription)")
+                }
+            }
+        )
+    }
+
+    /// A new tab of its own, in a group of its own — Safari's New Empty Tab
+    /// Group. Ours starts with one empty tab rather than none, because a group
+    /// with no tabs is pruned by design: a group exists while a tab belongs to
+    /// it.
+    @discardableResult
+    func createEmptyGroup() -> TabGroupRecord? {
+        addTab()
+        guard let newTabID = selectedTabID else { return nil }
+        return createGroup(withTabs: [newTabID])
     }
 
     /// Hands the current page's address to the system share picker. Only a

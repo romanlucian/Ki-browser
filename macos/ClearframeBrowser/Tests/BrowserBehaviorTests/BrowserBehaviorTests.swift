@@ -2673,3 +2673,145 @@ final class HistoryMenuTests: XCTestCase {
         XCTAssertTrue(ClearframeBrowserApp.recentPages(in: []).isEmpty)
     }
 }
+
+/// A private window, as opposed to a private tab in an ordinary one.
+@MainActor
+final class PrivateWindowTests: XCTestCase {
+    func testAPrivateWindowOpensWithAPrivateTab() throws {
+        let (workspace, teardown) = try Self.makeWorkspace(isPrivate: true)
+        defer { teardown() }
+        XCTAssertTrue(workspace.isPrivate)
+        XCTAssertEqual(workspace.tabs.count, 1)
+        XCTAssertTrue(workspace.tabs.allSatisfy(\.isPrivate))
+    }
+
+    /// The point of it being a window: there is no way to end up with a
+    /// normal tab beside the private ones.
+    func testEveryTabOpenedInAPrivateWindowIsPrivate() throws {
+        let (workspace, teardown) = try Self.makeWorkspace(isPrivate: true)
+        defer { teardown() }
+        workspace.addTab()
+        workspace.addTab(url: URL(string: "https://example.com")!)
+        XCTAssertEqual(workspace.tabs.count, 3)
+        XCTAssertTrue(workspace.tabs.allSatisfy(\.isPrivate))
+    }
+
+    func testAnOrdinaryWindowStillOpensOrdinaryTabs() throws {
+        let (workspace, teardown) = try Self.makeWorkspace(isPrivate: false)
+        defer { teardown() }
+        workspace.addTab()
+        XCTAssertFalse(workspace.isPrivate)
+        XCTAssertTrue(workspace.tabs.allSatisfy { !$0.isPrivate })
+    }
+
+    /// An ordinary window can still hold a private tab, which is what the
+    /// Tabs menu offers; asking for one explicitly still works.
+    func testAPrivateTabCanStillBeOpenedInAnOrdinaryWindow() throws {
+        let (workspace, teardown) = try Self.makeWorkspace(isPrivate: false)
+        defer { teardown() }
+        workspace.addTab(isPrivate: true)
+        XCTAssertEqual(workspace.tabs.filter(\.isPrivate).count, 1)
+        XCTAssertEqual(workspace.tabs.filter { !$0.isPrivate }.count, 1)
+    }
+
+    /// Nothing from a private window reaches the disk. Writing its tabs to
+    /// the saved session would put them back on screen after a relaunch.
+    func testAPrivateWindowNeverWritesTheSavedSession() throws {
+        let suiteName = "clearframe.private.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let blocking = try BrowserBehaviorTests.makeTestContentBlocking(defaults: defaults)
+        defer { blocking.removeStore() }
+        let dataStore = BrowserDataStore(defaults: defaults)
+
+        let ordinary = BrowserWorkspace(
+            dataStore: dataStore,
+            downloads: DownloadCenter(),
+            searchSettings: SearchSettingsStore(defaults: defaults),
+            contentBlocking: blocking.provider
+        )
+        ordinary.addTab(url: URL(string: "https://kept.example")!)
+        ordinary.persistNow()
+        let saved = try XCTUnwrap(dataStore.loadWorkspace())
+
+        let secret = BrowserWorkspace(
+            dataStore: dataStore,
+            downloads: DownloadCenter(),
+            searchSettings: SearchSettingsStore(defaults: defaults),
+            contentBlocking: blocking.provider,
+            restoresSession: false,
+            isPrivate: true
+        )
+        secret.addTab(url: URL(string: "https://secret.example")!)
+        secret.persistNow()
+
+        let reloaded = try XCTUnwrap(dataStore.loadWorkspace())
+        XCTAssertEqual(reloaded.tabs.map(\.id), saved.tabs.map(\.id))
+    }
+
+    /// A private window is not where a restored session belongs either, even
+    /// if it is the first window to open.
+    func testAPrivateWindowDoesNotRestoreASavedSession() throws {
+        let suiteName = "clearframe.private.restore.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let blocking = try BrowserBehaviorTests.makeTestContentBlocking(defaults: defaults)
+        defer { blocking.removeStore() }
+        let dataStore = BrowserDataStore(defaults: defaults)
+
+        let ordinary = BrowserWorkspace(
+            dataStore: dataStore,
+            downloads: DownloadCenter(),
+            searchSettings: SearchSettingsStore(defaults: defaults),
+            contentBlocking: blocking.provider
+        )
+        ordinary.addTab(url: URL(string: "https://one.example")!)
+        ordinary.addTab(url: URL(string: "https://two.example")!)
+        ordinary.persistNow()
+
+        let secret = BrowserWorkspace(
+            dataStore: dataStore,
+            downloads: DownloadCenter(),
+            searchSettings: SearchSettingsStore(defaults: defaults),
+            contentBlocking: blocking.provider,
+            restoresSession: true,
+            isPrivate: true
+        )
+
+        XCTAssertEqual(secret.tabs.count, 1, "a private window opens blank")
+        XCTAssertTrue(secret.tabs[0].isPrivate)
+    }
+
+    /// Safari's New Empty Tab Group. A group with no tabs at all is pruned by
+    /// design, so ours starts with one empty tab.
+    func testANewEmptyTabGroupArrivesWithOneBlankTab() throws {
+        let (workspace, teardown) = try Self.makeWorkspace(isPrivate: false)
+        defer { teardown() }
+        let before = workspace.tabs.count
+
+        let group = try XCTUnwrap(workspace.createEmptyGroup())
+
+        XCTAssertEqual(workspace.tabs.count, before + 1)
+        let members = workspace.tabs.filter { $0.groupID == group.id }
+        XCTAssertEqual(members.count, 1)
+        XCTAssertEqual(workspace.selectedTabID, members.first?.id)
+    }
+
+    private static func makeWorkspace(isPrivate: Bool) throws -> (BrowserWorkspace, () -> Void) {
+        let suiteName = "clearframe.privatewindow.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        let blocking = try BrowserBehaviorTests.makeTestContentBlocking(defaults: defaults)
+        let workspace = BrowserWorkspace(
+            dataStore: BrowserDataStore(defaults: defaults),
+            downloads: DownloadCenter(),
+            searchSettings: SearchSettingsStore(defaults: defaults),
+            contentBlocking: blocking.provider,
+            restoresSession: !isPrivate,
+            isPrivate: isPrivate
+        )
+        return (workspace, {
+            blocking.removeStore()
+            defaults.removePersistentDomain(forName: suiteName)
+        })
+    }
+}

@@ -60,6 +60,33 @@ enum PageFileCommands {
         }
     }
 
+    /// Writes the page out as a PDF, after the person names it.
+    static func exportPDF(
+        named suggestedName: String,
+        renderedBy render: @escaping (@escaping (Result<Data, Error>) -> Void) -> Void,
+        completion: @escaping (Result<URL, Error>) -> Void
+    ) {
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.pdf]
+        panel.nameFieldStringValue = safeFileName(from: suggestedName)
+        panel.message = "Export this page as a PDF."
+        panel.prompt = "Export"
+        guard panel.runModal() == .OK, let destination = panel.url else { return }
+        render { result in
+            switch result {
+            case .success(let data):
+                do {
+                    try data.write(to: destination, options: .atomic)
+                    completion(.success(destination))
+                } catch {
+                    completion(.failure(error))
+                }
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
+
     /// Offers the page's address to the apps the person has, through the
     /// system's own picker. Only the address travels — never the page's text,
     /// and never without a destination being chosen in that picker.

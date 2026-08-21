@@ -21,6 +21,8 @@ Dates are commit dates. Test counts are the totals at the end of each period, ve
 - Save Page As… writes a web archive of what the page is currently showing, rather than re-fetching the address.
 - Share Page… offers the page's address through the system picker. The address only, never the page's text, and never without a destination being chosen there.
 - History and Bookmarks menus. History lists recent pages, one entry per page rather than one per visit, and holds Back, Forward and Reopen Closed Tab. Bookmarks mirrors the bar's folders and links.
+- New Private Window (⇧⌘N), which is what that chord means in both Safari and Chrome; Clearframe had put a private *tab* there. A private window opens blank, every tab in it is private, it restores no session and writes none, and it offers no way to open an ordinary tab beside the private ones.
+- The File menu now carries what both browsers put there: New Tab, New Window, New Private Window, New Empty Tab Group (⌃⌘N), Open File…, Open Location… under its standard name rather than "Focus Address Bar" in Page, Close Window, Close All Windows (⌥⇧⌘W), Close Tab, Save Page As…, Export as PDF…, Share Page… and Print. Safari's empty tab group starts with no tabs; ours starts with one blank tab, because a group with no tabs is pruned by design.
 - Reload, Stop, and the zoom commands moved from Page to View, where a Mac user looks for them; View had held nothing but Enter Full Screen. AppKit's own window tabbing is switched off, so Show Tab Bar and Show All Tabs no longer appear beside Clearframe's own tab strip.
 
 **Tabs**

@@ -34,6 +34,18 @@ final class BrowserServices {
     /// it exists.
     private var originAwaitingWindow: CGPoint?
 
+    /// Set when New Private Window is chosen, and taken by the window that
+    /// opens next. `openWindow` carries no arguments of its own, so this is
+    /// how the scene learns which kind of window it is building.
+    private var nextWindowIsPrivate = false
+
+    func markNextWindowPrivate() { nextWindowIsPrivate = true }
+
+    func takeNextWindowIsPrivate() -> Bool {
+        defer { nextWindowIsPrivate = false }
+        return nextWindowIsPrivate
+    }
+
     /// Set once the first window has taken the saved session, so a second
     /// window opens empty instead of restoring the same tabs twice.
     private(set) var hasRestoredSession = false

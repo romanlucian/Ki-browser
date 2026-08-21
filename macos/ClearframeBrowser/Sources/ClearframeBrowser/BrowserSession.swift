@@ -286,6 +286,11 @@ final class BrowserSession: NSObject, ObservableObject {
     /// the Print command disables itself on them.
     var canPrintPage: Bool { loadState == .content }
 
+    /// The page as a PDF, laid out as WebKit is showing it.
+    func makePDF(completion: @escaping (Result<Data, Error>) -> Void) {
+        webView.createPDF { completion($0) }
+    }
+
     /// The page as WebKit currently holds it, resources included, so a saved
     /// copy is what was on screen rather than a fresh fetch of the address.
     func makeWebArchive(completion: @escaping (Result<Data, Error>) -> Void) {

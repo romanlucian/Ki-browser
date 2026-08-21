@@ -29,8 +29,17 @@ struct ClearframeBrowserApp: App {
             // Close Window below takes ⇧⌘W, which is Chrome's chord for it.
             CommandGroup(replacing: .singleWindowList) {}
             CommandGroup(replacing: .newItem) {
+                Button("New Tab") { focusedWorkspace?.addTab() }
+                    .keyboardShortcut("t", modifiers: [.command])
                 Button("New Window") { openNewWindow() }
                     .keyboardShortcut("n", modifiers: [.command])
+                // A window rather than a tab, which is what both Safari and
+                // Chrome mean by this chord. Everything opened in it is
+                // private, so there is no way to mix the two by accident.
+                Button("New Private Window") { openNewPrivateWindow() }
+                    .keyboardShortcut("n", modifiers: [.command, .shift])
+                Button("New Empty Tab Group") { focusedWorkspace?.createEmptyGroup() }
+                    .keyboardShortcut("n", modifiers: [.control, .command])
             }
             CommandGroup(after: .newItem) {
                 // Each of these puts a standard macOS panel in front of the
@@ -41,16 +50,34 @@ struct ClearframeBrowserApp: App {
                     focusedWorkspace?.openLocalFile(file)
                 }
                 .keyboardShortcut("o", modifiers: [.command])
+                // Its standard name, and the menu both browsers keep it in.
+                Button("Open Location…") { focusedWorkspace?.requestAddressFocus() }
+                    .keyboardShortcut("l", modifiers: [.command])
                 Divider()
                 Button("Close Window") {
                     NSApplication.shared.keyWindow?.performClose(nil)
                 }
                 .keyboardShortcut("w", modifiers: [.command, .shift])
+                Button("Close All Windows") {
+                    for window in NSApplication.shared.windows where window.isVisible {
+                        window.performClose(nil)
+                    }
+                }
+                .keyboardShortcut("w", modifiers: [.command, .option, .shift])
+                Button("Close Tab") { focusedWorkspace?.closeSelectedTab() }
+                    .keyboardShortcut("w", modifiers: [.command])
+                Divider()
                 Button("Save Page As…") { focusedWorkspace?.saveSelectedPage() }
                     .keyboardShortcut("s", modifiers: [.command])
                     .disabled(!(focusedWorkspace?.canSaveSelectedPage ?? false))
+                Button("Export as PDF…") { focusedWorkspace?.exportSelectedPageAsPDF() }
+                    .disabled(!(focusedWorkspace?.canSaveSelectedPage ?? false))
                 Button("Share Page…") { focusedWorkspace?.shareSelectedPage() }
                     .disabled(!(focusedWorkspace?.canShareSelectedPage ?? false))
+                Divider()
+                Button("Print…") { focusedWorkspace?.printSelectedPage() }
+                    .keyboardShortcut("p", modifiers: [.command])
+                    .disabled(!(focusedWorkspace?.canPrintSelectedPage ?? false))
             }
             // Reload, stop, and zoom change what the page looks like rather
             // than where it is, and on a Mac that is the View menu — which
@@ -71,12 +98,9 @@ struct ClearframeBrowserApp: App {
                 Divider()
             }
             CommandMenu("Tabs") {
-                Button("New Tab") { focusedWorkspace?.addTab() }
-                    .keyboardShortcut("t", modifiers: [.command])
                 Button("New Private Tab") { focusedWorkspace?.addTab(isPrivate: true) }
-                    .keyboardShortcut("n", modifiers: [.command, .shift])
-                Button("Close Current Tab") { focusedWorkspace?.closeSelectedTab() }
-                    .keyboardShortcut("w", modifiers: [.command])
+                    .keyboardShortcut("n", modifiers: [.command, .option])
+                    .disabled(focusedWorkspace?.isPrivate ?? true)
                 Button("Reopen Closed Tab") { focusedWorkspace?.reopenClosedTab() }
                     .keyboardShortcut("t", modifiers: [.command, .shift])
                     .disabled(!(focusedWorkspace?.canReopenClosedTab ?? false))
@@ -97,7 +121,7 @@ struct ClearframeBrowserApp: App {
                 Divider()
                 // ⌃⌘P is the shortcut Chrome uses for the same action, so a
                 // switching user's fingers already know it.
-                Button("New Tab Group") { focusedWorkspace?.createGroupForSelectedTab() }
+                Button("New Tab Group with This Tab") { focusedWorkspace?.createGroupForSelectedTab() }
                     .keyboardShortcut("p", modifiers: [.control, .command])
                 Button("Remove Tab from Group") { focusedWorkspace?.removeSelectedTabFromGroup() }
                     .disabled(focusedWorkspace?.selectedTabGroup == nil)
@@ -166,8 +190,6 @@ struct ClearframeBrowserApp: App {
                 // ⌘R is the most-used key in a browser and ⌘[ / ⌘] are the
                 // macOS history pair. ⇧⌘[ and ⇧⌘] already switch tabs; these
                 // are separate chords and do not collide with them.
-                Button("Focus Address Bar") { focusedWorkspace?.requestAddressFocus() }
-                    .keyboardShortcut("l", modifiers: [.command])
                 Button("Show Downloads") { focusedWorkspace?.downloads.isPanelPresented = true }
                     .keyboardShortcut("j", modifiers: [.command, .shift])
                 Divider()
@@ -180,10 +202,6 @@ struct ClearframeBrowserApp: App {
                     .keyboardShortcut("g", modifiers: [.command])
                 Button("Find Previous") { focusedWorkspace?.findPreviousInSelectedTab() }
                     .keyboardShortcut("g", modifiers: [.command, .shift])
-                Divider()
-                Button("Print…") { focusedWorkspace?.printSelectedPage() }
-                    .keyboardShortcut("p", modifiers: [.command])
-                    .disabled(!(focusedWorkspace?.canPrintSelectedPage ?? false))
             }
         }
 
@@ -217,6 +235,14 @@ struct ClearframeBrowserApp: App {
     private func openNewWindow() {
         openWindow(id: Self.browserWindowID)
     }
+
+    /// A window whose every tab is private. The flag is left for the scene to
+    /// pick up, the same way a torn-off tab is.
+    @MainActor
+    private func openNewPrivateWindow() {
+        BrowserServices.shared.markNextWindowPrivate()
+        openWindow(id: Self.browserWindowID)
+    }
 }
 
 /// One browser window: its own tabs, its own selection, its own address bar,
@@ -241,8 +267,14 @@ private struct BrowserWindow: View {
         // A window opened around a torn-off tab shows that tab, so it must not
         // also restore the session; otherwise the first window's tabs appear
         // in it too.
-        let restores = adopted == nil && services.claimSessionRestore()
-        return BrowserWorkspace(services: services, restoresSession: restores, adopting: adopted)
+        let isPrivate = services.takeNextWindowIsPrivate()
+        let restores = !isPrivate && adopted == nil && services.claimSessionRestore()
+        return BrowserWorkspace(
+            services: services,
+            restoresSession: restores,
+            adopting: isPrivate ? nil : adopted,
+            isPrivate: isPrivate
+        )
     }
 
     var body: some View {
