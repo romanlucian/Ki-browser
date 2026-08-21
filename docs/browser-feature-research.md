@@ -1,12 +1,16 @@
 # Browser feature research and gap analysis
 
-**Status:** August 19, 2026. A snapshot, not a roadmap. It records what Clearframe has, what mainstream browsers have that it does not, and which gaps are worth closing. Read it with [clearframe-strategy.md](clearframe-strategy.md), which decides what Clearframe is *for*; this file only supplies evidence.
+**Status:** August 19, 2026; sections 1 and 2 re-audited August 21, 2026. A snapshot, not a roadmap. It records what Clearframe has, what mainstream browsers have that it does not, and which gaps are worth closing. Read it with [clearframe-strategy.md](clearframe-strategy.md), which decides what Clearframe is *for*; this file only supplies evidence.
 
 ## Why this file exists
 
 Features were going in reactively. This is the systematic pass that replaces that: one audit of Clearframe's own source, and three competitor studies. Without it the same research gets re-run every few weeks.
 
+This repository is edited by more than one session, often within the same week, so sections 1 and 2 — the parts that describe what Clearframe currently has — go stale fast and need periodic re-checking against source. Sections 3 through 8 describe Chromium internals, WebKit behavior, and competitor products, none of which change when this codebase does, so they are not re-audited here.
+
 **How it was produced.** Four subagents on August 19, 2026: one read this repository's source directly, three researched Safari, Chrome, and the challenger browsers. The Chrome study lost its web-search budget and pivoted to reading Chromium's own source on `googlesource.com`, which produced better ground truth than search would have.
+
+**Re-audit, August 21, 2026.** One session re-checked every capability sections 1 and 2 named, directly against `macos/ClearframeBrowser/Sources/`, by reading the relevant code rather than trusting a menu entry. Several capabilities section 2 recorded as absent on August 19 had shipped in the two days since; the two defects it recorded were confirmed fixed and removed. Sections 3–8 were not touched and were not re-verified this pass.
 
 **Confidence conventions used throughout.** *Verified* means read live from primary source this session. *Recalled* means established knowledge that was not re-confirmed and should be checked before anyone depends on it. Anything unmarked in the Clearframe sections was read from this repository's source and is verified by construction.
 
@@ -24,24 +28,34 @@ Several capabilities are frequently assumed missing and are in fact shipped. Ver
 | Address suggestions | Shipped — local only, from history and bookmarks, no network |
 | Per-site website-data removal | Shipped — Settings and the site-information popover |
 | Tab groups, tab width compression | Shipped |
+| Reopen closed tab | Shipped — ⇧⌘T, `BrowserWorkspace.reopenClosedTab()` |
+| ⌘1–9 tab selection | Shipped — ⌘1–⌘8 pick that tab, ⌘9 picks the last one however many are open, matching Safari rather than counting to nine |
+| Duplicate tab | Shipped — Tabs menu, `duplicateSelectedTab()` |
+| Pin tab | Shipped — from a tab's own context menu, not a menu-bar shortcut |
+| Tab drag-reorder | Shipped — `BrowserWorkspace.moveTab(_:toIndex:)` |
+| Multiple windows | Shipped — ⌘N, plus ⌘⇧N for a private window |
+| Profiles | Shipped — a Profiles menu backed by `ProfileStore` |
+| Tab tear-off | Shipped — drag a tab out and it opens in a window of its own (`TornWindowDrag.swift`) |
+| Bookmarks-bar reordering | Shipped — `BrowserDataStore.moveBookmark(_:toIndex:)` |
+| Share sheet | Shipped — File ▸ Share Page…, hands only the page's address to `NSSharingServicePicker` (`PageFileCommands.share`) |
 
 Anyone planning work should check this table first. Documentation has drifted from the code more than once.
 
 ## 2. Verified absences
 
-Confirmed absent by source search, grouped by why they are absent.
+Confirmed absent by source search, grouped by why they are absent. Re-checked against source August 21, 2026; several items present here on August 19 have since shipped and moved to section 1 above.
 
-**Small and conspicuous.** Reopen closed tab (⇧⌘T) · ⌘1–9 tab selection · duplicate tab · pin tab · mute tab and an audio indicator · tab drag-reorder.
+**Structural.** Reader mode · per-site permission centre (media capture is always `.prompt` and never remembered — verified again at `BrowserSession.webView(_:requestMediaCapturePermissionFor:...)`; no geolocation or notification delegate exists) · per-site zoom memory (verified deliberate: `BrowserSession.pageZoom`'s doc comment says a site's zoom is "deliberately not stored" between tabs or launches) · startup-page options beyond tab restore (Settings only offers restore-tabs toggles, no configurable homepage or new-tab address) · appearance and theme settings · accessibility settings · localization (no `.lproj`, English-only strings) · proxy settings · tab hibernation · screenshot capture · keyboard-shortcut customization · certificate-details UI · crash reporter · updater.
 
-**Structural.** Reader mode · per-site permission centre (media capture is always `.prompt` and never remembered; no geolocation or notification delegate exists) · per-site zoom memory · multiple windows · profiles · startup-page options beyond tab restore · appearance and theme settings · accessibility settings · localization (no `.lproj`, English-only strings) · proxy settings · tab hibernation · picture-in-picture · screenshot capture · share sheet · keyboard-shortcut customization · certificate-details UI · crash reporter · updater.
-
-**Downloads specifically.** No resume or pause, no persistent history across launches, no byte progress, no quarantine or reputation check.
+**Downloads specifically.** No resume or pause (`WKDownloadDelegate`'s `resumeData` is received on failure but never used to resume), no persistent history across launches (`DownloadCenter.items` is in-memory only), no byte progress, no quarantine or reputation check.
 
 **Commercially significant.** No bookmark import or export. This is the single largest adoption blocker: a browser that cannot bring a person's bookmarks with them is not switchable. Section 3 specifies the fix completely.
 
+**Not possible with public API — do not attempt again without re-checking the SDK.** Mute tab and the audio indicator that makes muting useful: the public WebKit headers carry no mute property and no `isPlayingAudio`, both of which live behind private API, and the only audio-related public knob is `mediaTypesRequiringUserActionForPlayback`, which gates autoplay rather than sound. Injected JavaScript could silence `<video>` and `<audio>` elements, but it leaks on Web Audio and any page can un-mute itself, and no public API can say *which* tab is making noise — so muting would be guesswork. Picture-in-picture the same way: `allowsPictureInPictureMediaPlayback` is declared `API_AVAILABLE(ios(9.0))` with no macOS equivalent, and on this platform WebKit's own video controls already offer it, so there is nothing to add. Both were verified by compiling against the macOS SDK on August 21, 2026, not inferred.
+
 **Deliberately excluded, and should stay excluded.** Extensions (WebKit has no host for Manifest V3; the CEF scaffold exists as a future gate, not a plan) · passwords and autofill (blocked behind a security review that has not happened) · search suggestions (they would send every keystroke to a search engine; the local-only completion is the better product) · crypto wallets, ad networks, and agentic page actions (rejected in strategy).
 
-**Two defects found during the audit.** ⌘W is bound twice — the Tabs menu binds "Close Current Tab" while SwiftUI's standard window-close ⌘W is never removed. And a comment in `BrowserWorkspace.swift` refers to choosing a tab "from ⌘1-9", a shortcut that was never implemented.
+The August 19 audit's "two defects found" section is gone: both were confirmed fixed on re-audit. ⌘W's double binding is gone — `ClearframeBrowserApp.swift` now explicitly clears AppKit's default window-list command group (`CommandGroup(replacing: .singleWindowList) {}`) with a comment explaining why, so ⌘W closes only a tab and ⇧⌘W closes a window. And the `BrowserWorkspace.swift` comment describing a tab picked "from ⌘1-⌘9" is no longer a stale claim — that shortcut is now wired up in `ClearframeBrowserApp.swift` (see the ⌘1–9 row in section 1).
 
 ## 3. Bookmark import — complete specification
 
