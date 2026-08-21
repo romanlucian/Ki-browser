@@ -21,6 +21,10 @@ enum BrowserApplicationActivation {
 
 final class ClearframeApplicationDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Clearframe draws its own tab strip. AppKit's window tabbing would
+        // add a second, native one — along with Show Tab Bar and Show All Tabs
+        // in the View menu, which act on tabs Clearframe does not have.
+        NSWindow.allowsAutomaticWindowTabbing = false
         Task { @MainActor in
             BrowserApplicationActivation.bringBrowserToFront()
             try? await Task.sleep(nanoseconds: 120_000_000)

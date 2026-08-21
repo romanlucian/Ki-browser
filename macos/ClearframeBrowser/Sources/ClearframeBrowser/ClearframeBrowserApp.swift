@@ -1,3 +1,4 @@
+import ClearframeCore
 import SwiftUI
 
 @main
@@ -10,6 +11,8 @@ struct ClearframeBrowserApp: App {
     /// the tab the person is looking at.
     @FocusedValue(\.browserWorkspace) private var focusedWorkspace
     @Environment(\.openWindow) private var openWindow
+    /// The History and Bookmarks menus list what is actually saved.
+    private var dataStore: BrowserDataStore { BrowserServices.shared.dataStore }
 
     var body: some Scene {
         WindowGroup("Clearframe", id: Self.browserWindowID) {
@@ -30,10 +33,42 @@ struct ClearframeBrowserApp: App {
                     .keyboardShortcut("n", modifiers: [.command])
             }
             CommandGroup(after: .newItem) {
+                // Each of these puts a standard macOS panel in front of the
+                // person before anything happens; none of them can be reached
+                // by a page.
+                Button("Open File…") {
+                    guard let file = PageFileCommands.chooseFileToOpen() else { return }
+                    focusedWorkspace?.openLocalFile(file)
+                }
+                .keyboardShortcut("o", modifiers: [.command])
+                Divider()
                 Button("Close Window") {
                     NSApplication.shared.keyWindow?.performClose(nil)
                 }
                 .keyboardShortcut("w", modifiers: [.command, .shift])
+                Button("Save Page As…") { focusedWorkspace?.saveSelectedPage() }
+                    .keyboardShortcut("s", modifiers: [.command])
+                    .disabled(!(focusedWorkspace?.canSaveSelectedPage ?? false))
+                Button("Share Page…") { focusedWorkspace?.shareSelectedPage() }
+                    .disabled(!(focusedWorkspace?.canShareSelectedPage ?? false))
+            }
+            // Reload, stop, and zoom change what the page looks like rather
+            // than where it is, and on a Mac that is the View menu — which
+            // until now held nothing but Enter Full Screen.
+            CommandGroup(before: .toolbar) {
+                Button("Reload Page") { focusedWorkspace?.reloadSelectedTab() }
+                    .keyboardShortcut("r", modifiers: [.command])
+                Button("Stop Loading") { focusedWorkspace?.stopLoadingSelectedTab() }
+                    .keyboardShortcut(".", modifiers: [.command])
+                    .disabled(!(focusedWorkspace?.isSelectedTabLoading ?? false))
+                Divider()
+                Button("Zoom In") { focusedWorkspace?.zoomInSelectedTab() }
+                    .keyboardShortcut("+", modifiers: [.command])
+                Button("Zoom Out") { focusedWorkspace?.zoomOutSelectedTab() }
+                    .keyboardShortcut("-", modifiers: [.command])
+                Button("Actual Size") { focusedWorkspace?.resetZoomInSelectedTab() }
+                    .keyboardShortcut("0", modifiers: [.command])
+                Divider()
             }
             CommandMenu("Tabs") {
                 Button("New Tab") { focusedWorkspace?.addTab() }
@@ -67,15 +102,9 @@ struct ClearframeBrowserApp: App {
                 Button("Remove Tab from Group") { focusedWorkspace?.removeSelectedTabFromGroup() }
                     .disabled(focusedWorkspace?.selectedTabGroup == nil)
             }
-            CommandMenu("Page") {
-                // ⌘R is the most-used key in a browser and ⌘[ / ⌘] are the
-                // macOS history pair. ⇧⌘[ and ⇧⌘] already switch tabs; these
-                // are separate chords and do not collide with them.
-                Button("Reload Page") { focusedWorkspace?.reloadSelectedTab() }
-                    .keyboardShortcut("r", modifiers: [.command])
-                Button("Stop Loading") { focusedWorkspace?.stopLoadingSelectedTab() }
-                    .keyboardShortcut(".", modifiers: [.command])
-                    .disabled(!(focusedWorkspace?.isSelectedTabLoading ?? false))
+            // The two menus every Mac browser has and Clearframe did not.
+            // Both read what is already saved; neither adds a second store.
+            CommandMenu("History") {
                 Button("Back") { focusedWorkspace?.goBackInSelectedTab() }
                     .keyboardShortcut("[", modifiers: [.command])
                     .disabled(!(focusedWorkspace?.canGoBackInSelectedTab ?? false))
@@ -83,21 +112,62 @@ struct ClearframeBrowserApp: App {
                     .keyboardShortcut("]", modifiers: [.command])
                     .disabled(!(focusedWorkspace?.canGoForwardInSelectedTab ?? false))
                 Divider()
+                Button("Reopen Closed Tab") { focusedWorkspace?.reopenClosedTab() }
+                    .keyboardShortcut("t", modifiers: [.command, .shift])
+                    .disabled(!(focusedWorkspace?.canReopenClosedTab ?? false))
+                Divider()
+                if dataStore.history.isEmpty {
+                    Text("No pages visited yet")
+                } else {
+                    // A menu is for the handful of pages someone might want
+                    // back; the full list lives on the bookmarks home, which
+                    // can search it.
+                    ForEach(Self.recentPages(in: dataStore.history)) { entry in
+                        Button(BookmarkMenuTitle.short(entry.title)) {
+                            guard let url = WebURLPolicy.validatedURL(entry.url) else { return }
+                            focusedWorkspace?.addTab(url: url)
+                        }
+                    }
+                }
+                Divider()
+                Button("Show Full History…") { focusedWorkspace?.requestBookmarkLibrary() }
+            }
+            CommandMenu("Bookmarks") {
+                Button("Add Bookmark") { focusedWorkspace?.toggleBookmarkForSelectedTab() }
+                    .keyboardShortcut("d", modifiers: [.command])
+                Button("New Bookmark Folder…") { focusedWorkspace?.requestNewBookmarkFolder() }
+                Divider()
+                Button("Show All Bookmarks") { focusedWorkspace?.requestBookmarkLibrary() }
+                    .keyboardShortcut("b", modifiers: [.command, .option])
+                Button("Toggle Bookmarks Bar") { dataStore.showsBookmarksBar.toggle() }
+                    .keyboardShortcut("b", modifiers: [.command, .shift])
+                Divider()
+                let folders = dataStore.bookmarkFolders(in: nil)
+                let unfiled = dataStore.bookmarks(in: nil)
+                if folders.isEmpty && unfiled.isEmpty {
+                    Text("No bookmarks yet")
+                } else {
+                    ForEach(folders) { folder in
+                        Menu(BookmarkMenuTitle.short(folder.title)) {
+                            BookmarkMenuContents(store: dataStore, parentID: folder.id) { url in
+                                focusedWorkspace?.addTab(url: url)
+                            }
+                        }
+                    }
+                    ForEach(unfiled) { bookmark in
+                        Button(BookmarkMenuTitle.short(bookmark.title)) {
+                            guard let url = WebURLPolicy.validatedURL(bookmark.url) else { return }
+                            focusedWorkspace?.addTab(url: url)
+                        }
+                    }
+                }
+            }
+            CommandMenu("Page") {
+                // ⌘R is the most-used key in a browser and ⌘[ / ⌘] are the
+                // macOS history pair. ⇧⌘[ and ⇧⌘] already switch tabs; these
+                // are separate chords and do not collide with them.
                 Button("Focus Address Bar") { focusedWorkspace?.requestAddressFocus() }
                     .keyboardShortcut("l", modifiers: [.command])
-                Button("Add or Remove Bookmark") { focusedWorkspace?.toggleBookmarkForSelectedTab() }
-                    .keyboardShortcut("d", modifiers: [.command])
-                Button("New Bookmark Folder…") {
-                    focusedWorkspace?.requestNewBookmarkFolder()
-                }
-                Button("All Bookmarks…") {
-                    focusedWorkspace?.requestBookmarkLibrary()
-                }
-                .keyboardShortcut("b", modifiers: [.command, .option])
-                Button("Toggle Bookmarks Bar") {
-                    focusedWorkspace?.dataStore.showsBookmarksBar.toggle()
-                }
-                .keyboardShortcut("b", modifiers: [.command, .shift])
                 Button("Show Downloads") { focusedWorkspace?.downloads.isPanelPresented = true }
                     .keyboardShortcut("j", modifiers: [.command, .shift])
                 Divider()
@@ -110,13 +180,6 @@ struct ClearframeBrowserApp: App {
                     .keyboardShortcut("g", modifiers: [.command])
                 Button("Find Previous") { focusedWorkspace?.findPreviousInSelectedTab() }
                     .keyboardShortcut("g", modifiers: [.command, .shift])
-                Divider()
-                Button("Zoom In") { focusedWorkspace?.zoomInSelectedTab() }
-                    .keyboardShortcut("+", modifiers: [.command])
-                Button("Zoom Out") { focusedWorkspace?.zoomOutSelectedTab() }
-                    .keyboardShortcut("-", modifiers: [.command])
-                Button("Actual Size") { focusedWorkspace?.resetZoomInSelectedTab() }
-                    .keyboardShortcut("0", modifiers: [.command])
                 Divider()
                 Button("Print…") { focusedWorkspace?.printSelectedPage() }
                     .keyboardShortcut("p", modifiers: [.command])
@@ -134,6 +197,19 @@ struct ClearframeBrowserApp: App {
     }
 
     static let browserWindowID = "clearframe-browser"
+
+    /// The recently visited pages worth offering, one entry per page. History
+    /// records every visit, so without this the menu shows the same title
+    /// several times over and holds far fewer than twelve actual pages.
+    static func recentPages(in history: [HistoryRecord], limit: Int = 12) -> [HistoryRecord] {
+        var seen = Set<String>()
+        var result: [HistoryRecord] = []
+        for entry in history where seen.insert(entry.url).inserted {
+            result.append(entry)
+            if result.count == limit { break }
+        }
+        return result
+    }
 
     /// Opens an empty window. Tearing a tab out opens the same scene, having
     /// left the tab in `BrowserServices` for the new window to pick up.

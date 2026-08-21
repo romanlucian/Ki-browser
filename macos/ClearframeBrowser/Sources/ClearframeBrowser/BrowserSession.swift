@@ -219,6 +219,37 @@ final class BrowserSession: NSObject, ObservableObject {
         activeNavigation = webView.load(URLRequest(url: safeURL))
     }
 
+    /// Opens a file the person picked in an open panel.
+    ///
+    /// Deliberately a separate door from `load(_:)`, which takes http and
+    /// https and nothing else. Only an open panel the person drove reaches
+    /// this: no link, script, popup, redirect, restored tab, or typed address
+    /// can, so `WebURLPolicy`'s refusal of local schemes stands everywhere it
+    /// stood before.
+    ///
+    /// Read access is granted to the chosen file's own folder rather than the
+    /// file alone, because a saved page keeps its images and stylesheet beside
+    /// it and would otherwise render bare. WebKit gives file pages opaque
+    /// origins, so this widens what the page may *display*, not what its
+    /// scripts may read.
+    func loadLocalFile(_ url: URL) {
+        guard url.isFileURL else { return }
+        isShowingStartPage = false
+        lastRequestedURL = url
+        navigationDisplayName = url.lastPathComponent
+        currentURLString = url.absoluteString
+        pageTitle = url.lastPathComponent
+        hasCommittedNavigation = false
+        isLoading = true
+        estimatedProgress = 0.05
+        loadState = .loading
+        refreshConnectionSecurity()
+        activeNavigation = webView.loadFileURL(
+            url,
+            allowingReadAccessTo: url.deletingLastPathComponent()
+        )
+    }
+
     func openAITool(_ tool: AIToolListing) {
         load(tool.officialURL, displayName: tool.name)
     }
@@ -254,6 +285,12 @@ final class BrowserSession: NSObject, ObservableObject {
     /// bookmarks home, and the error surfaces are app views, not documents, so
     /// the Print command disables itself on them.
     var canPrintPage: Bool { loadState == .content }
+
+    /// The page as WebKit currently holds it, resources included, so a saved
+    /// copy is what was on screen rather than a fresh fetch of the address.
+    func makeWebArchive(completion: @escaping (Result<Data, Error>) -> Void) {
+        webView.createWebArchiveData { completion($0) }
+    }
 
     /// ⌘P. WebKit paginates the page the user is looking at; the print panel
     /// runs as a sheet on the browser window when there is one.

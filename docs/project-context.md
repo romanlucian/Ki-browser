@@ -71,6 +71,7 @@ Do not switch rendering engines now. CEF remains a future gated path for demonst
 - Optional OpenAI provider through a reusable protocol and macOS Keychain-backed prototype settings. Requests use constrained Responses API output, omit the full page URL, and preserve the local result on provider failure.
 - User-confirmed removal of tabs, history, bookmarks, in-app download metadata, per-site tracker-blocking exceptions, WebKit cookies/caches/website storage, workspace records, and recovery backups without deleting saved download files or general preferences.
 - Visible page dialogs and media permission prompts, WebKit renderer-termination state, same-document URL/title synchronization, and local last-known-good persistence recovery.
+- Standard Mac menus: File (new window, open a local file, close window, save the page as a web archive, share its address through the system picker), View (reload, stop, zoom), History (recent pages, one entry per page, plus back, forward, and reopen closed tab), and Bookmarks (the bar's folders and links). Opening a local file is a separate, person-driven path through an open panel; `WebURLPolicy` still refuses local schemes everywhere else, and a local page enters neither history nor the saved session.
 - A locally built app bundle at `dist/Clearframe.app`; it includes an icon and privacy manifest and uses the hardened runtime with an ad hoc local signature. It is not Developer ID signed or notarized.
 
 ## Extraction quality regression gate

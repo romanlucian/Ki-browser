@@ -2480,3 +2480,196 @@ final class TabMergeBetweenWindowsTests: XCTestCase {
         })
     }
 }
+
+/// The File menu's page commands, and the labels the new menus show.
+@MainActor
+final class PageFileCommandTests: XCTestCase {
+    func testAFileNameIsBuiltFromThePageTitle() {
+        XCTAssertEqual(PageFileCommands.safeFileName(from: "Apple Newsroom"), "Apple Newsroom")
+    }
+
+    /// A page title is not a filename: a slash would write into another
+    /// directory, and a colon is a path separator to the Finder.
+    func testPathCharactersAreRemovedFromAFileName() {
+        let name = PageFileCommands.safeFileName(from: "Reports / Q3: draft?")
+        XCTAssertFalse(name.contains("/"))
+        XCTAssertFalse(name.contains(":"))
+        XCTAssertFalse(name.contains("?"))
+    }
+
+    func testARunawayTitleIsCutToAUsableFileName() {
+        let name = PageFileCommands.safeFileName(from: String(repeating: "long title ", count: 40))
+        XCTAssertLessThanOrEqual(name.count, 80)
+        XCTAssertFalse(name.isEmpty)
+    }
+
+    func testATitleThatIsAllWhitespaceStillProducesAName() {
+        XCTAssertEqual(PageFileCommands.safeFileName(from: "   \n  "), "Untitled Page")
+    }
+
+    /// Everything an open panel offers has to be something the engine can
+    /// actually show, or the panel invites a file that opens as a blank page.
+    func testTheOpenPanelOffersOnlyTypesTheEngineRenders() {
+        let types = PageFileCommands.openableTypes
+        XCTAssertTrue(types.contains(.html))
+        XCTAssertTrue(types.contains(.pdf))
+        XCTAssertFalse(types.contains(.executable))
+        XCTAssertFalse(types.contains(.archive))
+    }
+
+    func testAShortMenuTitleIsLeftAlone() {
+        XCTAssertEqual(BookmarkMenuTitle.short("News"), "News")
+    }
+
+    func testALongMenuTitleIsCutOnAWord() {
+        let title = "A very long headline about something that happened somewhere today and yesterday"
+        let short = BookmarkMenuTitle.short(title)
+        XCTAssertLessThanOrEqual(short.count, 61)
+        XCTAssertTrue(short.hasSuffix("…"))
+        XCTAssertFalse(short.contains("  "))
+        // Cut on a word, so the label does not end mid-syllable.
+        XCTAssertFalse(short.dropLast().hasSuffix(" "))
+    }
+
+    func testAnEmptyMenuTitleStillReads() {
+        XCTAssertEqual(BookmarkMenuTitle.short("   "), "Untitled")
+    }
+}
+
+/// Opening a file is a separate door from opening a web address, and the one
+/// stays shut when the other opens.
+@MainActor
+final class LocalFileOpeningTests: XCTestCase {
+    /// The boundary that must not move: nothing that arrives as text — a
+    /// typed address, a link, a restored record — can name a local file.
+    func testAFileAddressIsStillRejectedEverywhereItWasBefore() {
+        XCTAssertNil(WebURLPolicy.validatedURL("file:///etc/passwd"))
+        XCTAssertNil(WebURLPolicy.validatedURL("File:///Users/someone/Desktop/page.html"))
+        XCTAssertNil(BookmarkURLPolicy.validatedURL("file:///etc/hosts"))
+    }
+
+    func testOpeningAFileAddsATabShowingIt() throws {
+        let (workspace, teardown) = try Self.makeWorkspace()
+        defer { teardown() }
+        let file = try Self.writeTemporaryPage()
+        defer { try? FileManager.default.removeItem(at: file) }
+        let before = workspace.tabs.count
+
+        workspace.openLocalFile(file)
+
+        XCTAssertEqual(workspace.tabs.count, before + 1)
+        let opened = try XCTUnwrap(workspace.selectedTab)
+        XCTAssertEqual(opened.session.currentURLString, file.absoluteString)
+    }
+
+    /// A web address is not a file, and asking to open one as a file does
+    /// nothing rather than something surprising.
+    func testOpeningANonFileAddressDoesNothing() throws {
+        let (workspace, teardown) = try Self.makeWorkspace()
+        defer { teardown() }
+        let before = workspace.tabs.count
+
+        workspace.openLocalFile(URL(string: "https://example.com")!)
+
+        XCTAssertEqual(workspace.tabs.count, before)
+    }
+
+    /// The saved session is a file on disk. A local path written into it would
+    /// be a record of what somebody opened, kept for a restore that refuses to
+    /// use it anyway.
+    func testALocalPageIsNotWrittenIntoTheSavedSession() throws {
+        let suiteName = "clearframe.localfile.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let blocking = try BrowserBehaviorTests.makeTestContentBlocking(defaults: defaults)
+        defer { blocking.removeStore() }
+        let dataStore = BrowserDataStore(defaults: defaults)
+        let workspace = BrowserWorkspace(
+            dataStore: dataStore,
+            downloads: DownloadCenter(),
+            searchSettings: SearchSettingsStore(defaults: defaults),
+            contentBlocking: blocking.provider
+        )
+        let file = try Self.writeTemporaryPage()
+        defer { try? FileManager.default.removeItem(at: file) }
+
+        workspace.openLocalFile(file)
+        workspace.persistNow()
+
+        let saved = try XCTUnwrap(dataStore.loadWorkspace())
+        let urls = saved.tabs.compactMap(\.url)
+        XCTAssertFalse(
+            urls.contains { $0.hasPrefix("file:") },
+            "a local path must not reach the saved session: \(urls)"
+        )
+    }
+
+    private static func writeTemporaryPage() throws -> URL {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("clearframe-test-\(UUID().uuidString).html")
+        try "<html><body><h1>Local page</h1></body></html>".write(to: url, atomically: true, encoding: .utf8)
+        return url
+    }
+
+    private static func makeWorkspace() throws -> (BrowserWorkspace, () -> Void) {
+        let suiteName = "clearframe.openfile.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        let blocking = try BrowserBehaviorTests.makeTestContentBlocking(defaults: defaults)
+        let workspace = BrowserWorkspace(
+            dataStore: BrowserDataStore(defaults: defaults),
+            downloads: DownloadCenter(),
+            searchSettings: SearchSettingsStore(defaults: defaults),
+            contentBlocking: blocking.provider
+        )
+        return (workspace, {
+            blocking.removeStore()
+            defaults.removePersistentDomain(forName: suiteName)
+        })
+    }
+}
+
+/// What the History menu offers. History records every visit; a menu wants
+/// pages.
+@MainActor
+final class HistoryMenuTests: XCTestCase {
+    private func visit(_ url: String, _ title: String, minutesAgo: Int) -> HistoryRecord {
+        HistoryRecord(
+            title: title,
+            url: url,
+            visitedAt: Date(timeIntervalSince1970: 1_000_000 - Double(minutesAgo * 60))
+        )
+    }
+
+    func testEachPageIsOfferedOnce() {
+        let history = [
+            visit("https://a.example", "A", minutesAgo: 1),
+            visit("https://b.example", "B", minutesAgo: 2),
+            visit("https://a.example", "A", minutesAgo: 3),
+            visit("https://a.example", "A", minutesAgo: 4),
+        ]
+        let recent = ClearframeBrowserApp.recentPages(in: history)
+        XCTAssertEqual(recent.map(\.url), ["https://a.example", "https://b.example"])
+    }
+
+    /// The newest visit wins, so a page that was reopened sits where its most
+    /// recent visit puts it rather than where it first appeared.
+    func testThePageKeepsItsMostRecentVisit() {
+        let history = [
+            visit("https://b.example", "B now", minutesAgo: 1),
+            visit("https://a.example", "A", minutesAgo: 2),
+            visit("https://b.example", "B before", minutesAgo: 90),
+        ]
+        let recent = ClearframeBrowserApp.recentPages(in: history)
+        XCTAssertEqual(recent.first?.title, "B now")
+        XCTAssertEqual(recent.count, 2)
+    }
+
+    func testTheMenuStaysShort() {
+        let history = (0..<50).map { visit("https://site\($0).example", "Page \($0)", minutesAgo: $0) }
+        XCTAssertEqual(ClearframeBrowserApp.recentPages(in: history).count, 12)
+    }
+
+    func testAnEmptyHistoryOffersNothing() {
+        XCTAssertTrue(ClearframeBrowserApp.recentPages(in: []).isEmpty)
+    }
+}

@@ -114,7 +114,12 @@ final class BrowserTab: ObservableObject, Identifiable {
     }
 
     var persistenceRecord: BrowserTabRecord {
+        // Web addresses only. A tab showing a file the person opened would
+        // otherwise write their local path into the saved session — and
+        // `restorableURL` refuses to reopen it anyway, so it would be a
+        // filesystem path stored on disk for nothing.
         let liveURL = session.currentURLString.nilIfEmpty
+            .flatMap { WebURLPolicy.validatedURL($0)?.absoluteString }
         return BrowserTabRecord(
             id: id,
             url: liveURL ?? pendingRestoreURL?.absoluteString,
@@ -947,6 +952,20 @@ final class BrowserWorkspace: ObservableObject {
         }
     }
 
+    /// Opens a file the person chose, in a tab of its own so the page they
+    /// were on is not replaced by it.
+    func openLocalFile(_ url: URL) {
+        guard url.isFileURL else { return }
+        let tab = makeTab(url: nil, isPrivate: false)
+        tabs.append(tab)
+        configure(tab)
+        enforcePinnedTabsPrecedeUnpinnedTabs()
+        selectedTabID = tab.id
+        tab.activate()
+        tab.session.loadLocalFile(url)
+        schedulePersistence()
+    }
+
     func openExternalURL(_ url: URL) {
         guard let safeURL = WebURLPolicy.validatedURL(url) else { return }
         addTab(url: safeURL, isPrivate: false)
@@ -1039,6 +1058,40 @@ final class BrowserWorkspace: ObservableObject {
     /// ⌘P.
     func printSelectedPage() {
         selectedTab?.session.printPage()
+    }
+
+    /// Saves the page in front as a web archive, after the person names it in
+    /// a save panel. `status` reports what happened so the caller can say so;
+    /// nothing is written if they cancel.
+    func saveSelectedPage(status: @escaping (String) -> Void = { _ in }) {
+        guard let tab = selectedTab, tab.session.canPrintPage else { return }
+        let session = tab.session
+        PageFileCommands.savePage(
+            named: tab.displayTitle,
+            archivedBy: { finished in session.makeWebArchive(completion: finished) },
+            completion: { result in
+                switch result {
+                case .success(let url): status("Saved to \(url.lastPathComponent).")
+                case .failure(let error): status("Could not save this page: \(error.localizedDescription)")
+                }
+            }
+        )
+    }
+
+    /// Hands the current page's address to the system share picker. Only a
+    /// real web address is offered — there is nothing to share about a start
+    /// surface, and a local file's path is not ours to send anywhere.
+    func shareSelectedPage() {
+        guard let shareable = selectedTab.flatMap({ WebURLPolicy.validatedURL($0.session.currentURLString) })
+        else { return }
+        PageFileCommands.share(shareable, from: NSApp.keyWindow?.contentView)
+    }
+
+    /// Whether there is a page worth saving or sharing.
+    var canSaveSelectedPage: Bool { selectedTab?.session.canPrintPage ?? false }
+
+    var canShareSelectedPage: Bool {
+        selectedTab.flatMap { WebURLPolicy.validatedURL($0.session.currentURLString) } != nil
     }
 
     /// ⌘R, ⌘., ⌘[, ⌘]. Each acts on the tab in front, like the toolbar
