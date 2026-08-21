@@ -24,21 +24,27 @@ final class BrowserWindowHolder: ObservableObject {
 /// (`TabStrip.windowDragGesture`) rather than this view's.
 struct WindowDragArea: NSViewRepresentable {
     let holder: BrowserWindowHolder
+    /// Paired with the window here rather than from `onAppear`, which can run
+    /// before the view has a window to report.
+    let workspace: BrowserWorkspace
 
     func makeNSView(context: Context) -> WindowCaptureView {
-        WindowCaptureView(holder: holder)
+        WindowCaptureView(holder: holder, workspace: workspace)
     }
 
     func updateNSView(_ nsView: WindowCaptureView, context: Context) {
         nsView.holder = holder
+        nsView.workspace = workspace
     }
 }
 
 final class WindowCaptureView: NSView {
     var holder: BrowserWindowHolder
+    var workspace: BrowserWorkspace
 
-    init(holder: BrowserWindowHolder) {
+    init(holder: BrowserWindowHolder, workspace: BrowserWorkspace) {
         self.holder = holder
+        self.workspace = workspace
         super.init(frame: .zero)
     }
 
@@ -50,5 +56,12 @@ final class WindowCaptureView: NSView {
         holder.window = window
         // The single switch that stops AppKit dragging the window off a tab.
         window?.isMovable = false
+        BrowserServices.shared.registerWindow(window, for: workspace)
+        // A window opened around a torn-off tab appears where the pointer let
+        // go of it. Only such a window finds a value here, and it is cleared
+        // on read, so an ordinary new window still cascades.
+        if let window, let topLeft = BrowserServices.shared.takeWindowTopLeftAwaitingWindow() {
+            window.setFrameTopLeftPoint(topLeft)
+        }
     }
 }

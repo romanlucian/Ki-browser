@@ -48,6 +48,7 @@ final class BrowserTab: ObservableObject, Identifiable {
         contentBlocking: ContentRuleListProvider? = nil,
         favicons: FaviconStore? = nil,
         webFeatures: WebFeatureSettingsStore? = nil,
+        websiteDataStore: WKWebsiteDataStore? = nil,
         adoptingPopupConfiguration popupConfiguration: WKWebViewConfiguration? = nil
     ) {
         self.id = id
@@ -71,6 +72,7 @@ final class BrowserTab: ObservableObject, Identifiable {
                 contentBlocking: contentBlocking,
                 favicons: favicons,
                 webFeatures: webFeatures,
+                websiteDataStore: websiteDataStore,
                 adoptingPopupConfiguration: popupConfiguration
             )
         } else if loadImmediately {
@@ -80,7 +82,9 @@ final class BrowserTab: ObservableObject, Identifiable {
                 initialURL: initialURL,
                 isPrivate: isPrivate,
                 contentBlocking: contentBlocking,
-                favicons: favicons
+                favicons: favicons,
+                webFeatures: webFeatures,
+                websiteDataStore: websiteDataStore
             )
         } else {
             resolvedSession = BrowserSession(
@@ -88,7 +92,9 @@ final class BrowserTab: ObservableObject, Identifiable {
                 searchSettings: searchSettings,
                 isPrivate: isPrivate,
                 contentBlocking: contentBlocking,
-                favicons: favicons
+                favicons: favicons,
+                webFeatures: webFeatures,
+                websiteDataStore: websiteDataStore
             )
             pendingRestoreURL = initialURL
         }
@@ -114,7 +120,12 @@ final class BrowserTab: ObservableObject, Identifiable {
     }
 
     var persistenceRecord: BrowserTabRecord {
+        // Web addresses only. A tab showing a file the person opened would
+        // otherwise write their local path into the saved session — and
+        // `restorableURL` refuses to reopen it anyway, so it would be a
+        // filesystem path stored on disk for nothing.
         let liveURL = session.currentURLString.nilIfEmpty
+            .flatMap { WebURLPolicy.validatedURL($0)?.absoluteString }
         return BrowserTabRecord(
             id: id,
             url: liveURL ?? pendingRestoreURL?.absoluteString,
@@ -203,6 +214,12 @@ final class BrowserWorkspace: ObservableObject {
     /// HTTPS upgrading and the Web Inspector switch, shared so a change in
     /// Settings reaches tabs that are already open.
     let webFeatures: WebFeatureSettingsStore
+    /// The profile this window belongs to. A window keeps it for life:
+    /// swapping a live window's cookie store underneath its open pages would
+    /// mean tearing down every web view in it.
+    let profileID: UUID
+    /// This profile's cookies and logins, handed to every ordinary tab.
+    private let websiteDataStore: WKWebsiteDataStore?
 
     /// A tab that was closed and can be brought back. Deliberately in memory
     /// only: a closed tab reappearing after a relaunch is a surprise, and for
@@ -218,6 +235,15 @@ final class BrowserWorkspace: ObservableObject {
     private static let closedTabLimit = 10
 
     private var tabSubscriptions: [UUID: AnyCancellable] = [:]
+    /// Whether this window's tabs are the ones written back as the saved
+    /// session. Only the window that restored it writes to it, and a private
+    /// window never does.
+    private let persistsSession: Bool
+    /// A private window: every tab it opens is private, so they share the
+    /// ephemeral WebKit store, leave no history, and are not written to the
+    /// saved session. Opening a normal tab from here is deliberately not
+    /// possible — a window is one thing or the other, as it is in Safari.
+    let isPrivate: Bool
     private var downloadSubscription: AnyCancellable?
     private var dataStoreSubscription: AnyCancellable?
     private var contentBlockingSubscription: AnyCancellable?
@@ -229,8 +255,22 @@ final class BrowserWorkspace: ObservableObject {
         searchSettings: SearchSettingsStore? = nil,
         contentBlocking: ContentRuleListProvider? = nil,
         favicons: FaviconStore? = nil,
-        webFeatures: WebFeatureSettingsStore? = nil
+        webFeatures: WebFeatureSettingsStore? = nil,
+        /// Only the first window takes the saved session. A second window
+        /// restoring the same tabs would show them twice and then race the
+        /// first one writing the session back.
+        restoresSession: Bool = true,
+        /// A tab dragged out of another window. It arrives alive, so this
+        /// window opens showing that page rather than a blank one.
+        adopting: BrowserTab? = nil,
+        isPrivate: Bool = false,
+        profileID: UUID = BrowserProfileRecord.defaultID,
+        websiteDataStore: WKWebsiteDataStore? = nil
     ) {
+        self.profileID = profileID
+        self.websiteDataStore = websiteDataStore
+        self.isPrivate = isPrivate
+        self.persistsSession = restoresSession && !isPrivate
         let resolvedDataStore = dataStore ?? BrowserDataStore()
         let resolvedDownloads = downloads ?? DownloadCenter()
         let resolvedSearchSettings = searchSettings ?? SearchSettingsStore()
@@ -256,7 +296,16 @@ final class BrowserWorkspace: ObservableObject {
             self?.objectWillChange.send()
         }
 
-        if let restored = resolvedDataStore.loadWorkspace(), !restored.tabs.isEmpty {
+        // A private window opens blank: it adopts nothing and restores
+        // nothing, because neither would be private.
+        if !isPrivate, let adopting {
+            // Its group belongs to the window it came from.
+            adopting.groupID = nil
+            tabs = [adopting]
+            selectedTabID = adopting.id
+        } else if !isPrivate, restoresSession,
+                  let restored = resolvedDataStore.loadWorkspace(),
+                  !restored.tabs.isEmpty {
             let selectedID = restored.selectedTabID ?? restored.tabs.first?.id
             let reloadEverything = resolvedDataStore.reloadsRestoredTabs
             tabGroups = restored.groups
@@ -272,7 +321,9 @@ final class BrowserWorkspace: ObservableObject {
                     groupID: record.groupID,
                     isPinned: record.isPinned,
                     contentBlocking: resolvedContentBlocking,
-                    favicons: resolvedFavicons
+                    favicons: resolvedFavicons,
+                    webFeatures: resolvedWebFeatures,
+                    websiteDataStore: websiteDataStore
                 )
             }
             selectedTabID = tabs.contains(where: { $0.id == selectedID }) ? selectedID : tabs.first?.id
@@ -284,8 +335,11 @@ final class BrowserWorkspace: ObservableObject {
             let tab = BrowserTab(
                 downloadCenter: resolvedDownloads,
                 searchSettings: resolvedSearchSettings,
+                isPrivate: isPrivate,
                 contentBlocking: resolvedContentBlocking,
-                favicons: resolvedFavicons
+                favicons: resolvedFavicons,
+                webFeatures: resolvedWebFeatures,
+                websiteDataStore: websiteDataStore
             )
             tabs = [tab]
             selectedTabID = tab.id
@@ -349,8 +403,11 @@ final class BrowserWorkspace: ObservableObject {
 
     var canCloseTab: Bool { !tabs.isEmpty }
 
-    func addTab(url: URL? = nil, select: Bool = true, isPrivate: Bool = false) {
-        let tab = makeTab(url: url, isPrivate: isPrivate)
+    /// - Parameter isPrivate: left unset, a tab is as private as its window.
+    ///   A private window has no way to open a normal tab, which is the point
+    ///   of it being a window rather than a tab.
+    func addTab(url: URL? = nil, select: Bool = true, isPrivate: Bool? = nil) {
+        let tab = makeTab(url: url, isPrivate: isPrivate ?? self.isPrivate)
         tabs.append(tab)
         configure(tab)
         if select { selectTab(tab.id) }
@@ -385,6 +442,93 @@ final class BrowserWorkspace: ObservableObject {
         if let groupID = tab.groupID { setCollapsed(false, forGroup: groupID) }
         selectedTabID = id
         selectedTab?.activate()
+        schedulePersistence()
+    }
+
+    /// A workspace built on the services the whole application shares, so a
+    /// second window sees the same bookmarks, history, downloads and site
+    /// icons as the first.
+    /// A workspace for one window, in one profile. Bookmarks, history, site
+    /// icons, per-site exceptions and logins come from that profile; the
+    /// download list, the search choice and the WebKit switches are shared by
+    /// all of them.
+    convenience init(
+        services: BrowserServices,
+        restoresSession: Bool,
+        adopting: BrowserTab? = nil,
+        isPrivate: Bool = false,
+        profileID: UUID
+    ) {
+        let profile = services.services(for: profileID)
+        self.init(
+            dataStore: profile.dataStore,
+            downloads: services.downloads,
+            searchSettings: services.searchSettings,
+            contentBlocking: profile.contentBlocking,
+            favicons: profile.favicons,
+            webFeatures: services.webFeatures,
+            restoresSession: restoresSession,
+            adopting: adopting,
+            isPrivate: isPrivate,
+            profileID: profileID,
+            websiteDataStore: profile.websiteDataStore
+        )
+        services.register(self)
+    }
+
+    /// Whether a tab can leave this window. The last one cannot: pulling it
+    /// out would close this window to open an identical one, which is why
+    /// Chrome moves the window instead.
+    var canDetachTab: Bool { tabs.count > 1 }
+
+    /// Takes a tab out of this window and hands it back **alive**. Unlike
+    /// `closeTab` it is not torn down and not remembered as closed, because it
+    /// is not closing — it keeps its session, and with it its web view, its
+    /// scroll position and its back/forward list, ready to be shown in
+    /// another window.
+    ///
+    /// The caller must give the returned tab to another workspace. A tab
+    /// dropped on the floor here takes its web view with it.
+    /// - Parameter evenIfLast: allowed when the tab is going to another
+    ///   window rather than to a new one. The window it leaves is then empty
+    ///   and the caller closes it, which is what dropping a lone tab into
+    ///   another window means.
+    func detachTab(_ id: UUID, evenIfLast: Bool = false) -> BrowserTab? {
+        guard evenIfLast || canDetachTab,
+              let index = tabs.firstIndex(where: { $0.id == id })
+        else { return nil }
+        let wasSelected = selectedTabID == id
+        let tab = tabs.remove(at: index)
+        tabSubscriptions.removeValue(forKey: id)
+        // The group stays with the window that owns it.
+        tab.groupID = nil
+        if tabs.isEmpty {
+            selectedTabID = nil
+        } else if wasSelected {
+            let nextIndex = min(index, tabs.count - 1)
+            selectedTabID = tabs[nextIndex].id
+            tabs[nextIndex].activate()
+        }
+        pruneEmptyGroups()
+        if let groupID = selectedTab?.groupID { setCollapsed(false, forGroup: groupID) }
+        schedulePersistence()
+        return tab
+    }
+
+    /// Takes in a tab detached from another window, at `index` if the strip
+    /// has a position in mind — a drop lands where the pointer was — or at the
+    /// end otherwise. The pinned run still comes first, so a pinned tab
+    /// arriving lands inside it and an unpinned one lands after it.
+    func adopt(_ tab: BrowserTab, at index: Int? = nil) {
+        guard !tabs.contains(where: { $0.id == tab.id }) else { return }
+        tab.groupID = nil
+        let pinnedCount = tabs.filter(\.isPinned).count
+        var target = index ?? (tab.isPinned ? pinnedCount : tabs.count)
+        target = tab.isPinned ? min(target, pinnedCount) : max(target, pinnedCount)
+        tabs.insert(tab, at: min(max(target, 0), tabs.count))
+        configure(tab)
+        selectedTabID = tab.id
+        tab.activate()
         schedulePersistence()
     }
 
@@ -843,7 +987,8 @@ final class BrowserWorkspace: ObservableObject {
             isPrivate: isPrivate,
             contentBlocking: contentBlocking,
             favicons: favicons,
-            webFeatures: webFeatures
+            webFeatures: webFeatures,
+            websiteDataStore: websiteDataStore
         )
     }
 
@@ -854,6 +999,20 @@ final class BrowserWorkspace: ObservableObject {
         } else {
             selectedTab?.session.load(url)
         }
+    }
+
+    /// Opens a file the person chose, in a tab of its own so the page they
+    /// were on is not replaced by it.
+    func openLocalFile(_ url: URL) {
+        guard url.isFileURL else { return }
+        let tab = makeTab(url: nil, isPrivate: false)
+        tabs.append(tab)
+        configure(tab)
+        enforcePinnedTabsPrecedeUnpinnedTabs()
+        selectedTabID = tab.id
+        tab.activate()
+        tab.session.loadLocalFile(url)
+        schedulePersistence()
     }
 
     func openExternalURL(_ url: URL) {
@@ -950,6 +1109,67 @@ final class BrowserWorkspace: ObservableObject {
         selectedTab?.session.printPage()
     }
 
+    /// Saves the page in front as a web archive, after the person names it in
+    /// a save panel. `status` reports what happened so the caller can say so;
+    /// nothing is written if they cancel.
+    func saveSelectedPage(status: @escaping (String) -> Void = { _ in }) {
+        guard let tab = selectedTab, tab.session.canPrintPage else { return }
+        let session = tab.session
+        PageFileCommands.savePage(
+            named: tab.displayTitle,
+            archivedBy: { finished in session.makeWebArchive(completion: finished) },
+            completion: { result in
+                switch result {
+                case .success(let url): status("Saved to \(url.lastPathComponent).")
+                case .failure(let error): status("Could not save this page: \(error.localizedDescription)")
+                }
+            }
+        )
+    }
+
+    /// Writes the page in front out as a PDF, after the person names it.
+    func exportSelectedPageAsPDF(status: @escaping (String) -> Void = { _ in }) {
+        guard let tab = selectedTab, tab.session.canPrintPage else { return }
+        let session = tab.session
+        PageFileCommands.exportPDF(
+            named: tab.displayTitle,
+            renderedBy: { finished in session.makePDF(completion: finished) },
+            completion: { result in
+                switch result {
+                case .success(let url): status("Exported to \(url.lastPathComponent).")
+                case .failure(let error): status("Could not export this page: \(error.localizedDescription)")
+                }
+            }
+        )
+    }
+
+    /// A new tab of its own, in a group of its own — Safari's New Empty Tab
+    /// Group. Ours starts with one empty tab rather than none, because a group
+    /// with no tabs is pruned by design: a group exists while a tab belongs to
+    /// it.
+    @discardableResult
+    func createEmptyGroup() -> TabGroupRecord? {
+        addTab()
+        guard let newTabID = selectedTabID else { return nil }
+        return createGroup(withTabs: [newTabID])
+    }
+
+    /// Hands the current page's address to the system share picker. Only a
+    /// real web address is offered — there is nothing to share about a start
+    /// surface, and a local file's path is not ours to send anywhere.
+    func shareSelectedPage() {
+        guard let shareable = selectedTab.flatMap({ WebURLPolicy.validatedURL($0.session.currentURLString) })
+        else { return }
+        PageFileCommands.share(shareable, from: NSApp.keyWindow?.contentView)
+    }
+
+    /// Whether there is a page worth saving or sharing.
+    var canSaveSelectedPage: Bool { selectedTab?.session.canPrintPage ?? false }
+
+    var canShareSelectedPage: Bool {
+        selectedTab.flatMap { WebURLPolicy.validatedURL($0.session.currentURLString) } != nil
+    }
+
     /// ⌘R, ⌘., ⌘[, ⌘]. Each acts on the tab in front, like the toolbar
     /// buttons beside the address bar.
     func reloadSelectedTab() {
@@ -979,6 +1199,7 @@ final class BrowserWorkspace: ObservableObject {
     }
 
     func persistNow() {
+        guard persistsSession else { return }
         let persistentTabs = tabs.filter { !$0.isPrivate }
         let persistentSelection = persistentTabs.contains(where: { $0.id == selectedTabID })
             ? selectedTabID

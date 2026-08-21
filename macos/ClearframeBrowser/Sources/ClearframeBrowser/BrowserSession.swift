@@ -95,6 +95,9 @@ final class BrowserSession: NSObject, ObservableObject {
         contentBlocking: ContentRuleListProvider? = nil,
         favicons: FaviconStore? = nil,
         webFeatures: WebFeatureSettingsStore? = nil,
+        /// The profile's cookies and logins. Left unset, the app's default
+        /// store — which is where anything saved before profiles existed is.
+        websiteDataStore: WKWebsiteDataStore? = nil,
         adoptingPopupConfiguration popupConfiguration: WKWebViewConfiguration? = nil
     ) {
         self.downloadCenter = downloadCenter
@@ -109,7 +112,12 @@ final class BrowserSession: NSObject, ObservableObject {
         // the opener's data store and user agent, so nothing here overrides it.
         let configuration = popupConfiguration ?? WKWebViewConfiguration()
         if popupConfiguration == nil {
-            configuration.websiteDataStore = isPrivate ? .nonPersistent() : .default()
+            // A private tab is ephemeral whatever profile it belongs to; an
+            // ordinary one gets its profile's store, which is what keeps two
+            // profiles signed into the same site apart.
+            configuration.websiteDataStore = isPrivate
+                ? .nonPersistent()
+                : (websiteDataStore ?? .default())
             // Ask for the page Safari would get: same engine, same capabilities.
             configuration.applicationNameForUserAgent = BrowserUserAgent.applicationName
             configuration.preferences.isElementFullscreenEnabled = true
@@ -219,6 +227,37 @@ final class BrowserSession: NSObject, ObservableObject {
         activeNavigation = webView.load(URLRequest(url: safeURL))
     }
 
+    /// Opens a file the person picked in an open panel.
+    ///
+    /// Deliberately a separate door from `load(_:)`, which takes http and
+    /// https and nothing else. Only an open panel the person drove reaches
+    /// this: no link, script, popup, redirect, restored tab, or typed address
+    /// can, so `WebURLPolicy`'s refusal of local schemes stands everywhere it
+    /// stood before.
+    ///
+    /// Read access is granted to the chosen file's own folder rather than the
+    /// file alone, because a saved page keeps its images and stylesheet beside
+    /// it and would otherwise render bare. WebKit gives file pages opaque
+    /// origins, so this widens what the page may *display*, not what its
+    /// scripts may read.
+    func loadLocalFile(_ url: URL) {
+        guard url.isFileURL else { return }
+        isShowingStartPage = false
+        lastRequestedURL = url
+        navigationDisplayName = url.lastPathComponent
+        currentURLString = url.absoluteString
+        pageTitle = url.lastPathComponent
+        hasCommittedNavigation = false
+        isLoading = true
+        estimatedProgress = 0.05
+        loadState = .loading
+        refreshConnectionSecurity()
+        activeNavigation = webView.loadFileURL(
+            url,
+            allowingReadAccessTo: url.deletingLastPathComponent()
+        )
+    }
+
     func openAITool(_ tool: AIToolListing) {
         load(tool.officialURL, displayName: tool.name)
     }
@@ -254,6 +293,17 @@ final class BrowserSession: NSObject, ObservableObject {
     /// bookmarks home, and the error surfaces are app views, not documents, so
     /// the Print command disables itself on them.
     var canPrintPage: Bool { loadState == .content }
+
+    /// The page as a PDF, laid out as WebKit is showing it.
+    func makePDF(completion: @escaping (Result<Data, Error>) -> Void) {
+        webView.createPDF { completion($0) }
+    }
+
+    /// The page as WebKit currently holds it, resources included, so a saved
+    /// copy is what was on screen rather than a fresh fetch of the address.
+    func makeWebArchive(completion: @escaping (Result<Data, Error>) -> Void) {
+        webView.createWebArchiveData { completion($0) }
+    }
 
     /// ⌘P. WebKit paginates the page the user is looking at; the print panel
     /// runs as a sheet on the browser window when there is one.

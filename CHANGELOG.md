@@ -10,6 +10,31 @@ Dates are commit dates. Test counts are the totals at the end of each period, ve
 
 ## Unreleased
 
+### Week of August 21, 2026
+
+**Windows**
+- Multiple windows. Each keeps its own tabs and selection; bookmarks, history, downloads, site icons, tracker rules, and settings stay shared. Menu commands act on the window in front rather than on a single app-wide workspace. New Window (⌘N) and Close Window (⇧⌘W) appear in a File menu the app did not have before.
+- A tab can be dragged out of the strip, upwards or downwards, into a window of its own, and the same move is on the tab's menu as "Move tab to new window". The tab carries its live web view across, so the page keeps its scroll position and its back/forward list instead of reloading. Dragging the last tab in a window moves the window, as Chrome does. Only the first window restores the saved session and only its tabs are written back; a torn-off window's tabs are not restored after a relaunch.
+
+**Profiles**
+- Profiles. Each one owns its bookmarks, history, saved session, site icons, per-site tracker exceptions, and — through its own `WKWebsiteDataStore` — its logins: two profiles signed into the same site do not see each other's session. The download list, the search choice and the WebKit switches stay shared.
+- The profile that existed before this feature keeps the application's original stores, so bookmarks, history and signed-in sessions saved beforehand are not stranded behind a new identifier. It cannot be deleted; there has to be somewhere for a window to open.
+- A window belongs to one profile for life. Choosing a profile opens a window in it rather than swapping the one in front, because a window's open pages are bound to their profile's cookies. For the same reason a tab dragged out of a window stays in its profile, and a drop into a window of a different profile is declined rather than silently rehomed.
+- Deleting a profile removes its bookmarks, history, site icons, exceptions and logins from the Mac, after saying so and defaulting to cancel. Downloaded files are left alone.
+
+**Menus**
+- A File menu, which the app did not have: New Window, Open File…, Close Window, Save Page As…, and Share Page…. Opening a file is a separate door from opening an address — `WebURLPolicy` still refuses local schemes for links, typed addresses, popups, bookmarks and restored tabs, and a local page is kept out of both history and the saved session.
+- Save Page As… writes a web archive of what the page is currently showing, rather than re-fetching the address.
+- Share Page… offers the page's address through the system picker. The address only, never the page's text, and never without a destination being chosen there.
+- History and Bookmarks menus. History lists recent pages, one entry per page rather than one per visit, and holds Back, Forward and Reopen Closed Tab. Bookmarks mirrors the bar's folders and links.
+- New Private Window (⇧⌘N), which is what that chord means in both Safari and Chrome; Clearframe had put a private *tab* there. A private window opens blank, every tab in it is private, it restores no session and writes none, and it offers no way to open an ordinary tab beside the private ones.
+- The File menu now carries what both browsers put there: New Tab, New Window, New Private Window, New Empty Tab Group (⌃⌘N), Open File…, Open Location… under its standard name rather than "Focus Address Bar" in Page, Close Window, Close All Windows (⌥⇧⌘W), Close Tab, Save Page As…, Export as PDF…, Share Page… and Print. Safari's empty tab group starts with no tabs; ours starts with one blank tab, because a group with no tabs is pruned by design.
+- Reload, Stop, and the zoom commands moved from Page to View, where a Mac user looks for them; View had held nothing but Enter Full Screen. AppKit's own window tabbing is switched off, so Show Tab Bar and Show All Tabs no longer appear beside Clearframe's own tab strip.
+
+**Tabs**
+- A tab is dragged by any part of its chip and reorders live under the pointer, rather than through the system drag-and-drop session with its press-and-hold delay. Dragging a tab previously moved the whole window: `hiddenTitleBar` keeps `fullSizeContentView`, so the strip sits in the band AppKit treats as a title bar, and every view AppKit hit-tests there is a SwiftUI-internal container answering `mouseDownCanMoveWindow` with the NSView default of `true`. The window is now not movable by AppKit at all, and the strip grants dragging back as a gesture on empty background only.
+- Known gap: dropping the `Button` that made a pinned chip an accessibility element costs it its spoken name. A pinned tab is reachable and actionable and carries its title as a hint, but announces as "button" first.
+
 ### Week of August 18–20, 2026
 
 **Tabs**

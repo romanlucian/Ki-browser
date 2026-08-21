@@ -4,6 +4,32 @@ import SwiftUI
 /// The tab strip: grouped and ungrouped tabs sharing one row of width, a
 /// new-tab button, and the tab counter.
 ///
+/// One moment of a tab being dragged. The chip reports it; the strip decides
+/// what it means, because only the strip knows how many tabs are left and
+/// where the other chips are.
+struct TabDragUpdate {
+    /// The pointer, in the strip's coordinate space.
+    let location: CGPoint
+    let translation: CGSize
+
+    /// How far a press may wander and still count as a click rather than a
+    /// drag. Small enough that a deliberate pull is never mistaken for a tap,
+    /// large enough to survive the shake of a real hand on a trackpad.
+    static let slop: CGFloat = 4
+    /// How far out of the strip a tab must travel, up or down, before it means
+    /// "into its own window". A chip is 34pt tall, so this is comfortably
+    /// clear of it: dragging along the strip never trips it by accident.
+    static let tearOffDistance: CGFloat = 44
+
+    var isTap: Bool {
+        abs(translation.width) <= Self.slop && abs(translation.height) <= Self.slop
+    }
+
+    /// True once the pointer has left the strip vertically, in either
+    /// direction — Chrome tears a tab out downwards or upwards alike.
+    var hasLeftStrip: Bool { abs(translation.height) > Self.tearOffDistance }
+}
+
 /// Where each chip currently sits, in the strip's own coordinate space, so a
 /// drop can be resolved by position rather than by whichever view claimed it.
 struct TabChipFramesKey: PreferenceKey {
@@ -20,6 +46,7 @@ struct TabStrip: View {
     static let dropSpace = "clearframe.tabStrip"
     @State private var chipFrames: [UUID: CGRect] = [:]
     @StateObject private var windowHolder = BrowserWindowHolder()
+    @Environment(\.openWindow) private var openWindow
     @State private var windowDragOrigin: CGPoint?
     @State private var windowDragStartMouse: CGPoint?
 
@@ -63,7 +90,7 @@ struct TabStrip: View {
             // window is `windowDragGesture`'s job — see `WindowDragArea`.
             // Explicit fill: a representable with no intrinsic size should
             // not be left to guess the strip's bounds.
-            WindowDragArea(holder: windowHolder)
+            WindowDragArea(holder: windowHolder, workspace: workspace)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
             HStack(alignment: .bottom, spacing: 8) {
@@ -120,11 +147,98 @@ struct TabStrip: View {
         .frame(height: Self.topInset + TabStripMetrics.chipHeight)
         .background(ClearframeTheme.bg2)
         .contentShape(Rectangle())
+        // The pairing that lets a tab dragged out of another window find this
+        // strip is made in `WindowDragArea`, where the window is known.
+        .onDisappear { BrowserServices.shared.forgetWindow(of: workspace) }
         // Empty strip background behaves like a title bar. This is the
         // outermost gesture in the strip, so a press that starts on a chip is
         // claimed by the chip's own gesture and never reaches here.
         .gesture(windowDragGesture)
         .onTapGesture(count: 2) { windowHolder.window?.performZoom(nil) }
+    }
+
+    /// Moves the tab into whichever other window's strip the pointer was
+    /// released over, and returns whether one was found. The tab arrives with
+    /// its own web view, exactly as it does when torn into a new window.
+    ///
+    /// A window emptied by this closes: dropping its only tab elsewhere is
+    /// what merging two windows means.
+    @MainActor
+    private func dropIntoAnotherWindow(_ tabID: UUID) -> Bool {
+        let services = BrowserServices.shared
+        guard let (target, targetWindow) = services.dropTarget(
+            at: NSEvent.mouseLocation,
+            excluding: workspace,
+            stripHeight: Self.topInset + TabStripMetrics.chipHeight
+        ) else { return false }
+        // Two windows in different profiles are two different sets of logins.
+        // Dropping a tab across that line would leave it showing one profile's
+        // session inside another's window, so the drop is declined and the tab
+        // gets a window of its own instead.
+        guard target.profileID == workspace.profileID, target.isPrivate == workspace.isPrivate else {
+            return false
+        }
+        let wasLastTab = !workspace.canDetachTab
+        guard let tab = workspace.detachTab(tabID, evenIfLast: true) else { return false }
+        target.adopt(tab)
+        targetWindow?.makeKeyAndOrderFront(nil)
+        if wasLastTab {
+            services.forgetWindow(of: workspace)
+            windowHolder.window?.performClose(nil)
+        }
+        return true
+    }
+
+    /// Takes the tab out of this window and opens one around it, where the
+    /// pointer let go. The tab arrives alive — same session, same web view —
+    /// so the page keeps its scroll position and its back/forward list rather
+    /// than reloading from the address.
+    @MainActor
+    private func tearOff(_ tabID: UUID) {
+        guard let tab = workspace.detachTab(tabID) else { return }
+        let pointer = NSEvent.mouseLocation
+        // Offset so the new window's own strip lands under the pointer rather
+        // than its top-left corner, which would put the tab somewhere else.
+        let services = BrowserServices.shared
+        // The new window belongs to the same profile: the tab's web view is
+        // bound to that profile's cookies, and a window claiming a different
+        // one would be lying about whose session is on screen.
+        services.markNextWindow(profileID: workspace.profileID)
+        services.handOff(
+            tab: tab,
+            windowTopLeft: CGPoint(x: pointer.x - Self.tearOffPointerInset, y: pointer.y + Self.topInset)
+        )
+        openWindow(id: ClearframeBrowserApp.browserWindowID)
+        // If no window came to claim it, the tab would be gone along with the
+        // page it was showing. Take it back rather than lose it.
+        DispatchQueue.main.async {
+            guard services.isTabStillAwaitingWindow,
+                  let stranded = services.takeTabAwaitingWindow()
+            else { return }
+            workspace.adopt(stranded)
+        }
+    }
+
+    /// Roughly where the first chip sits from the window's left edge, so a
+    /// torn-off tab appears under the pointer that pulled it out.
+    private static let tearOffPointerInset: CGFloat = 100
+
+    private func moveWindowWithPointer() {
+        guard let window = windowHolder.window else { return }
+        let mouse = NSEvent.mouseLocation
+        if windowDragOrigin == nil {
+            windowDragOrigin = window.frame.origin
+            windowDragStartMouse = mouse
+        }
+        guard let origin = windowDragOrigin, let start = windowDragStartMouse else { return }
+        window.setFrameOrigin(
+            CGPoint(x: origin.x + (mouse.x - start.x), y: origin.y + (mouse.y - start.y))
+        )
+    }
+
+    private func endWindowDrag() {
+        windowDragOrigin = nil
+        windowDragStartMouse = nil
     }
 
     /// Moves the window with the pointer. AppKit's own window dragging is off
@@ -138,25 +252,8 @@ struct TabStrip: View {
     /// exactly. They share the same axes as `frame.origin`, so no flip either.
     private var windowDragGesture: some Gesture {
         DragGesture(minimumDistance: 2, coordinateSpace: .global)
-            .onChanged { _ in
-                guard let window = windowHolder.window else { return }
-                let mouse = NSEvent.mouseLocation
-                if windowDragOrigin == nil {
-                    windowDragOrigin = window.frame.origin
-                    windowDragStartMouse = mouse
-                }
-                guard let origin = windowDragOrigin, let start = windowDragStartMouse else { return }
-                window.setFrameOrigin(
-                    CGPoint(
-                        x: origin.x + (mouse.x - start.x),
-                        y: origin.y + (mouse.y - start.y)
-                    )
-                )
-            }
-            .onEnded { _ in
-                windowDragOrigin = nil
-                windowDragStartMouse = nil
-            }
+            .onChanged { _ in moveWindowWithPointer() }
+            .onEnded { _ in endWindowDrag() }
     }
 
     private static let topInset: CGFloat = 7
@@ -261,16 +358,33 @@ struct TabStrip: View {
                     addToGroup: { workspace.addTab(tab.id, toGroup: $0) },
                     removeFromGroup: { workspace.removeTabFromGroup(tab.id) },
                     togglePin: { workspace.togglePin(tab.id) },
-                    closeOthers: { workspace.closeOtherTabs(keeping: tab.id) }
+                    closeOthers: { workspace.closeOtherTabs(keeping: tab.id) },
+                    moveToNewWindow: { tearOff(tab.id) },
+                    canMoveToNewWindow: workspace.canDetachTab
                 ),
-                // Where the pointer is, not where it started: the chip
-                // under it is the slot this tab should occupy now.
-                dragMoved: { location in
-                    guard let targetID = Self.chipID(at: location, in: chipFrames),
+                dragChanged: { update in
+                    guard !update.hasLeftStrip else {
+                        // Pulled clear of the strip. With nothing to tear off
+                        // — one tab, one window — the window follows the
+                        // pointer instead, which is what Chrome does.
+                        if !workspace.canDetachTab { moveWindowWithPointer() }
+                        return
+                    }
+                    // Where the pointer is, not where it started: the chip
+                    // under it is the slot this tab should occupy now.
+                    guard abs(update.translation.width) > TabDragUpdate.slop,
+                          let targetID = Self.chipID(at: update.location, in: chipFrames),
                           targetID != tab.id,
                           let index = workspace.tabs.firstIndex(where: { $0.id == targetID })
                     else { return }
                     _ = workspace.moveTab(tab.id, toIndex: index)
+                },
+                dragEnded: { update in
+                    endWindowDrag()
+                    guard update.hasLeftStrip else { return }
+                    // Let go over another window's strip? Then the tab joins
+                    // that window. Otherwise it gets a window of its own.
+                    if !dropIntoAnotherWindow(tab.id) { tearOff(tab.id) }
                 }
             )
             .tabStripRole(tab.isPinned ? .pinnedTab : .tab(isSelected: tab.id == workspace.selectedTabID))
@@ -306,6 +420,10 @@ struct TabChipMenuActions {
     let removeFromGroup: () -> Void
     let togglePin: () -> Void
     let closeOthers: () -> Void
+    /// The keyboard's way to what dragging a tab out of the strip does.
+    let moveToNewWindow: () -> Void
+    /// False for the last tab in a window: it is already alone in one.
+    let canMoveToNewWindow: Bool
 }
 
 struct TabChip: View {
@@ -316,9 +434,10 @@ struct TabChip: View {
     let select: () -> Void
     let close: () -> Void
     let menu: TabChipMenuActions
-    /// Fires continuously while this chip is dragged, with the pointer in the
-    /// strip's coordinate space.
-    let dragMoved: (CGPoint) -> Void
+    /// Fires continuously while this chip is dragged.
+    let dragChanged: (TabDragUpdate) -> Void
+    /// Fires once, on release, for a press that was a drag rather than a tap.
+    let dragEnded: (TabDragUpdate) -> Void
     @State private var isHovered = false
 
     init(
@@ -328,7 +447,8 @@ struct TabChip: View {
         select: @escaping () -> Void,
         close: @escaping () -> Void,
         menu: TabChipMenuActions,
-        dragMoved: @escaping (CGPoint) -> Void
+        dragChanged: @escaping (TabDragUpdate) -> Void,
+        dragEnded: @escaping (TabDragUpdate) -> Void
     ) {
         self.tab = tab
         _session = ObservedObject(wrappedValue: tab.session)
@@ -337,7 +457,8 @@ struct TabChip: View {
         self.select = select
         self.close = close
         self.menu = menu
-        self.dragMoved = dragMoved
+        self.dragChanged = dragChanged
+        self.dragEnded = dragEnded
     }
 
     private var host: String {
@@ -395,11 +516,15 @@ struct TabChip: View {
     private var selectOrDragGesture: some Gesture {
         DragGesture(minimumDistance: 0, coordinateSpace: .named(TabStrip.dropSpace))
             .onChanged { value in
-                guard abs(value.translation.width) > 4 else { return }
-                dragMoved(value.location)
+                dragChanged(TabDragUpdate(location: value.location, translation: value.translation))
             }
             .onEnded { value in
-                if abs(value.translation.width) <= 4 { select() }
+                let update = TabDragUpdate(location: value.location, translation: value.translation)
+                if update.isTap {
+                    select()
+                } else {
+                    dragEnded(update)
+                }
             }
     }
 
@@ -558,6 +683,9 @@ struct TabChip: View {
                 Button("Remove tab from group", action: menu.removeFromGroup)
             }
         }
+        Divider()
+        Button("Move tab to new window") { menu.moveToNewWindow() }
+            .disabled(!menu.canMoveToNewWindow)
         Divider()
         Button("Close tab", action: close)
         Button("Close other tabs", action: menu.closeOthers)

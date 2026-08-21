@@ -4,8 +4,13 @@ import SwiftUI
 
 struct AISettingsView: View {
     @EnvironmentObject private var configuration: AIConfigurationStore
-    @EnvironmentObject private var workspace: BrowserWorkspace
     @EnvironmentObject private var onboarding: OnboardingController
+    // Settings edits the application, not one window: these are the stores
+    // every window shares, and the two actions below reach all of them.
+    private let services = BrowserServices.shared
+    @ObservedObject private var dataStore = BrowserServices.shared.dataStore
+    @ObservedObject private var downloads = BrowserServices.shared.downloads
+    @ObservedObject private var webFeatures = BrowserServices.shared.webFeatures
     @AppStorage("clearframe.restoreTabs") private var restoresTabs = true
     @AppStorage("clearframe.reloadRestoredTabs") private var reloadsRestoredTabs = false
     @AppStorage("clearframe.saveHistory") private var savesHistory = true
@@ -18,7 +23,7 @@ struct AISettingsView: View {
         Form {
             DefaultBrowserSettingsSection()
 
-            SearchEngineSettingsSection(settings: workspace.searchSettings)
+            SearchEngineSettingsSection(settings: services.searchSettings)
 
             Section("Clearframe introduction") {
                 Button("Show welcome tour") {
@@ -45,8 +50,8 @@ struct AISettingsView: View {
                 Toggle(
                     "Use HTTPS when a site is known to support it",
                     isOn: Binding(
-                        get: { workspace.webFeatures.upgradesToHTTPS },
-                        set: { workspace.webFeatures.setUpgradesToHTTPS($0) }
+                        get: { webFeatures.upgradesToHTTPS },
+                        set: { webFeatures.setUpgradesToHTTPS($0) }
                     )
                 )
                 Text("Upgrades the address you are opening when WebKit already knows that host serves HTTPS. It applies to tabs you open from now on, and it upgrades the page request itself — it does not promise that everything the page then loads is encrypted.")
@@ -58,10 +63,10 @@ struct AISettingsView: View {
                 Toggle(
                     "Show features for web developers",
                     isOn: Binding(
-                        get: { workspace.webFeatures.showsDeveloperFeatures },
+                        get: { webFeatures.showsDeveloperFeatures },
                         set: {
-                            workspace.webFeatures.setShowsDeveloperFeatures($0)
-                            workspace.applyDeveloperFeatureSetting()
+                            webFeatures.setShowsDeveloperFeatures($0)
+                            services.liveWorkspaces.forEach { $0.applyDeveloperFeatureSetting() }
                         }
                     )
                 )
@@ -84,14 +89,14 @@ struct AISettingsView: View {
                 Text("History stays in this Mac user profile and is never included in AI requests. Turning this off stops Clearframe recording new visits; visits it already saved stay until you clear them from All Bookmarks (⌘⌥B) or with Clear local browsing data below.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                if let notice = workspace.dataStore.recoveryNotice {
+                if let notice = dataStore.recoveryNotice {
                     VStack(alignment: .leading, spacing: 7) {
                         Label("Local data recovery", systemImage: "externaldrive.badge.checkmark")
                             .font(.callout.weight(.semibold))
                         Text(notice)
                             .font(.caption)
                             .foregroundStyle(.secondary)
-                        Button("Dismiss") { workspace.dataStore.dismissRecoveryNotice() }
+                        Button("Dismiss") { dataStore.dismissRecoveryNotice() }
                             .font(.caption)
                     }
                     .padding(.vertical, 4)
@@ -99,8 +104,8 @@ struct AISettingsView: View {
                 Button("Clear local browsing data…", role: .destructive) {
                     showsResetConfirmation = true
                 }
-                .disabled(isResettingBrowserData || workspace.downloads.activeCount > 0)
-                Text(workspace.downloads.activeCount > 0
+                .disabled(isResettingBrowserData || downloads.activeCount > 0)
+                Text(downloads.activeCount > 0
                      ? "Cancel or finish active downloads before clearing browser data. Saved files are never deleted."
                      : "Clears tabs, history, bookmarks, the in-app download list, cookies, caches, local website storage, per-site tracker-blocking exceptions, and recovery backups. Saved files, search choice, onboarding state, and the Optional AI key are kept.")
                     .font(.caption)
@@ -117,14 +122,14 @@ struct AISettingsView: View {
 
             SiteDataSettingsSection(inventory: siteData)
 
-            ContentBlockingSettingsSection(provider: workspace.contentBlocking)
+            ContentBlockingSettingsSection(provider: services.contentBlocking)
 
             Section("Bookmarks bar") {
                 Toggle(
                     "Show bookmarks below the address bar",
                     isOn: Binding(
-                        get: { workspace.dataStore.showsBookmarksBar },
-                        set: { workspace.dataStore.showsBookmarksBar = $0 }
+                        get: { dataStore.showsBookmarksBar },
+                        set: { dataStore.showsBookmarksBar = $0 }
                     )
                 )
                 Text("Shows top-level folders and unfiled bookmarks in a compact local bar. Folder menus include nested subfolders. This preference and all bookmark data stay on this Mac.")
@@ -176,7 +181,7 @@ struct AISettingsView: View {
         .task { await siteData.refresh() }
         .onChange(of: restoresTabs) { _, enabled in
             if !enabled {
-                workspace.dataStore.clearSavedWorkspace()
+                dataStore.clearSavedWorkspace()
             }
         }
         // Deliberately no `onChange` for `savesHistory`: switching it off used
@@ -193,7 +198,7 @@ struct AISettingsView: View {
                 isResettingBrowserData = true
                 browserDataStatus = ""
                 Task { @MainActor in
-                    await workspace.resetLocalBrowsingData()
+                    for window in services.liveWorkspaces { await window.resetLocalBrowsingData() }
                     isResettingBrowserData = false
                     browserDataStatus = "Local browsing data cleared."
                     // The per-site list describes the same WebKit store the

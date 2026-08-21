@@ -53,9 +53,9 @@ Do not switch rendering engines now. CEF remains a future gated path for demonst
 
 ## Delivered version-1 capabilities
 
-- Standalone native window with startup activation and address-field focus.
+- Standalone native windows with startup activation and address-field focus. Each window keeps its own tabs and selection while sharing bookmarks, history, downloads, site icons, tracker rules, and settings; menu commands act on the window in front. A tab can be dragged out of the strip, up or down, into a window of its own, carrying its live web view so the page keeps its scroll position and back/forward list. Only the first window restores the saved session, and only that window's tabs are written back — a torn-off window's tabs are not restored after a relaunch.
 - Explicit on-device voice-input shell with visible status and review-before-submit behavior.
-- Independent tabs, safe close/teardown, safe popup routing, external HTTP/HTTPS opening, tab keyboard commands, and ephemeral private tabs.
+- Independent tabs, safe close/teardown, safe popup routing, external HTTP/HTTPS opening, tab keyboard commands, and ephemeral private tabs. A private window (⇧⌘N) opens blank, makes every tab in it private, restores no session and writes none, and has no way to open an ordinary tab.
 - Local restoration of up to 12 recent regular-tab URLs/titles with lazy loading, corruption recovery, and an opt-out; private tabs are excluded.
 - Back, forward, home, reload, stop, address/search, progress, HTTPS indication, and clear loading/offline/error states.
 - Default-on tracker blocking against a small, first-party curated domain list, enforced locally by WebKit's content-rule-list engine, with an address-bar shield control, a Settings switch, per-site exceptions, and state-only status text with no per-page or running block counts (see [content-blocking.md](content-blocking.md)).
@@ -71,6 +71,8 @@ Do not switch rendering engines now. CEF remains a future gated path for demonst
 - Optional OpenAI provider through a reusable protocol and macOS Keychain-backed prototype settings. Requests use constrained Responses API output, omit the full page URL, and preserve the local result on provider failure.
 - User-confirmed removal of tabs, history, bookmarks, in-app download metadata, per-site tracker-blocking exceptions, WebKit cookies/caches/website storage, workspace records, and recovery backups without deleting saved download files or general preferences.
 - Visible page dialogs and media permission prompts, WebKit renderer-termination state, same-document URL/title synchronization, and local last-known-good persistence recovery.
+- Profiles, each owning its bookmarks, history, saved session, site icons, per-site tracker exceptions and — through a separate `WKWebsiteDataStore` — its logins, so two profiles signed into the same site do not share a session. Downloads, the search choice and the WebKit switches are shared. A window belongs to one profile for life and choosing a profile opens a window in it; a tab cannot be dragged across that line. The profile that predates the feature keeps the application's original stores and cannot be deleted.
+- Standard Mac menus: File (new tab, new window, new private window, new empty tab group, open a local file, close window, save the page as a web archive, share its address through the system picker, export it as a PDF, print), View (reload, stop, zoom), History (recent pages, one entry per page, plus back, forward, and reopen closed tab), and Bookmarks (the bar's folders and links). Opening a local file is a separate, person-driven path through an open panel; `WebURLPolicy` still refuses local schemes everywhere else, and a local page enters neither history nor the saved session.
 - A locally built app bundle at `dist/Clearframe.app`; it includes an icon and privacy manifest and uses the hardened runtime with an ad hoc local signature. It is not Developer ID signed or notarized.
 
 ## Extraction quality regression gate
@@ -79,7 +81,7 @@ Complex news pages can expose embedded media-player controls and accessibility b
 
 ## Remaining release gaps
 
-This is a practical MVP, not a Chrome/Safari-scale production browser. Remaining work includes broader navigation and hostile-page QA, multiple profiles, tab reordering/groups, bookmark/folder reordering and sync, granular per-site data controls, comprehensive site permissions and certificate UI, a security-reviewed password/import system, persisted/resumable download history and scanning, crash reporting and relaunch recovery beyond the delivered WebKit-process error state, updater infrastructure, accessibility QA, sensitive-identifier redaction and a production AI backend, independent security review, Developer ID signing, notarization, default-browser registration QA after signed installation, and public distribution work.
+This is a practical MVP, not a Chrome/Safari-scale production browser. Remaining work includes broader navigation and hostile-page QA, bookmark/folder reordering, import from other browsers, and sync, granular per-site data controls, comprehensive site permissions and certificate UI, a security-reviewed password/import system, persisted/resumable download history and scanning, crash reporting and relaunch recovery beyond the delivered WebKit-process error state, updater infrastructure, accessibility QA, sensitive-identifier redaction and a production AI backend, independent security review, Developer ID signing, notarization, default-browser registration QA after signed installation, and public distribution work.
 
 ## Source license
 
