@@ -169,6 +169,9 @@ struct ClearframeBrowserApp: App {
                 Button("Toggle Bookmarks Bar") { dataStore.showsBookmarksBar.toggle() }
                     .keyboardShortcut("b", modifiers: [.command, .shift])
                 Divider()
+                Button("Import Bookmarks…") { focusedWorkspace?.requestBookmarkImport() }
+                Button("Export Bookmarks…") { BookmarkExportCommand.run(store: dataStore) }
+                Divider()
                 let folders = dataStore.bookmarkFolders(in: nil)
                 let unfiled = dataStore.bookmarks(in: nil)
                 if folders.isEmpty && unfiled.isEmpty {
@@ -245,7 +248,7 @@ struct ClearframeBrowserApp: App {
         }
     }
 
-    static let browserWindowID = "clearframe-browser"
+    static let browserWindowID = BrowserWindowScene.id
 
     /// The recently visited pages worth offering, one entry per page. History
     /// records every visit, so without this the menu shows the same title

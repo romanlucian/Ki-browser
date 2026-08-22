@@ -247,7 +247,7 @@ struct TabStrip: View {
             windowTopLeft: CGPoint(x: pointer.x - Self.tearOffPointerInset, y: pointer.y + Self.topInset),
             followsPointer: followingPointer
         )
-        openWindow(id: ClearframeBrowserApp.browserWindowID)
+        openWindow(id: BrowserWindowScene.id)
         // If no window came to claim it, the tab would be gone along with the
         // page it was showing. Take it back rather than lose it.
         DispatchQueue.main.async {
