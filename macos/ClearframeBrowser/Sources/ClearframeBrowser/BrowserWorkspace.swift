@@ -203,6 +203,10 @@ final class BrowserWorkspace: ObservableObject {
     @Published private(set) var bookmarkLibraryRequest = 0
     @Published private(set) var bookmarkFolderRequestID = UUID()
     private(set) var requestedBookmarkFolderParentID: UUID?
+    /// Bumped by the Bookmarks menu's "Import Bookmarks…" command. The
+    /// toolbar — always present regardless of which surface the selected tab
+    /// is showing — watches this and presents the import sheet.
+    @Published private(set) var bookmarkImportRequestID = UUID()
 
     let downloads: DownloadCenter
     let dataStore: BrowserDataStore
@@ -1070,6 +1074,10 @@ final class BrowserWorkspace: ObservableObject {
     func requestNewBookmarkFolder(parentID: UUID? = nil) {
         requestedBookmarkFolderParentID = parentID
         bookmarkFolderRequestID = UUID()
+    }
+
+    func requestBookmarkImport() {
+        bookmarkImportRequestID = UUID()
     }
 
     func requestAddressFocus() {

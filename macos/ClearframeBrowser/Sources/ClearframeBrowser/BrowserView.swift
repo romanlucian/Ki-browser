@@ -243,6 +243,7 @@ private struct BrowserToolbar: View {
     let goHome: () -> Void
     @StateObject private var voiceInput = VoiceInputController()
     @State private var folderEditorRequest: BookmarkFolderEditorRequest?
+    @State private var showsBookmarkImport = false
     /// Which suggestion row is highlighted. Row zero is the best answer, so
     /// Return without touching the arrows does what the field already shows.
     @State private var suggestionSelection = 0
@@ -403,6 +404,20 @@ private struct BrowserToolbar: View {
                     parentID: request.parentID
                 )
                 folderEditorRequest = nil
+            }
+        }
+        .onChange(of: workspace.bookmarkImportRequestID) { _, _ in
+            showsBookmarkImport = true
+        }
+        .sheet(isPresented: $showsBookmarkImport) {
+            BookmarkImportSheet(store: dataStore) { didImport in
+                showsBookmarkImport = false
+                // The person may have been looking at any page when they
+                // chose Import Bookmarks from the menu — this is what lets
+                // them see the result instead of being told about it. A
+                // plain Cancel never navigates them away from what they were
+                // reading.
+                if didImport { workspace.openBookmarksHome() }
             }
         }
         .onDisappear { voiceInput.stop() }
