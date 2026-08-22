@@ -16,8 +16,19 @@ final class BookmarkImportTests: XCTestCase {
         return (BrowserDataStore(defaults: defaults), suiteName, defaults)
     }
 
-    private func plan(_ imported: BookmarkImport, into store: BrowserDataStore) -> BookmarkImportPlan {
-        BookmarkImportMergePlanner.plan(imported, into: BookmarkCollection(folders: store.bookmarkFolders, bookmarks: store.bookmarks))
+    private static let importFolderTitle = "Imported from Chrome — 21 August 2026"
+
+    private func plan(
+        _ imported: BookmarkImport,
+        into store: BrowserDataStore,
+        placement: BookmarkImportPlacement = .singleFolder
+    ) -> BookmarkImportPlan {
+        BookmarkImportMergePlanner.plan(
+            imported,
+            into: BookmarkCollection(folders: store.bookmarkFolders, bookmarks: store.bookmarks),
+            placement: placement,
+            importFolderTitle: Self.importFolderTitle
+        )
     }
 
     // MARK: - An already-saved address is left untouched
@@ -43,7 +54,7 @@ final class BookmarkImportTests: XCTestCase {
             ])
         ])
         let mergePlan = plan(imported, into: store)
-        let result = BookmarkImportApplier.apply(mergePlan, destinationFolderTitle: "Imported from Chrome — 21 August 2026", into: store)
+        let result = BookmarkImportApplier.apply(mergePlan, into: store)
 
         let stillExisting = try XCTUnwrap(store.bookmarks.first { $0.id == existing.id })
         XCTAssertEqual(stillExisting.id, existing.id)
@@ -74,22 +85,27 @@ final class BookmarkImportTests: XCTestCase {
             ])
         ])
         let mergePlan = plan(imported, into: store)
-        let result = BookmarkImportApplier.apply(mergePlan, destinationFolderTitle: "Imported from Chrome — 21 August 2026", into: store)
+        let result = BookmarkImportApplier.apply(mergePlan, into: store)
 
-        let destination = try XCTUnwrap(result.destinationFolderID.flatMap(store.bookmarkFolder(id:)))
-        XCTAssertNil(destination.parentID, "the destination is a new top-level folder")
+        let destination = try XCTUnwrap(result.importFolderID.flatMap(store.bookmarkFolder(id:)))
+        XCTAssertNil(destination.parentID, "the dated container is a new top-level folder")
         XCTAssertEqual(destination.title, "Imported from Chrome — 21 August 2026")
-        XCTAssertEqual(result.createdFolderIDs.count, 3, "Bookmarks bar, Work, Reading")
+        XCTAssertEqual(
+            result.createdFolderIDs.count, 3,
+            "the dated container, Work, Reading — the source's own \"Bookmarks bar\" level is collapsed away"
+        )
 
-        let bar = try XCTUnwrap(store.bookmarkFolder(id: result.createdFolderIDs[0]))
-        let work = try XCTUnwrap(store.bookmarkFolder(id: result.createdFolderIDs[1]))
-        let reading = try XCTUnwrap(store.bookmarkFolder(id: result.createdFolderIDs[2]))
-        XCTAssertEqual(bar.title, "Bookmarks bar")
-        XCTAssertEqual(bar.parentID, destination.id)
+        let work = try XCTUnwrap(result.createdFolderIDs[1].flatMap(store.bookmarkFolder(id:)))
+        let reading = try XCTUnwrap(result.createdFolderIDs[2].flatMap(store.bookmarkFolder(id:)))
+        XCTAssertEqual(result.createdFolderIDs[0], destination.id)
         XCTAssertEqual(work.title, "Work")
-        XCTAssertEqual(work.parentID, bar.id)
+        XCTAssertEqual(work.parentID, destination.id, "\"Work\" is one click inside, not two")
         XCTAssertEqual(reading.title, "Reading")
         XCTAssertEqual(reading.parentID, work.id)
+        XCTAssertFalse(
+            store.bookmarkFolders.contains { $0.title == "Bookmarks bar" },
+            "no folder is created for the container the exporting browser wrote"
+        )
 
         let article = try XCTUnwrap(store.bookmarks.first { $0.url == "https://example.com/article" })
         XCTAssertEqual(article.folderID, reading.id, "filed exactly where the source had it, not flattened")
@@ -100,18 +116,20 @@ final class BookmarkImportTests: XCTestCase {
     func testApplyingNeverAddsAnythingIntoAFolderThatAlreadyExisted() throws {
         let (store, suiteName, defaults) = try makeStore()
         defer { TestSuiteCleanup.destroy(suiteName, defaults: defaults) }
-        let handMade = try XCTUnwrap(store.createBookmarkFolder(title: "Bookmarks bar", iconID: "folder", parentID: nil))
+        let handMade = try XCTUnwrap(store.createBookmarkFolder(title: "Work", iconID: "folder", parentID: nil))
 
         let imported = BookmarkImport(roots: [
             ImportedFolder(title: "Bookmarks bar", children: [
-                .bookmark(ImportedBookmark(title: "New", url: "https://example.com/new", addedAt: nil))
+                .folder(ImportedFolder(title: "Work", children: [
+                    .bookmark(ImportedBookmark(title: "New", url: "https://example.com/new", addedAt: nil))
+                ]))
             ])
         ])
         let mergePlan = plan(imported, into: store)
-        _ = BookmarkImportApplier.apply(mergePlan, destinationFolderTitle: "Imported from Chrome — 21 August 2026", into: store)
+        _ = BookmarkImportApplier.apply(mergePlan, into: store)
 
         XCTAssertFalse(store.bookmarkFolderContainsItems(handMade), "a same-named existing folder is never reused")
-        XCTAssertEqual(store.bookmarkFolders.filter { $0.title == "Bookmarks bar" }.count, 2, "a new folder is created instead")
+        XCTAssertEqual(store.bookmarkFolders.filter { $0.title == "Work" }.count, 2, "a new folder is created instead")
     }
 
     // MARK: - Empty import creates no folder
@@ -128,9 +146,9 @@ final class BookmarkImportTests: XCTestCase {
         XCTAssertTrue(mergePlan.isEmpty)
 
         let folderCountBefore = store.bookmarkFolders.count
-        let result = BookmarkImportApplier.apply(mergePlan, destinationFolderTitle: "Imported from Chrome — 21 August 2026", into: store)
+        let result = BookmarkImportApplier.apply(mergePlan, into: store)
 
-        XCTAssertNil(result.destinationFolderID)
+        XCTAssertNil(result.importFolderID)
         XCTAssertEqual(result.addedCount, 0)
         XCTAssertEqual(store.bookmarkFolders.count, folderCountBefore, "not even an empty destination folder is created")
     }
@@ -161,7 +179,7 @@ final class BookmarkImportTests: XCTestCase {
             ])
         ])
         let mergePlan = plan(imported, into: store)
-        let result = BookmarkImportApplier.apply(mergePlan, destinationFolderTitle: "Imported from Chrome — 21 August 2026", into: store)
+        let result = BookmarkImportApplier.apply(mergePlan, into: store)
 
         XCTAssertGreaterThan(store.bookmarks.count, beforeBookmarks.count)
         XCTAssertGreaterThan(store.bookmarkFolders.count, beforeFolders.count)
@@ -170,6 +188,189 @@ final class BookmarkImportTests: XCTestCase {
 
         XCTAssertEqual(store.bookmarks, beforeBookmarks, "every pre-existing bookmark, unchanged, nothing left behind")
         XCTAssertEqual(store.bookmarkFolders, beforeFolders, "every pre-existing folder, unchanged, nothing left behind")
+    }
+
+    // MARK: - Bar placement, against a real store
+
+    private func chromeShapedImport() -> BookmarkImport {
+        BookmarkImport(roots: [
+            ImportedFolder(title: "Bookmarks bar", children: [
+                .folder(ImportedFolder(title: "Projects", children: [
+                    .bookmark(ImportedBookmark(title: "P", url: "https://p.example/", addedAt: nil))
+                ])),
+                .folder(ImportedFolder(title: "AI", children: [
+                    .bookmark(ImportedBookmark(title: "A", url: "https://a.example/", addedAt: nil))
+                ]))
+            ], role: .bookmarksBar),
+            ImportedFolder(title: "Other bookmarks", children: [
+                .bookmark(ImportedBookmark(title: "O", url: "https://o.example/", addedAt: nil))
+            ])
+        ])
+    }
+
+    /// The ordering guarantee that matters most: an import appends to the
+    /// bar and never renumbers what is already on it. Both creation
+    /// primitives only ever append, and the applier must never reach for the
+    /// move-to-index calls that renumber a whole sibling row.
+    func testBarPlacementAppendsAfterTheUsersOwnFoldersWithoutRenumberingThem() throws {
+        let (store, suiteName, defaults) = try makeStore()
+        defer { TestSuiteCleanup.destroy(suiteName, defaults: defaults) }
+
+        let a = try XCTUnwrap(store.createBookmarkFolder(title: "Mine A", iconID: "folder", parentID: nil))
+        let b = try XCTUnwrap(store.createBookmarkFolder(title: "Mine B", iconID: "folder", parentID: nil))
+        let positionsBefore = store.bookmarkFolders.filter { $0.parentID == nil }.map(\.position)
+
+        let mergePlan = plan(chromeShapedImport(), into: store, placement: .bookmarksBar)
+        _ = BookmarkImportApplier.apply(mergePlan, into: store)
+
+        XCTAssertEqual(
+            store.bookmarkFolders(in: nil).map(\.title),
+            ["Mine A", "Mine B", "Projects", "AI", Self.importFolderTitle],
+            "the person's own folders keep their order, and the import lands after them"
+        )
+        let stillA = try XCTUnwrap(store.bookmarkFolder(id: a.id))
+        let stillB = try XCTUnwrap(store.bookmarkFolder(id: b.id))
+        XCTAssertEqual([stillA.position, stillB.position], positionsBefore, "no existing position is rewritten")
+    }
+
+    /// Bar placement makes the import a sibling of the person's own
+    /// bookmarks for the first time. The skip rule must still hold, and it
+    /// must hold for a bookmark loose on the bar, not only one in a folder.
+    func testBarPlacementLeavesAnAlreadySavedLooseBarBookmarkUntouched() throws {
+        let (store, suiteName, defaults) = try makeStore()
+        defer { TestSuiteCleanup.destroy(suiteName, defaults: defaults) }
+
+        let mine = try XCTUnwrap(store.addBookmark(title: "My Name For It", url: "https://p.example/", folderID: nil))
+
+        let mergePlan = plan(chromeShapedImport(), into: store, placement: .bookmarksBar)
+        _ = BookmarkImportApplier.apply(mergePlan, into: store)
+
+        let still = try XCTUnwrap(store.bookmarks.first { $0.id == mine.id })
+        XCTAssertEqual(still.title, "My Name For It", "not renamed to the import's title")
+        XCTAssertNil(still.folderID, "not relocated into an imported folder")
+        XCTAssertEqual(store.bookmarks.filter { $0.url == "https://p.example/" }.count, 1)
+    }
+
+    /// The most important new test: bar placement spreads the import across
+    /// the bar rather than into one deletable folder, so undo has to put
+    /// every one of the person's own records back exactly — same order,
+    /// same positions, same ids.
+    func testUndoingABarPlacementImportRestoresTheOriginalTreeExactly() throws {
+        let (store, suiteName, defaults) = try makeStore()
+        defer { TestSuiteCleanup.destroy(suiteName, defaults: defaults) }
+
+        let personal = try XCTUnwrap(store.createBookmarkFolder(title: "Personal", iconID: "folder", parentID: nil))
+        _ = store.addBookmark(title: "Existing", url: "https://existing.example/", folderID: personal.id)
+        _ = store.addBookmark(title: "Loose", url: "https://loose.example/", folderID: nil)
+
+        let beforeBookmarks = store.bookmarks
+        let beforeFolders = store.bookmarkFolders
+
+        let mergePlan = plan(chromeShapedImport(), into: store, placement: .bookmarksBar)
+        let result = BookmarkImportApplier.apply(mergePlan, into: store)
+
+        XCTAssertGreaterThan(store.bookmarkFolders(in: nil).count, beforeFolders.filter { $0.parentID == nil }.count)
+
+        BookmarkImportApplier.undo(result, in: store)
+
+        XCTAssertEqual(store.bookmarks, beforeBookmarks, "every pre-existing bookmark, unchanged, nothing left behind")
+        XCTAssertEqual(store.bookmarkFolders, beforeFolders, "every pre-existing folder, unchanged, nothing left behind")
+    }
+
+    /// Re-importing the same profile is the founder's likely next action
+    /// after trying this once. It must add nothing at all — no duplicate
+    /// chips, no second dated folder.
+    func testReimportingTheSameSourceAddsNothing() throws {
+        let (store, suiteName, defaults) = try makeStore()
+        defer { TestSuiteCleanup.destroy(suiteName, defaults: defaults) }
+
+        _ = BookmarkImportApplier.apply(plan(chromeShapedImport(), into: store, placement: .bookmarksBar), into: store)
+        let foldersAfterFirst = store.bookmarkFolders
+        let bookmarksAfterFirst = store.bookmarks
+
+        let second = plan(chromeShapedImport(), into: store, placement: .bookmarksBar)
+        XCTAssertTrue(second.isEmpty, "every address is already saved")
+        let result = BookmarkImportApplier.apply(second, into: store)
+
+        XCTAssertEqual(result.addedCount, 0)
+        XCTAssertNil(result.importFolderID)
+        XCTAssertEqual(store.bookmarkFolders, foldersAfterFirst, "no second dated folder, no duplicate chips")
+        XCTAssertEqual(store.bookmarks, bookmarksAfterFirst)
+    }
+
+    /// A collision produces two chips, both intact — never a merge, never a
+    /// rename of somebody's own folder.
+    func testBarPlacementNeverMergesIntoAnExistingSameNamedBarFolder() throws {
+        let (store, suiteName, defaults) = try makeStore()
+        defer { TestSuiteCleanup.destroy(suiteName, defaults: defaults) }
+
+        let mine = try XCTUnwrap(store.createBookmarkFolder(title: "AI", iconID: "folder", parentID: nil))
+        _ = store.addBookmark(title: "My AI Link", url: "https://mine.example/", folderID: mine.id)
+
+        let mergePlan = plan(chromeShapedImport(), into: store, placement: .bookmarksBar)
+        XCTAssertEqual(mergePlan.barTitleCollisions, ["AI"], "the preview is told before anything is written")
+        _ = BookmarkImportApplier.apply(mergePlan, into: store)
+
+        XCTAssertEqual(store.bookmarkFolders(in: nil).filter { $0.title == "AI" }.count, 2)
+        let stillMine = try XCTUnwrap(store.bookmarkFolder(id: mine.id))
+        XCTAssertEqual(stillMine.title, "AI", "the person's own folder is never renamed to make room")
+        XCTAssertEqual(
+            store.bookmarks(in: mine.id).map(\.url), ["https://mine.example/"],
+            "and nothing imported is filed into it"
+        )
+    }
+
+    // MARK: - Result copy
+
+    func testResultHeadlineNamesBothPlacesUnderBarPlacement() throws {
+        let (store, suiteName, defaults) = try makeStore()
+        defer { TestSuiteCleanup.destroy(suiteName, defaults: defaults) }
+
+        let result = BookmarkImportApplier.apply(
+            plan(chromeShapedImport(), into: store, placement: .bookmarksBar),
+            into: store
+        )
+
+        let headline = BookmarkImportSheet.resultHeadline(result)
+        XCTAssertTrue(headline.contains("2 folders on your bookmarks bar"), headline)
+        XCTAssertTrue(headline.contains(Self.importFolderTitle), headline)
+    }
+
+    /// With nothing left over there is no dated folder, and the copy must
+    /// not name one.
+    func testResultHeadlineNamesNoFolderWhenTheImportWasEntirelyABar() throws {
+        let (store, suiteName, defaults) = try makeStore()
+        defer { TestSuiteCleanup.destroy(suiteName, defaults: defaults) }
+
+        let imported = BookmarkImport(roots: [
+            ImportedFolder(title: "Bookmarks bar", children: [
+                .folder(ImportedFolder(title: "Projects", children: [
+                    .bookmark(ImportedBookmark(title: "P", url: "https://p.example/", addedAt: nil))
+                ]))
+            ], role: .bookmarksBar)
+        ])
+        let result = BookmarkImportApplier.apply(plan(imported, into: store, placement: .bookmarksBar), into: store)
+
+        XCTAssertNil(result.importFolderID)
+        let headline = BookmarkImportSheet.resultHeadline(result)
+        XCTAssertEqual(headline, "1 bookmark added — 1 folder on your bookmarks bar.")
+    }
+
+    /// Undo copy must not promise "nothing else is touched" — a bookmark
+    /// moved into an imported folder afterwards is kept, but moves up one
+    /// level.
+    func testUndoExplanationDoesNotPromiseNothingElseIsTouched() throws {
+        let (store, suiteName, defaults) = try makeStore()
+        defer { TestSuiteCleanup.destroy(suiteName, defaults: defaults) }
+
+        let result = BookmarkImportApplier.apply(
+            plan(chromeShapedImport(), into: store, placement: .bookmarksBar),
+            into: store
+        )
+
+        let copy = BookmarkImportSheet.undoExplanation(result)
+        XCTAssertTrue(copy.contains("move up one level"), copy)
+        XCTAssertFalse(copy.contains("Nothing else is touched"), copy)
     }
 
     // MARK: - Destination folder naming
