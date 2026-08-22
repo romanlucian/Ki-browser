@@ -36,6 +36,11 @@ public enum NetscapeBookmarkImporter {
     /// whatever children have been appended to it so far.
     private struct OpenList {
         var title: String
+        /// Whether the `<H3>` that introduced this list carried
+        /// `PERSONAL_TOOLBAR_FOLDER="true"`. Carried on the open list rather
+        /// than read at close time because the attribute arrives on the
+        /// heading, one tag *before* the `<DL>` it describes.
+        var isToolbar: Bool = false
         var children: [ImportedNode] = []
     }
 
@@ -49,6 +54,11 @@ public enum NetscapeBookmarkImporter {
         var stack: [OpenList] = []
         var roots: [ImportedFolder] = []
         var pendingFolderTitle: String?
+        /// Set by the `<H3>` branch, consumed by the `<DL>` that follows it —
+        /// the same hand-off `pendingFolderTitle` makes, and it must be
+        /// cleared in exactly the same places or a marker would leak onto
+        /// the next folder.
+        var pendingFolderIsToolbar = false
 
         init(characters: [Character]) {
             self.characters = characters
@@ -79,14 +89,20 @@ public enum NetscapeBookmarkImporter {
                 guard stack.count < BookmarkImportLimits.maxNestingDepth else {
                     throw BookmarkImportError.nestingTooDeep
                 }
-                stack.append(OpenList(title: pendingFolderTitle ?? ""))
+                stack.append(OpenList(title: pendingFolderTitle ?? "", isToolbar: pendingFolderIsToolbar))
                 pendingFolderTitle = nil
+                pendingFolderIsToolbar = false
 
             case (true, "DL"):
                 closeCurrentList()
 
             case (false, "H3"):
                 pendingFolderTitle = NetscapeHTMLEntities.unescape(readText())
+                // Attribute keys are already lowercased by `readTag`; values
+                // are not, and browsers have written `TRUE` as well as
+                // `true`. Unquoted values parse fine too, so this reads the
+                // same either way.
+                pendingFolderIsToolbar = tag.attributes["personal_toolbar_folder"]?.lowercased() == "true"
 
             case (false, "A"):
                 let rawTitle = NetscapeHTMLEntities.unescape(readText())
@@ -253,7 +269,8 @@ public enum NetscapeBookmarkImporter {
                 let title = finished.title.trimmingCharacters(in: .whitespacesAndNewlines)
                 let folder = ImportedFolder(
                     title: title.isEmpty ? untitledFolderFallbackTitle : title,
-                    children: finished.children
+                    children: finished.children,
+                    role: finished.isToolbar ? .bookmarksBar : .ordinary
                 )
                 stack[stack.count - 1].children.append(.folder(folder))
             }
