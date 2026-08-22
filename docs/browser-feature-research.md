@@ -1,6 +1,6 @@
 # Browser feature research and gap analysis
 
-**Status:** August 19, 2026; sections 1 and 2 re-audited August 21, 2026. A snapshot, not a roadmap. It records what Clearframe has, what mainstream browsers have that it does not, and which gaps are worth closing. Read it with [clearframe-strategy.md](clearframe-strategy.md), which decides what Clearframe is *for*; this file only supplies evidence.
+**Status:** August 19, 2026; sections 1 and 2 re-audited August 21, 2026; sections 2 and 3 updated August 22, 2026 when bookmark import shipped and its placement was researched (3.1). A snapshot, not a roadmap. It records what Clearframe has, what mainstream browsers have that it does not, and which gaps are worth closing. Read it with [clearframe-strategy.md](clearframe-strategy.md), which decides what Clearframe is *for*; this file only supplies evidence.
 
 ## Why this file exists
 
@@ -49,7 +49,7 @@ Confirmed absent by source search, grouped by why they are absent. Re-checked ag
 
 **Downloads specifically.** No resume or pause (`WKDownloadDelegate`'s `resumeData` is received on failure but never used to resume), no persistent history across launches (`DownloadCenter.items` is in-memory only), no byte progress, no quarantine or reputation check.
 
-**Commercially significant.** No bookmark import or export. This is the single largest adoption blocker: a browser that cannot bring a person's bookmarks with them is not switchable. Section 3 specifies the fix completely.
+**Commercially significant — closed August 22, 2026.** Bookmark import and export shipped: Chromium-profile import (Chrome, Brave, Edge, with profile names), Netscape HTML import and export, an already-saved address skipped rather than replaced, and an in-session undo. Section 3 specified it; section 3.1 records what shipping it changed. Safari import remains blocked by Full Disk Access, which the sheet explains rather than failing silently.
 
 **Not possible with public API — do not attempt again without re-checking the SDK.** Mute tab and the audio indicator that makes muting useful: the public WebKit headers carry no mute property and no `isPlayingAudio`, both of which live behind private API, and the only audio-related public knob is `mediaTypesRequiringUserActionForPlayback`, which gates autoplay rather than sound. Injected JavaScript could silence `<video>` and `<audio>` elements, but it leaks on Web Audio and any page can un-mute itself, and no public API can say *which* tab is making noise — so muting would be guesswork. Picture-in-picture the same way: `allowsPictureInPictureMediaPlayback` is declared `API_AVAILABLE(ios(9.0))` with no macOS equivalent, and on this platform WebKit's own video controls already offer it, so there is nothing to add. Both were verified by compiling against the macOS SDK on August 21, 2026, not inferred.
 
@@ -125,6 +125,28 @@ Three details that will otherwise cost a debugging session:
 3. **The format has no GUID field.** Round-tripping through it loses stable identity; an importer must mint fresh identifiers.
 
 `PERSONAL_TOOLBAR_FOLDER="true"` appears on exactly one folder — the bookmarks bar. `ICON` is an optional inline data URI and is safe to ignore.
+
+**This attribute was specified here and then not read for a month.** Both importers knew which root was the bar and discarded the fact: the Chromium reader used the `bookmark_bar` key to find the node and kept only the display name, and the HTML reader had the attribute parsed into a dictionary it never consulted. Clearframe's *exporter* wrote the marker the whole time, so Clearframe could not read back a file Clearframe wrote — export, re-import, and the bar came back as an ordinary folder. Fixed August 22, 2026 (`ImportedFolderRole`). The lesson worth keeping: a documented format detail is not implemented until a test asserts a parser produces it, and the export-side test that existed here asserted only that the marker was *written*.
+
+### 3.1 Where imported bookmarks should land — researched August 22, 2026
+
+Import shipped putting everything inside one dated folder. Against a real Chrome profile whose bar *is* ten folders, one click each, that produced one chip with everything three levels down: `Imported from Chrome` ▸ `Bookmarks bar` ▸ `Projects`. Safe, and the wrong shape for the job people import for, which is switching browsers.
+
+**What the vendors actually do** (verified from shipped source and official help, not from search summaries):
+
+| Browser | From another browser | From an HTML file | Empty-bar rule |
+| --- | --- | --- | --- |
+| Chrome | Wrapper at the end of the bar; contents merge onto the bar when it is empty | Same placement, wrapper named "Imported" | **Yes — the origin of the rule** |
+| Firefox | **Direct merge, no wrapper at all** — Chrome's bar to the Firefox toolbar | Merges by container attribute | Merges regardless |
+| Safari | Merges, appended after existing bookmarks | Dated "Imported" folder | No |
+| Brave, Edge | Chromium wrapper behaviour | Same | Presumed inherited, unverified |
+| Vivaldi | Always a wrapper, not on the bar | Same | No |
+
+Chromium's `profile_writer.cc` states the reason in a comment: importing everything into one folder "makes for unnecessary nesting." Firefox went further and removed its "From Google Chrome" wrapper entirely — the migrator now inserts into `PlacesUtils.bookmarks.toolbarGuid` directly. The two most import-experienced vendors both moved toward merging.
+
+**What nobody does**, and where Clearframe is therefore deliberately ahead rather than merely different: no major browser de-duplicates on re-import (Chrome mints "Imported (1)", Firefox appends duplicates, Safari stacks dated folders), none offers an undo, and none shows the placement before committing to it.
+
+**Shipped August 22, 2026.** A placement choice in the preview, defaulted by whether the bar is empty; the source's own root level collapsed away in both shapes; non-bar roots collected into one dated chip. Two rules held deliberately: a folder name that collides is reported before the import runs and then left alone — never merged into, never renamed to "AI (2)", because renaming would misname the *person's* folder — and the bar is identified by the format marker, never by folder title, since the same folder is called "toolbar", "Bookmarks Toolbar", "Favorites", and whatever a localized export calls it.
 
 ### Other browsers
 
