@@ -86,6 +86,9 @@ swiftc \
     "$PACKAGE_DIR/Sources/ClearframeBrowser/BookmarkActions.swift" \
     "$PACKAGE_DIR/Sources/ClearframeBrowser/BookmarkBarViews.swift" \
     "$PACKAGE_DIR/Sources/ClearframeBrowser/BookmarkLibraryViews.swift" \
+    "$PACKAGE_DIR/Sources/ClearframeBrowser/BookmarkExport.swift" \
+    "$PACKAGE_DIR/Sources/ClearframeBrowser/BookmarkImportSources.swift" \
+    "$PACKAGE_DIR/Sources/ClearframeBrowser/BookmarkImportViews.swift" \
     "$PACKAGE_DIR/Sources/ClearframeBrowser/BookmarksHomePage.swift" \
     "$PACKAGE_DIR/Sources/ClearframeBrowser/DownloadViews.swift" \
     "$PACKAGE_DIR/Sources/ClearframeBrowser/ContentBlockingViews.swift" \
@@ -95,6 +98,15 @@ swiftc \
     "$PACKAGE_DIR/Sources/ClearframeBrowser/TabStripLayout.swift" \
     "$PACKAGE_DIR/Sources/ClearframeBrowser/TabStripViews.swift" \
     "$PACKAGE_DIR/Sources/ClearframeBrowser/BrowserView.swift" \
+    "$PACKAGE_DIR/Sources/ClearframeBrowser/BookmarkDragPayload.swift" \
+    "$PACKAGE_DIR/Sources/ClearframeBrowser/BookmarkMenuCommands.swift" \
+    "$PACKAGE_DIR/Sources/ClearframeBrowser/BookmarkMenuRow.swift" \
+    "$PACKAGE_DIR/Sources/ClearframeBrowser/BookmarkWindowOpener.swift" \
+    "$PACKAGE_DIR/Sources/ClearframeBrowser/BrowserServices.swift" \
+    "$PACKAGE_DIR/Sources/ClearframeBrowser/PageFileCommands.swift" \
+    "$PACKAGE_DIR/Sources/ClearframeBrowser/ProfilePrompts.swift" \
+    "$PACKAGE_DIR/Sources/ClearframeBrowser/ProfileStore.swift" \
+    "$PACKAGE_DIR/Sources/ClearframeBrowser/TornWindowDrag.swift" \
     "$PACKAGE_DIR/Tests/BrowserE2ESmoke.swift" \
     "$BUILD_DIR"/ClearframeCore.build/*.swift.o \
     -framework AppKit \

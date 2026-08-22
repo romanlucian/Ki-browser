@@ -24,6 +24,7 @@ struct BookmarksHomePage: View {
     @State private var pendingDeletion: BookmarkFolderRecord?
     @State private var dropConfirmation: String?
     @State private var showsClearHistoryConfirmation = false
+    @State private var showsBookmarkImport = false
 
     private var trimmedSearch: String {
         search.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -79,6 +80,11 @@ struct BookmarksHomePage: View {
         } message: {
             Text(ClearHistoryConfirmation.message(visitCount: store.history.count))
         }
+        .sheet(isPresented: $showsBookmarkImport) {
+            // Already the surface a completed import would open — no further
+            // navigation needed once the sheet closes.
+            BookmarkImportSheet(store: store) { _ in showsBookmarkImport = false }
+        }
         .accessibilityLabel("All bookmarks")
     }
 
@@ -97,6 +103,20 @@ struct BookmarksHomePage: View {
             sidebarRow(.history, symbol: "clock.arrow.circlepath", count: store.history.count)
 
             Spacer(minLength: 12)
+
+            // The visible way in when someone lands here realizing their
+            // bookmarks are missing — bringing them from another browser, or
+            // taking Clearframe's with them, in one click from the surface
+            // where that decision actually comes up.
+            VStack(alignment: .leading, spacing: 2) {
+                sidebarActionRow("Import Bookmarks…", symbol: "square.and.arrow.down") {
+                    showsBookmarkImport = true
+                }
+                sidebarActionRow("Export Bookmarks…", symbol: "square.and.arrow.up") {
+                    BookmarkExportCommand.run(store: store)
+                }
+            }
+            .padding(.bottom, 4)
 
             Label("Stored only in this Mac user profile.", systemImage: "lock")
                 .font(.system(size: 10.5))
@@ -138,6 +158,26 @@ struct BookmarksHomePage: View {
         .buttonStyle(.plain)
         .padding(.horizontal, 10)
         .accessibilityLabel("\(target.rawValue), \(count) items")
+    }
+
+    private func sidebarActionRow(_ title: String, symbol: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 9) {
+                Image(systemName: symbol)
+                    .font(.system(size: 11, weight: .semibold))
+                    .frame(width: 15)
+                Text(title)
+                    .font(.system(size: 12))
+                Spacer(minLength: 6)
+            }
+            .foregroundStyle(ClearframeTheme.textSecondary)
+            .padding(.horizontal, 10)
+            .frame(height: 26)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, 10)
+        .accessibilityLabel(title)
     }
 
     // MARK: - Main column

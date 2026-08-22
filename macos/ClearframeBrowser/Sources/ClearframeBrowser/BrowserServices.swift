@@ -3,6 +3,14 @@ import ClearframeCore
 import Foundation
 import WebKit
 
+/// The identifier for a browser window scene. It lives here rather than on the
+/// `App` type because views that ask for a new window need it, and so does the
+/// end-to-end smoke harness, which cannot compile the `@main` type without two
+/// entry points colliding.
+enum BrowserWindowScene {
+    static let id = "clearframe-browser"
+}
+
 /// The parts of the browser that belong to the application rather than to any
 /// one window: bookmarks and history, the download list, the search choice,
 /// the compiled tracker rules, the site-icon cache, and the WebKit switches.

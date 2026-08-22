@@ -24,6 +24,6 @@ enum BookmarkWindowOpener {
             profileID: services.profiles.currentProfileID,
             isPrivate: isPrivate
         )
-        openWindow(id: ClearframeBrowserApp.browserWindowID)
+        openWindow(id: BrowserWindowScene.id)
     }
 }
