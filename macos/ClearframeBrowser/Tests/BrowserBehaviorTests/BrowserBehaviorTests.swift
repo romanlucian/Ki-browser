@@ -1646,6 +1646,39 @@ final class BrowserBehaviorTests: XCTestCase {
         XCTAssertFalse(files.contains("redirects.json"), "www and case are the same host, not a redirect")
     }
 
+    // MARK: - The AI home shows a tool as itself once it has been opened
+
+    /// The AI home is the first surface anybody sees, and it must not depend
+    /// on shipping other companies' logos inside the app. It draws the icon a
+    /// visit already captured, and the catalog's own monogram until there is
+    /// one — the same rule as every other icon in the browser.
+    func testAToolsMarkUsesACapturedIconAndOtherwiseTheCatalogMonogram() async throws {
+        let directory = Self.makeFaviconDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = FaviconStore(directory: directory, fetch: RecordingFaviconFetcher(response: Self.pngFixture()).fetch)
+        let tool = try XCTUnwrap(AIToolCatalog.tools.first)
+        let host = try XCTUnwrap(tool.officialURL.host)
+
+        XCTAssertNil(store.icon(forHost: host), "nothing is shipped with the app for this tool")
+        XCTAssertFalse(tool.monogram.isEmpty, "so the catalog must carry something to draw instead")
+
+        await store.capture(pageURL: tool.officialURL, declaredIconURLs: FaviconStore.PageIcons(), isPrivate: false)
+
+        XCTAssertNotNil(store.icon(forHost: host), "opening the tool is what makes its own mark appear")
+    }
+
+    /// Every listing needs a monogram, because that is what shows before the
+    /// reader has opened anything — the state the AI home launches in.
+    func testEveryCatalogedToolCanBeDrawnBeforeItHasEverBeenOpened() {
+        for tool in AIToolCatalog.tools {
+            XCTAssertFalse(
+                tool.monogram.trimmingCharacters(in: .whitespaces).isEmpty,
+                "\(tool.name) has nothing to draw on first launch"
+            )
+            XCTAssertNotNil(tool.officialURL.host, "\(tool.name) has no host to key an icon by")
+        }
+    }
+
     func testFaviconLookupNeverReachesTheNetwork() {
         let directory = Self.makeFaviconDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }

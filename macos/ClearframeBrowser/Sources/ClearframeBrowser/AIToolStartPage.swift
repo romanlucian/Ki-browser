@@ -337,11 +337,7 @@ private struct AIToolCard: View {
             }
 
             HStack(alignment: .top, spacing: 11) {
-                Text(tool.monogram)
-                    .font(.system(size: 12, weight: .bold, design: .rounded))
-                    .foregroundStyle(Color.black.opacity(0.72))
-                    .frame(width: 40, height: 40)
-                    .background(accent, in: RoundedRectangle(cornerRadius: 12))
+                AIToolMark(tool: tool, accent: accent)
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text(tool.name)
@@ -374,5 +370,70 @@ private struct AIToolCard: View {
         .padding(15)
         .frame(maxWidth: .infinity, alignment: .topLeading)
         .contentShape(Rectangle())
+    }
+}
+
+/// A tool's mark on the AI home: the site's real icon once Clearframe has one,
+/// and the catalog's monogram until then.
+///
+/// No logo is bundled with the app. The icon is the one captured on a visit
+/// like any other — so a tool the reader has opened is shown as itself, and one
+/// they have not keeps the designed monogram rather than an empty square. That
+/// keeps this page under the same rule as the rest of the browser: an icon
+/// comes from a visit, never from a file shipped alongside somebody else's
+/// trademark and never from a service asked about it.
+struct AIToolMark: View {
+    let tool: AIToolListing
+    let accent: Color
+    var size: CGFloat = 40
+    @Environment(\.faviconStore) private var store
+
+    var body: some View {
+        Group {
+            if let store {
+                CapturedAIToolMark(store: store, tool: tool, accent: accent, size: size)
+            } else {
+                AIToolMonogram(tool: tool, accent: accent, size: size)
+            }
+        }
+        .frame(width: size, height: size)
+        // The card already names the tool and its maker.
+        .accessibilityHidden(true)
+    }
+}
+
+/// Split out so the mark redraws the moment a capture completes: an
+/// `@ObservedObject` needs a concrete view identity to subscribe from.
+private struct CapturedAIToolMark: View {
+    @ObservedObject var store: FaviconStore
+    let tool: AIToolListing
+    let accent: Color
+    let size: CGFloat
+
+    var body: some View {
+        if let host = tool.officialURL.host, let icon = store.icon(forHost: host) {
+            Image(nsImage: icon)
+                .resizable()
+                .interpolation(.high)
+                .aspectRatio(contentMode: .fill)
+                .frame(width: size, height: size)
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        } else {
+            AIToolMonogram(tool: tool, accent: accent, size: size)
+        }
+    }
+}
+
+private struct AIToolMonogram: View {
+    let tool: AIToolListing
+    let accent: Color
+    let size: CGFloat
+
+    var body: some View {
+        Text(tool.monogram)
+            .font(.system(size: size * 0.3, weight: .bold, design: .rounded))
+            .foregroundStyle(Color.black.opacity(0.72))
+            .frame(width: size, height: size)
+            .background(accent, in: RoundedRectangle(cornerRadius: 12))
     }
 }
