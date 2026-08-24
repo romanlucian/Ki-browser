@@ -10,6 +10,24 @@ Dates are commit dates. Test counts are the totals at the end of each period, ve
 
 ## Unreleased
 
+### Week of August 24, 2026
+
+**Bookmarks, on arriving from another browser**
+- Importing can put the other browser's bar folders straight onto Clearframe's bar, instead of burying everything in one dated folder. The preview asks, and defaults by what is already there: an empty bar takes the import, a bar somebody has arranged gets the removable-in-one-gesture shape. Anything the source kept off its own bar goes into a single dated chip. Chromium makes the same call, and its own source calls the alternative "unnecessary nesting"; Firefox no longer wraps at all.
+- The source's own root level is collapsed away in both shapes. It is a container the exporting browser writes on its way out, not a folder anybody made, and keeping it was a whole extra click on every folder.
+- Both importers now read which folder the source called its bar — Chromium's `bookmark_bar` key, Netscape HTML's `PERSONAL_TOOLBAR_FOLDER` — instead of discarding it. Clearframe's exporter had always written that marker and Clearframe could not read it back, so exporting bookmarks and re-importing them lost the bar. The bar is never identified by folder title: the same folder is called "toolbar", "Bookmarks Toolbar", "Favorites", or whatever a localized export calls it.
+- A folder name that collides with one already on the bar is named in the preview and then left alone. Clearframe does not merge an import into a folder somebody made, and does not rename theirs to "AI (2)" to make room, so both appear and either can be deleted.
+
+**History**
+- History is its own full-page destination on ⌘Y, grouped into Today, Yesterday and the days before, with its own search and Clear History. It used to share the bookmarks home behind a toggle, which meant the History menu's own "Show Full History" opened the bookmarks page, and ⌘Y was bound to nothing. ⌘Y is history in Safari, Chrome, Firefox, Edge, Brave and Arc on this platform.
+- The toolbar's books button keeps a bookmarks-only popover. It is the drill-down organizer, with move menus and drop targets the full page has no equivalent for; the history half was what became redundant.
+
+**Speed, with several hundred bookmarks**
+- The store rebuilt and re-normalized its entire bookmark collection on every read, and the bookmarks bar reads once per chip, per redraw. With four hundred bookmarks in ninety-six folders that was about 135 ms per bar redraw, and moving a window redraws continuously — so dragging a window stalled for seconds. The collection is now built once and rebuilt only when the records change. Measured against the running app: the two normalization passes accounted for about 15% of main-thread time before, and do not appear in the trace at all after.
+- Applying an import made one store call per folder and per bookmark, each re-encoding both whole collections. Four hundred bookmarks meant roughly a thousand full serializations of a growing collection. It is one write now.
+- The address bar rebuilt its whole suggestion list several times per keystroke, and re-lowercased and re-split every candidate's title while matching — about 25 ms per character against a 17 ms frame. Both are done once now, and the folded forms are kept separate from the address a row opens, because a path or query folded to lowercase is a dead link.
+- Renaming one bookmark no longer re-encodes every folder, and saving no longer re-decodes the stored value to check something it already knew.
+
 ### Week of August 21, 2026
 
 **Windows**
