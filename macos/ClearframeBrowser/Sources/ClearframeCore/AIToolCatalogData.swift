@@ -5,7 +5,7 @@ import Foundation
 enum AIToolCatalogData {
     static let tools: [AIToolListing] = [
         tool(
-            "chatgpt", "ChatGPT", "OpenAI", "GPT", "General AI assistant",
+            "chatgpt", "ChatGPT", "OpenAI", "CG", "General AI assistant",
             "General questions, brainstorming, coding, and conversational image work.",
             [.askAndLearn, .write, .research, .createImages, .code],
             "https://chatgpt.com/",
@@ -107,7 +107,7 @@ enum AIToolCatalogData {
             access: .paidPlan
         ),
         tool(
-            "runway", "Runway", "Runway AI", "RW", "AI video studio",
+            "runway", "Runway", "Runway", "RW", "AI video studio",
             "Generating and editing video with prompt-driven creative tools.",
             [.createVideos],
             "https://app.runwayml.com/"

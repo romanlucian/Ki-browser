@@ -34,11 +34,20 @@ The target cadence is one short editorial review each week while the catalog is 
 2. Read the provider’s current product and plan pages. Check only broad task fit and whether the access label remains honest; do not copy exact prices into the app.
 3. Review every badge against the definitions above. Remove a badge when evidence is ambiguous rather than filling every category.
 4. Check category size, plain-language card copy, provider balance, and regional/plan caveats. Do not infer worldwide availability.
-5. Update the checked date and catalog version only after the full review. Add or update an official-source URL for every badge rationale.
-6. Run `swift test`, the native smoke test where the macOS host permits it, and review the AI home visually at narrow and wide window sizes.
-7. Commit the configuration, tests, and this rationale together so the Git history explains the change.
+5. Check whether any listed provider is under a regulatory block, ban, or major intellectual-property action in a market Clearframe ships to. Listing one is an editorial decision, not an automatic removal — but make it deliberately and record the reasoning, so the history shows a decision rather than an oversight.
+6. Update the checked date and catalog version only after the full review. Add or update an official-source URL for every badge rationale.
+7. Run `swift test`, the native smoke test where the macOS host permits it, and review the AI home visually at narrow and wide window sizes.
+8. Commit the configuration, tests, and this rationale together so the Git history explains the change.
 
 No provider can buy a badge or position. A future commercial relationship must be clearly labeled in a separate surface and must not silently alter this editorial ordering.
+
+## Naming these products, and what to do if a provider objects
+
+The catalog names other companies' products and links to their official sites. That is referential use: a directory cannot describe a tool without naming it, so the names appear as plain text in the app's own typeface, with no logo, no brand styling, and no artwork of any provider bundled with Clearframe. A tool's own icon appears only if the reader has opened it and the browser captured it during that visit, the same way it captures any site's icon. The AI home states in the app that Clearframe is independent, is not affiliated with or endorsed by any listed provider, and that the names are their owners' trademarks.
+
+**If a provider objects**, in writing and from an address that plausibly represents them: correct the entry, or remove the card, in the next update. Do not argue the point in public and do not wait for a review cycle. Record the objection and what was done about it below.
+
+**Objections received:** none as of August 25, 2026.
 
 ## Future secure remote-update design
 

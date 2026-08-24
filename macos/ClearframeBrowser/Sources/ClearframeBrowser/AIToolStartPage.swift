@@ -48,7 +48,7 @@ struct AIToolStartPage: View {
         HStack(spacing: 8) {
             Label("Catalog \(AIToolCatalog.release.version)", systemImage: "checkmark.seal")
             Text("·")
-            Text("Last checked")
+            Text("Links and labels checked")
             Text(
                 AIToolCatalog.release.lastChecked,
                 format: .dateTime.month(.abbreviated).day().year()
@@ -199,6 +199,14 @@ struct AIToolStartPage: View {
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(ClearframeTheme.textPrimary)
             Text("Clearframe does not rank these services live, share your current page or prompt, or receive payment when you open a card. Each provider controls accounts, plans, country availability, data use, and terms; check its official site before relying on a feature or access hint.")
+                .font(.caption)
+                .foregroundStyle(ClearframeTheme.textSecondary)
+            // Says the thing the rest of this block only implies: that naming
+            // these products is how a directory refers to them, not a claim of
+            // any relationship. Two of the makers whose published policies
+            // permit being named — Midjourney and Canva — ask for exactly this
+            // notice in return.
+            Text("Clearframe is independent: it is not affiliated with, endorsed by, or sponsored by any listed provider. All product and company names are trademarks of their respective owners.")
                 .font(.caption)
                 .foregroundStyle(ClearframeTheme.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
