@@ -23,15 +23,40 @@ public indirect enum ImportedNode: Equatable, Sendable {
     case folder(ImportedFolder)
 }
 
+/// What the source said one of its roots was.
+///
+/// Only meaningful on a root. A folder nested inside one is always
+/// `.ordinary`, whatever it claims — every export format marks its bar
+/// exactly once, at the top, and a marker deeper in the tree is a
+/// hand-edited file rather than a second bar.
+public enum ImportedFolderRole: String, Equatable, Sendable {
+    /// The source's own bookmarks bar: Chromium's `roots.bookmark_bar` key,
+    /// or Netscape HTML's `PERSONAL_TOOLBAR_FOLDER="true"` attribute.
+    ///
+    /// This is a structural fact, not a name. Chrome writes the folder's
+    /// title as "toolbar" in some profiles, Firefox calls it "Bookmarks
+    /// Toolbar", Safari calls it "Favorites", and a localized export calls
+    /// it whatever that language calls it. Deciding which root is the bar
+    /// by reading its title is therefore wrong in every one of those cases,
+    /// which is the whole reason this exists.
+    case bookmarksBar
+    case ordinary
+}
+
 /// One imported folder and everything inside it, in the order the source
 /// file listed them.
 public struct ImportedFolder: Equatable, Sendable {
     public let title: String
     public let children: [ImportedNode]
+    /// Defaulted so a folder is ordinary unless a parser positively says
+    /// otherwise — the safe direction, since mistaking an ordinary folder
+    /// for the bar would scatter it across somebody's bookmarks bar.
+    public let role: ImportedFolderRole
 
-    public init(title: String, children: [ImportedNode]) {
+    public init(title: String, children: [ImportedNode], role: ImportedFolderRole = .ordinary) {
         self.title = title
         self.children = children
+        self.role = role
     }
 }
 
@@ -43,9 +68,75 @@ public struct ImportedFolder: Equatable, Sendable {
 public struct BookmarkImport: Equatable, Sendable {
     public let roots: [ImportedFolder]
 
+    /// Normalizes the bar marker on the way in, so every later stage can
+    /// trust it without re-checking: at most one root carries
+    /// `.bookmarksBar`, and nothing below a root carries it at all.
+    ///
+    /// Enforced here rather than in each parser because it is a property of
+    /// the format, not of one reader — a hand-edited HTML file can put
+    /// `PERSONAL_TOOLBAR_FOLDER` on a folder six levels down, and a bar
+    /// buried six levels down is not a bar.
     public init(roots: [ImportedFolder]) {
-        self.roots = roots
+        var barClaimed = false
+        self.roots = roots.map { root in
+            let keepsRole = root.role == .bookmarksBar && !barClaimed
+            if keepsRole { barClaimed = true }
+            // Scan before rebuilding: a file with no nested marker at all —
+            // which is every file any shipping browser writes — keeps its
+            // parsed children untouched.
+            let children = Self.containsBarMarker(root.children)
+                ? Self.demotedToOrdinary(root.children)
+                : root.children
+            return ImportedFolder(
+                title: root.title,
+                children: children,
+                role: keepsRole ? .bookmarksBar : .ordinary
+            )
+        }
     }
+
+    /// Iterative, like `walk`: a corrupted tree should not be able to
+    /// overflow a stack merely by being asked whether it is corrupted.
+    private static func containsBarMarker(_ nodes: [ImportedNode]) -> Bool {
+        var stack = nodes
+        while let node = stack.popLast() {
+            guard case .folder(let folder) = node else { continue }
+            if folder.role == .bookmarksBar { return true }
+            stack.append(contentsOf: folder.children)
+        }
+        return false
+    }
+
+    /// Recursive, and safe to be for the same reason the merge planner's
+    /// prune is: this tree already passed a parser's own depth cap
+    /// (`BookmarkImportLimits.maxNestingDepth`) before it could reach here.
+    /// Only ever entered once `containsBarMarker` has said there is
+    /// something to fix.
+    private static func demotedToOrdinary(_ nodes: [ImportedNode]) -> [ImportedNode] {
+        nodes.map { node in
+            guard case .folder(let folder) = node else { return node }
+            return .folder(ImportedFolder(
+                title: folder.title,
+                children: demotedToOrdinary(folder.children),
+                role: .ordinary
+            ))
+        }
+    }
+
+    /// The root the source itself called its bar, if it said so at all.
+    ///
+    /// At most one: a file marking several is read as marking the first,
+    /// because every format defines the marker as singular and a second one
+    /// carries no information about which was meant.
+    public var bookmarksBarRoot: ImportedFolder? {
+        roots.first { $0.role == .bookmarksBar }
+    }
+
+    /// Whether the source identified a bar at all. A file that did not —
+    /// an older export, or a format with no such concept — is not broken;
+    /// it just cannot be merged onto a bar by anything but a guess, and
+    /// Clearframe does not guess.
+    public var declaresBookmarksBar: Bool { bookmarksBarRoot != nil }
 
     /// Every bookmark anywhere in the tree, however deep.
     public var bookmarkCount: Int {

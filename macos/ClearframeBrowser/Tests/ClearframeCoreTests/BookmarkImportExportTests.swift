@@ -458,9 +458,9 @@ final class BookmarkImportExportTests: XCTestCase {
 
     /// The round trip that matters most: what Clearframe writes, Clearframe
     /// (or any other browser) must read back with the same tree, the same
-    /// titles — entities included — and the same order folders and
-    /// bookmarks already render in on the bar (folders first, then
-    /// bookmarks, each in position order).
+    /// titles — entities included — the same order folders and bookmarks
+    /// already render in on the bar (folders first, then bookmarks, each in
+    /// position order), and the bar still identified as the bar.
     func testExportImportRoundTripPreservesTreeTitlesAndOrder() throws {
         let work = BookmarkFolderRecord(title: "Work", parentID: nil, createdAt: Date(timeIntervalSince1970: 1_700_000_000), position: 0)
         let personal = BookmarkFolderRecord(title: "Personal", parentID: nil, createdAt: Date(timeIntervalSince1970: 1_700_000_010), position: 1)
@@ -483,11 +483,203 @@ final class BookmarkImportExportTests: XCTestCase {
                 ])),
                 .folder(ImportedFolder(title: "Personal", children: [])),
                 .bookmark(ImportedBookmark(title: "Example", url: "https://example.com/", addedAt: Date(timeIntervalSince1970: 1_700_000_100)))
-            ])
+            ], role: .bookmarksBar)
         ])
 
         XCTAssertEqual(result, expected)
         XCTAssertEqual(result.bookmarkCount, 3)
         XCTAssertEqual(result.folderCount, 3, "Work, Personal, Reading — the synthetic bar root is not counted")
+    }
+
+    // MARK: - Which root the source called its bar
+
+    /// The whole point of `ImportedFolderRole`: Chrome writes this profile
+    /// with the bar *named* "toolbar", and Clearframe renames it to
+    /// "Bookmarks bar" for display. Neither string is what identifies it —
+    /// the `bookmark_bar` key is.
+    func testChromiumMarksTheBookmarkBarRootEvenWhenTheFileNamesItToolbar() throws {
+        let json = """
+        {
+          "roots": {
+            "bookmark_bar": { "type": "folder", "name": "toolbar", "children": [
+              { "type": "url", "name": "Example", "url": "https://example.com/" }
+            ] },
+            "other": { "type": "folder", "name": "Other", "children": [
+              { "type": "url", "name": "Org", "url": "https://example.org/" }
+            ] },
+            "synced": { "type": "folder", "name": "Mobile", "children": [
+              { "type": "url", "name": "Net", "url": "https://example.net/" }
+            ] }
+          }
+        }
+        """
+        let result = try ChromiumBookmarkImporter.parse(Data(json.utf8))
+
+        XCTAssertEqual(result.roots.map(\.role), [.bookmarksBar, .ordinary, .ordinary])
+        XCTAssertEqual(result.bookmarksBarRoot?.title, "Bookmarks bar")
+        XCTAssertTrue(result.declaresBookmarksBar)
+    }
+
+    /// A root Clearframe does not recognize is never the bar, however it is
+    /// named — only the documented `bookmark_bar` key means the bar.
+    func testChromiumUnknownExtraRootIsOrdinary() throws {
+        let json = """
+        {
+          "roots": {
+            "other": { "type": "folder", "name": "Other", "children": [
+              { "type": "url", "name": "Org", "url": "https://example.org/" }
+            ] },
+            "bookmark_bar_backup": { "type": "folder", "name": "Bookmarks bar", "children": [
+              { "type": "url", "name": "Example", "url": "https://example.com/" }
+            ] }
+          }
+        }
+        """
+        let result = try ChromiumBookmarkImporter.parse(Data(json.utf8))
+
+        XCTAssertEqual(result.roots.map(\.role), [.ordinary, .ordinary])
+        XCTAssertFalse(result.declaresBookmarksBar, "a title that reads like the bar is not the bar")
+    }
+
+    /// A folder inside the bar is not itself a bar, whatever it is called.
+    func testChromiumNestedFolderNamedLikeTheBarIsOrdinary() throws {
+        let json = """
+        {
+          "roots": {
+            "bookmark_bar": { "type": "folder", "name": "Bookmarks bar", "children": [
+              { "type": "folder", "name": "Bookmarks bar", "children": [
+                { "type": "url", "name": "Example", "url": "https://example.com/" }
+              ] }
+            ] }
+          }
+        }
+        """
+        let result = try ChromiumBookmarkImporter.parse(Data(json.utf8))
+
+        XCTAssertEqual(result.roots.count, 1)
+        XCTAssertEqual(result.roots[0].role, .bookmarksBar)
+        guard case .folder(let nested)? = result.roots[0].children.first else {
+            return XCTFail("expected the nested folder to survive")
+        }
+        XCTAssertEqual(nested.role, .ordinary)
+    }
+
+    func testNetscapePersonalToolbarFolderMarksTheBarRoot() throws {
+        let html = """
+        <!DOCTYPE NETSCAPE-Bookmark-file-1>
+        <DL><p>
+            <DT><H3 PERSONAL_TOOLBAR_FOLDER="true">Bookmarks bar</H3>
+            <DL><p>
+                <DT><A HREF="https://example.com/">Example</A>
+            </DL><p>
+            <DT><H3>Other bookmarks</H3>
+            <DL><p>
+                <DT><A HREF="https://example.org/">Org</A>
+            </DL><p>
+        </DL><p>
+        """
+        let result = try NetscapeBookmarkImporter.parse(html)
+
+        XCTAssertEqual(result.roots.map(\.role), [.bookmarksBar, .ordinary])
+        XCTAssertEqual(result.bookmarksBarRoot?.title, "Bookmarks bar")
+    }
+
+    /// Browsers have written `TRUE` as well as `true`, and the value is not
+    /// always quoted.
+    func testNetscapeToolbarAttributeAcceptsUnquotedAndUppercaseValues() throws {
+        let html = """
+        <!DOCTYPE NETSCAPE-Bookmark-file-1>
+        <DL><p>
+            <DT><H3 PERSONAL_TOOLBAR_FOLDER=TRUE>Barra dei preferiti</H3>
+            <DL><p><DT><A HREF="https://example.com/">Example</A></DL><p>
+        </DL><p>
+        """
+        let result = try NetscapeBookmarkImporter.parse(html)
+
+        XCTAssertEqual(result.roots.map(\.role), [.bookmarksBar])
+        XCTAssertEqual(
+            result.bookmarksBarRoot?.title, "Barra dei preferiti",
+            "the bar is found by its marker, so a localized name is irrelevant"
+        )
+    }
+
+    func testNetscapeWithNoToolbarAttributeMarksNothing() throws {
+        let html = """
+        <!DOCTYPE NETSCAPE-Bookmark-file-1>
+        <DL><p>
+            <DT><H3>Bookmarks bar</H3>
+            <DL><p><DT><A HREF="https://example.com/">Example</A></DL><p>
+        </DL><p>
+        """
+        let result = try NetscapeBookmarkImporter.parse(html)
+
+        XCTAssertEqual(result.roots.map(\.role), [.ordinary])
+        XCTAssertFalse(result.declaresBookmarksBar, "Clearframe never guesses the bar from a title")
+    }
+
+    /// A hand-edited file can put the marker six levels down. A bar six
+    /// levels down is not a bar.
+    func testNetscapeToolbarAttributeOnANestedFolderIsIgnored() throws {
+        let html = """
+        <!DOCTYPE NETSCAPE-Bookmark-file-1>
+        <DL><p>
+            <DT><H3>Other bookmarks</H3>
+            <DL><p>
+                <DT><H3 PERSONAL_TOOLBAR_FOLDER="true">Not really the bar</H3>
+                <DL><p><DT><A HREF="https://example.com/">Example</A></DL><p>
+            </DL><p>
+        </DL><p>
+        """
+        let result = try NetscapeBookmarkImporter.parse(html)
+
+        XCTAssertFalse(result.declaresBookmarksBar)
+        guard case .folder(let nested)? = result.roots.first?.children.first else {
+            return XCTFail("expected the nested folder to survive")
+        }
+        XCTAssertEqual(nested.role, .ordinary, "the marker is demoted, the folder is kept")
+    }
+
+    /// Two marked roots carry no information about which was meant, so the
+    /// first wins and the rest are demoted.
+    func testSeveralMarkedRootsKeepOnlyTheFirst() {
+        let result = BookmarkImport(roots: [
+            ImportedFolder(title: "First", children: [], role: .bookmarksBar),
+            ImportedFolder(title: "Second", children: [], role: .bookmarksBar)
+        ])
+
+        XCTAssertEqual(result.roots.map(\.role), [.bookmarksBar, .ordinary])
+        XCTAssertEqual(result.bookmarksBarRoot?.title, "First")
+    }
+
+    /// Clearframe's exporter has always written `PERSONAL_TOOLBAR_FOLDER`
+    /// on the bar; until now Clearframe could not read it back, so its own
+    /// export lost the bar on the way in. This closes that loop.
+    func testClearframeExportRoundTripsItsOwnToolbarMarker() throws {
+        let folder = BookmarkFolderRecord(title: "Projects", parentID: nil, createdAt: Date(timeIntervalSince1970: 1_700_000_000), position: 0)
+        let bookmark = BookmarkRecord(
+            title: "Example", url: "https://example.com/",
+            createdAt: Date(timeIntervalSince1970: 1_700_000_050), folderID: folder.id, position: 0
+        )
+
+        let html = NetscapeBookmarkExporter.html(folders: [folder], bookmarks: [bookmark])
+        let result = try NetscapeBookmarkImporter.parse(html)
+
+        XCTAssertTrue(result.declaresBookmarksBar, "Clearframe must be able to read its own export")
+        XCTAssertEqual(result.roots.map(\.role), [.bookmarksBar])
+    }
+
+    /// The synthetic root for bookmarks found outside any folder is not a
+    /// bar — nothing declared it one.
+    func testStrayTopLevelBookmarksSyntheticRootIsOrdinary() throws {
+        let html = """
+        <!DOCTYPE NETSCAPE-Bookmark-file-1>
+        <DL><p>
+            <DT><A HREF="https://example.com/">Loose</A>
+        </DL><p>
+        """
+        let result = try NetscapeBookmarkImporter.parse(html)
+
+        XCTAssertEqual(result.roots.count, 1)
+        XCTAssertEqual(result.roots[0].role, .ordinary)
     }
 }

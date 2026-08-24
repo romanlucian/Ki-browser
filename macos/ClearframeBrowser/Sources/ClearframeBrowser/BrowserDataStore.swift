@@ -4,9 +4,14 @@ import Foundation
 
 @MainActor
 final class BrowserDataStore: ObservableObject {
-    @Published private(set) var bookmarks: [BookmarkRecord]
-    @Published private(set) var bookmarkFolders: [BookmarkFolderRecord]
-    @Published private(set) var history: [HistoryRecord]
+    @Published private(set) var bookmarks: [BookmarkRecord] {
+        didSet {
+            cachedBookmarkCollection = nil
+            cachedAddressCandidates = nil
+        }
+    }
+    @Published private(set) var bookmarkFolders: [BookmarkFolderRecord] { didSet { cachedBookmarkCollection = nil } }
+    @Published private(set) var history: [HistoryRecord] { didSet { cachedAddressCandidates = nil } }
     @Published private(set) var recoveryNotice: String?
     @Published var showsBookmarksBar: Bool {
         didSet { defaults.set(showsBookmarksBar, forKey: showsBookmarksBarKey) }
@@ -308,24 +313,126 @@ final class BrowserDataStore: ObservableObject {
         recoveryNotice = nil
     }
 
+    /// The bytes currently stored under each key that this store already
+    /// knows decode — because it wrote them itself after a successful
+    /// encode, or because it decoded them on the way in.
+    ///
+    /// Without this, promoting the previous value to `lastKnownGood` decoded
+    /// it again on every single save. For history that is 500 records
+    /// re-parsed on every page visit, on the main actor, purely to
+    /// re-establish something the store had already established. Comparing
+    /// the bytes is a length check and a memcmp; decoding them is not.
+    private var validatedData: [String: Data] = [:]
+
     private func save<T: Codable>(_ value: T, key: String) {
         guard let data = try? encoder.encode(value) else { return }
-        if let current = defaults.data(forKey: key),
-           (try? decoder.decode(T.self, from: current)) != nil {
+        if let current = defaults.data(forKey: key), isKnownDecodable(current, key: key, as: T.self) {
             defaults.set(current, forKey: Self.backupKey(for: key))
         }
         defaults.set(data, forKey: key)
+        validatedData[key] = data
+    }
+
+    /// Deliberately still decodes the first time it sees a given blob: the
+    /// point of the backup is that a value nobody could read never becomes
+    /// the thing recovery falls back to, and a value written before this
+    /// session started has not been checked by this store.
+    private func isKnownDecodable<T: Decodable>(_ data: Data, key: String, as type: T.Type) -> Bool {
+        if validatedData[key] == data { return true }
+        guard (try? decoder.decode(type, from: data)) != nil else { return false }
+        validatedData[key] = data
+        return true
+    }
+
+    /// Rebuilt only when the records actually change, never per read.
+    ///
+    /// This used to be a plain computed property, and every read accessor
+    /// below goes through it — `bookmarkFolders(in:)`, `bookmarks(in:)`,
+    /// `bookmarkFolder(id:)`, `bookmarkFolderContainsItems(_:)`,
+    /// `bookmarkDescendantCounts()`. Those are exactly what SwiftUI view
+    /// bodies call, once per folder, per render. So one bookmarks-bar
+    /// layout rebuilt and re-normalized the whole collection once per chip,
+    /// and moving the window — which re-lays out the chrome — stalled for
+    /// seconds once somebody had imported a few hundred bookmarks.
+    ///
+    /// Correctness rests on `didSet` above: any write to either array drops
+    /// the cache, so there is no path that can serve a stale collection.
+    private var cachedBookmarkCollection: BookmarkCollection?
+
+    /// What the address field can complete to, rebuilt only when history or
+    /// bookmarks change.
+    ///
+    /// It lives here rather than on the view because the view read it from a
+    /// computed property, which meant rebuilding it several times per
+    /// keystroke — grouping every visit and every bookmark, on the main
+    /// actor, between one character and the next.
+    private var cachedAddressCandidates: [AddressCandidate]?
+
+    var addressCandidates: [AddressCandidate] {
+        if let cachedAddressCandidates { return cachedAddressCandidates }
+        let built = AddressCompletion.candidates(history: history, bookmarks: bookmarks)
+        cachedAddressCandidates = built
+        return built
     }
 
     private var bookmarkCollection: BookmarkCollection {
-        BookmarkCollection(folders: bookmarkFolders, bookmarks: bookmarks)
+        if let cachedBookmarkCollection { return cachedBookmarkCollection }
+        let built = BookmarkCollection(folders: bookmarkFolders, bookmarks: bookmarks)
+        cachedBookmarkCollection = built
+        return built
+    }
+
+    /// Suspends writing bookmarks and folders to disk until `body` returns,
+    /// then writes each of them once.
+    ///
+    /// Applying an import is one store call per folder and one per bookmark,
+    /// and each of those re-encoded *both* whole collections. Bringing in
+    /// four hundred bookmarks meant roughly a thousand full serializations
+    /// of a collection that grew with every step — tens of megabytes of JSON
+    /// on the main actor for a single import.
+    ///
+    /// The in-memory records still update on every call, so the published
+    /// state a caller reads back mid-batch is always current; only the
+    /// writing waits. A crash inside a batch therefore loses the whole
+    /// import rather than an arbitrary prefix of it, which is the better of
+    /// the two outcomes.
+    func performBatch(_ body: () -> Void) {
+        let wasBatching = isBatchingWrites
+        isBatchingWrites = true
+        body()
+        guard !wasBatching else { return } // Only the outermost batch flushes.
+        isBatchingWrites = false
+        flushPendingBookmarkWrites()
+    }
+
+    private var isBatchingWrites = false
+    private var hasPendingBookmarkWrites = false
+
+    private func flushPendingBookmarkWrites() {
+        guard hasPendingBookmarkWrites else { return }
+        hasPendingBookmarkWrites = false
+        save(bookmarks, key: bookmarksKey)
+        save(bookmarkFolders, key: bookmarkFoldersKey)
     }
 
     private func apply(_ collection: BookmarkCollection) {
-        bookmarkFolders = collection.folders
-        bookmarks = collection.bookmarks
-        save(bookmarks, key: bookmarksKey)
-        save(bookmarkFolders, key: bookmarkFoldersKey)
+        let foldersChanged = bookmarkFolders != collection.folders
+        let bookmarksChanged = bookmarks != collection.bookmarks
+        if foldersChanged { bookmarkFolders = collection.folders }
+        if bookmarksChanged { bookmarks = collection.bookmarks }
+        // Seeded after both assignments, because each one clears the cache.
+        // `collection` is already normalized — it came from a normalized
+        // collection through a mutation that maintains that — so this saves
+        // the first read after every change from rebuilding it.
+        cachedBookmarkCollection = collection
+        guard foldersChanged || bookmarksChanged else { return }
+        guard !isBatchingWrites else {
+            hasPendingBookmarkWrites = true
+            return
+        }
+        // Renaming one bookmark used to re-encode every folder as well.
+        if bookmarksChanged { save(bookmarks, key: bookmarksKey) }
+        if foldersChanged { save(bookmarkFolders, key: bookmarkFoldersKey) }
     }
 
     private func removeStoredValue(forKey key: String) {

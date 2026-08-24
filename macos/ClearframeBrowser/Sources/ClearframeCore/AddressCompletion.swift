@@ -12,6 +12,17 @@ public struct AddressCandidate: Equatable, Sendable {
     public let lastVisit: Date
     public let isBookmarked: Bool
 
+    /// `url` folded flat, for matching only.
+    ///
+    /// Separate from `url` on purpose, and never shown or opened. `url` keeps
+    /// the case of its path and query because that case carries meaning — a
+    /// YouTube video id or a Docs link folded to lowercase is a dead link —
+    /// so the flat form has to live beside it rather than replace it.
+    public let comparableURL: String
+    /// `title` lowercased and split into words, so matching a keystroke does
+    /// not re-lowercase and re-split every candidate's title every time.
+    public let titleWords: [String]
+
     public init(
         url: String,
         title: String = "",
@@ -24,6 +35,13 @@ public struct AddressCandidate: Equatable, Sendable {
         self.visits = visits
         self.lastVisit = lastVisit
         self.isBookmarked = isBookmarked
+        // Derived here rather than by the caller, so no construction site can
+        // get them out of step with the values they come from.
+        self.comparableURL = url.lowercased()
+        let loweredTitle = title.lowercased()
+        self.titleWords = loweredTitle.isEmpty
+            ? []
+            : loweredTitle.split(whereSeparator: { !$0.isLetter && !$0.isNumber }).map(String.init)
     }
 }
 
@@ -177,18 +195,21 @@ public enum AddressCompletion {
         case addressContains = 2
     }
 
+    /// Reads the folded forms prepared when the candidate was built. This
+    /// runs once per candidate per keystroke, and doing the lowercasing and
+    /// splitting here meant several hundred fresh strings and arrays per
+    /// character typed.
     private static func strength(
         of candidate: AddressCandidate,
         terms: [String],
         needle: String
     ) -> MatchStrength? {
-        let url = candidate.url.lowercased()
+        let url = candidate.comparableURL
         if !needle.isEmpty, url.hasPrefix(needle) { return .addressPrefix }
 
-        let title = candidate.title.lowercased()
-        if !title.isEmpty {
-            let words = title.split(whereSeparator: { !$0.isLetter && !$0.isNumber }).map(String.init)
-            if terms.allSatisfy({ term in words.contains { $0.hasPrefix(term) } }) { return .titleWord }
+        let words = candidate.titleWords
+        if !words.isEmpty, terms.allSatisfy({ term in words.contains { $0.hasPrefix(term) } }) {
+            return .titleWord
         }
         if terms.allSatisfy({ url.contains($0) }) { return .addressContains }
         return nil

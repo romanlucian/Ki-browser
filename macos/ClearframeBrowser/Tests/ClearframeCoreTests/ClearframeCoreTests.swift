@@ -1066,6 +1066,36 @@ final class ClearframeCoreTests: XCTestCase {
         XCTAssertEqual(collection.bookmarks(in: root.id).count, 1, "direct listings stay shallow")
     }
 
+    /// Totals alone cannot see this: a normalization that cuts *every*
+    /// folder in a cycle loose keeps the same count and the same "one root
+    /// subtree each" property as one that cuts only the first. The chain
+    /// that survives is the difference between an imported folder tree
+    /// keeping its shape and being flattened onto the bar, so it is pinned
+    /// by shape here.
+    func testBreakingAnImportedCycleCutsOnlyTheFirstLinkAndKeepsTheChain() {
+        let firstID = UUID()
+        let secondID = UUID()
+        let thirdID = UUID()
+        let collection = BookmarkCollection(
+            folders: [
+                BookmarkFolderRecord(id: firstID, title: "First", parentID: secondID),
+                BookmarkFolderRecord(id: secondID, title: "Second", parentID: thirdID),
+                BookmarkFolderRecord(id: thirdID, title: "Third", parentID: firstID)
+            ],
+            bookmarks: []
+        )
+
+        func parent(_ id: UUID) -> UUID? { collection.folders.first { $0.id == id }?.parentID }
+
+        XCTAssertNil(parent(firstID), "the cycle is cut at the first folder that sees it")
+        XCTAssertEqual(parent(secondID), thirdID, "the rest of the chain is left intact")
+        XCTAssertEqual(parent(thirdID), firstID)
+        XCTAssertEqual(
+            collection.folders(in: nil).count, 1,
+            "one root, not three — cutting every link would flatten the whole chain onto the bar"
+        )
+    }
+
     func testBookmarkDescendantCountsTerminateForPreviouslyCyclicImportedFolders() {
         let firstID = UUID()
         let secondID = UUID()

@@ -646,11 +646,12 @@ private struct BrowserToolbar: View {
         return AddressCompletion.completion(for: typed, in: addressCandidates)
     }
 
-    /// Rebuilt when history or bookmarks change rather than on every keystroke:
-    /// the store is `@ObservedObject`, so this recomputes with the view, and a
-    /// five-hundred-entry history is cheap to group.
+    /// Genuinely rebuilt only when history or bookmarks change — the store
+    /// caches it and drops the cache when either changes. This used to say so
+    /// while being a computed property on a view, which rebuilt it on every
+    /// body evaluation, several times per keystroke.
     private var addressCandidates: [AddressCandidate] {
-        AddressCompletion.candidates(history: dataStore.history, bookmarks: dataStore.bookmarks)
+        dataStore.addressCandidates
     }
 
     private func submitAddress() {

@@ -37,7 +37,12 @@ public enum ChromiumBookmarkImporter {
         for (key, displayName) in knownRoots {
             seenKeys.insert(key)
             guard let node = rootsObject[key] as? [String: Any] else { continue }
-            roots.append(try parseFolder(node, titleOverride: displayName, depth: 1))
+            roots.append(try parseFolder(
+                node,
+                titleOverride: displayName,
+                role: key == "bookmark_bar" ? .bookmarksBar : .ordinary,
+                depth: 1
+            ))
         }
 
         // Chrome has written exactly these three roots for years, but a
@@ -47,7 +52,7 @@ public enum ChromiumBookmarkImporter {
         let extraKeys = rootsObject.keys.filter { !seenKeys.contains($0) }.sorted()
         for key in extraKeys {
             guard let node = rootsObject[key] as? [String: Any] else { continue }
-            roots.append(try parseFolder(node, titleOverride: nil, depth: 1))
+            roots.append(try parseFolder(node, titleOverride: nil, role: .ordinary, depth: 1))
         }
 
         guard !roots.isEmpty else { throw BookmarkImportError.missingRoots }
@@ -57,6 +62,7 @@ public enum ChromiumBookmarkImporter {
     private static func parseFolder(
         _ node: [String: Any],
         titleOverride: String?,
+        role: ImportedFolderRole,
         depth: Int
     ) throws -> ImportedFolder {
         // In practice, Foundation's own `JSONSerialization` reader refuses
@@ -83,7 +89,7 @@ public enum ChromiumBookmarkImporter {
             }
             switch type {
             case "folder":
-                children.append(.folder(try parseFolder(childNode, titleOverride: nil, depth: depth + 1)))
+                children.append(.folder(try parseFolder(childNode, titleOverride: nil, role: .ordinary, depth: depth + 1)))
             case "url":
                 if let bookmark = parseBookmark(childNode) {
                     children.append(.bookmark(bookmark))
@@ -92,7 +98,7 @@ public enum ChromiumBookmarkImporter {
                 continue // e.g. a future node type Clearframe does not know about yet.
             }
         }
-        return ImportedFolder(title: title, children: children)
+        return ImportedFolder(title: title, children: children, role: role)
     }
 
     /// `nil` means "skip this entry" — an invalid or non-web URL is not a
