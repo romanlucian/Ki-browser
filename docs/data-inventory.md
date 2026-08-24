@@ -76,7 +76,7 @@ Private browsing limits, stated plainly: it isolates storage for that tab. It do
 | Party | When | What they receive |
 |---|---|---|
 | The chosen search provider | On submitting a search | The query, under that provider's own terms |
-| Websites visited | On visiting | Ordinary web request data, plus one same-origin icon request |
+| Websites visited | On visiting | Ordinary web request data, plus up to four cookie-free icon requests to the page's own origin or a host it already loaded from |
 | OpenAI | Only if Optional AI is enabled **and** the user acts | Page title, host, language, ≤18,000 characters of text, random installation identifier |
 
 No other processor. No analytics vendor, no error-reporting service, no advertising network, no content delivery network of Clearframe's own.
