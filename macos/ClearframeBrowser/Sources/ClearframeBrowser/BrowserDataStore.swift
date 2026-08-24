@@ -4,8 +4,8 @@ import Foundation
 
 @MainActor
 final class BrowserDataStore: ObservableObject {
-    @Published private(set) var bookmarks: [BookmarkRecord]
-    @Published private(set) var bookmarkFolders: [BookmarkFolderRecord]
+    @Published private(set) var bookmarks: [BookmarkRecord] { didSet { cachedBookmarkCollection = nil } }
+    @Published private(set) var bookmarkFolders: [BookmarkFolderRecord] { didSet { cachedBookmarkCollection = nil } }
     @Published private(set) var history: [HistoryRecord]
     @Published private(set) var recoveryNotice: String?
     @Published var showsBookmarksBar: Bool {
@@ -317,13 +317,36 @@ final class BrowserDataStore: ObservableObject {
         defaults.set(data, forKey: key)
     }
 
+    /// Rebuilt only when the records actually change, never per read.
+    ///
+    /// This used to be a plain computed property, and every read accessor
+    /// below goes through it — `bookmarkFolders(in:)`, `bookmarks(in:)`,
+    /// `bookmarkFolder(id:)`, `bookmarkFolderContainsItems(_:)`,
+    /// `bookmarkDescendantCounts()`. Those are exactly what SwiftUI view
+    /// bodies call, once per folder, per render. So one bookmarks-bar
+    /// layout rebuilt and re-normalized the whole collection once per chip,
+    /// and moving the window — which re-lays out the chrome — stalled for
+    /// seconds once somebody had imported a few hundred bookmarks.
+    ///
+    /// Correctness rests on `didSet` above: any write to either array drops
+    /// the cache, so there is no path that can serve a stale collection.
+    private var cachedBookmarkCollection: BookmarkCollection?
+
     private var bookmarkCollection: BookmarkCollection {
-        BookmarkCollection(folders: bookmarkFolders, bookmarks: bookmarks)
+        if let cachedBookmarkCollection { return cachedBookmarkCollection }
+        let built = BookmarkCollection(folders: bookmarkFolders, bookmarks: bookmarks)
+        cachedBookmarkCollection = built
+        return built
     }
 
     private func apply(_ collection: BookmarkCollection) {
         bookmarkFolders = collection.folders
         bookmarks = collection.bookmarks
+        // Seeded after both assignments, because each one clears the cache.
+        // `collection` is already normalized — it came from a normalized
+        // collection through a mutation that maintains that — so this saves
+        // the first read after every change from rebuilding it.
+        cachedBookmarkCollection = collection
         save(bookmarks, key: bookmarksKey)
         save(bookmarkFolders, key: bookmarkFoldersKey)
     }

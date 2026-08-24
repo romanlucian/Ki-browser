@@ -558,35 +558,52 @@ public struct BookmarkCollection: Codable, Equatable, Sendable {
     /// Gives a position to anything saved before positions existed, using the
     /// order those bookmarks were already being shown in — newest first — so an
     /// upgrade does not rearrange somebody's bar under them.
+    /// Backfills `position` on records saved before positions existed.
+    ///
+    /// One grouping pass, then work only on the groups that actually need
+    /// it. The straightforward shape — for every group, scan every record to
+    /// ask whether that group needs backfilling — costs groups × records
+    /// even when nothing needs doing, which for a few hundred imported
+    /// bookmarks in thirty folders is thousands of struct comparisons per
+    /// call. That was affordable while this ran once at load and became a
+    /// stall once it ran per read.
     private mutating func assignMissingPositions() {
-        let parentIDs = Set(folders.map(\.parentID))
-        for parentID in parentIDs where folders.contains(where: { $0.parentID == parentID && $0.position == nil }) {
-            let ordered = folders
-                .filter { $0.parentID == parentID }
-                .sorted { lhs, rhs in
-                    let left = lhs.position ?? Int.max
-                    let right = rhs.position ?? Int.max
-                    if left != right { return left < right }
-                    return lhs.title.localizedCaseInsensitiveCompare(rhs.title) == .orderedAscending
-                }
-            for (offset, record) in ordered.enumerated() {
-                guard let slot = folders.firstIndex(where: { $0.id == record.id }) else { continue }
+        var folderSlots: [UUID?: [Int]] = [:]
+        var foldersNeedingBackfill: Set<UUID?> = []
+        for index in folders.indices {
+            let parentID = folders[index].parentID
+            folderSlots[parentID, default: []].append(index)
+            if folders[index].position == nil { foldersNeedingBackfill.insert(parentID) }
+        }
+        for parentID in foldersNeedingBackfill {
+            guard let slots = folderSlots[parentID] else { continue }
+            let ordered = slots.sorted { lhs, rhs in
+                let left = folders[lhs].position ?? Int.max
+                let right = folders[rhs].position ?? Int.max
+                if left != right { return left < right }
+                return folders[lhs].title.localizedCaseInsensitiveCompare(folders[rhs].title) == .orderedAscending
+            }
+            for (offset, slot) in ordered.enumerated() {
                 folders[slot].position = offset
             }
         }
 
-        let folderIDs = Set(bookmarks.map(\.folderID))
-        for folderID in folderIDs where bookmarks.contains(where: { $0.folderID == folderID && $0.position == nil }) {
-            let ordered = bookmarks
-                .filter { $0.folderID == folderID }
-                .sorted { lhs, rhs in
-                    let left = lhs.position ?? Int.max
-                    let right = rhs.position ?? Int.max
-                    if left != right { return left < right }
-                    return lhs.createdAt > rhs.createdAt
-                }
-            for (offset, record) in ordered.enumerated() {
-                guard let slot = bookmarks.firstIndex(where: { $0.id == record.id }) else { continue }
+        var bookmarkSlots: [UUID?: [Int]] = [:]
+        var bookmarksNeedingBackfill: Set<UUID?> = []
+        for index in bookmarks.indices {
+            let folderID = bookmarks[index].folderID
+            bookmarkSlots[folderID, default: []].append(index)
+            if bookmarks[index].position == nil { bookmarksNeedingBackfill.insert(folderID) }
+        }
+        for folderID in bookmarksNeedingBackfill {
+            guard let slots = bookmarkSlots[folderID] else { continue }
+            let ordered = slots.sorted { lhs, rhs in
+                let left = bookmarks[lhs].position ?? Int.max
+                let right = bookmarks[rhs].position ?? Int.max
+                if left != right { return left < right }
+                return bookmarks[lhs].createdAt > bookmarks[rhs].createdAt
+            }
+            for (offset, slot) in ordered.enumerated() {
                 bookmarks[slot].position = offset
             }
         }
@@ -609,7 +626,13 @@ public struct BookmarkCollection: Codable, Equatable, Sendable {
             }
         }
 
-        // Break imported parent cycles at the first affected folder.
+        // Break imported parent cycles at the first affected folder. The
+        // parent of a parent is looked up through a map built once rather
+        // than by scanning the array at every hop, which turned this into a
+        // nested linear scan.
+        var parentOf: [UUID: UUID?] = [:]
+        parentOf.reserveCapacity(folders.count)
+        for folder in folders { parentOf[folder.id] = folder.parentID }
         for index in folders.indices {
             var seen: Set<UUID> = [folders[index].id]
             var parent = folders[index].parentID
@@ -618,7 +641,7 @@ public struct BookmarkCollection: Codable, Equatable, Sendable {
                     folders[index].parentID = nil
                     break
                 }
-                parent = folders.first(where: { $0.id == parentID })?.parentID
+                parent = parentOf[parentID] ?? nil
             }
         }
 
