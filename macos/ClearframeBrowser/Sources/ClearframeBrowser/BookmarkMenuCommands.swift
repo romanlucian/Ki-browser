@@ -41,7 +41,7 @@ struct BookmarkMenuContents: View {
                     guard let url = WebURLPolicy.validatedURL(bookmark.url) else { return }
                     open(url)
                 } label: {
-                    BookmarkMenuRow(
+                    PageMenuRow(
                         title: BookmarkMenuTitle.short(bookmark.title),
                         url: bookmark.url,
                         store: favicons

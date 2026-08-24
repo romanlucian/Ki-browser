@@ -788,7 +788,7 @@ private struct BookmarkFolderMenuContents: View {
             if !childFolders.isEmpty && !bookmarks.isEmpty { Divider() }
             ForEach(bookmarks) { bookmark in
                 Button { open(bookmark.url) } label: {
-                    BookmarkMenuRow(title: bookmark.title, url: bookmark.url)
+                    PageMenuRow(title: bookmark.title, url: bookmark.url)
                 }
             }
         }

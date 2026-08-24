@@ -201,6 +201,11 @@ struct HistoryEntryRow: View {
                             .foregroundStyle(ClearframeTheme.textTertiary)
                             .frame(width: 58, alignment: .leading)
                     }
+                    // A visited page is the one thing an icon has definitely
+                    // been captured for, so history is the last place that
+                    // should be showing bare text. Never triggers a fetch —
+                    // it draws what is already stored, or the identity square.
+                    SiteIconView(urlString: url)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(title)
                             .font(.system(size: 13))

@@ -2,15 +2,16 @@ import AppKit
 import ClearframeCore
 import SwiftUI
 
-/// A saved page as a row in a menu: its own site icon where one has been
-/// captured during a visit, a plain globe where it has not.
+/// A web page as a row in a menu — a bookmark, or somewhere recently
+/// visited: its own site icon where one has been captured during a visit, a
+/// plain globe where it has not.
 ///
 /// Deliberately not `SiteIconView`. A menu row takes an image, not a view, and
 /// the icon has to be known the moment the menu is built rather than arriving
 /// asynchronously afterwards — so this reads what `FaviconStore` already holds
 /// and settles for the globe if that is nothing. The icon policy is unchanged:
 /// nothing is fetched here, and a site with no captured icon simply has none.
-struct BookmarkMenuRow: View {
+struct PageMenuRow: View {
     let title: String
     let url: String
     /// Passed in from the menu bar, whose commands are built outside any view

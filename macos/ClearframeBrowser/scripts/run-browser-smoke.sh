@@ -102,7 +102,7 @@ swiftc \
     "$PACKAGE_DIR/Sources/ClearframeBrowser/BrowserView.swift" \
     "$PACKAGE_DIR/Sources/ClearframeBrowser/BookmarkDragPayload.swift" \
     "$PACKAGE_DIR/Sources/ClearframeBrowser/BookmarkMenuCommands.swift" \
-    "$PACKAGE_DIR/Sources/ClearframeBrowser/BookmarkMenuRow.swift" \
+    "$PACKAGE_DIR/Sources/ClearframeBrowser/PageMenuRow.swift" \
     "$PACKAGE_DIR/Sources/ClearframeBrowser/BookmarkWindowOpener.swift" \
     "$PACKAGE_DIR/Sources/ClearframeBrowser/BrowserServices.swift" \
     "$PACKAGE_DIR/Sources/ClearframeBrowser/PageFileCommands.swift" \

@@ -150,9 +150,19 @@ struct ClearframeBrowserApp: App {
                     // back; the full list lives on the bookmarks home, which
                     // can search it.
                     ForEach(Self.recentPages(in: dataStore.history)) { entry in
-                        Button(BookmarkMenuTitle.short(entry.title)) {
+                        Button {
                             guard let url = WebURLPolicy.validatedURL(entry.url) else { return }
                             focusedWorkspace?.addTab(url: url)
+                        } label: {
+                            // The same row the Bookmarks menu uses. A visited
+                            // page is exactly the kind of thing an icon has
+                            // already been captured for, so this menu was the
+                            // one place with the icon available and not shown.
+                            PageMenuRow(
+                                title: BookmarkMenuTitle.short(entry.title),
+                                url: entry.url,
+                                store: BrowserServices.shared.favicons
+                            )
                         }
                     }
                 }
@@ -199,7 +209,7 @@ struct ClearframeBrowserApp: App {
                             guard let url = WebURLPolicy.validatedURL(bookmark.url) else { return }
                             focusedWorkspace?.addTab(url: url)
                         } label: {
-                            BookmarkMenuRow(
+                            PageMenuRow(
                                 title: BookmarkMenuTitle.short(bookmark.title),
                                 url: bookmark.url,
                                 store: BrowserServices.shared.favicons
