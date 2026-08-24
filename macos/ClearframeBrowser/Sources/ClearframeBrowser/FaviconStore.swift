@@ -210,8 +210,27 @@ final class FaviconStore: ObservableObject {
         let rel: String
         /// The `sizes` attribute verbatim, empty when the page declared none.
         let sizes: String
+        /// The `media` attribute verbatim, empty when the page declared none.
+        /// Sites increasingly ship two icons — a dark mark for light
+        /// backgrounds and a light one for dark — and distinguish them only
+        /// here.
+        let media: String
 
         var isAppleTouch: Bool { rel.contains("apple-touch-icon") }
+
+        /// How well this icon suits Clearframe's own chrome, which is always
+        /// dark. Lower is better.
+        ///
+        /// An icon a site declared *for light backgrounds* is usually a dark
+        /// mark, and drawing it on a dark tab strip makes it a black square —
+        /// which is exactly what Google Flow's `flow_favicon_b.png` did.
+        var appearanceScore: Int {
+            let value = media.lowercased()
+            guard value.contains("prefers-color-scheme") else { return 1 } // Declared for everywhere.
+            if value.contains("dark") { return 0 }
+            if value.contains("light") { return 2 }
+            return 1
+        }
         var isSVG: Bool { url.lowercased().hasSuffix(".svg") }
 
         /// The largest square edge the page claims, or `nil` for none and for
@@ -276,6 +295,7 @@ final class FaviconStore: ObservableObject {
                 let lOwn = isSameOrigin(left.element.0, as: pageURL)
                 let rOwn = isSameOrigin(right.element.0, as: pageURL)
                 if lOwn != rOwn { return lOwn }
+                if l.appearanceScore != r.appearanceScore { return l.appearanceScore < r.appearanceScore }
                 if l.isSVG != r.isSVG { return r.isSVG }
                 let lScore = sizeScore(l), rScore = sizeScore(r)
                 if lScore != rScore { return lScore < rScore }
@@ -407,7 +427,8 @@ final class FaviconStore: ObservableObject {
             return DeclaredIcon(
                 url: url,
                 rel: (entry["rel"] as? String ?? "").lowercased(),
-                sizes: entry["sizes"] as? String ?? ""
+                sizes: entry["sizes"] as? String ?? "",
+                media: entry["media"] as? String ?? ""
             )
         }
         let hosts = Set((payload["hosts"] as? [String] ?? []).map { $0.lowercased() }.filter { !$0.isEmpty })
@@ -430,7 +451,8 @@ final class FaviconStore: ObservableObject {
           icons.push({
             href: new URL(link.getAttribute('href'), document.baseURI).href,
             rel: rel,
-            sizes: (link.getAttribute('sizes') || '')
+            sizes: (link.getAttribute('sizes') || ''),
+            media: (link.getAttribute('media') || '')
           });
         } catch (error) {}
       });
@@ -623,7 +645,12 @@ private struct StoredSiteIcon: View {
             Image(nsImage: icon)
                 .resizable()
                 .interpolation(.high)
-                .aspectRatio(contentMode: .fill)
+                // `fit`, not `fill`: a site's icon is not always square —
+                // Google Flow's is 653x524 — and filling a square slot with
+                // one crops its sides away and upscales what is left into a
+                // blur. Fitting shows all of it. For the square icons that
+                // are the norm the two are identical.
+                .aspectRatio(contentMode: .fit)
                 .frame(width: size, height: size)
                 .clipShape(RoundedRectangle(cornerRadius: SiteIconFallback.cornerRadius, style: .continuous))
         } else {

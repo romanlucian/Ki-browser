@@ -1690,10 +1690,71 @@ final class BrowserBehaviorTests: XCTestCase {
         XCTAssertNil(store.icon(forHost: "never-visited.example"))
     }
 
-    private static func declared(_ icons: [(String, String, String)], contacted: Set<String> = []) -> FaviconStore.PageIcons {
+    private static func declared(
+        _ icons: [(String, String, String)],
+        contacted: Set<String> = [],
+        media: [String] = []
+    ) -> FaviconStore.PageIcons {
         FaviconStore.PageIcons(
-            icons: icons.map { FaviconStore.DeclaredIcon(url: $0.0, rel: $0.1, sizes: $0.2) },
+            icons: icons.enumerated().map { index, icon in
+                FaviconStore.DeclaredIcon(
+                    url: icon.0,
+                    rel: icon.1,
+                    sizes: icon.2,
+                    media: index < media.count ? media[index] : ""
+                )
+            },
             contactedHosts: contacted
+        )
+    }
+
+    /// Sites increasingly ship a dark mark for light backgrounds and a light
+    /// one for dark, distinguished only by `media`. Clearframe's chrome is
+    /// always dark, so taking the first declared icon picked the one designed
+    /// to be invisible on it — Google Flow's tab was a black square.
+    func testAnIconDeclaredForDarkBackgroundsIsPreferredOverOneForLight() throws {
+        let pageURL = try XCTUnwrap(URL(string: "https://labs.example/tool"))
+
+        XCTAssertEqual(
+            FaviconStore.iconCandidates(for: pageURL, declared: Self.declared(
+                [
+                    ("https://labs.example/icon_black.png", "icon", ""),
+                    ("https://labs.example/icon_white.png", "icon", "")
+                ],
+                media: ["(prefers-color-scheme: light)", "(prefers-color-scheme: dark)"]
+            )).first?.absoluteString,
+            "https://labs.example/icon_white.png",
+            "the mark made for a dark background wins on a dark tab strip"
+        )
+    }
+
+    /// An icon with no media query applies everywhere, so it beats one the
+    /// site said was for light backgrounds only.
+    func testAnUnqualifiedIconBeatsOneDeclaredForLightBackgroundsOnly() throws {
+        let pageURL = try XCTUnwrap(URL(string: "https://labs.example/tool"))
+
+        XCTAssertEqual(
+            FaviconStore.iconCandidates(for: pageURL, declared: Self.declared(
+                [
+                    ("https://labs.example/icon_black.png", "icon", ""),
+                    ("https://labs.example/icon_any.png", "icon", "")
+                ],
+                media: ["(prefers-color-scheme: light)", ""]
+            )).first?.absoluteString,
+            "https://labs.example/icon_any.png"
+        )
+    }
+
+    func testAnUnrecognisedMediaQueryIsTreatedAsApplyingEverywhere() throws {
+        let pageURL = try XCTUnwrap(URL(string: "https://labs.example/tool"))
+
+        XCTAssertEqual(
+            FaviconStore.iconCandidates(for: pageURL, declared: Self.declared(
+                [("https://labs.example/icon.png", "icon", "")],
+                media: ["(min-width: 600px)"]
+            )).first?.absoluteString,
+            "https://labs.example/icon.png",
+            "a media query about something else must not demote an icon"
         )
     }
 

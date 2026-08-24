@@ -423,7 +423,7 @@ private struct CapturedAIToolMark: View {
             Image(nsImage: icon)
                 .resizable()
                 .interpolation(.high)
-                .aspectRatio(contentMode: .fill)
+                .aspectRatio(contentMode: .fit)
                 .frame(width: size, height: size)
                 .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         } else {
