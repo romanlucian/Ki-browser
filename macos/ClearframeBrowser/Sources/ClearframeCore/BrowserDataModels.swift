@@ -627,12 +627,15 @@ public struct BookmarkCollection: Codable, Equatable, Sendable {
         }
 
         // Break imported parent cycles at the first affected folder. The
-        // parent of a parent is looked up through a map built once rather
-        // than by scanning the array at every hop, which turned this into a
-        // nested linear scan.
-        var parentOf: [UUID: UUID?] = [:]
-        parentOf.reserveCapacity(folders.count)
-        for folder in folders { parentOf[folder.id] = folder.parentID }
+        // hop is O(1) through an index map instead of a scan per hop, but it
+        // reads the *live* array, never a snapshot of it: this loop cuts
+        // links as it goes, and cutting one link un-cycles every folder
+        // behind it. Reading a snapshot would re-detect the same cycle from
+        // each of its members and cut all of them, flattening an imported
+        // chain onto the bar instead of keeping its shape.
+        var indexByID: [UUID: Int] = [:]
+        indexByID.reserveCapacity(folders.count)
+        for index in folders.indices { indexByID[folders[index].id] = index }
         for index in folders.indices {
             var seen: Set<UUID> = [folders[index].id]
             var parent = folders[index].parentID
@@ -641,7 +644,7 @@ public struct BookmarkCollection: Codable, Equatable, Sendable {
                     folders[index].parentID = nil
                     break
                 }
-                parent = parentOf[parentID] ?? nil
+                parent = indexByID[parentID].map { folders[$0].parentID } ?? nil
             }
         }
 
