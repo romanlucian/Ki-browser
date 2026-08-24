@@ -11,6 +11,17 @@ class QuietFixtureHandler(SimpleHTTPRequestHandler):
     def log_message(self, format, *args):
         print(format % args, flush=True)
 
+    def do_GET(self):
+        # A permanent redirect to a different path, so the browser can be
+        # checked against the case a real site creates: the address a
+        # bookmark holds is not the address the icon ends up filed under.
+        if self.path.startswith("/redirect-to-fixture"):
+            self.send_response(301)
+            self.send_header("Location", "/index.html")
+            self.end_headers()
+            return
+        super().do_GET()
+
 
 def main():
     parser = argparse.ArgumentParser()

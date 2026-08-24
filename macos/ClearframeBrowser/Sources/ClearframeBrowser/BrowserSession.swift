@@ -75,6 +75,14 @@ final class BrowserSession: NSObject, ObservableObject {
 
     private var isShowingStartPage = true
     private var lastRequestedURL: URL?
+    /// Where the navigation now in flight began, before any redirect.
+    ///
+    /// Separate from `lastRequestedURL`, which does not survive a redirect —
+    /// once the site sends the browser somewhere else, that becomes the new
+    /// address. This is written once when a navigation starts and then left
+    /// alone, which is what makes it possible to tell afterwards that
+    /// `pinterest.co.uk` is where the visit to `uk.pinterest.com` came from.
+    private var navigationOriginURL: URL?
     private var lastCommittedWebURL: URL?
     private var navigationDisplayName: String?
     private var activeNavigation: WKNavigation?
@@ -925,6 +933,9 @@ extension BrowserSession: WKNavigationDelegate {
         // loading. Staleness is filtered where it belongs, on the callbacks
         // that report an outcome.
         activeNavigation = navigation
+        // Recorded here because nothing has had a chance to change it yet:
+        // a server redirect is reported later, on this same navigation.
+        navigationOriginURL = lastRequestedURL ?? webView.url.flatMap(WebURLPolicy.validatedURL)
         isLoading = true
         hasCommittedNavigation = false
         // A notice about a link Clearframe declined belongs to the page it was
@@ -991,10 +1002,10 @@ extension BrowserSession: WKNavigationDelegate {
         guard let favicons,
               let url = webView.url.flatMap(WebURLPolicy.validatedURL),
               FaviconStore.captureHost(for: url) != nil else { return }
-        // Where this navigation started. Server redirects do not touch it, so
-        // after `pinterest.co.uk` redirects to `uk.pinterest.com` this is
-        // still the address a bookmark would have been saved at.
-        let requested = lastRequestedURL
+        // Where this navigation started, captured before the site had a
+        // chance to redirect. After `pinterest.co.uk` sends the browser to
+        // `uk.pinterest.com`, this is still the address a bookmark holds.
+        let requested = navigationOriginURL
         faviconTask?.cancel()
         faviconTask = Task { [weak self] in
             guard let self else { return }

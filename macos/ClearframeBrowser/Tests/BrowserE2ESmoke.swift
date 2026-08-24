@@ -76,6 +76,14 @@ private func configuredFixtureURL() throws -> URL {
     return url
 }
 
+private func reflectedNavigationOriginURL(_ session: BrowserSession) -> URL? {
+    guard let stored = Mirror(reflecting: session).children.first(where: { $0.label == "navigationOriginURL" })?.value else {
+        return nil
+    }
+    if let url = stored as? URL { return url }
+    return Mirror(reflecting: stored).children.first?.value as? URL
+}
+
 private func reflectedRequestedURL(_ session: BrowserSession) -> URL? {
     guard let stored = Mirror(reflecting: session).children.first(where: { $0.label == "lastRequestedURL" })?.value else {
         return nil
@@ -442,6 +450,26 @@ struct BrowserE2ESmoke {
             try require(settled, "a page that navigated itself left the tab loading forever")
             try require(session.loadState == .content, "the tab did not settle on the page it was sent to")
             print("PASS navigation race: a page that redirected itself finished loading")
+
+            // A server redirect through a real navigation: the icon is captured
+            // under where the page ended up, and a bookmark holds where it
+            // started. Driven end to end on purpose — unit tests that call
+            // `recordRedirectAlias` directly pass happily while the browser
+            // hands it the post-redirect address, which is exactly the bug
+            // this check exists to catch.
+            let redirectSource = fixtureURL.deletingLastPathComponent()
+                .appendingPathComponent("redirect-to-fixture")
+            session.navigate(redirectSource.absoluteString)
+            let followed = await waitUntil(timeout: 12) {
+                !session.isLoading && session.currentURLString.hasSuffix("index.html")
+            }
+            try require(followed, "the server redirect never settled")
+            let recordedOrigin = reflectedNavigationOriginURL(session)
+            try require(
+                recordedOrigin?.absoluteString == redirectSource.absoluteString,
+                "the address the navigation started at was lost to the redirect — got \(recordedOrigin?.absoluteString ?? "nil")"
+            )
+            print("PASS redirect origin: the address a visit began at survives the redirect that follows it")
 
             // Leave the shared session on the page later checks expect.
             try await loadDeterministicPage(in: session, localURL: fixtureURL)
