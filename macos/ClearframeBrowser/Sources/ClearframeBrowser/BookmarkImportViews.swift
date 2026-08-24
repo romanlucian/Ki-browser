@@ -65,7 +65,14 @@ enum BookmarkImportApplier {
         guard !plan.isEmpty else { return emptyResult(for: plan) }
 
         var createdFolderIDs: [UUID?] = []
+        var createdBookmarkIDs: [UUID] = []
         var createdBarFolderCount = 0
+
+        // One write for the whole import instead of one per record. Every
+        // call below still updates the store's published records
+        // immediately; only the encoding and the disk write wait for the
+        // end.
+        store.performBatch {
         for (index, planned) in plan.folders.enumerated() {
             // `flatMap`, not `map`: a parent that could not be created
             // leaves its children filed one level up rather than trapping.
@@ -82,12 +89,12 @@ enum BookmarkImportApplier {
             }
         }
 
-        var createdBookmarkIDs: [UUID] = []
         for planned in plan.bookmarks {
             let parentID = planned.parentIndex.flatMap { createdFolderIDs[$0] }
             if let created = store.addBookmark(title: planned.title, url: planned.url, folderID: parentID) {
                 createdBookmarkIDs.append(created.id)
             }
+        }
         }
 
         let importFolderID = plan.importFolderIndex.flatMap { createdFolderIDs[$0] }
@@ -133,6 +140,7 @@ enum BookmarkImportApplier {
     /// up, because deleting its folder preserves its contents by reparenting
     /// them. The result screen says so rather than promising nothing moves.
     static func undo(_ result: BookmarkImportApplyResult, in store: BrowserDataStore) {
+        store.performBatch {
         for bookmarkID in result.createdBookmarkIDs {
             guard let bookmark = store.bookmarks.first(where: { $0.id == bookmarkID }) else { continue }
             store.removeBookmark(bookmark)
@@ -140,6 +148,7 @@ enum BookmarkImportApplier {
         for folderID in result.createdFolderIDs.reversed() {
             guard let folderID, let folder = store.bookmarkFolder(id: folderID) else { continue }
             store.deleteBookmarkFolderPreservingContents(folder)
+        }
         }
     }
 }

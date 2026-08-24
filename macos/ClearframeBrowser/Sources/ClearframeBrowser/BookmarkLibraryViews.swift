@@ -162,12 +162,14 @@ struct BookmarkOrganizerView: View {
         }
     }
 
-    private var destinations: [BookmarkFolderDestination] {
-        BookmarkFolderDestination.tree(in: store)
-    }
-
     var body: some View {
-        VStack(spacing: 8) {
+        // Built once per body, not once per row. Every row's "Move to" menu
+        // needs the same folder tree, and reading it from a computed
+        // property inside `ForEach` rebuilt the whole thing for each one —
+        // the same mistake, one layer up, that made the bar slow.
+        // `BookmarksHomePage` already hoists it this way.
+        let destinations = BookmarkFolderDestination.tree(in: store)
+        return VStack(spacing: 8) {
             HStack(spacing: 8) {
                 if let currentFolder {
                     Button {

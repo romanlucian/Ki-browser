@@ -320,6 +320,83 @@ final class BookmarkImportTests: XCTestCase {
         )
     }
 
+    // MARK: - Batched writes
+
+    /// A batch defers writing, never the records themselves: the applier
+    /// reads folder ids back out of the store while the batch is still open,
+    /// so anything that made those calls return stale data would file every
+    /// imported bookmark in the wrong place.
+    func testRecordsAreReadableInsideABatchBeforeAnythingIsWritten() throws {
+        let (store, suiteName, defaults) = try makeStore()
+        defer { TestSuiteCleanup.destroy(suiteName, defaults: defaults) }
+
+        var seenInside: BookmarkFolderRecord?
+        store.performBatch {
+            guard let made = store.createBookmarkFolder(title: "Inside", iconID: "folder", parentID: nil) else { return }
+            seenInside = store.bookmarkFolder(id: made.id)
+            _ = store.addBookmark(title: "Child", url: "https://inside.example/", folderID: made.id)
+            XCTAssertEqual(store.bookmarks(in: made.id).count, 1, "reads inside the batch see the new records")
+        }
+
+        XCTAssertEqual(seenInside?.title, "Inside")
+        XCTAssertEqual(store.bookmarkFolders(in: nil).map(\.title), ["Inside"])
+    }
+
+    /// What the batch exists for: the whole import reaches disk, once.
+    func testABatchedImportPersistsEverythingItCreated() throws {
+        let (store, suiteName, defaults) = try makeStore()
+        defer { TestSuiteCleanup.destroy(suiteName, defaults: defaults) }
+
+        let mergePlan = plan(chromeShapedImport(), into: store, placement: .bookmarksBar)
+        _ = BookmarkImportApplier.apply(mergePlan, into: store)
+
+        let reopened = BrowserDataStore(defaults: defaults)
+        XCTAssertEqual(
+            reopened.bookmarks.count, store.bookmarks.count,
+            "a batched import is on disk by the time apply returns"
+        )
+        XCTAssertEqual(reopened.bookmarkFolders.count, store.bookmarkFolders.count)
+        XCTAssertEqual(
+            Set(reopened.bookmarkFolders(in: nil).map(\.title)),
+            Set(store.bookmarkFolders(in: nil).map(\.title))
+        )
+    }
+
+    func testUndoingABatchedImportPersistsTheRemoval() throws {
+        let (store, suiteName, defaults) = try makeStore()
+        defer { TestSuiteCleanup.destroy(suiteName, defaults: defaults) }
+
+        let result = BookmarkImportApplier.apply(
+            plan(chromeShapedImport(), into: store, placement: .bookmarksBar),
+            into: store
+        )
+        BookmarkImportApplier.undo(result, in: store)
+
+        let reopened = BrowserDataStore(defaults: defaults)
+        XCTAssertTrue(reopened.bookmarks.isEmpty, "undo reached disk too")
+        XCTAssertTrue(reopened.bookmarkFolders.isEmpty)
+    }
+
+    /// Renaming a bookmark used to re-encode every folder as well.
+    func testABookmarkOnlyChangeDoesNotRewriteTheFolders() throws {
+        let (store, suiteName, defaults) = try makeStore()
+        defer { TestSuiteCleanup.destroy(suiteName, defaults: defaults) }
+
+        _ = store.createBookmarkFolder(title: "Kept", iconID: "folder", parentID: nil)
+        let bookmark = try XCTUnwrap(store.addBookmark(title: "Before", url: "https://rename.example/", folderID: nil))
+        let foldersOnDisk = try XCTUnwrap(defaults.data(forKey: "clearframe.bookmarkFolders.v2"))
+
+        XCTAssertTrue(store.updateBookmark(id: bookmark.id, title: "After", url: bookmark.url))
+
+        XCTAssertEqual(
+            defaults.data(forKey: "clearframe.bookmarkFolders.v2"), foldersOnDisk,
+            "the folder blob is untouched when only a bookmark changed"
+        )
+        let reopened = BrowserDataStore(defaults: defaults)
+        XCTAssertEqual(reopened.bookmarks.first?.title, "After", "and the bookmark change still persisted")
+        XCTAssertEqual(reopened.bookmarkFolders.map(\.title), ["Kept"])
+    }
+
     // MARK: - Result copy
 
     func testResultHeadlineNamesBothPlacesUnderBarPlacement() throws {
