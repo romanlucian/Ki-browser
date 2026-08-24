@@ -316,8 +316,22 @@ struct TabStrip: View {
     /// exactly. They share the same axes as `frame.origin`, so no flip either.
     private var windowDragGesture: some Gesture {
         DragGesture(minimumDistance: 2, coordinateSpace: .global)
-            .onChanged { _ in moveWindowWithPointer() }
-            .onEnded { _ in endWindowDrag() }
+            .onChanged { _ in
+                // A tab that has just been pulled out of this strip is still
+                // under the pointer, and the window it became is what follows
+                // it. The window it left has to stay where it is, or both slide
+                // across the screen together.
+                //
+                // The button check is what makes this self-healing: once the
+                // press that tore the tab out is over, this stops applying even
+                // if the flag has not been cleared yet by the next press.
+                guard !(dragToreOff && NSEvent.pressedMouseButtons & 1 != 0) else { return }
+                moveWindowWithPointer()
+            }
+            .onEnded { _ in
+                dragToreOff = false
+                endWindowDrag()
+            }
     }
 
     /// The strip's own height: the band a drop has to land in for a tab to
