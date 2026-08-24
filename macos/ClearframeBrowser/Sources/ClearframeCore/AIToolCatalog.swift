@@ -119,9 +119,9 @@ public enum AIToolCatalog {
     /// A small, bundled editorial catalog. Its checked date and configuration
     /// are intentionally explicit; the app never fetches arbitrary remote data.
     public static let release = AIToolCatalogRelease(
-        version: "2026.08.11.1",
+        version: "2026.08.24.1",
         lastChecked: Calendar(identifier: .gregorian).date(
-            from: DateComponents(timeZone: TimeZone(secondsFromGMT: 0), year: 2026, month: 8, day: 11)
+            from: DateComponents(timeZone: TimeZone(secondsFromGMT: 0), year: 2026, month: 8, day: 24)
         )!
     )
 

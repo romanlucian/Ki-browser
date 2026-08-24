@@ -567,15 +567,18 @@ final class ClearframeCoreTests: XCTestCase {
         XCTAssertTrue(videoTools.contains(where: { $0.id == "seedance" && $0.officialURL.host == "seed.bytedance.com" }))
     }
 
+    /// The date is only allowed to move when a review actually happened, which
+    /// is what this test is for: bumping it is a deliberate edit in two places,
+    /// never a side effect of shipping.
     func testAIToolCatalogReleaseHasVisibleVersionAndCheckedDate() {
-        XCTAssertEqual(AIToolCatalog.release.version, "2026.08.11.1")
+        XCTAssertEqual(AIToolCatalog.release.version, "2026.08.24.1")
         let components = Calendar(identifier: .gregorian).dateComponents(
             in: TimeZone(secondsFromGMT: 0)!,
             from: AIToolCatalog.release.lastChecked
         )
         XCTAssertEqual(components.year, 2026)
         XCTAssertEqual(components.month, 8)
-        XCTAssertEqual(components.day, 11)
+        XCTAssertEqual(components.day, 24)
     }
 
     func testAIToolCatalogUsesBroadAccessLabelsAndSourcedTaskRecommendations() {
