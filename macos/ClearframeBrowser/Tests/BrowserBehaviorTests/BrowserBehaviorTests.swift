@@ -1532,6 +1532,120 @@ final class BrowserBehaviorTests: XCTestCase {
         XCTAssertNil(reopened.icon(forHost: "never-visited.example"))
     }
 
+    // MARK: - Site icons across a redirect
+
+    /// The case this exists for. A bookmark saved at `pinterest.co.uk` opens,
+    /// the site redirects to `uk.pinterest.com`, and the icon is captured
+    /// there. Without the alias the bookmark can never show an icon, however
+    /// many times it is opened.
+    func testAnIconCapturedAfterARedirectIsFoundUnderTheAddressTheVisitStartedAt() async throws {
+        let directory = Self.makeFaviconDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = FaviconStore(directory: directory, fetch: RecordingFaviconFetcher(response: Self.pngFixture()).fetch)
+        let requested = try XCTUnwrap(URL(string: "https://www.pinterest.co.uk/gtedesign/"))
+        let landed = try XCTUnwrap(URL(string: "https://uk.pinterest.com/gtedesign/"))
+
+        store.recordRedirectAlias(from: requested, to: try XCTUnwrap(FaviconStore.captureHost(for: landed)), isPrivate: false)
+        await store.capture(pageURL: landed, declaredIconURLs: [], isPrivate: false)
+
+        XCTAssertNotNil(store.icon(forHost: "uk.pinterest.com"), "the icon is stored where the page ended up")
+        XCTAssertNotNil(store.icon(forHost: "pinterest.co.uk"), "and is found under where the visit started")
+        XCTAssertNotNil(store.icon(forHost: "www.pinterest.co.uk"), "www never splits one site in two")
+    }
+
+    /// A host's own icon must always win. Otherwise one visit that happened to
+    /// redirect could replace a site's real icon with somewhere else's.
+    func testAHostsOwnIconIsPreferredOverOneBorrowedThroughARedirect() async throws {
+        let directory = Self.makeFaviconDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = FaviconStore(directory: directory, fetch: RecordingFaviconFetcher(response: Self.pngFixture()).fetch)
+
+        await store.capture(
+            pageURL: try XCTUnwrap(URL(string: "https://start.example/page")),
+            declaredIconURLs: [],
+            isPrivate: false
+        )
+        let own = try XCTUnwrap(store.icon(forHost: "start.example"))
+
+        await store.capture(pageURL: try XCTUnwrap(URL(string: "https://elsewhere.example/")), declaredIconURLs: [], isPrivate: false)
+        store.recordRedirectAlias(
+            from: try XCTUnwrap(URL(string: "https://start.example/page")),
+            to: "elsewhere.example",
+            isPrivate: false
+        )
+
+        XCTAssertTrue(store.icon(forHost: "start.example") === own, "its own icon is untouched by the alias")
+    }
+
+    /// Last-write-wins, which is what heals a bookmark that landed on a
+    /// sign-in page once.
+    func testARedirectAliasIsReplacedByTheNextOneRatherThanAccumulating() async throws {
+        let directory = Self.makeFaviconDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = FaviconStore(directory: directory, fetch: RecordingFaviconFetcher(response: Self.pngFixture()).fetch)
+        let bookmark = try XCTUnwrap(URL(string: "https://saved.example/"))
+
+        await store.capture(pageURL: try XCTUnwrap(URL(string: "https://signin.example/")), declaredIconURLs: [], isPrivate: false)
+        store.recordRedirectAlias(from: bookmark, to: "signin.example", isPrivate: false)
+        let borrowedFromSignIn = try XCTUnwrap(store.icon(forHost: "saved.example"))
+
+        await store.capture(pageURL: try XCTUnwrap(URL(string: "https://real.example/")), declaredIconURLs: [], isPrivate: false)
+        store.recordRedirectAlias(from: bookmark, to: "real.example", isPrivate: false)
+
+        XCTAssertFalse(
+            store.icon(forHost: "saved.example") === borrowedFromSignIn,
+            "the newer redirect replaces the older one"
+        )
+        XCTAssertTrue(store.icon(forHost: "saved.example") === store.icon(forHost: "real.example"))
+    }
+
+    func testARedirectAliasSurvivesRelaunchAndIsErasedByTheDataReset() async throws {
+        let directory = Self.makeFaviconDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = FaviconStore(directory: directory, fetch: RecordingFaviconFetcher(response: Self.pngFixture()).fetch)
+        let requested = try XCTUnwrap(URL(string: "https://old.example/"))
+
+        await store.capture(pageURL: try XCTUnwrap(URL(string: "https://new.example/")), declaredIconURLs: [], isPrivate: false)
+        store.recordRedirectAlias(from: requested, to: "new.example", isPrivate: false)
+
+        let reopened = FaviconStore(directory: directory, fetch: Self.forbiddenFaviconFetcher)
+        XCTAssertNotNil(reopened.icon(forHost: "old.example"), "the alias is read back from disk")
+
+        reopened.clearAll()
+        let afterReset = FaviconStore(directory: directory, fetch: Self.forbiddenFaviconFetcher)
+        XCTAssertNil(afterReset.icon(forHost: "old.example"), "the reset takes the alias with the icons")
+        XCTAssertNil(afterReset.icon(forHost: "new.example"))
+    }
+
+    /// A private window leaves nothing behind, aliases included.
+    func testAPrivateVisitsRedirectAliasIsNeverWrittenToDisk() async throws {
+        let directory = Self.makeFaviconDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = FaviconStore(directory: directory, fetch: RecordingFaviconFetcher(response: Self.pngFixture()).fetch)
+
+        store.recordRedirectAlias(
+            from: try XCTUnwrap(URL(string: "https://private-start.example/")),
+            to: "private-end.example",
+            isPrivate: true
+        )
+
+        let files = (try? FileManager.default.contentsOfDirectory(atPath: directory.path)) ?? []
+        XCTAssertFalse(files.contains("redirects.json"), "a private visit writes no alias file")
+    }
+
+    /// Only a real cross-host redirect records anything.
+    func testNoAliasIsRecordedWhenNothingRedirected() async throws {
+        let directory = Self.makeFaviconDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = FaviconStore(directory: directory, fetch: RecordingFaviconFetcher(response: Self.pngFixture()).fetch)
+        let same = try XCTUnwrap(URL(string: "https://www.same.example/one"))
+
+        store.recordRedirectAlias(from: same, to: "same.example", isPrivate: false)
+
+        let files = (try? FileManager.default.contentsOfDirectory(atPath: directory.path)) ?? []
+        XCTAssertFalse(files.contains("redirects.json"), "www and case are the same host, not a redirect")
+    }
+
     func testFaviconLookupNeverReachesTheNetwork() {
         let directory = Self.makeFaviconDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }

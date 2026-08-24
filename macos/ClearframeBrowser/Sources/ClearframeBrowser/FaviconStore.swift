@@ -13,6 +13,12 @@ import SwiftUI
 ///   or `/favicon.ico` on the same origin. A third-party favicon service is
 ///   never contacted; doing so would hand a log of the user's browsing to
 ///   somebody else, which is exactly what Clearframe promises not to do.
+/// - When a visit **redirects**, the host it started at is recorded as
+///   ending up at the host it finished at, so a bookmark saved at the
+///   redirecting address can find the icon. Read from a redirect the user's
+///   own navigation already followed — no extra request of any kind. Chrome
+///   and Firefox both do this; without it such a bookmark can never show an
+///   icon however often it is opened.
 /// - A host that was never visited has no icon and never causes a request.
 ///   Bookmarks of unvisited sites keep the deterministic `IdentityColor`
 ///   square instead (see `SiteIconView`).
@@ -46,6 +52,19 @@ final class FaviconStore: ObservableObject {
     /// persisted: a site that adds an icon tomorrow gets a fresh chance.
     private var failedThisSession: Set<String> = []
     private var inFlight: Set<String> = []
+    /// Hosts that redirect somewhere else, pointing at the host whose icon
+    /// they should borrow: `pinterest.co.uk` → `uk.pinterest.com`.
+    ///
+    /// Learned only from a redirect the person's own navigation already
+    /// followed, so it costs no request. Without it a bookmark saved at the
+    /// address that redirects can never show an icon, however many times it
+    /// is opened: the icon is filed under where the page ended up, and the
+    /// bookmark keeps asking for where it started.
+    ///
+    /// Chrome and Firefox both do this — Chrome maps a captured icon onto
+    /// every URL in the redirect chain, Firefox attaches it to the redirect
+    /// sources, prioritising bookmarked ones.
+    private var aliases: [String: String] = [:]
 
     init(
         directory: URL? = FaviconStore.defaultDirectory,
@@ -54,15 +73,27 @@ final class FaviconStore: ObservableObject {
         self.directory = directory
         self.fetch = fetch
         memory.countLimit = 300
+        aliases = Self.loadAliases(in: directory)
     }
 
     // MARK: - Lookup
 
     /// The stored icon for `host`, from memory or disk. Never performs a
     /// network request: only an actual visit (`captureIfNeeded`) can fetch.
+    ///
+    /// A host's own icon always wins. Only when it has none is a redirect
+    /// alias followed — so an icon captured directly can never be displaced
+    /// by one borrowed from somewhere a host happened to redirect to.
     func icon(forHost host: String) -> NSImage? {
         let key = IdentityColor.normalizedHost(host)
         guard !key.isEmpty else { return nil }
+        if let own = storedIcon(forNormalizedHost: key) { return own }
+        // One hop only. A chain of aliases would be a way to loop.
+        guard let target = aliases[key], target != key else { return nil }
+        return storedIcon(forNormalizedHost: target)
+    }
+
+    private func storedIcon(forNormalizedHost key: String) -> NSImage? {
         if let cached = memory.object(forKey: key as NSString) { return cached }
         guard !missingOnDisk.contains(key),
               let fileURL = fileURL(forNormalizedHost: key),
@@ -80,10 +111,38 @@ final class FaviconStore: ObservableObject {
     /// Called from `BrowserSession`'s `didFinish` for the page just loaded.
     /// Reads the icon the live page declared, then stores the first
     /// same-origin candidate that resolves to an image.
-    func captureIfNeeded(for pageURL: URL, in webView: WKWebView, isPrivate: Bool) async {
-        guard let host = Self.captureHost(for: pageURL), shouldCapture(host: host) else { return }
+    /// `requestedURL` is the address the navigation started at, which differs
+    /// from `pageURL` when the site redirected. Passing it lets the icon be
+    /// found later under the address a bookmark actually holds.
+    func captureIfNeeded(for pageURL: URL, requestedURL: URL?, in webView: WKWebView, isPrivate: Bool) async {
+        guard let host = Self.captureHost(for: pageURL) else { return }
+        recordRedirectAlias(from: requestedURL, to: host, isPrivate: isPrivate)
+        guard shouldCapture(host: host) else { return }
         let declared = await declaredIconURLs(in: webView)
         await capture(pageURL: pageURL, declaredIconURLs: declared, isPrivate: isPrivate)
+    }
+
+    /// Remembers that `requestedURL`'s host ends up at `finalHost`.
+    ///
+    /// Last-write-wins, which is how this heals itself: a bookmark that
+    /// happens to land on a sign-in page today borrows that icon until the
+    /// next visit reaches the real page and overwrites it. Chrome accepts the
+    /// same trade and re-propagates on every visit for the same reason.
+    ///
+    /// Deliberately no "only within the same registered domain" guard. The
+    /// case this exists for — `pinterest.co.uk` redirecting to
+    /// `uk.pinterest.com` — crosses registrable domains, so such a guard
+    /// would rule out exactly the thing it is meant to fix.
+    func recordRedirectAlias(from requestedURL: URL?, to finalHost: String, isPrivate: Bool) {
+        guard let requestedURL, let requestedHost = Self.captureHost(for: requestedURL), requestedHost != finalHost
+        else { return }
+        guard aliases[requestedHost] != finalHost else { return }
+        aliases[requestedHost] = finalHost
+        // A host that had nothing may now resolve through the alias.
+        missingOnDisk.remove(requestedHost)
+        revision += 1
+        // Private tabs leave nothing behind, aliases included.
+        if !isPrivate { writeAliases() }
     }
 
     /// The capture step without WebKit, so the policy is unit-testable:
@@ -117,6 +176,7 @@ final class FaviconStore: ObservableObject {
         memory.removeAllObjects()
         missingOnDisk.removeAll()
         failedThisSession.removeAll()
+        aliases.removeAll()
         if let directory {
             try? FileManager.default.removeItem(at: directory)
         }
@@ -196,6 +256,27 @@ final class FaviconStore: ObservableObject {
     private func fileURL(forNormalizedHost host: String) -> URL? {
         guard let directory, let name = Self.fileName(forNormalizedHost: host) else { return nil }
         return directory.appendingPathComponent(name, isDirectory: false)
+    }
+
+    /// The alias table sits beside the icons, so the browsing-data reset —
+    /// which deletes the whole directory — takes it too.
+    private static func aliasFileURL(in directory: URL?) -> URL? {
+        directory?.appendingPathComponent("redirects.json", isDirectory: false)
+    }
+
+    private static func loadAliases(in directory: URL?) -> [String: String] {
+        guard let url = aliasFileURL(in: directory),
+              let data = try? Data(contentsOf: url),
+              let decoded = try? JSONDecoder().decode([String: String].self, from: data)
+        else { return [:] }
+        return decoded
+    }
+
+    private func writeAliases() {
+        guard let directory, let url = Self.aliasFileURL(in: directory),
+              let data = try? JSONEncoder().encode(aliases) else { return }
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try? data.write(to: url, options: .atomic)
     }
 
     private func writeToDisk(_ png: Data, forNormalizedHost host: String) {

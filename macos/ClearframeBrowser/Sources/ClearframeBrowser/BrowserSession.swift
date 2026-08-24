@@ -991,10 +991,19 @@ extension BrowserSession: WKNavigationDelegate {
         guard let favicons,
               let url = webView.url.flatMap(WebURLPolicy.validatedURL),
               FaviconStore.captureHost(for: url) != nil else { return }
+        // Where this navigation started. Server redirects do not touch it, so
+        // after `pinterest.co.uk` redirects to `uk.pinterest.com` this is
+        // still the address a bookmark would have been saved at.
+        let requested = lastRequestedURL
         faviconTask?.cancel()
         faviconTask = Task { [weak self] in
             guard let self else { return }
-            await favicons.captureIfNeeded(for: url, in: self.webView, isPrivate: self.isPrivate)
+            await favicons.captureIfNeeded(
+                for: url,
+                requestedURL: requested,
+                in: self.webView,
+                isPrivate: self.isPrivate
+            )
         }
     }
 

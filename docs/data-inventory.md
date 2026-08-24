@@ -27,6 +27,7 @@
 ### Files on disk
 
 `~/Library/Application Support/Clearframe/Favicons/<host>.png` — site icons, downscaled to 64px, capped at 256 KB each.
+`~/Library/Application Support/Clearframe/Favicons/redirects.json` — which hosts redirect to which, learned from visits already made, so a bookmark saved at a redirecting address can find its icon. Hostnames only, no addresses or page titles.
 
 ### Keychain
 
@@ -44,7 +45,7 @@ Exactly four things. Nothing else.
 
 **2. Search queries, on submit.** Sent to the provider the user chose (DuckDuckGo by default; Google, Bing, Brave Search, or Startpage if selected). **Nothing is sent while typing.** Address-bar suggestions are built only from history and bookmarks already on the Mac — no keystroke goes anywhere to produce them, and suggestions are silent entirely in private tabs.
 
-**3. One site-icon request per visited site.** Fetched only during an actual visit, only from that site's own origin, over an ephemeral session with no cookies, capped at 512 KB with a 5-second timeout. **No third-party icon service is ever contacted** — a Google favicon endpoint would disclose the user's bookmark list to Google. Sites never visited are never contacted.
+**3. One site-icon request per visited site.** Fetched only during an actual visit, only from that site's own origin, over an ephemeral session with no cookies, capped at 512 KB with a 5-second timeout. **No third-party icon service is ever contacted** — a Google favicon endpoint would disclose the user's bookmark list to Google. Sites never visited are never contacted, and no icon is fetched speculatively for an imported bookmark. A redirect the visit already followed is recorded so the starting address can find the icon, which adds no request of any kind.
 
 **4. Optional AI, only after an explicit action.** Off by default. Requires the user to supply their own OpenAI key. When they click Improve with AI or request a translation, the request contains the page title, hostname, declared language, and at most 18,000 characters of extracted visible text — plus the random installation identifier from section 1.
 
