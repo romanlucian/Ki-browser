@@ -16,14 +16,12 @@ struct BookmarksHomePage: View {
     @ObservedObject var store: BrowserDataStore
     let open: (String, Bool) -> Void
 
-    @State private var section: LibrarySection = .bookmarks
     @State private var search = ""
     @State private var currentFolderID: UUID?
     @State private var editorRequest: BookmarkFolderEditorRequest?
     @State private var bookmarkEditorRequest: BookmarkEditorRequest?
     @State private var pendingDeletion: BookmarkFolderRecord?
     @State private var dropConfirmation: String?
-    @State private var showsClearHistoryConfirmation = false
     @State private var showsBookmarkImport = false
 
     private var trimmedSearch: String {
@@ -70,16 +68,6 @@ struct BookmarksHomePage: View {
         } message: { folder in
             Text("\(folder.title) contains saved items. Its bookmarks and subfolders will move to the parent folder; nothing will be deleted.")
         }
-        .confirmationDialog(
-            ClearHistoryConfirmation.title,
-            isPresented: $showsClearHistoryConfirmation,
-            titleVisibility: .visible
-        ) {
-            Button(ClearHistoryConfirmation.confirmLabel, role: .destructive) { store.clearHistory() }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text(ClearHistoryConfirmation.message(visitCount: store.history.count))
-        }
         .sheet(isPresented: $showsBookmarkImport) {
             // Already the surface a completed import would open — no further
             // navigation needed once the sheet closes.
@@ -99,8 +87,10 @@ struct BookmarksHomePage: View {
                 .padding(.horizontal, 10)
                 .padding(.bottom, 8)
 
-            sidebarRow(.bookmarks, symbol: "bookmark", count: store.bookmarks.count)
-            sidebarRow(.history, symbol: "clock.arrow.circlepath", count: store.history.count)
+            Text("\(store.bookmarks.count) saved \(store.bookmarks.count == 1 ? "page" : "pages")")
+                .font(.system(size: 12))
+                .foregroundStyle(ClearframeTheme.textSecondary)
+                .padding(.horizontal, 10)
 
             Spacer(minLength: 12)
 
@@ -129,37 +119,6 @@ struct BookmarksHomePage: View {
         .background(ClearframeTheme.bg1)
     }
 
-    private func sidebarRow(_ target: LibrarySection, symbol: String, count: Int) -> some View {
-        let isSelected = section == target
-        return Button {
-            section = target
-        } label: {
-            HStack(spacing: 9) {
-                Image(systemName: symbol)
-                    .font(.system(size: 11, weight: .semibold))
-                    .frame(width: 15)
-                Text(target.rawValue)
-                    .font(.system(size: 12.5, weight: .semibold))
-                Spacer(minLength: 6)
-                Text("\(count)")
-                    .font(ClearframeTheme.metaFont)
-                    .tracking(ClearframeTheme.metaTracking)
-                    .foregroundStyle(ClearframeTheme.textTertiary)
-            }
-            .foregroundStyle(isSelected ? ClearframeTheme.textPrimary : ClearframeTheme.textSecondary)
-            .padding(.horizontal, 10)
-            .frame(height: 30)
-            .background(
-                isSelected ? ClearframeTheme.bg3 : Color.clear,
-                in: RoundedRectangle(cornerRadius: ClearframeTheme.radius8)
-            )
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .padding(.horizontal, 10)
-        .accessibilityLabel("\(target.rawValue), \(count) items")
-    }
-
     private func sidebarActionRow(_ title: String, symbol: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: 9) {
@@ -186,18 +145,14 @@ struct BookmarksHomePage: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
                 header(stats: stats)
-                searchField
-                if section == .bookmarks {
-                    folderGrid(stats: stats)
-                    // The flat index belongs to the root page; a drill-down
-                    // stays about the one folder the reader opened.
-                    if currentFolderID == nil {
-                        allFoldersSection(stats: stats)
-                    }
-                    bookmarkSection(stats: stats)
-                } else {
-                    historySection
+                HomeSearchField(placeholder: "Search saved pages and folders", text: $search)
+                folderGrid(stats: stats)
+                // The flat index belongs to the root page; a drill-down
+                // stays about the one folder the reader opened.
+                if currentFolderID == nil {
+                    allFoldersSection(stats: stats)
                 }
+                bookmarkSection(stats: stats)
             }
             .frame(maxWidth: 1_020, alignment: .leading)
             .padding(.horizontal, 32)
@@ -215,7 +170,7 @@ struct BookmarksHomePage: View {
         let folder = currentFolderID.flatMap { stats.folder(id: $0) }
         return VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 10) {
-                if section == .bookmarks, let folder {
+                if let folder {
                     Button {
                         currentFolderID = folder.parentID
                     } label: {
@@ -245,50 +200,16 @@ struct BookmarksHomePage: View {
     }
 
     private func headerTitle(folder: BookmarkFolderRecord?) -> String {
-        guard section == .bookmarks else { return "History" }
         guard let folder else { return "Bookmarks" }
         return folder.title
     }
 
     private func headerDetail(folder: BookmarkFolderRecord?, stats: BookmarksHomeStats) -> String {
-        guard section == .bookmarks else {
-            return "Recent page visits saved on this Mac. Clearing history removes them from this device."
-        }
         if isSearching { return "Searching every folder by page title, web address, and folder name." }
         guard let folder else {
             return "Folders and saved pages in this Mac user profile. Drop a page link onto a folder to file it."
         }
         return stats.pathLabel(for: folder.id)
-    }
-
-    private var searchField: some View {
-        HStack(spacing: 9) {
-            Image(systemName: "magnifyingglass")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(ClearframeTheme.textTertiary)
-            TextField(
-                section == .bookmarks ? "Search saved pages and folders" : "Search history",
-                text: $search
-            )
-            .textFieldStyle(.plain)
-            .font(.system(size: 13))
-            .foregroundStyle(ClearframeTheme.textPrimary)
-            if !search.isEmpty {
-                Button { search = "" } label: {
-                    Image(systemName: "xmark.circle.fill").foregroundStyle(ClearframeTheme.textTertiary)
-                }
-                .buttonStyle(.plain)
-                .help("Clear search")
-            }
-        }
-        .padding(.horizontal, 13)
-        .frame(height: 34)
-        .frame(maxWidth: 440)
-        .background(ClearframeTheme.bg1, in: RoundedRectangle(cornerRadius: ClearframeTheme.radius10))
-        .overlay(
-            RoundedRectangle(cornerRadius: ClearframeTheme.radius10)
-                .stroke(ClearframeTheme.hairline2)
-        )
     }
 
     // MARK: - Folder cards
@@ -302,7 +223,7 @@ struct BookmarksHomePage: View {
     private func folderGrid(stats: BookmarksHomeStats) -> some View {
         let folders = visibleFolders(stats: stats)
         VStack(alignment: .leading, spacing: 12) {
-            sectionTitle(isSearching ? "MATCHING FOLDERS" : "FOLDERS", count: folders.count)
+            HomeSectionTitle(title: isSearching ? "MATCHING FOLDERS" : "FOLDERS", count: folders.count)
             LazyVGrid(
                 columns: [GridItem(.adaptive(minimum: 178, maximum: 236), spacing: 16, alignment: .top)],
                 alignment: .leading,
@@ -346,7 +267,7 @@ struct BookmarksHomePage: View {
                 }
             }
             if folders.isEmpty && isSearching {
-                emptyNote("No folder name matches “\(trimmedSearch)”.")
+                HomeEmptyNote("No folder name matches “\(trimmedSearch)”.")
             }
         }
     }
@@ -363,9 +284,9 @@ struct BookmarksHomePage: View {
         let bookmarks = visibleBookmarks(stats: stats)
         let destinations = BookmarkFolderDestination.tree(in: store)
         VStack(alignment: .leading, spacing: 12) {
-            sectionTitle(bookmarkSectionTitle, count: bookmarks.count)
+            HomeSectionTitle(title: bookmarkSectionTitle, count: bookmarks.count)
             if bookmarks.isEmpty {
-                emptyNote(emptyBookmarksNote)
+                HomeEmptyNote(emptyBookmarksNote)
             } else {
                 LazyVStack(spacing: 6) {
                     ForEach(bookmarks) { bookmark in
@@ -403,7 +324,7 @@ struct BookmarksHomePage: View {
     private func allFoldersSection(stats: BookmarksHomeStats) -> some View {
         if !isSearching && !stats.allFolders.isEmpty {
             VStack(alignment: .leading, spacing: 12) {
-                sectionTitle("ALL FOLDERS", count: stats.allFolders.count)
+                HomeSectionTitle(title: "ALL FOLDERS", count: stats.allFolders.count)
                 LazyVStack(spacing: 5) {
                     ForEach(stats.allFolders) { folder in
                         BookmarksHomeFolderRow(
@@ -417,84 +338,6 @@ struct BookmarksHomePage: View {
                 }
             }
         }
-    }
-
-    // MARK: - History
-
-    private var filteredHistory: [HistoryRecord] {
-        guard isSearching else { return store.history }
-        return store.history.filter {
-            $0.title.localizedCaseInsensitiveContains(trimmedSearch)
-                || $0.url.localizedCaseInsensitiveContains(trimmedSearch)
-        }
-    }
-
-    @ViewBuilder
-    private var historySection: some View {
-        let history = filteredHistory
-        VStack(alignment: .leading, spacing: 12) {
-            sectionTitle("RECENT VISITS", count: history.count)
-            if history.isEmpty {
-                emptyNote(isSearching
-                          ? "No visit matches “\(trimmedSearch)”."
-                          : "No local history yet. Completed page visits appear here.")
-            } else {
-                LazyVStack(spacing: 5) {
-                    ForEach(history) { item in
-                        LibraryRow(
-                            title: item.title,
-                            url: item.url,
-                            detail: item.visitedAt.formatted(date: .abbreviated, time: .shortened),
-                            open: { open(item.url, false) },
-                            openNewTab: { open(item.url, true) },
-                            remove: { store.removeHistory(item) }
-                        )
-                    }
-                }
-            }
-            HStack(spacing: 10) {
-                Label("Stored only in this Mac user profile.", systemImage: "lock")
-                    .font(.system(size: 11))
-                    .foregroundStyle(ClearframeTheme.textTertiary)
-                Spacer(minLength: 8)
-                if !store.history.isEmpty {
-                    Button("Clear History", role: .destructive) {
-                        showsClearHistoryConfirmation = true
-                    }
-                    .font(.system(size: 11, weight: .semibold))
-                    .help("Removes every stored visit from this Mac, after you confirm")
-                }
-            }
-            .padding(.top, 2)
-        }
-    }
-
-    // MARK: - Shared pieces
-
-    private func sectionTitle(_ title: String, count: Int) -> some View {
-        HStack(spacing: 8) {
-            Text(title)
-                .font(ClearframeTheme.metaFont)
-                .tracking(ClearframeTheme.metaTracking)
-                .foregroundStyle(ClearframeTheme.textSecondary)
-            Text("\(count)")
-                .font(ClearframeTheme.metaFont)
-                .tracking(ClearframeTheme.metaTracking)
-                .foregroundStyle(ClearframeTheme.textTertiary)
-            Rectangle()
-                .fill(ClearframeTheme.hairline1)
-                .frame(height: 1)
-        }
-    }
-
-    private func emptyNote(_ text: String) -> some View {
-        Text(text)
-            .font(.system(size: 12))
-            .foregroundStyle(ClearframeTheme.textTertiary)
-            .padding(.vertical, 14)
-            .padding(.horizontal, 14)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(ClearframeTheme.bg1, in: RoundedRectangle(cornerRadius: ClearframeTheme.radius12))
     }
 
     /// Opens the folder's own saved pages, each in its own tab.

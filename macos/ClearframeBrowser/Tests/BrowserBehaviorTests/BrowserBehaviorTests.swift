@@ -882,6 +882,77 @@ final class BrowserBehaviorTests: XCTestCase {
         XCTAssertEqual(workspace.bookmarkLibraryRequest, requestsBefore + 2)
     }
 
+    func testOpenHistoryHomeShowsTheHistorySurfaceOnTheSelectedTab() throws {
+        let workspace = try makeSurfaceTestWorkspace()
+        let tab = try XCTUnwrap(workspace.selectedTab)
+        tab.session.navigate("https://example.com/page")
+        tab.session.stopLoading()
+        XCTAssertEqual(tab.session.loadState, .content)
+
+        workspace.openHistoryHome()
+
+        XCTAssertEqual(tab.startSurface, .historyHome)
+        XCTAssertEqual(tab.session.loadState, .startPage)
+        XCTAssertEqual(workspace.tabs.count, 1, "the history page reuses the selected tab")
+    }
+
+    /// The two full-page surfaces are separate destinations. Opening one must
+    /// not leave a tab on the other — until they were split, History ▸ Show
+    /// Full History landed on the bookmarks page.
+    func testHistoryAndBookmarksHomesAreSeparateDestinations() throws {
+        let workspace = try makeSurfaceTestWorkspace()
+        let tab = try XCTUnwrap(workspace.selectedTab)
+
+        workspace.openBookmarksHome()
+        XCTAssertEqual(tab.startSurface, .bookmarksHome)
+
+        workspace.openHistoryHome()
+        XCTAssertEqual(tab.startSurface, .historyHome, "history replaces bookmarks, rather than sharing a toggle with it")
+
+        workspace.openBookmarksHome()
+        XCTAssertEqual(tab.startSurface, .bookmarksHome)
+    }
+
+    /// `openHistoryHome` has no request counter beside it, unlike the
+    /// bookmark library. Nothing should have grown one.
+    func testOpenHistoryHomeDoesNotDisturbTheBookmarkLibraryCounter() throws {
+        let workspace = try makeSurfaceTestWorkspace()
+        let before = workspace.bookmarkLibraryRequest
+
+        workspace.openHistoryHome()
+
+        XCTAssertEqual(workspace.bookmarkLibraryRequest, before)
+    }
+
+    func testGoingHomeReturnsAHistoryTabToTheAIGuide() throws {
+        let workspace = try makeSurfaceTestWorkspace()
+        let tab = try XCTUnwrap(workspace.selectedTab)
+        workspace.openHistoryHome()
+        XCTAssertEqual(tab.startSurface, .historyHome)
+
+        tab.goHome()
+
+        XCTAssertEqual(tab.startSurface, .aiHome, "Home always means the AI guide")
+    }
+
+    func testHistoryHomeSearchMatchesTitlesAndAddresses() {
+        let visits = [
+            HistoryRecord(title: "Garlic Chilli", url: "https://recipes.example/garlic"),
+            HistoryRecord(title: "Swift Forums", url: "https://forums.swift.org/thread"),
+            HistoryRecord(title: "", url: "https://example.com/untitled")
+        ]
+
+        XCTAssertEqual(HistoryHomeSearch.visits(visits, matching: "").count, 3, "an empty query keeps everything")
+        XCTAssertEqual(HistoryHomeSearch.visits(visits, matching: "   ").count, 3, "so does whitespace")
+        XCTAssertEqual(HistoryHomeSearch.visits(visits, matching: "garlic").map(\.title), ["Garlic Chilli"])
+        XCTAssertEqual(
+            HistoryHomeSearch.visits(visits, matching: "SWIFT.ORG").map(\.title), ["Swift Forums"],
+            "the address matches too, case-insensitively"
+        )
+        XCTAssertEqual(HistoryHomeSearch.visits(visits, matching: "untitled").count, 1, "a visit with no title is still findable")
+        XCTAssertTrue(HistoryHomeSearch.visits(visits, matching: "nothing here").isEmpty)
+    }
+
     func testGoingHomeReturnsTheTabToTheAIGuideSurface() throws {
         let workspace = try makeSurfaceTestWorkspace()
         let tab = try XCTUnwrap(workspace.selectedTab)

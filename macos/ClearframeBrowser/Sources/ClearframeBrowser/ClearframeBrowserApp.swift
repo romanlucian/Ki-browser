@@ -157,7 +157,12 @@ struct ClearframeBrowserApp: App {
                     }
                 }
                 Divider()
-                Button("Show Full History…") { focusedWorkspace?.requestBookmarkLibrary() }
+                // ⌘Y is history in Safari, Chrome, Firefox, Edge, Brave and
+                // Arc on this platform. Until this existed, History ▸ Show
+                // Full History called the same function as Bookmarks ▸ Show
+                // All Bookmarks and landed on the bookmarks page.
+                Button("Show Full History…") { focusedWorkspace?.openHistoryHome() }
+                    .keyboardShortcut("y", modifiers: [.command])
             }
             CommandMenu("Bookmarks") {
                 Button("Add Bookmark") { focusedWorkspace?.toggleBookmarkForSelectedTab() }

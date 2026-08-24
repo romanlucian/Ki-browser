@@ -24,7 +24,7 @@ Several capabilities are frequently assumed missing and are in fact shipped. Ver
 | Page zoom | Shipped — ⌘+ / ⌘− / ⌘0, plus pinch magnification |
 | Print | Shipped — ⌘P |
 | Default-browser registration | Shipped — a Settings section with live status |
-| Full-page history view | Shipped — inside the bookmarks home |
+| Full-page history view | Shipped — its own destination on ⌘Y, grouped by day, separate from the bookmarks home |
 | Address suggestions | Shipped — local only, from history and bookmarks, no network |
 | Per-site website-data removal | Shipped — Settings and the site-information popover |
 | Tab groups, tab width compression | Shipped |
@@ -40,6 +40,18 @@ Several capabilities are frequently assumed missing and are in fact shipped. Ver
 | Share sheet | Shipped — File ▸ Share Page…, hands only the page's address to `NSSharingServicePicker` (`PageFileCommands.share`) |
 
 Anyone planning work should check this table first. Documentation has drifted from the code more than once.
+
+## 1.1 The delivery order, and where it got to
+
+The gap list was worked in waves. They were agreed in conversation and never written down, which meant every session had to reconstruct them — recorded here so that stops happening.
+
+**Wave 1 — the tab and window basics a Mac browser is expected to have.** Reopen closed tab (⇧⌘T), ⌘1–9 tab selection, duplicate tab, a ⌘W that closes the tab rather than the window, and Settings switches for HTTPS upgrade and the Web Inspector. **Done, August 21, 2026.** Two items were dropped with evidence rather than deferred: mute tab and picture-in-picture are not buildable against the public macOS WebKit API, and the reasoning is in section 2 so nobody re-attempts them from a menu screenshot.
+
+**Wave 2 — bring a person's bookmarks with them.** Import from Chromium profiles (Chrome, Brave, Edge, named per profile), Netscape HTML import and export, an already-saved address skipped rather than replaced, an in-session undo, and honest handling of Safari's Full Disk Access gate. **Done, August 22, 2026**, and extended the same day with the placement choice in 3.1 after the first real import showed one folder was the wrong shape.
+
+**Wave 3 — the reading and evidence work.** Evidence Mode's exact sheet, "find what answers this", and the structural outline. **Not started.** This is where the product's own promise lives rather than parity with other browsers, so it should not be pushed behind more parity work.
+
+**Unwaved but shipped, because using the product surfaced them.** The bookmarks-bar placement research (3.1), the performance work of August 24 (a store that rebuilt its whole bookmark collection on every read, an import that saved once per bookmark, an address bar that rebuilt its suggestions per keystroke), and splitting history onto its own ⌘Y destination. None of these came from the gap list. All of them came from the founder using Clearframe as his own browser with four hundred real bookmarks — which remains the only source of evidence of this kind the project has.
 
 ## 2. Verified absences
 
