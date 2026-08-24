@@ -100,6 +100,31 @@ struct TabStrip: View {
     /// or below a chip still means that chip. Ties — including frames that
     /// momentarily overlap mid-animation — resolve to the leftmost chip, so
     /// the answer never depends on dictionary order.
+    /// The tab a carried chip should change places with, or `nil` to leave the
+    /// order alone.
+    ///
+    /// Chrome's rule: a chip displaces a neighbour only once its centre passes
+    /// that neighbour's *resting* midpoint. Asking instead which rectangle
+    /// contains the centre — which is what this used to do — oscillates
+    /// whenever the neighbour is wider than the tab being dragged, because the
+    /// swap slides the neighbour's rectangle back under the very point that
+    /// caused it, and the next event swaps them straight back. The selected tab
+    /// is always wider than its neighbours, so dragging past it shook every
+    /// time on any strip narrow enough to compress.
+    ///
+    /// After a swap the neighbour's midpoint on the other side is a full tab
+    /// away, so the reverse move is false by construction rather than merely
+    /// delayed by a gate.
+    static func reorderTarget(carrying id: UUID, centre: CGFloat, in frames: [UUID: CGRect]) -> UUID? {
+        let ordered = frames.sorted {
+            $0.value.minX != $1.value.minX ? $0.value.minX < $1.value.minX : $0.key.uuidString < $1.key.uuidString
+        }
+        guard let here = ordered.firstIndex(where: { $0.key == id }) else { return nil }
+        if here + 1 < ordered.count, centre > ordered[here + 1].value.midX { return ordered[here + 1].key }
+        if here > 0, centre < ordered[here - 1].value.midX { return ordered[here - 1].key }
+        return nil
+    }
+
     static func chipID(at point: CGPoint, in frames: [UUID: CGRect]) -> UUID? {
         func distance(to frame: CGRect) -> CGFloat {
             max(frame.minX - point.x, point.x - frame.maxX, 0)
@@ -406,6 +431,18 @@ struct TabStrip: View {
                     canMoveToNewWindow: workspace.canDetachTab
                 ),
                 dragChanged: { update in
+                    // A fresh press. `DragGesture(minimumDistance: 0)` reports
+                    // its first change with no translation, which is the only
+                    // start-of-gesture signal available here — and this state
+                    // has to be cleared somewhere other than `dragEnded`,
+                    // because a gesture whose end goes missing would otherwise
+                    // leave `dragToreOff` true and silently stop this window
+                    // ever tearing out another tab.
+                    if update.translation == .zero {
+                        dragToreOff = false
+                        lastReorderX = nil
+                        endWindowDrag()
+                    }
                     guard let slot = chipFrames[tab.id] else { return }
                     guard !update.hasLeftStrip(row: slot) else {
                         dragState = nil
@@ -448,16 +485,20 @@ struct TabStrip: View {
                     let gate = TabDragUpdate.reorderGate
                         * min(1, slot.width / TabStripMetrics.maximumTabWidth)
                     if let last = lastReorderX, abs(update.location.x - last) < gate { return }
-                    guard let targetID = Self.chipID(
-                              at: CGPoint(x: slot.midX + offset, y: slot.midY),
+                    guard let targetID = Self.reorderTarget(
+                              carrying: tab.id,
+                              centre: slot.midX + offset,
                               in: chipFrames
                           ),
                           targetID != tab.id,
                           let index = workspace.tabs.firstIndex(where: { $0.id == targetID })
                     else { return }
-                    if workspace.moveTab(tab.id, toIndex: index) {
-                        lastReorderX = update.location.x
-                    }
+                    // Armed on the attempt, not on the result. A move the
+                    // pinned clamp refuses used to leave the gate un-armed, so
+                    // it stayed open for the rest of the drag and the same
+                    // refusal was retried on every single event.
+                    lastReorderX = update.location.x
+                    _ = workspace.moveTab(tab.id, toIndex: index)
                 },
                 dragEnded: { update in
                     endWindowDrag()
@@ -476,9 +517,22 @@ struct TabStrip: View {
                 }
             )
             // Drawn where the pointer has it, above the chips sliding past
-            // underneath. `offset` moves the drawing only, so the layout keeps
-            // giving this tab a slot and the reorder maths stays honest.
+            // underneath.
             .offset(x: dragState?.id == tab.id ? dragState?.offset ?? 0 : 0)
+            // Measured *outside* the offset, so what is published is the slot
+            // the layout gave this tab rather than where the drag has drawn
+            // it. Inside, a chip reported its own displacement back into the
+            // maths that produced it — the carried chip then travelled at half
+            // the pointer's speed, and the reorder decision was made against a
+            // rectangle that moved with the answer.
+            .background(
+                GeometryReader { proxy in
+                    Color.clear.preference(
+                        key: TabChipFramesKey.self,
+                        value: [tab.id: proxy.frame(in: .named(TabStrip.dropSpace))]
+                    )
+                }
+            )
             .zIndex(dragState?.id == tab.id ? 1 : 0)
             // The chip in hand tracks the pointer exactly; animating it would
             // put it behind the cursor, which is the lag being fixed here. Its
@@ -596,14 +650,6 @@ struct TabChip: View {
         // as it does in every other browser, rather than only on release.
         .contentShape(Rectangle())
         .gesture(selectOrDragGesture)
-        .background(
-            GeometryReader { proxy in
-                Color.clear.preference(
-                    key: TabChipFramesKey.self,
-                    value: [tab.id: proxy.frame(in: .named(TabStrip.dropSpace))]
-                )
-            }
-        )
     }
 
     /// One gesture for both jobs. `minimumDistance: 0` means the press is

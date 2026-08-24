@@ -2318,6 +2318,101 @@ final class TabStripDropResolutionTests: XCTestCase {
         XCTAssertNil(TabStrip.chipID(at: CGPoint(x: 10, y: 10), in: [:]))
     }
 
+    // MARK: - Reordering must not undo itself
+
+    /// The real geometry the shake happened on: five tabs in a 700pt strip,
+    /// the selected one wider than the rest.
+    private static func compressedStrip(order: [UUID], selected: UUID) -> [UUID: CGRect] {
+        var frames: [UUID: CGRect] = [:]
+        var x: CGFloat = 0
+        for id in order {
+            let width: CGFloat = id == selected ? 177 : 126
+            frames[id] = CGRect(x: x, y: 0, width: width, height: 32)
+            x += width + 4
+        }
+        return frames
+    }
+
+    /// A chip that has entered a wider neighbour but not yet reached its
+    /// midpoint stays put. This exact input swapped under the old rule, and
+    /// the swap is what the next event undid.
+    func testACarriedChipDoesNotDisplaceANeighbourItHasOnlyPartlyOverlapped() {
+        let frames = Self.compressedStrip(order: [a, b], selected: b)
+        // `a` is 0..126, `b` is 130..307 with midpoint 218.5.
+        XCTAssertNil(TabStrip.reorderTarget(carrying: a, centre: 200, in: frames))
+        XCTAssertEqual(TabStrip.reorderTarget(carrying: a, centre: 220, in: frames), b)
+    }
+
+    /// The invariant whose absence let this ship: apply the swap, rebuild the
+    /// frames the layout would then produce, and the same pointer position
+    /// must no longer ask for anything.
+    func testASwapIsNotImmediatelyUndoneAtTheSamePointerPosition() {
+        let before = Self.compressedStrip(order: [a, b], selected: b)
+        let centre: CGFloat = 220
+        XCTAssertEqual(TabStrip.reorderTarget(carrying: a, centre: centre, in: before), b)
+
+        let after = Self.compressedStrip(order: [b, a], selected: b)
+        XCTAssertNil(
+            TabStrip.reorderTarget(carrying: a, centre: centre, in: after),
+            "the swap put the neighbour back under this point; it must not swap back"
+        )
+        // The band that actually shook. Once `b` is first it occupies 0...177,
+        // so anything from 128 to 179 sits inside the neighbour's rectangle —
+        // which is why asking "whose rectangle is this?" swapped straight back.
+        // Measured against a resting midpoint instead, none of it moves.
+        for centre in stride(from: CGFloat(128), through: 179, by: 1) {
+            XCTAssertNil(
+                TabStrip.reorderTarget(carrying: a, centre: centre, in: after),
+                "x=\(centre) is inside the neighbour but behind its midpoint; it must not reorder"
+            )
+        }
+    }
+
+    /// Dragged across the whole strip one point at a time, the order changes
+    /// monotonically and never revisits an arrangement it already left.
+    func testAStepwiseDragReordersOnceAndNeverRevisitsAnOrder() {
+        var order = [a, b, c]
+        var seen: Set<[UUID]> = [order]
+        var changes = 0
+
+        for step in stride(from: CGFloat(60), through: 700, by: 1) {
+            let frames = Self.compressedStrip(order: order, selected: b)
+            guard let target = TabStrip.reorderTarget(carrying: a, centre: step, in: frames),
+                  let from = order.firstIndex(of: a),
+                  let to = order.firstIndex(of: target)
+            else { continue }
+            order.remove(at: from)
+            order.insert(a, at: to)
+            changes += 1
+            XCTAssertTrue(seen.insert(order).inserted, "order \(order) was revisited at x=\(step)")
+        }
+
+        XCTAssertEqual(order, [b, c, a], "the tab ends up last, having passed both neighbours")
+        XCTAssertEqual(changes, 2, "one move per neighbour passed, never a flip back")
+    }
+
+    /// A hand resting exactly on a boundary must not shake.
+    func testAPointerParkedOnABoundaryProducesNoReorders() {
+        let frames = Self.compressedStrip(order: [a, b], selected: b)
+        let midpoint = try! XCTUnwrap(frames[b]).midX
+        for jitter in stride(from: CGFloat(-1), through: 1, by: 0.1) {
+            let target = TabStrip.reorderTarget(carrying: a, centre: midpoint + jitter, in: frames)
+            // Either side of the midpoint asks for at most the one neighbour,
+            // and never for something behind it.
+            XCTAssertNotEqual(target, a)
+        }
+    }
+
+    func testACarriedChipAtTheEndsOfTheStripHasNowhereFurtherToGo() {
+        let frames = Self.compressedStrip(order: [a, b], selected: b)
+        XCTAssertNil(TabStrip.reorderTarget(carrying: a, centre: -500, in: frames), "already leftmost")
+        XCTAssertNil(TabStrip.reorderTarget(carrying: b, centre: 5_000, in: frames), "already rightmost")
+    }
+
+    func testAReorderTargetIsNothingWhenTheCarriedChipIsUnknown() {
+        XCTAssertNil(TabStrip.reorderTarget(carrying: c, centre: 100, in: Self.compressedStrip(order: [a, b], selected: b)))
+    }
+
     /// Three unpinned tabs in a throwaway defaults suite, plus the cleanup the
     /// suite and the rule-list store both need.
     private static func makeStripWorkspace() throws -> (BrowserWorkspace, () -> Void) {
