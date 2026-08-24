@@ -86,7 +86,7 @@ struct AISettingsView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Toggle("Save browsing history on this Mac", isOn: $savesHistory)
-                Text("History stays in this Mac user profile and is never included in AI requests. Turning this off stops Clearframe recording new visits; visits it already saved stay until you clear them from All Bookmarks (⌘⌥B) or with Clear local browsing data below.")
+                Text("History stays in this Mac user profile and is never included in AI requests. Turning this off stops Clearframe recording new visits; visits it already saved stay until you clear them from History (⌘Y) or with Clear local browsing data below.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 if let notice = dataStore.recoveryNotice {

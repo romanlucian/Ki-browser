@@ -90,6 +90,8 @@ swiftc \
     "$PACKAGE_DIR/Sources/ClearframeBrowser/BookmarkImportSources.swift" \
     "$PACKAGE_DIR/Sources/ClearframeBrowser/BookmarkImportViews.swift" \
     "$PACKAGE_DIR/Sources/ClearframeBrowser/BookmarksHomePage.swift" \
+    "$PACKAGE_DIR/Sources/ClearframeBrowser/HistoryHomePage.swift" \
+    "$PACKAGE_DIR/Sources/ClearframeBrowser/StartSurfaceChrome.swift" \
     "$PACKAGE_DIR/Sources/ClearframeBrowser/DownloadViews.swift" \
     "$PACKAGE_DIR/Sources/ClearframeBrowser/ContentBlockingViews.swift" \
     "$PACKAGE_DIR/Sources/ClearframeBrowser/SiteDataInventory.swift" \

@@ -3,92 +3,28 @@ import ClearframeCore
 import Foundation
 import SwiftUI
 
-enum LibrarySection: String, CaseIterable {
-    case bookmarks = "Bookmarks"
-    case history = "History"
-}
-
-/// One wording for the Clear History confirmation, shared by the library
-/// popover and the full-page bookmarks home. Clearing history removes up to
-/// 500 stored visits and cannot be undone, so both places ask first.
-enum ClearHistoryConfirmation {
-    static let title = "Clear all local history?"
-    static let confirmLabel = "Clear history"
-
-    static func message(visitCount: Int) -> String {
-        let visits = visitCount == 1 ? "1 stored visit" : "\(visitCount) stored visits"
-        return "This removes \(visits) from this Mac and cannot be undone. Your bookmarks, open tabs, and downloaded files are not affected."
-    }
-}
-
-struct LibraryPopover: View {
+/// The toolbar's quick bookmark panel.
+///
+/// It survives the split to its own destination because it is not a smaller
+/// bookmarks home: it is the drill-down organizer, with the move menus, drop
+/// targets and inline folder editing, and the full page has no equivalent for
+/// those. History is what became redundant here once ⌘Y opened a page of its
+/// own — which is also the shape Safari settles on, a panel for bookmarks and
+/// a menu and a page for history.
+struct BookmarkPopover: View {
     @ObservedObject var store: BrowserDataStore
     let open: (String, Bool) -> Void
-    @State private var section: LibrarySection = .bookmarks
     @State private var search = ""
-    @State private var showsClearHistoryConfirmation = false
-
-    private var filteredHistory: [HistoryRecord] {
-        guard !search.isEmpty else { return store.history }
-        return store.history.filter { $0.title.localizedCaseInsensitiveContains(search) || $0.url.localizedCaseInsensitiveContains(search) }
-    }
 
     var body: some View {
         VStack(spacing: 10) {
-            Picker("Library", selection: $section) {
-                ForEach(LibrarySection.allCases, id: \.self) { Text($0.rawValue).tag($0) }
-            }
-            .pickerStyle(.segmented)
             TextField("Search saved pages", text: $search)
                 .textFieldStyle(.roundedBorder)
 
-            if section == .bookmarks {
-                BookmarkOrganizerView(store: store, search: search, open: open)
-            } else {
-                ScrollView {
-                    LazyVStack(spacing: 5) {
-                        if filteredHistory.isEmpty { libraryEmpty("No local history", "Completed page visits appear here.") }
-                        ForEach(filteredHistory) { item in
-                            LibraryRow(
-                                title: item.title,
-                                url: item.url,
-                                detail: item.visitedAt.formatted(date: .abbreviated, time: .shortened),
-                                open: { open(item.url, false) },
-                                openNewTab: { open(item.url, true) },
-                                remove: { store.removeHistory(item) }
-                            )
-                        }
-                    }
-                }
-                if !store.history.isEmpty {
-                    HStack {
-                        Text("Stored only in this Mac user profile.").font(.caption2).foregroundStyle(.secondary)
-                        Spacer()
-                        Button("Clear History", role: .destructive) {
-                            showsClearHistoryConfirmation = true
-                        }
-                        .font(.caption)
-                    }
-                }
-            }
+            BookmarkOrganizerView(store: store, search: search, open: open)
         }
         .padding(14)
         .frame(width: 430, height: 450)
-        .confirmationDialog(
-            ClearHistoryConfirmation.title,
-            isPresented: $showsClearHistoryConfirmation,
-            titleVisibility: .visible
-        ) {
-            Button(ClearHistoryConfirmation.confirmLabel, role: .destructive) { store.clearHistory() }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text(ClearHistoryConfirmation.message(visitCount: store.history.count))
-        }
-    }
-
-    private func libraryEmpty(_ title: String, _ detail: String) -> some View {
-        ContentUnavailableView(title, systemImage: "books.vertical", description: Text(detail))
-            .frame(height: 270)
     }
 }
 
@@ -717,35 +653,6 @@ struct BookmarkFolderEditor: View {
         } else {
             artwork
         }
-    }
-}
-
-struct LibraryRow: View {
-    let title: String
-    let url: String
-    let detail: String?
-    let open: () -> Void
-    let openNewTab: () -> Void
-    let remove: () -> Void
-
-    var body: some View {
-        HStack(spacing: 8) {
-            Button(action: open) {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(title).font(.callout.weight(.medium)).lineLimit(1)
-                    Text(detail ?? url).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            Button(action: openNewTab) { Image(systemName: "plus.square.on.square").frame(width: 22, height: 22) }
-                .buttonStyle(.plain).help("Open in new tab")
-            Button(action: remove) { Image(systemName: "trash").frame(width: 22, height: 22) }
-                .buttonStyle(.plain).foregroundStyle(.secondary).help("Remove")
-        }
-        .padding(8)
-        .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 8))
     }
 }
 

@@ -195,6 +195,15 @@ private struct BrowserTabContent: View {
                         workspace.open(url, inNewTab: inNewTab)
                     }
                 )
+            case .historyHome:
+                HistoryHomePage(
+                    store: workspace.dataStore,
+                    open: { url, inNewTab in
+                        addressFocused = false
+                        if !inNewTab { addressText = url }
+                        workspace.open(url, inNewTab: inNewTab)
+                    }
+                )
             }
         case .failed(let failure):
             BrowserErrorView(
@@ -295,9 +304,9 @@ private struct BrowserToolbar: View {
                         Image(systemName: "books.vertical")
                     }
                     .buttonStyle(GhostButtonStyle())
-                    .help("Bookmarks and history")
+                    .help("Bookmarks")
                     .popover(isPresented: $showsLibrary, arrowEdge: .top) {
-                        LibraryPopover(
+                        BookmarkPopover(
                             store: dataStore,
                             open: { url, newTab in
                                 workspace.open(url, inNewTab: newTab)

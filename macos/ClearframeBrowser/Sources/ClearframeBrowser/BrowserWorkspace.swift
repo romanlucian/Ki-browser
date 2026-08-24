@@ -9,6 +9,7 @@ import WebKit
 enum StartSurface {
     case aiHome
     case bookmarksHome
+    case historyHome
 }
 
 @MainActor
@@ -168,6 +169,12 @@ final class BrowserTab: ObservableObject, Identifiable {
     /// Shows the full-page bookmarks home on this tab's start surface.
     func showBookmarksHome() {
         startSurface = .bookmarksHome
+        session.showStartPage()
+    }
+
+    /// Shows the full-page history surface on this tab's start surface.
+    func showHistoryHome() {
+        startSurface = .historyHome
         session.showStartPage()
     }
 
@@ -1061,6 +1068,21 @@ final class BrowserWorkspace: ObservableObject {
             return
         }
         tab.showBookmarksHome()
+    }
+
+    /// Opens the full-page history surface on the selected tab, creating a tab
+    /// first if the workspace momentarily has none.
+    ///
+    /// No request counter beside it, unlike `requestBookmarkLibrary`: nothing
+    /// listens for one, and a second unused counter is a second thing to keep
+    /// alive.
+    func openHistoryHome() {
+        guard let tab = selectedTab else {
+            addTab()
+            selectedTab?.showHistoryHome()
+            return
+        }
+        tab.showHistoryHome()
     }
 
     /// D7: ⌘⌥B and the bookmarks-bar entry points open the full-page home. The

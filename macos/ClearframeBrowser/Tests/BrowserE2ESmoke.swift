@@ -355,6 +355,22 @@ struct BrowserE2ESmoke {
             let libraryRequest = workspace.bookmarkLibraryRequest
             workspace.requestBookmarkLibrary()
             try require(workspace.bookmarkLibraryRequest == libraryRequest + 1, "Page menu did not request the bookmark organizer")
+
+            // Bookmarks and history are separate destinations. This also
+            // happens to be the only gate that proves HistoryHomePage.swift
+            // and StartSurfaceChrome.swift are in this script's hand-listed
+            // file set — a UI file missing from it stops the suite compiling
+            // while `swift test` stays green.
+            if let surfaceTab = workspace.selectedTab {
+                workspace.openBookmarksHome()
+                try require(surfaceTab.startSurface == .bookmarksHome, "the bookmarks home did not open")
+                workspace.openHistoryHome()
+                try require(surfaceTab.startSurface == .historyHome, "the history page did not open")
+                try require(surfaceTab.session.loadState == .startPage, "the history page is not a start surface")
+                surfaceTab.goHome()
+                try require(surfaceTab.startSurface == .aiHome, "Home did not return the tab to the AI guide")
+                print("PASS surfaces: bookmarks home and history page are separate destinations")
+            }
             let folderRequestID = workspace.bookmarkFolderRequestID
             workspace.requestNewBookmarkFolder(parentID: swiftFolder.id)
             try require(workspace.bookmarkFolderRequestID != folderRequestID, "Page menu did not request a folder editor")
