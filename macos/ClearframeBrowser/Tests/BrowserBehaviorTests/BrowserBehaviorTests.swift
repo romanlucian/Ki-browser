@@ -1514,7 +1514,7 @@ final class BrowserBehaviorTests: XCTestCase {
 
         await store.capture(
             pageURL: try XCTUnwrap(URL(string: "https://WWW.Example.com/articles/one")),
-            declaredIconURLs: [],
+            declaredIconURLs: FaviconStore.PageIcons(),
             isPrivate: false
         )
 
@@ -1546,7 +1546,7 @@ final class BrowserBehaviorTests: XCTestCase {
         let landed = try XCTUnwrap(URL(string: "https://uk.pinterest.com/gtedesign/"))
 
         store.recordRedirectAlias(from: requested, to: try XCTUnwrap(FaviconStore.captureHost(for: landed)), isPrivate: false)
-        await store.capture(pageURL: landed, declaredIconURLs: [], isPrivate: false)
+        await store.capture(pageURL: landed, declaredIconURLs: FaviconStore.PageIcons(), isPrivate: false)
 
         XCTAssertNotNil(store.icon(forHost: "uk.pinterest.com"), "the icon is stored where the page ended up")
         XCTAssertNotNil(store.icon(forHost: "pinterest.co.uk"), "and is found under where the visit started")
@@ -1562,12 +1562,12 @@ final class BrowserBehaviorTests: XCTestCase {
 
         await store.capture(
             pageURL: try XCTUnwrap(URL(string: "https://start.example/page")),
-            declaredIconURLs: [],
+            declaredIconURLs: FaviconStore.PageIcons(),
             isPrivate: false
         )
         let own = try XCTUnwrap(store.icon(forHost: "start.example"))
 
-        await store.capture(pageURL: try XCTUnwrap(URL(string: "https://elsewhere.example/")), declaredIconURLs: [], isPrivate: false)
+        await store.capture(pageURL: try XCTUnwrap(URL(string: "https://elsewhere.example/")), declaredIconURLs: FaviconStore.PageIcons(), isPrivate: false)
         store.recordRedirectAlias(
             from: try XCTUnwrap(URL(string: "https://start.example/page")),
             to: "elsewhere.example",
@@ -1585,11 +1585,11 @@ final class BrowserBehaviorTests: XCTestCase {
         let store = FaviconStore(directory: directory, fetch: RecordingFaviconFetcher(response: Self.pngFixture()).fetch)
         let bookmark = try XCTUnwrap(URL(string: "https://saved.example/"))
 
-        await store.capture(pageURL: try XCTUnwrap(URL(string: "https://signin.example/")), declaredIconURLs: [], isPrivate: false)
+        await store.capture(pageURL: try XCTUnwrap(URL(string: "https://signin.example/")), declaredIconURLs: FaviconStore.PageIcons(), isPrivate: false)
         store.recordRedirectAlias(from: bookmark, to: "signin.example", isPrivate: false)
         let borrowedFromSignIn = try XCTUnwrap(store.icon(forHost: "saved.example"))
 
-        await store.capture(pageURL: try XCTUnwrap(URL(string: "https://real.example/")), declaredIconURLs: [], isPrivate: false)
+        await store.capture(pageURL: try XCTUnwrap(URL(string: "https://real.example/")), declaredIconURLs: FaviconStore.PageIcons(), isPrivate: false)
         store.recordRedirectAlias(from: bookmark, to: "real.example", isPrivate: false)
 
         XCTAssertFalse(
@@ -1605,7 +1605,7 @@ final class BrowserBehaviorTests: XCTestCase {
         let store = FaviconStore(directory: directory, fetch: RecordingFaviconFetcher(response: Self.pngFixture()).fetch)
         let requested = try XCTUnwrap(URL(string: "https://old.example/"))
 
-        await store.capture(pageURL: try XCTUnwrap(URL(string: "https://new.example/")), declaredIconURLs: [], isPrivate: false)
+        await store.capture(pageURL: try XCTUnwrap(URL(string: "https://new.example/")), declaredIconURLs: FaviconStore.PageIcons(), isPrivate: false)
         store.recordRedirectAlias(from: requested, to: "new.example", isPrivate: false)
 
         let reopened = FaviconStore(directory: directory, fetch: Self.forbiddenFaviconFetcher)
@@ -1657,36 +1657,119 @@ final class BrowserBehaviorTests: XCTestCase {
         XCTAssertNil(store.icon(forHost: "never-visited.example"))
     }
 
-    func testFaviconCandidatesStayOnTheVisitedSiteOwnOrigin() throws {
+    private static func declared(_ icons: [(String, String, String)], contacted: Set<String> = []) -> FaviconStore.PageIcons {
+        FaviconStore.PageIcons(
+            icons: icons.map { FaviconStore.DeclaredIcon(url: $0.0, rel: $0.1, sizes: $0.2) },
+            contactedHosts: contacted
+        )
+    }
+
+    func testFaviconCandidatesPreferTheVisitedSiteOwnOrigin() throws {
         let pageURL = try XCTUnwrap(URL(string: "https://example.com/story"))
 
         XCTAssertEqual(
-            FaviconStore.iconCandidates(for: pageURL, declared: ["/assets/icon.png", "https://example.com/other.png"])
-                .map(\.absoluteString),
-            ["https://example.com/assets/icon.png", "https://example.com/favicon.ico"],
-            "a same-origin declared icon is tried first, then the origin's own /favicon.ico"
-        )
-        XCTAssertEqual(
-            FaviconStore.iconCandidates(
-                for: pageURL,
-                declared: [
-                    "https://www.google.com/s2/favicons?domain=example.com",
-                    "https://cdn.example.net/icon.png",
-                    "http://example.com/insecure.png",
-                    "https://images.example.com/icon.png"
-                ]
-            ).map(\.absoluteString),
-            ["https://example.com/favicon.ico"],
-            "icon services, CDNs, other subdomains, and scheme downgrades are all dropped"
+            FaviconStore.iconCandidates(for: pageURL, declared: Self.declared([
+                ("/assets/icon.png", "icon", ""),
+                ("https://example.com/other.png", "icon", "")
+            ])).map(\.absoluteString),
+            [
+                "https://example.com/assets/icon.png",
+                "https://example.com/other.png",
+                "https://example.com/favicon.ico"
+            ],
+            "same-origin icons are tried in declaration order, then the origin's own /favicon.ico"
         )
         XCTAssertTrue(
             FaviconStore.iconCandidates(
                 for: try XCTUnwrap(URL(string: "file:///Users/private/page.html")),
-                declared: ["file:///Users/private/icon.png"]
+                declared: Self.declared([("file:///Users/private/icon.png", "icon", "")])
             ).isEmpty,
             "only real web pages are ever candidates"
         )
         XCTAssertNil(FaviconStore.captureHost(for: try XCTUnwrap(URL(string: "about:blank"))))
+    }
+
+    /// The rule the same-origin one replaced. A host the page never touched is
+    /// never asked — which is what keeps a favicon service impossible, since
+    /// nothing on any page is ever loaded from one.
+    func testAnIconIsOnlyFetchedFromAHostThePageItselfAlreadyUsed() throws {
+        let pageURL = try XCTUnwrap(URL(string: "https://chat.example/"))
+
+        XCTAssertEqual(
+            FaviconStore.iconCandidates(for: pageURL, declared: Self.declared(
+                [("https://assets.cdn.example/app/favicon.png", "icon", "")],
+                contacted: ["assets.cdn.example"]
+            )).map(\.absoluteString),
+            ["https://assets.cdn.example/app/favicon.png", "https://chat.example/favicon.ico"],
+            "the CDN that already served this page may be asked for its icon"
+        )
+        XCTAssertEqual(
+            FaviconStore.iconCandidates(for: pageURL, declared: Self.declared(
+                [
+                    ("https://www.google.com/s2/favicons?domain=chat.example", "icon", ""),
+                    ("https://assets.cdn.example/app/favicon.png", "icon", "")
+                ],
+                contacted: ["assets.cdn.example"]
+            )).map(\.absoluteString),
+            ["https://assets.cdn.example/app/favicon.png", "https://chat.example/favicon.ico"],
+            "an icon service the page never loaded from is dropped even when the page names it"
+        )
+        XCTAssertEqual(
+            FaviconStore.iconCandidates(for: pageURL, declared: Self.declared(
+                [("http://assets.cdn.example/icon.png", "icon", "")],
+                contacted: ["assets.cdn.example"]
+            )).map(\.absoluteString),
+            ["https://chat.example/favicon.ico"],
+            "reaching off-origin is https only, whatever the page asks for"
+        )
+    }
+
+    func testTheSitesOwnOriginIsPreferredOverAHostItMerelyUsed() throws {
+        let pageURL = try XCTUnwrap(URL(string: "https://chat.example/"))
+
+        XCTAssertEqual(
+            FaviconStore.iconCandidates(for: pageURL, declared: Self.declared(
+                [
+                    ("https://cdn.example/icon.png", "icon", ""),
+                    ("https://chat.example/icon.png", "icon", "")
+                ],
+                contacted: ["cdn.example"]
+            )).first?.absoluteString,
+            "https://chat.example/icon.png",
+            "a site's own address is asked before anywhere else"
+        )
+    }
+
+    func testABitmapIsPreferredOverAnSVGAndASizeCloseToWhatIsStored() throws {
+        let pageURL = try XCTUnwrap(URL(string: "https://example.com/"))
+
+        XCTAssertEqual(
+            FaviconStore.iconCandidates(for: pageURL, declared: Self.declared([
+                ("https://example.com/icon.svg", "icon", "any"),
+                ("https://example.com/icon-512.png", "icon", "512x512")
+            ])).first?.absoluteString,
+            "https://example.com/icon-512.png",
+            "an SVG cannot be decoded today, so a bitmap beside it wins"
+        )
+        XCTAssertEqual(
+            FaviconStore.iconCandidates(for: pageURL, declared: Self.declared([
+                ("https://example.com/icon-16.png", "icon", "16x16"),
+                ("https://example.com/icon-64.png", "icon", "64x64"),
+                ("https://example.com/icon-512.png", "icon", "512x512")
+            ])).first?.absoluteString,
+            "https://example.com/icon-64.png",
+            "the size that needs neither upscaling nor much downscaling is tried first"
+        )
+    }
+
+    func testAtMostFourAddressesAreEverTried() throws {
+        let pageURL = try XCTUnwrap(URL(string: "https://example.com/"))
+        let many = (0..<8).map { ("https://example.com/icon\($0).png", "icon", "") }
+
+        let candidates = FaviconStore.iconCandidates(for: pageURL, declared: Self.declared(many))
+
+        XCTAssertEqual(candidates.count, FaviconStore.maximumCandidates)
+        XCTAssertEqual(candidates.last?.absoluteString, "https://example.com/favicon.ico", "the guess is always last")
     }
 
     func testPrivateFaviconCaptureKeepsTheIconInMemoryAndOffTheDisk() async throws {
@@ -1697,7 +1780,7 @@ final class BrowserBehaviorTests: XCTestCase {
 
         await store.capture(
             pageURL: try XCTUnwrap(URL(string: "https://private.example/page")),
-            declaredIconURLs: ["https://private.example/icon.png"],
+            declaredIconURLs: Self.declared([("https://private.example/icon.png", "icon", "")]),
             isPrivate: true
         )
 
@@ -1719,7 +1802,7 @@ final class BrowserBehaviorTests: XCTestCase {
         let store = FaviconStore(directory: directory, fetch: RecordingFaviconFetcher(response: Self.pngFixture()).fetch)
         await store.capture(
             pageURL: try XCTUnwrap(URL(string: "https://example.com/page")),
-            declaredIconURLs: [],
+            declaredIconURLs: FaviconStore.PageIcons(),
             isPrivate: false
         )
         XCTAssertNotNil(store.icon(forHost: "example.com"))
@@ -1742,8 +1825,8 @@ final class BrowserBehaviorTests: XCTestCase {
         let store = FaviconStore(directory: directory, fetch: fetcher.fetch)
         let pageURL = try XCTUnwrap(URL(string: "http://127.0.0.1:8080/index.html"))
 
-        await store.capture(pageURL: pageURL, declaredIconURLs: [], isPrivate: false)
-        await store.capture(pageURL: pageURL, declaredIconURLs: [], isPrivate: false)
+        await store.capture(pageURL: pageURL, declaredIconURLs: FaviconStore.PageIcons(), isPrivate: false)
+        await store.capture(pageURL: pageURL, declaredIconURLs: FaviconStore.PageIcons(), isPrivate: false)
 
         XCTAssertEqual(fetcher.requestedURLs.count, 1, "one silent attempt per host per session, then nothing")
         XCTAssertNil(store.icon(forHost: "127.0.0.1"))

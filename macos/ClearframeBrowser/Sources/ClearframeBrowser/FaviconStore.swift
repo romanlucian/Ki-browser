@@ -7,12 +7,22 @@ import SwiftUI
 ///
 /// The privacy policy this type exists to enforce, in one place:
 ///
-/// - An icon is fetched **only** while the user is visiting that site, from
-///   that site's **own origin** — the icon the page itself declared
-///   (`link[rel~="icon"]`/`apple-touch-icon`, resolved against the page URL),
-///   or `/favicon.ico` on the same origin. A third-party favicon service is
-///   never contacted; doing so would hand a log of the user's browsing to
-///   somebody else, which is exactly what Clearframe promises not to do.
+/// - An icon is fetched **only** while the user is visiting that site — the
+///   icon the page itself declared (`link[rel~="icon"]`/`apple-touch-icon`),
+///   or `/favicon.ico` on its own origin.
+/// - The hosts that may be asked are the page's own origin, and any host the
+///   page *itself already loaded something from during this visit* — which is
+///   how most large sites actually serve their icon: from their own CDN,
+///   which delivered the page's scripts seconds earlier and therefore already
+///   knows about the visit. One further cookie-free request for an image
+///   tells it nothing it does not already have.
+/// - **A third-party favicon service is never contacted**, and cannot be:
+///   nothing on any page is ever loaded from one, so no such host can pass the
+///   test above. That is the promise this exists to keep — stated in terms of
+///   who learns about the visit rather than of a single address, because the
+///   address-only form was never quite true. `/favicon.ico` follows redirects,
+///   so a site could always send this fetch to a host of its choosing simply
+///   by answering with one.
 /// - When a visit **redirects**, the host it started at is recorded as
 ///   ending up at the host it finished at, so a bookmark saved at the
 ///   redirecting address can find the icon. Read from a redirect the user's
@@ -147,7 +157,7 @@ final class FaviconStore: ObservableObject {
 
     /// The capture step without WebKit, so the policy is unit-testable:
     /// `declaredIconURLs` is what the page declared, verbatim.
-    func capture(pageURL: URL, declaredIconURLs: [String], isPrivate: Bool) async {
+    func capture(pageURL: URL, declaredIconURLs: PageIcons, isPrivate: Bool) async {
         guard let host = Self.captureHost(for: pageURL), shouldCapture(host: host) else { return }
         inFlight.insert(host)
         defer { inFlight.remove(host) }
@@ -193,23 +203,121 @@ final class FaviconStore: ObservableObject {
         return host.isEmpty ? nil : host
     }
 
-    /// At most two same-origin candidates, in the order they are tried: the
-    /// first icon the page declared for its own origin, then `/favicon.ico`
-    /// on that origin. A declared icon hosted anywhere else — a CDN, an
-    /// icon service, another one of the site's own subdomains — is dropped,
-    /// because "the site the user is visiting" is the only origin this
-    /// browser is willing to reveal the visit to.
-    nonisolated static func iconCandidates(for pageURL: URL, declared: [String]) -> [URL] {
+    /// One icon the page declared for itself.
+    struct DeclaredIcon: Equatable, Sendable {
+        let url: String
+        /// The `rel` value, lowercased — `icon`, `apple-touch-icon`, and so on.
+        let rel: String
+        /// The `sizes` attribute verbatim, empty when the page declared none.
+        let sizes: String
+
+        var isAppleTouch: Bool { rel.contains("apple-touch-icon") }
+        var isSVG: Bool { url.lowercased().hasSuffix(".svg") }
+
+        /// The largest square edge the page claims, or `nil` for none and for
+        /// `sizes="any"` — which says scalable rather than a measurement.
+        var declaredEdge: Int? {
+            sizes.lowercased()
+                .split(whereSeparator: { $0 == " " || $0 == "," })
+                .compactMap { token -> Int? in
+                    guard let x = token.firstIndex(where: { $0 == "x" || $0 == "×" }) else { return nil }
+                    return Int(token[token.index(after: x)...])
+                }
+                .max()
+        }
+    }
+
+    /// What one page said about its own icons, and which hosts it had already
+    /// loaded something from by the time it was asked.
+    struct PageIcons: Equatable, Sendable {
+        var icons: [DeclaredIcon] = []
+        /// Lowercased hostnames this page already fetched a resource from
+        /// during this visit. Reachability is decided against this and nothing
+        /// else — see `iconCandidates`.
+        var contactedHosts: Set<String> = []
+    }
+
+    /// The addresses worth trying for one page's icon, best first, at most
+    /// four.
+    ///
+    /// **Which hosts may be asked.** The page's own origin always. Beyond it,
+    /// only a host the page *itself already loaded something from during this
+    /// visit* — which is how the icons of most large sites are actually
+    /// served: the site's own CDN, which delivered its scripts and images
+    /// seconds earlier and therefore already knows about the visit. Asking it
+    /// for one more image, without cookies, discloses nothing it does not
+    /// already have.
+    ///
+    /// A favicon service can never satisfy that test, because nothing on the
+    /// page was ever loaded from one — which is the promise this rule exists
+    /// to keep, stated in terms of who learns about the visit rather than of
+    /// a single address. The address-only form was always approximate anyway:
+    /// `/favicon.ico` follows redirects, so a site could already send this
+    /// fetch to another host of its choosing simply by answering with one.
+    ///
+    /// **Which is tried first.** The site's own origin before a CDN; a bitmap
+    /// close to the stored size before a far one; a bitmap before an SVG,
+    /// because a page that offers both usually offers the SVG first and only
+    /// the bitmap can be decoded today. `/favicon.ico` last, as the guess it
+    /// is.
+    nonisolated static func iconCandidates(for pageURL: URL, declared: PageIcons) -> [URL] {
         guard let fallback = sameOriginFaviconURL(for: pageURL) else { return [] }
+
+        let ranked = declared.icons
+            .compactMap { icon -> (URL, DeclaredIcon)? in
+                guard let url = URL(string: icon.url, relativeTo: pageURL)?.absoluteURL,
+                      isReachable(url, from: pageURL, contactedHosts: declared.contactedHosts)
+                else { return nil }
+                return (url, icon)
+            }
+            .enumerated()
+            .sorted { left, right in
+                let (l, r) = (left.element.1, right.element.1)
+                let lOwn = isSameOrigin(left.element.0, as: pageURL)
+                let rOwn = isSameOrigin(right.element.0, as: pageURL)
+                if lOwn != rOwn { return lOwn }
+                if l.isSVG != r.isSVG { return r.isSVG }
+                let lScore = sizeScore(l), rScore = sizeScore(r)
+                if lScore != rScore { return lScore < rScore }
+                if l.isAppleTouch != r.isAppleTouch { return r.isAppleTouch }
+                // Declaration order decides the rest, so the result never
+                // depends on how the page happened to be walked.
+                return left.offset < right.offset
+            }
+            .map(\.element.0)
+
         var candidates: [URL] = []
-        if let first = declared.lazy
-            .compactMap({ URL(string: $0, relativeTo: pageURL)?.absoluteURL })
-            .first(where: { isSameOrigin($0, as: pageURL) }) {
-            candidates.append(first)
+        for url in ranked where !candidates.contains(url) {
+            candidates.append(url)
+            if candidates.count == maximumCandidates - 1 { break }
         }
         if !candidates.contains(fallback) { candidates.append(fallback) }
         return candidates
     }
+
+    /// Lower sorts first. An icon at least as big as what is stored beats a
+    /// smaller one — downscaling keeps detail, upscaling invents it — and an
+    /// undeclared size sits between the two, since it is usually 16px but
+    /// might not be.
+    private nonisolated static func sizeScore(_ icon: DeclaredIcon) -> Int {
+        guard let edge = icon.declaredEdge else { return 1_000 }
+        return edge >= storedPixelSize ? edge - storedPixelSize : 2_000 + (storedPixelSize - edge)
+    }
+
+    /// Whether this browser is willing to ask `url`'s host for an icon while
+    /// visiting `pageURL`. See `iconCandidates` for why the page's own
+    /// contacts are the boundary.
+    nonisolated static func isReachable(_ url: URL, from pageURL: URL, contactedHosts: Set<String>) -> Bool {
+        guard let scheme = url.scheme?.lowercased(), ["http", "https"].contains(scheme) else { return false }
+        if isSameOrigin(url, as: pageURL) { return true }
+        // A plain-http icon is never worth reaching off-origin for.
+        guard scheme == "https", let host = url.host?.lowercased(), !host.isEmpty else { return false }
+        return contactedHosts.contains(host)
+    }
+
+    /// Four addresses, of which the last is always `/favicon.ico`. Chromium
+    /// usually downloads one or two; this is generous and still bounded.
+    nonisolated static let maximumCandidates = 4
 
     nonisolated static func isSameOrigin(_ url: URL, as pageURL: URL) -> Bool {
         guard let scheme = url.scheme?.lowercased(), ["http", "https"].contains(scheme) else { return false }
@@ -287,28 +395,56 @@ final class FaviconStore: ObservableObject {
 
     /// Reads what the live document declared. Failures return no candidates,
     /// which leaves only the same-origin `/favicon.ico` attempt.
-    private func declaredIconURLs(in webView: WKWebView) async -> [String] {
+    private func declaredIconURLs(in webView: WKWebView) async -> PageIcons {
         let value: Any? = await withCheckedContinuation { continuation in
             webView.evaluateJavaScript(Self.iconLinkScript) { value, _ in
                 continuation.resume(returning: value)
             }
         }
-        return (value as? [Any])?.compactMap { $0 as? String } ?? []
+        guard let payload = value as? [String: Any] else { return PageIcons() }
+        let icons = (payload["icons"] as? [[String: Any]] ?? []).compactMap { entry -> DeclaredIcon? in
+            guard let url = entry["href"] as? String, !url.isEmpty else { return nil }
+            return DeclaredIcon(
+                url: url,
+                rel: (entry["rel"] as? String ?? "").lowercased(),
+                sizes: entry["sizes"] as? String ?? ""
+            )
+        }
+        let hosts = Set((payload["hosts"] as? [String] ?? []).map { $0.lowercased() }.filter { !$0.isEmpty })
+        return PageIcons(icons: icons, contactedHosts: hosts)
     }
 
+    /// Reads what the page declared, and which hosts it has already fetched
+    /// something from. Both come from the page itself: the second is the
+    /// browser's own resource timing, which is a record of loads that already
+    /// happened rather than anything new.
     private static let iconLinkScript = #"""
     (() => {
       const wanted = ['icon', 'shortcut', 'apple-touch-icon', 'apple-touch-icon-precomposed'];
-      const found = [];
+      const icons = [];
       document.querySelectorAll('link[rel][href]').forEach(link => {
-        if (found.length >= 8) return;
-        const rel = (link.getAttribute('rel') || '').toLowerCase().split(/\s+/);
-        if (!rel.some(value => wanted.includes(value))) return;
+        if (icons.length >= 8) return;
+        const rel = (link.getAttribute('rel') || '').toLowerCase();
+        if (!rel.split(/\s+/).some(value => wanted.includes(value))) return;
         try {
-          found.push(new URL(link.getAttribute('href'), document.baseURI).href);
+          icons.push({
+            href: new URL(link.getAttribute('href'), document.baseURI).href,
+            rel: rel,
+            sizes: (link.getAttribute('sizes') || '')
+          });
         } catch (error) {}
       });
-      return found;
+      const hosts = new Set();
+      try {
+        performance.getEntriesByType('resource').forEach(entry => {
+          if (hosts.size >= 64) return;
+          try {
+            const url = new URL(entry.name);
+            if (url.protocol === 'https:') { hosts.add(url.hostname.toLowerCase()); }
+          } catch (error) {}
+        });
+      } catch (error) {}
+      return { icons: icons, hosts: Array.from(hosts) };
     })()
     """#
 
@@ -369,10 +505,33 @@ final class FaviconStore: ObservableObject {
         do {
             let (data, response) = try await session.data(for: request)
             guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else { return nil }
+            guard !isHTML(response: http, body: data) else { return nil }
             return data
         } catch {
             return nil
         }
+    }
+
+    /// Whether a 200 is really a web page. Single-page apps commonly answer
+    /// every unmatched path with their own shell, so `/favicon.ico` comes back
+    /// as a perfectly successful HTML document. Decoding it would fail anyway;
+    /// recognising it here says so without the work, and keeps "this site
+    /// serves a page, not an icon" a distinct outcome rather than a decode
+    /// error.
+    ///
+    /// Only HTML is rejected, never "not an image": plenty of servers hand
+    /// icons back as `text/plain` or `application/octet-stream`, and those are
+    /// fine to try.
+    nonisolated static func isHTML(response: HTTPURLResponse, body: Data) -> Bool {
+        if let type = response.mimeType?.lowercased(),
+           type.hasPrefix("text/html") || type.hasPrefix("application/xhtml") {
+            return true
+        }
+        // Some servers send no usable type at all, so the first bytes decide.
+        let prefix = String(decoding: body.prefix(64), as: UTF8.self)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        return prefix.hasPrefix("<!doctype html") || prefix.hasPrefix("<html")
     }
 
     private static let requestTimeout: TimeInterval = 5
