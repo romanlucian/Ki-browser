@@ -10,23 +10,35 @@ import AppKit
 /// window — so the tracking is done here.
 @MainActor
 enum TornWindowDrag {
+    /// How long each wait for a drag event lasts before the button is checked
+    /// again. Short enough that a missed release is noticed immediately,
+    /// long enough not to spin.
+    private static let pointerPollInterval: TimeInterval = 0.05
+
     /// Follows the pointer until the button is released, then offers the tab to
     /// whichever window the pointer is over, so a tab torn out by mistake can
     /// be put back in the same gesture.
     static func follow(window: NSWindow, workspace: BrowserWorkspace, stripHeight: CGFloat) {
         // The gesture may already be over — a very fast flick releases before
-        // the window exists. Waiting on an event that will never come would
-        // hang the app, so the button is checked first.
+        // the window exists — so the button is checked before waiting at all.
         guard NSEvent.pressedMouseButtons & 1 != 0 else { return }
 
         let startMouse = NSEvent.mouseLocation
         let startOrigin = window.frame.origin
-        while let event = NSApp.nextEvent(
-            matching: [.leftMouseDragged, .leftMouseUp],
-            until: .distantFuture,
-            inMode: .eventTracking,
-            dequeue: true
-        ) {
+        // Checking the button once and then waiting on `.distantFuture` was a
+        // race: a release landing between the check and the first wait leaves
+        // this loop waiting for a mouse-up that has already been delivered,
+        // and it is a nested event loop, so nothing else in the app is
+        // dispatched while it waits. The button is now re-checked on every
+        // slice instead, which makes waiting forever impossible rather than
+        // unlikely.
+        while NSEvent.pressedMouseButtons & 1 != 0 {
+            guard let event = NSApp.nextEvent(
+                matching: [.leftMouseDragged, .leftMouseUp],
+                until: Date().addingTimeInterval(pointerPollInterval),
+                inMode: .eventTracking,
+                dequeue: true
+            ) else { continue } // Nothing this slice; the condition above decides whether to keep waiting.
             if event.type == .leftMouseUp { break }
             let mouse = NSEvent.mouseLocation
             window.setFrameOrigin(
