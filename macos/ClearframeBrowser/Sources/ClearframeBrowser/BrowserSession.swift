@@ -1006,8 +1006,15 @@ extension BrowserSession: WKNavigationDelegate {
         // chance to redirect. After `pinterest.co.uk` sends the browser to
         // `uk.pinterest.com`, this is still the address a bookmark holds.
         let requested = navigationOriginURL
-        faviconTask?.cancel()
+        // Let the cancelled run unwind before the replacement starts. It holds
+        // this host in the store's in-flight set until it does, and a
+        // replacement arriving first is turned away by it — which on a site
+        // that reloads itself moments after loading is exactly when the
+        // replacement is the run that matters.
+        let previous = faviconTask
+        previous?.cancel()
         faviconTask = Task { [weak self] in
+            _ = await previous?.value
             guard let self else { return }
             await favicons.captureIfNeeded(
                 for: url,

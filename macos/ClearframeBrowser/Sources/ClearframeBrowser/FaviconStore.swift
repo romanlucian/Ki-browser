@@ -58,9 +58,30 @@ final class FaviconStore: ObservableObject {
     /// Hosts already looked for on disk and not found — keeps repeated view
     /// renders from re-reading a file that is not there.
     private var missingOnDisk: Set<String> = []
-    /// Hosts whose capture failed in this run. Session-only and never
-    /// persisted: a site that adds an icon tomorrow gets a fresh chance.
-    private var failedThisSession: Set<String> = []
+    /// For each host, the sets of addresses already tried and exhausted in
+    /// this run. Session-only and never persisted: a site that adds an icon
+    /// tomorrow gets a fresh chance.
+    ///
+    /// Keyed by *what was tried*, not merely by host, and that distinction is
+    /// the whole point. A page can finish loading before the document that
+    /// declares the icon exists — a bot-check interstitial, a consent bounce,
+    /// a redirect stub. That first document declares nothing, so the only
+    /// address to try is `/favicon.ico`, and single-page sites answer that
+    /// with their own HTML. Remembering "this host failed" then spends the
+    /// site's one chance on a document that was never going to have an icon,
+    /// and the real page — reloaded a moment later, declaring its icon
+    /// properly — is refused without a request. That is what left DeepSeek
+    /// grey in a fresh profile.
+    ///
+    /// Remembering the candidate set instead gives the behaviour this type
+    /// already documented: one attempt per navigation, at no extra cost for
+    /// the case the memory exists for. A site with genuinely no icon produces
+    /// the identical one-address set on every page view, so it is still asked
+    /// exactly once per run.
+    private var failedThisSession: [String: Set<Set<URL>>] = [:]
+    /// A host randomising its icon address cannot make this grow without
+    /// bound, or be re-fetched on every page view forever.
+    private static let maximumRememberedAttempts = 3
     private var inFlight: Set<String> = []
     /// Hosts that redirect somewhere else, pointing at the host whose icon
     /// they should borrow: `pinterest.co.uk` → `uk.pinterest.com`.
@@ -159,10 +180,12 @@ final class FaviconStore: ObservableObject {
     /// `declaredIconURLs` is what the page declared, verbatim.
     func capture(pageURL: URL, declaredIconURLs: PageIcons, isPrivate: Bool) async {
         guard let host = Self.captureHost(for: pageURL), shouldCapture(host: host) else { return }
+        let candidates = Self.iconCandidates(for: pageURL, declared: declaredIconURLs)
+        guard !candidates.isEmpty, !hasAlreadyTried(candidates, forHost: host) else { return }
         inFlight.insert(host)
         defer { inFlight.remove(host) }
 
-        for candidate in Self.iconCandidates(for: pageURL, declared: declaredIconURLs) {
+        for candidate in candidates {
             guard let data = await fetch(candidate),
                   !data.isEmpty,
                   data.count <= Self.maximumDownloadBytes,
@@ -175,9 +198,14 @@ final class FaviconStore: ObservableObject {
             // leave nothing behind.
             if !isPrivate { writeToDisk(png, forNormalizedHost: host) }
             revision += 1
+            failedThisSession[host] = nil
             return
         }
-        failedThisSession.insert(host)
+        // A cancelled capture did not fail — the tab simply navigated again
+        // while it was in flight — and recording it as one would refuse the
+        // navigation that replaced it.
+        guard !Task.isCancelled else { return }
+        failedThisSession[host, default: []].insert(Set(candidates))
     }
 
     /// Erases every stored icon: the on-disk directory and the in-memory
@@ -376,9 +404,18 @@ final class FaviconStore: ObservableObject {
 
     // MARK: - Internals
 
+    /// Cheap enough to run before reading the page: a host already being
+    /// fetched, or one that already has an icon, needs nothing further. What
+    /// was *tried* is checked later, in `capture`, once the addresses this
+    /// document offers are actually known.
     private func shouldCapture(host: String) -> Bool {
-        guard !inFlight.contains(host), !failedThisSession.contains(host) else { return false }
+        guard !inFlight.contains(host) else { return false }
         return icon(forHost: host) == nil
+    }
+
+    private func hasAlreadyTried(_ candidates: [URL], forHost host: String) -> Bool {
+        guard let attempts = failedThisSession[host] else { return false }
+        return attempts.contains(Set(candidates)) || attempts.count >= Self.maximumRememberedAttempts
     }
 
     private func fileURL(forNormalizedHost host: String) -> URL? {

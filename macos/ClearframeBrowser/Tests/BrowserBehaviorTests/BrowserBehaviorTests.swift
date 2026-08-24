@@ -1679,6 +1679,96 @@ final class BrowserBehaviorTests: XCTestCase {
         }
     }
 
+    // MARK: - A page that finishes before the icon exists
+
+    /// A bot check, a consent bounce or a redirect stub finishes loading
+    /// before the document that declares the icon exists. That first document
+    /// declares nothing, so the only address to try is `/favicon.ico` — which
+    /// single-page sites answer with their own HTML. Remembering "this host
+    /// failed" spent the site's one chance on a page that was never going to
+    /// have an icon, and refused the real one a moment later without asking.
+    /// This is what left DeepSeek grey in a fresh profile.
+    func testADocumentThatDeclaredNothingDoesNotBlockTheOneThatDoes() async throws {
+        let directory = Self.makeFaviconDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let fetcher = ScriptedFaviconFetcher([
+            // The catch-all route every single-page app has.
+            "https://chat.example/favicon.ico": Data("<!doctype html><html><body>app</body></html>".utf8),
+            "https://cdn.example/icon-180.png": Self.pngFixture()
+        ])
+        let store = FaviconStore(directory: directory, fetch: fetcher.fetch)
+        let page = try XCTUnwrap(URL(string: "https://chat.example/sign_in"))
+
+        // Document one: the interstitial. Declares no icon at all.
+        await store.capture(pageURL: page, declaredIconURLs: FaviconStore.PageIcons(), isPrivate: false)
+        XCTAssertNil(store.icon(forHost: "chat.example"), "there was nothing to find yet")
+
+        // Document two: the real page, declaring its icon on the CDN that
+        // served its stylesheet moments earlier.
+        await store.capture(
+            pageURL: page,
+            declaredIconURLs: FaviconStore.PageIcons(
+                icons: [FaviconStore.DeclaredIcon(url: "https://cdn.example/icon-180.png", rel: "icon", sizes: "180x180", media: "")],
+                contactedHosts: ["cdn.example"]
+            ),
+            isPrivate: false
+        )
+
+        XCTAssertNotNil(store.icon(forHost: "chat.example"), "the second document must still be asked")
+        XCTAssertTrue(
+            fetcher.requestedURLs.map(\.absoluteString).contains("https://cdn.example/icon-180.png"),
+            "and the address it declared must actually be fetched"
+        )
+    }
+
+    /// The reason the memory exists: a site with genuinely no icon offers the
+    /// same one address every time, and must not be re-asked on every page.
+    func testASiteWithNoIconIsStillOnlyAskedOncePerSession() async throws {
+        let directory = Self.makeFaviconDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let fetcher = ScriptedFaviconFetcher([:])
+        let store = FaviconStore(directory: directory, fetch: fetcher.fetch)
+
+        for path in ["/one", "/two", "/three"] {
+            await store.capture(
+                pageURL: try XCTUnwrap(URL(string: "https://bare.example\(path)")),
+                declaredIconURLs: FaviconStore.PageIcons(),
+                isPrivate: false
+            )
+        }
+
+        XCTAssertEqual(
+            fetcher.requestedURLs.map(\.absoluteString),
+            ["https://bare.example/favicon.ico"],
+            "three page views, one request"
+        )
+    }
+
+    /// A site changing its icon address on every page view must not be able to
+    /// make the browser fetch forever.
+    func testAHostThatKeepsOfferingNewAddressesIsEventuallyLeftAlone() async throws {
+        let directory = Self.makeFaviconDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let fetcher = ScriptedFaviconFetcher([:])
+        let store = FaviconStore(directory: directory, fetch: fetcher.fetch)
+        let page = try XCTUnwrap(URL(string: "https://churn.example/"))
+
+        for index in 0..<8 {
+            await store.capture(
+                pageURL: page,
+                declaredIconURLs: FaviconStore.PageIcons(
+                    icons: [FaviconStore.DeclaredIcon(url: "https://churn.example/icon\(index).png", rel: "icon", sizes: "", media: "")]
+                ),
+                isPrivate: false
+            )
+        }
+
+        XCTAssertLessThanOrEqual(
+            fetcher.requestedURLs.count, 8,
+            "a host offering a new address every time is left alone after a few tries"
+        )
+    }
+
     func testFaviconLookupNeverReachesTheNetwork() {
         let directory = Self.makeFaviconDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -2382,6 +2472,22 @@ private struct TestContentBlocking {
 /// Main-actor isolated to match `FaviconStore.Fetcher`, so its bookkeeping
 /// and the assertions that read it run on the same actor.
 @MainActor
+/// Answers each address differently, so a test can model a site whose first
+/// document is not the one that declares the icon.
+private final class ScriptedFaviconFetcher {
+    private(set) var requestedURLs: [URL] = []
+    private let responses: [String: Data?]
+
+    init(_ responses: [String: Data?]) {
+        self.responses = responses
+    }
+
+    func fetch(_ url: URL) async -> Data? {
+        requestedURLs.append(url)
+        return responses[url.absoluteString] ?? nil
+    }
+}
+
 private final class RecordingFaviconFetcher {
     private(set) var requestedURLs: [URL] = []
     private let response: Data?
