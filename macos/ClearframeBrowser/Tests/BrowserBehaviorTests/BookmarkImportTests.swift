@@ -397,6 +397,49 @@ final class BookmarkImportTests: XCTestCase {
         XCTAssertEqual(reopened.bookmarkFolders.map(\.title), ["Kept"])
     }
 
+    // MARK: - Address candidates are cached, not stale
+
+    /// The store caches what the address field completes to. A cache that
+    /// outlived a change would make the address bar quietly wrong — offering
+    /// a bookmark that was deleted, or never offering one just added.
+    func testAddressCandidatesFollowBookmarkAndHistoryChanges() throws {
+        let (store, suiteName, defaults) = try makeStore()
+        defer { TestSuiteCleanup.destroy(suiteName, defaults: defaults) }
+
+        XCTAssertTrue(store.addressCandidates.isEmpty)
+
+        let added = try XCTUnwrap(store.addBookmark(title: "Example", url: "https://example.com/", folderID: nil))
+        XCTAssertEqual(store.addressCandidates.map(\.url), ["example.com"], "a new bookmark is completable at once")
+        XCTAssertTrue(try XCTUnwrap(store.addressCandidates.first).isBookmarked)
+
+        store.recordVisit(title: "Other", url: "https://other.example/page")
+        XCTAssertEqual(
+            Set(store.addressCandidates.map(\.url)), ["example.com", "other.example/page"],
+            "a visit is completable at once too"
+        )
+
+        store.removeBookmark(added)
+        XCTAssertEqual(
+            store.addressCandidates.map(\.url), ["other.example/page"],
+            "and a removed bookmark stops being offered"
+        )
+    }
+
+    /// The folded matching fields must stay in step with what a row opens.
+    func testCandidateComparisonFieldsNeverReplaceWhatARowOpens() {
+        let candidate = AddressCandidate(
+            url: "docs.google.com/document/d/AbCdEf",
+            title: "My Notes",
+            visits: 1,
+            lastVisit: .distantPast,
+            isBookmarked: false
+        )
+
+        XCTAssertEqual(candidate.url, "docs.google.com/document/d/AbCdEf", "the opened address keeps its case")
+        XCTAssertEqual(candidate.comparableURL, "docs.google.com/document/d/abcdef")
+        XCTAssertEqual(candidate.titleWords, ["my", "notes"])
+    }
+
     // MARK: - Result copy
 
     func testResultHeadlineNamesBothPlacesUnderBarPlacement() throws {

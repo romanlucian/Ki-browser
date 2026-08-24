@@ -4,9 +4,14 @@ import Foundation
 
 @MainActor
 final class BrowserDataStore: ObservableObject {
-    @Published private(set) var bookmarks: [BookmarkRecord] { didSet { cachedBookmarkCollection = nil } }
+    @Published private(set) var bookmarks: [BookmarkRecord] {
+        didSet {
+            cachedBookmarkCollection = nil
+            cachedAddressCandidates = nil
+        }
+    }
     @Published private(set) var bookmarkFolders: [BookmarkFolderRecord] { didSet { cachedBookmarkCollection = nil } }
-    @Published private(set) var history: [HistoryRecord]
+    @Published private(set) var history: [HistoryRecord] { didSet { cachedAddressCandidates = nil } }
     @Published private(set) var recoveryNotice: String?
     @Published var showsBookmarksBar: Bool {
         didSet { defaults.set(showsBookmarksBar, forKey: showsBookmarksBarKey) }
@@ -353,6 +358,22 @@ final class BrowserDataStore: ObservableObject {
     /// Correctness rests on `didSet` above: any write to either array drops
     /// the cache, so there is no path that can serve a stale collection.
     private var cachedBookmarkCollection: BookmarkCollection?
+
+    /// What the address field can complete to, rebuilt only when history or
+    /// bookmarks change.
+    ///
+    /// It lives here rather than on the view because the view read it from a
+    /// computed property, which meant rebuilding it several times per
+    /// keystroke — grouping every visit and every bookmark, on the main
+    /// actor, between one character and the next.
+    private var cachedAddressCandidates: [AddressCandidate]?
+
+    var addressCandidates: [AddressCandidate] {
+        if let cachedAddressCandidates { return cachedAddressCandidates }
+        let built = AddressCompletion.candidates(history: history, bookmarks: bookmarks)
+        cachedAddressCandidates = built
+        return built
+    }
 
     private var bookmarkCollection: BookmarkCollection {
         if let cachedBookmarkCollection { return cachedBookmarkCollection }
