@@ -242,6 +242,36 @@
         "formActions": []
       },
       "expected": "article"
+    },
+    {
+      "id": "encyclopedia-article-whose-paragraphs-end-in-citations",
+      "page": {
+        "title": "Artificial intelligence",
+        "url": "https://en.wikipedia.org/wiki/Artificial_intelligence",
+        "hostname": "en.wikipedia.org",
+        "scheme": "https",
+        "language": "en",
+        "text": "Artificial intelligence is the capability of computational systems to perform tasks that people usually associate with human intelligence, among them learning, reasoning, problem solving, perception and the making of decisions under real uncertainty.[1]\nThe field of research sits between engineering, mathematics and computer science, and it develops the methods and the software that let a machine perceive its environment and use what it learns from that environment to pursue goals defined for it.[2]\nSome of the most visible applications today include advanced web search engines, the recommendation systems used by streaming services, conversational assistants that understand ordinary speech, and vehicles that drive themselves along public roads.[3]\nGeneral intelligence, meaning a machine able to complete any task a person can complete at least as well as the person can, remains one of the declared long term goals of the field and is not considered close by most researchers now working in it.[4]\nThe discipline was founded as an academic subject in nineteen fifty six at a summer workshop, and it has since passed through several long cycles of considerable optimism followed by disappointment and by the withdrawal of most research funding.[5]\nFunding and public interest rose sharply again after two thousand and twelve, when deep learning began to outperform every earlier technique on the standard benchmarks for recognising images and for transcribing recorded human speech into text.[6]\nReasoning, the representation of knowledge, planning, the processing of natural language, perception and support for robotics are among the traditional goals into which academic research in the field has been divided for several decades now.[7]\nResearchers have adapted a wide range of techniques in order to reach those goals, including search and mathematical optimisation, formal logic, artificial neural networks, and methods originally drawn from statistics, probability and economics.[8]\nNeural networks learn by adjusting the strength of the connections between their many units, so that the network as a whole gradually produces outputs that lie closer to the examples it has been shown repeatedly during its training procedure.[9]\nTraining a modern model of this kind requires very large quantities of text or images, together with an amount of computing power that only a fairly small number of organisations anywhere are currently in a position to be able to afford at all.[10]\nThe energy and the water needed to run the data centres involved has become a subject of public debate in several countries, alongside unresolved questions about where the original training material came from and who was asked about its use.[11]\nRegulators in several jurisdictions have begun to draft rules covering transparency, the explanation of automated decisions, and the particular circumstances under which a person may formally object to a decision that was made about them.[12]\nSurveys of working practitioners continue to disagree about how quickly any further progress will arrive, and the range of published predictions has stayed remarkably wide for most of the last two decades of work within the discipline itself.[13]",
+        "wordCount": 489,
+        "hasPasswordField": false,
+        "formActions": []
+      },
+      "expected": "article"
+    },
+    {
+      "id": "teaser-listing-ending-in-brackets-is-still-a-listing",
+      "page": {
+        "title": "Regional news",
+        "url": "https://example.org/news",
+        "hostname": "example.org",
+        "scheme": "https",
+        "language": "en",
+        "text": "Council approves the new winter timetable for the eastern region. [1]\nCouncil approves the new winter timetable for the eastern region. [2]\nCouncil approves the new winter timetable for the eastern region. [3]\nCouncil approves the new winter timetable for the eastern region. [4]\nCouncil approves the new winter timetable for the eastern region. [5]\nCouncil approves the new winter timetable for the eastern region. [6]\nCouncil approves the new winter timetable for the eastern region. [7]\nCouncil approves the new winter timetable for the eastern region. [8]\nCouncil approves the new winter timetable for the eastern region. [9]\nCouncil approves the new winter timetable for the eastern region. [10]\nCouncil approves the new winter timetable for the eastern region. [11]\nCouncil approves the new winter timetable for the eastern region. [12]\nCouncil approves the new winter timetable for the eastern region. [13]\nCouncil approves the new winter timetable for the eastern region. [14]",
+        "wordCount": 154,
+        "hasPasswordField": false,
+        "formActions": []
+      },
+      "expected": "listing"
     }
   ],
   "riskCases": [

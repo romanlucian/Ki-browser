@@ -145,8 +145,13 @@ public enum LocalAnalysisEngine {
         var longPunctuatedCharacters = 0
         for block in blocks {
             let characters = block.count
-            let isPunctuated = block.last.map(blockEndings.contains) ?? false
             let longBlock = block.contains(where: isCJK) ? longCJKBlockCharacters : longBlockCharacters
+            // Only a block already long enough to be a paragraph has its citations
+            // discounted. A short teaser ending "…region. [1]" is a list entry
+            // whatever the bracket holds, and stripping there would read a headline
+            // list as prose.
+            let considered = characters >= longBlock ? withoutTrailingCitations(block) : block
+            let isPunctuated = considered.last.map(blockEndings.contains) ?? false
             totalCharacters += characters
             if isPunctuated { punctuatedBlocks += 1 }
             if isPunctuated && characters >= longBlock { longPunctuatedCharacters += characters }
@@ -356,6 +361,32 @@ public enum LocalAnalysisEngine {
         // A capital follows, so only a known abbreviation joins them: "Dr. Alison" is
         // one sentence and "the office. Analysts" is two.
         return !abbreviations.contains(word)
+    }
+
+    /// Reference sites close a paragraph with its citations — "…under real
+    /// uncertainty.[12]" — so the block ends in a bracket and reads as
+    /// unpunctuated. That alone scored the English Wikipedia article on artificial
+    /// intelligence at 13.9% punctuated and classified it a listing, which hides the
+    /// analysis behind the section-page notice. The markers are furniture, not
+    /// prose, so they are ignored when asking whether a block ends in a sentence.
+    /// The block's own text is never altered; only this question is asked of the
+    /// trimmed form.
+    ///
+    /// Scanned by unicode scalar rather than matched with a regular expression: the
+    /// two runtimes' regex dialects disagree about what `\s` covers, and this must
+    /// not.
+    private static func withoutTrailingCitations(_ block: String) -> String {
+        let scalars = Array(block.unicodeScalars)
+        var end = scalars.count
+        while true {
+            while end > 0, scalars[end - 1] == " " { end -= 1 }
+            guard end > 0, scalars[end - 1] == "]" else { break }
+            var open = end - 2
+            while open >= 0, scalars[open] != "[", scalars[open] != "]" { open -= 1 }
+            guard open >= 0, scalars[open] == "[", end - 1 - open <= 25 else { break }
+            end = open
+        }
+        return String(String.UnicodeScalarView(scalars[..<end]))
     }
 
     private static func deduplicated(_ sentences: [String]) -> [String] {

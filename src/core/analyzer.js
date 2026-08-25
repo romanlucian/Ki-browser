@@ -363,6 +363,30 @@ export function summarizeLocally(page) {
 // punctuated prose describe a list of links rather than a text to summarize. Article
 // stays the safe default — including the single-block extractor fallback — because
 // hiding a real summary costs the reader more than summarizing a list.
+// Reference sites close a paragraph with its citations — "…under real
+// uncertainty.[12]" — so the block ends in a bracket and reads as unpunctuated.
+// That alone scored the English Wikipedia article on artificial intelligence at
+// 13.9% punctuated and classified it a listing, which hides the analysis behind
+// the section-page notice. The markers are furniture, not prose, so they are
+// ignored when asking whether a block ends in a sentence. The block's own text is
+// never altered; only this question is asked of the trimmed form.
+//
+// Scanned by code point rather than matched with a regular expression: the two
+// runtimes' regex dialects disagree about what \s covers, and this must not.
+function withoutTrailingCitations(block) {
+  const points = [...block];
+  let end = points.length;
+  for (;;) {
+    while (end > 0 && points[end - 1] === " ") end -= 1;
+    if (end === 0 || points[end - 1] !== "]") break;
+    let open = end - 2;
+    while (open >= 0 && points[open] !== "[" && points[open] !== "]") open -= 1;
+    if (open < 0 || points[open] !== "[" || end - 1 - open > 25) break;
+    end = open;
+  }
+  return points.slice(0, end).join("");
+}
+
 export function assessStructure(page) {
   const blocks = (page.text || "").split(/\r?\n/).map(normalizeText).filter(Boolean);
   if (blocks.length < MINIMUM_LISTING_BLOCKS) return "article";
@@ -371,8 +395,13 @@ export function assessStructure(page) {
   let totalCharacters = 0;
   let longPunctuatedCharacters = 0;
   for (const block of blocks) {
-    const isPunctuated = BLOCK_ENDING_PATTERN.test(block);
     const longBlock = CJK_PATTERN.test(block) ? LONG_CJK_BLOCK_CHARACTERS : LONG_BLOCK_CHARACTERS;
+    // Only a block already long enough to be a paragraph has its citations
+    // discounted. A short teaser ending "…region. [1]" is a list entry whatever
+    // the bracket holds, and stripping there would read a headline list as prose.
+    const isPunctuated = BLOCK_ENDING_PATTERN.test(
+      block.length >= longBlock ? withoutTrailingCitations(block) : block
+    );
     totalCharacters += block.length;
     if (isPunctuated) punctuatedBlocks += 1;
     if (isPunctuated && block.length >= longBlock) longPunctuatedCharacters += block.length;
