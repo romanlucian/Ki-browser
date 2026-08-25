@@ -90,7 +90,11 @@ function renderAnalysis() {
   $("#sourceHost").textContent = currentPage.hostname || "CURRENT PAGE";
   $("#pageTitle").textContent = currentPage.title;
   $("#sourceMeta").textContent = `${currentAnalysis.readMinutes} min read · ${currentPage.language || "language not declared"}`;
-  $("#summaryText").textContent = currentAnalysis.summary;
+  // The engine returns an empty summary when nothing readable survived extraction,
+  // rather than a sentence of its own — it preserves the page's language and cannot
+  // know the reader's. Saying so is this panel's job.
+  $("#summaryText").textContent =
+    currentAnalysis.summary || "There is not enough readable text on this page to summarize.";
   $("#modeBadge").textContent = currentAnalysis.mode.toUpperCase();
   textList($("#keyPoints"), currentAnalysis.keyPoints);
   $("#pointsSection").classList.toggle("hidden", currentAnalysis.keyPoints.length === 0);

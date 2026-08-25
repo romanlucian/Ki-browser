@@ -131,3 +131,29 @@ test("shared contract: player interface text never reaches the reader, in any la
     }
   }
 });
+
+test("shared contract: a sentence the page prints twice is reported once", () => {
+  for (const testCase of contract.duplicateSentenceCases) {
+    const result = summarizeLocally(extensionPage(testCase.page));
+    const sentence = testCase.repeatedSentence;
+    // A page may print the same line twice — a headline echoed in a standfirst. It
+    // is one thing the page said, so it is one thing to report.
+    const inSummary = result.summary.split(sentence).length - 1;
+    assert.ok(inSummary <= 1, `${testCase.id}: the gist repeats a sentence — ${sentence}`);
+    assert.ok(
+      result.keyPoints.filter((point) => point === sentence).length <= 1,
+      `${testCase.id}: a key point is repeated — ${sentence}`
+    );
+  }
+});
+
+test("shared contract: a page that is only boilerplate analyses to nothing", () => {
+  for (const testCase of contract.emptyAnalysisCases) {
+    const result = summarizeLocally(extensionPage(testCase.page));
+    // Empty, not a sentence of explanation: a user-facing string here would be
+    // English on a page that is not, and belongs to the interface, not the engine.
+    assert.equal(result.summary, "", `${testCase.id}: engine produced prose of its own`);
+    assert.deepEqual(result.keyPoints, [], `${testCase.id}: unexpected key points`);
+    assert.deepEqual(result.claimsToCheck, [], `${testCase.id}: unexpected claims`);
+  }
+});

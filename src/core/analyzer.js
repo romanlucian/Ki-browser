@@ -177,6 +177,23 @@ function sentencesFromReadingBlocks(value = "") {
 // `toLowerCase`, not `toLocaleLowerCase`, to match Swift's locale-independent
 // `lowercased()`. Turkish casing rules applied on one side only would key the two
 // runtimes differently.
+// A page may print the same line twice — a headline echoed in a standfirst, a
+// caption repeated under a gallery. It is one thing the page said, so it is one
+// thing to report, and counting it twice also inflates its own word frequencies
+// and pushes it up the ranking against sentences printed once.
+//
+// Swift folds case with the locale-independent `lowercased()`; `toLowerCase` is
+// its counterpart here.
+function deduplicated(sentences) {
+  const seen = new Set();
+  return sentences.filter((sentence) => {
+    const key = sentence.toLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 function repeatedInterfaceText(sentences) {
   const counts = new Map();
   for (const sentence of sentences) {
@@ -244,17 +261,16 @@ export function summarizeLocally(page) {
   const source = page.text || page.description || "";
   const extracted = sentencesFromReadingBlocks(source);
   const repeated = repeatedInterfaceText(extracted);
-  const sentences = extracted.filter(
+  const sentences = deduplicated(extracted).filter(
     (sentence) =>
       !isMediaInterfaceSentence(sentence) && !repeated.has(sentence.toLowerCase())
   );
 
+  // Nothing readable survived. Return nothing, rather than a sentence of English
+  // explanation: this engine preserves the page's own language, and the words a
+  // reader sees when there is no analysis belong to the interface.
   if (!sentences.length) {
-    return {
-      summary: page.description || "There is not enough readable text on this page to summarize.",
-      keyPoints: [],
-      claimsToCheck: []
-    };
+    return { summary: "", keyPoints: [], claimsToCheck: [] };
   }
 
   const scored = sentenceScores(sentences, page.title, page.language);

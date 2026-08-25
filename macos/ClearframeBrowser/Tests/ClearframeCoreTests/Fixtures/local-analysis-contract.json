@@ -433,5 +433,38 @@
         "playback rate"
       ]
     }
+  ],
+  "duplicateSentenceCases": [
+    {
+      "id": "a-sentence-printed-twice-is-reported-once",
+      "page": {
+        "title": "Winter timetable",
+        "url": "https://example.org/",
+        "hostname": "example.org",
+        "scheme": "https",
+        "language": "en",
+        "text": "The winter timetable changes the winter service on every winter route this year.\nThe winter timetable changes the winter service on every winter route this year.\nEngineers reported that the eastern line signalling work remains on its original schedule.\nPassenger groups asked for clearer information screens at the four busiest stations.\nOfficials confirmed that fares will not change before the next review in September.",
+        "wordCount": 64,
+        "hasPasswordField": false,
+        "formActions": []
+      },
+      "repeatedSentence": "The winter timetable changes the winter service on every winter route this year."
+    }
+  ],
+  "emptyAnalysisCases": [
+    {
+      "id": "a-page-of-nothing-but-boilerplate-analyses-to-nothing",
+      "page": {
+        "title": "Cookie notice",
+        "url": "https://example.org/notice",
+        "hostname": "example.org",
+        "scheme": "https",
+        "language": "en",
+        "text": "Accept all cookies to continue browsing this website and see personalised content.\nAccept all cookies to continue browsing this website and see personalised content.\nAccept all cookies to continue browsing this website and see personalised content.",
+        "wordCount": 36,
+        "hasPasswordField": false,
+        "formActions": []
+      }
+    }
   ]
 }

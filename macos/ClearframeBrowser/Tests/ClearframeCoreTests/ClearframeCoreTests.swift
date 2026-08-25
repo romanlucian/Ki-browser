@@ -1255,6 +1255,37 @@ final class ClearframeCoreTests: XCTestCase {
         }
     }
 
+    func testLocalAnalysisContractReportsARepeatedSentenceOnce() throws {
+        let contract = try localAnalysisContract()
+        for testCase in contract.duplicateSentenceCases {
+            let content = LocalAnalysisEngine.summarize(page: testCase.page)
+            let sentence = testCase.repeatedSentence
+            // A page may print the same line twice — a headline echoed in a
+            // standfirst. It is one thing the page said, so it is one thing to report.
+            XCTAssertLessThanOrEqual(
+                content.summary.components(separatedBy: sentence).count - 1, 1,
+                "\(testCase.id): the gist repeats a sentence — \(sentence)"
+            )
+            XCTAssertLessThanOrEqual(
+                content.keyPoints.filter { $0 == sentence }.count, 1,
+                "\(testCase.id): a key point is repeated — \(sentence)"
+            )
+        }
+    }
+
+    func testLocalAnalysisContractAnalysesAPageOfOnlyBoilerplateToNothing() throws {
+        let contract = try localAnalysisContract()
+        for testCase in contract.emptyAnalysisCases {
+            let content = LocalAnalysisEngine.summarize(page: testCase.page)
+            // Empty, not a sentence of explanation: a user-facing string here would
+            // be English on a page that is not, and belongs to the interface rather
+            // than to the engine.
+            XCTAssertEqual(content.summary, "", "\(testCase.id): engine produced prose of its own")
+            XCTAssertEqual(content.keyPoints, [], "\(testCase.id): unexpected key points")
+            XCTAssertEqual(content.claimsToCheck, [], "\(testCase.id): unexpected claims")
+        }
+    }
+
     private func localAnalysisContract() throws -> LocalAnalysisContract {
         let url = try XCTUnwrap(
             Bundle.module.url(forResource: "local-analysis-contract", withExtension: "json")
@@ -1272,6 +1303,19 @@ private struct LocalAnalysisContract: Decodable {
     let readingTimeCases: [ReadingTimeContractCase]
     let evidenceCases: [EvidenceContractCase]
     let boilerplateCases: [BoilerplateContractCase]
+    let duplicateSentenceCases: [DuplicateSentenceContractCase]
+    let emptyAnalysisCases: [EmptyAnalysisContractCase]
+}
+
+private struct DuplicateSentenceContractCase: Decodable {
+    let id: String
+    let page: PageSnapshot
+    let repeatedSentence: String
+}
+
+private struct EmptyAnalysisContractCase: Decodable {
+    let id: String
+    let page: PageSnapshot
 }
 
 private struct EvidenceContractCase: Decodable {
