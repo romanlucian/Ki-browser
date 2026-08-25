@@ -38,29 +38,38 @@ export function extractPage() {
   const readingNodes = (selector) => [root, ...shadowRoots].flatMap(
     (scope) => [...scope.querySelectorAll(selector)]
   );
-  const seenBlocks = new Set();
-  // `tr` is here because a link aggregator lays its entries out in table rows and
-  // has no paragraphs at all. Without it such a page reached the whole-document
-  // fallback, which reads `innerText` from a DETACHED clone — and a detached node
-  // is outside the layout tree, so the engine gives it textContent semantics with
-  // no layout line breaks. The page then arrived as a single block whatever the
-  // fallback did with newlines. These nodes are live, so their `innerText` breaks
-  // lines where the layout does.
-  const paragraphs = readingNodes("h1, h2, h3, p, li, blockquote, tr")
-    .filter((node) => !node.closest(excludedSelector) && isRendered(node))
-    // A row counts as a reading block only when nothing inside it already is, so a
-    // documentation table whose cells hold paragraphs is not read twice — and `tr`
-    // is in that list because sites lay tables out inside tables. Hacker News does,
-    // and without it every outer row repeated the rows nested within it.
-    .filter((node) => node.tagName !== "TR" || !node.querySelector("h1, h2, h3, p, li, blockquote, tr"))
-    .map((node) => clean(node.innerText))
-    .filter((text) => text.length >= 45 && text.length <= 1800)
-    .filter((text) => {
-      const key = text.toLocaleLowerCase();
-      if (seenBlocks.has(key)) return false;
-      seenBlocks.add(key);
-      return true;
-    });
+  const gatherBlocks = (selector) => {
+    const seen = new Set();
+    return readingNodes(selector)
+      .filter((node) => !node.closest(excludedSelector) && isRendered(node))
+      // A row counts only when nothing inside it already does, so a documentation
+      // table whose cells hold paragraphs is not read twice — and `tr` is in that
+      // list because sites lay tables out inside tables. Hacker News does, and
+      // without it every outer row repeated the rows nested within it.
+      .filter((node) => node.tagName !== "TR" || !node.querySelector("h1, h2, h3, p, li, blockquote, tr"))
+      .map((node) => clean(node.innerText))
+      .filter((text) => text.length >= 45 && text.length <= 1800)
+      .filter((text) => {
+        const key = text.toLocaleLowerCase();
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+  };
+  // Rows are read only by a page that offers nothing else. A link aggregator lays
+  // every entry out in a table and has no paragraph anywhere, and without rows it
+  // reached the whole-document fallback — which takes `innerText` from a DETACHED
+  // clone, outside the layout tree, so the engine gives it textContent semantics
+  // with no line breaks and the page arrived as one block.
+  //
+  // An article that merely contains a table is a different case and must not be
+  // treated the same way. Wikipedia's country articles put an infobox ahead of the
+  // lede in document order, so its rows collected the opening-position bonus and
+  // the gist began "Labelled map Show globe" instead of the article's first
+  // sentence. Asking for rows only when there are no paragraphs keeps the
+  // aggregator readable and leaves the article alone.
+  const prose = gatherBlocks("h1, h2, h3, p, li, blockquote");
+  const paragraphs = prose.length >= 2 ? prose : gatherBlocks("h1, h2, h3, p, li, blockquote, tr");
 
   // `clean` collapses every run of whitespace, newlines included. On a page whose
   // content is not paragraphs — a link aggregator laying its entries out in table
