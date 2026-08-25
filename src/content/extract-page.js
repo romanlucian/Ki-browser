@@ -39,8 +39,18 @@ export function extractPage() {
     (scope) => [...scope.querySelectorAll(selector)]
   );
   const seenBlocks = new Set();
-  const paragraphs = readingNodes("h1, h2, h3, p, li, blockquote")
+  // `tr` is here because a link aggregator lays its entries out in table rows and
+  // has no paragraphs at all. Without it such a page reached the whole-document
+  // fallback, which reads `innerText` from a DETACHED clone — and a detached node
+  // is outside the layout tree, so the engine gives it textContent semantics with
+  // no layout line breaks. The page then arrived as a single block whatever the
+  // fallback did with newlines. These nodes are live, so their `innerText` breaks
+  // lines where the layout does.
+  const paragraphs = readingNodes("h1, h2, h3, p, li, blockquote, tr")
     .filter((node) => !node.closest(excludedSelector) && isRendered(node))
+    // A row counts as a reading block only when nothing inside it already is, so a
+    // documentation table whose cells hold paragraphs is not read twice.
+    .filter((node) => node.tagName !== "TR" || !node.querySelector("h1, h2, h3, p, li, blockquote"))
     .map((node) => clean(node.innerText))
     .filter((text) => text.length >= 45 && text.length <= 1800)
     .filter((text) => {

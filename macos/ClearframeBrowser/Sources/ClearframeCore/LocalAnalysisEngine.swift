@@ -252,8 +252,26 @@ public enum LocalAnalysisEngine {
         return result
     }
 
+    /// Exactly the characters JavaScript's `\s` matches, and deliberately not
+    /// `CharacterSet.whitespacesAndNewlines`.
+    ///
+    /// The extractor that produces `page.text` is JavaScript, and its `clean()`
+    /// decides which characters survive into the text a key point has to be found
+    /// in. Foundation's set disagrees on three. It counts U+200B and U+0085 as
+    /// space where JavaScript does not, so this engine replaced a zero-width space
+    /// the page still contains with an ordinary one and emitted "Local businesses"
+    /// for a page that says "Local\u{200B}businesses" — a key point Evidence Mode
+    /// can never find, under a label promising extracted page text. And it does not
+    /// count U+FEFF where JavaScript does, so a byte-order mark ended a block in one
+    /// runtime and not the other.
+    private static let javaScriptWhitespace: CharacterSet = {
+        var set = CharacterSet(charactersIn: "\t\n\u{000B}\u{000C}\r \u{00A0}\u{1680}\u{2028}\u{2029}\u{202F}\u{205F}\u{3000}\u{FEFF}")
+        set.insert(charactersIn: Unicode.Scalar(0x2000)!...Unicode.Scalar(0x200A)!)
+        return set
+    }()
+
     private static func normalize(_ value: String) -> String {
-        value.components(separatedBy: .whitespacesAndNewlines)
+        value.components(separatedBy: javaScriptWhitespace)
             .filter { !$0.isEmpty }
             .joined(separator: " ")
     }
@@ -264,7 +282,13 @@ public enum LocalAnalysisEngine {
     /// punctuation — an invented character would leave the sentence unfindable on the
     /// live page, which is exactly what Evidence Mode searches for.
     private static func sentencesFromReadingBlocks(_ value: String, language: String = "") -> [String] {
-        value.components(separatedBy: .newlines).flatMap { splitSentences($0, language: language) }
+        // `/\r?\n/` in the other runtime: a lone carriage return, U+0085, U+2028 and
+        // U+2029 are not block separators there, and `.newlines` would make them
+        // separators here. They are ordinary whitespace inside a block instead.
+        value
+            .replacingOccurrences(of: "\r\n", with: "\n")
+            .components(separatedBy: "\n")
+            .flatMap { splitSentences($0, language: language) }
     }
 
     /// Embedded media players sometimes expose their accessibility controls through
@@ -425,8 +449,30 @@ public enum LocalAnalysisEngine {
     private static func isCJK(_ character: Character) -> Bool {
         character.unicodeScalars.contains { scalar in
             switch scalar.value {
-            case 0x3400...0x4DBF, 0x4E00...0x9FFF, 0xF900...0xFAFF,
-                 0x3040...0x30FF, 0xAC00...0xD7AF:
+            // The same list as `CJK_PATTERN` in the other runtime, which cannot use
+            // `\p{Script=...}` here because Swift exposes no script property. This
+            // decides the shortest sentence worth keeping and the size a block must
+            // reach to count as a paragraph, so a character one runtime calls CJK
+            // and the other does not gives two answers about the same page. The
+            // ranges beyond the Basic Multilingual Plane and the halfwidth katakana
+            // were missing, and `\p{Script=Han}` and `\p{Script=Katakana}` include
+            // both.
+            case 0x1100...0x11FF,      // Hangul Jamo
+                 0x2E80...0x2EFF,      // CJK Radicals Supplement
+                 0x2F00...0x2FDF,      // Kangxi Radicals
+                 0x3005, 0x3007,       // iteration mark, ideographic zero
+                 0x3040...0x30FF,      // Hiragana and Katakana
+                 0x3130...0x318F,      // Hangul Compatibility Jamo
+                 0x31F0...0x31FF,      // Katakana Phonetic Extensions
+                 0x3400...0x4DBF,      // CJK Extension A
+                 0x4E00...0x9FFF,      // CJK Unified Ideographs
+                 0xA960...0xA97F,      // Hangul Jamo Extended-A
+                 0xAC00...0xD7AF,      // Hangul Syllables
+                 0xD7B0...0xD7FF,      // Hangul Jamo Extended-B
+                 0xF900...0xFAFF,      // CJK Compatibility Ideographs
+                 0xFF66...0xFF9F,      // halfwidth Katakana
+                 0x20000...0x3134F,    // CJK Extensions B through G
+                 0x2F800...0x2FA1F:    // CJK Compatibility Supplement
                 return true
             default:
                 return false

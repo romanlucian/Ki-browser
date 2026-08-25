@@ -272,6 +272,21 @@
         "formActions": []
       },
       "expected": "listing"
+    },
+    {
+      "id": "a-block-straddling-the-paragraph-threshold-is-measured-the-same-way",
+      "page": {
+        "title": "Seasonal timetable review",
+        "url": "https://example.org/t",
+        "hostname": "example.org",
+        "scheme": "https",
+        "language": "en",
+        "text": "The committee reviewed the revised seasonal timetable for the eastern corridor ééééééxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.[12]\nThe committee reviewed the revised seasonal timetable for the eastern corridor ééééééxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.[12]\nThe committee reviewed the revised seasonal timetable for the eastern corridor ééééééxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.[12]\nThe committee reviewed the revised seasonal timetable for the eastern corridor ééééééxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.[12]\nThe committee reviewed the revised seasonal timetable for the eastern corridor ééééééxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.[12]\nThe committee reviewed the revised seasonal timetable for the eastern corridor ééééééxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.[12]\nThe committee reviewed the revised seasonal timetable for the eastern corridor ééééééxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.[12]\nThe committee reviewed the revised seasonal timetable for the eastern corridor ééééééxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.[12]\nThe committee reviewed the revised seasonal timetable for the eastern corridor ééééééxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.[12]\nThe committee reviewed the revised seasonal timetable for the eastern corridor ééééééxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.[12]\nThe committee reviewed the revised seasonal timetable for the eastern corridor ééééééxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.[12]\nThe committee reviewed the revised seasonal timetable for the eastern corridor ééééééxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.[12]\nThe committee reviewed the revised seasonal timetable for the eastern corridor ééééééxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.[12]",
+        "wordCount": 156,
+        "hasPasswordField": false,
+        "formActions": []
+      },
+      "expected": "listing"
     }
   ],
   "riskCases": [
@@ -403,6 +418,20 @@
         "language": "en",
         "text": "Floating video changed how people use phones, and the change arrived faster than most reviewers expected.\nPhones gained floating video slowly, because every platform solved the same problem in a different way.\nThe floating video feature on phones is now expected by reviewers and by ordinary people alike.\nApple introduced picture-in-picture on the iPad in 2015, letting a video float above other applications.\nDevelopers had to opt in, and several streaming services delayed adoption for licensing reasons.\nSupport for picture-in-picture on Android arrived with Oreo and reached most handsets by 2019.\nBrowser vendors shipped their own controls, which behave differently from the operating system version.\nToday the capability is treated as a defect when it is missing from a major application.",
         "wordCount": 121,
+        "hasPasswordField": false,
+        "formActions": []
+      }
+    },
+    {
+      "id": "zero-width-space-in-page-text-stays-in-the-key-point",
+      "page": {
+        "title": "Harbour bridge reopens",
+        "url": "https://example.org/bridge",
+        "hostname": "example.org",
+        "scheme": "https",
+        "language": "en",
+        "text": "The harbour​bridge reopened this week after eighteen months of structural repair work.\nEngineers said the eastern​span needed more attention than the original survey suggested.\nFerry​operators kept a reduced timetable running throughout the closure for local commuters.\nThe council​published a full account of the overspend alongside the completion notice today.\nCyclists​regained a dedicated lane that had been closed since the beginning of the project.\nLocal​businesses on the north shore reported a clear rise in trade during the first weekend.\nTraffic​counts will be published each month until the temporary restrictions are lifted.",
+        "wordCount": 90,
         "hasPasswordField": false,
         "formActions": []
       }
@@ -658,6 +687,14 @@
       "expected": [
         "They bought pens, pencils, ́etc. Then they walked back to the office building.",
         "The receipt was filed with the others in the cabinet beside the meeting room."
+      ]
+    },
+    {
+      "id": "only-javascript-whitespace-collapses-inside-a-sentence",
+      "language": "en",
+      "text": "The harbour​bridge and the eastern﻿span reopened after a longclosure here.",
+      "expected": [
+        "The harbour​bridge and the eastern span reopened after a longclosure here."
       ]
     }
   ]

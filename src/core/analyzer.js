@@ -38,7 +38,12 @@ function graphemeCount(value) {
   return [...GRAPHEME_SEGMENTER.segment(value)].length;
 }
 
-const CJK_PATTERN = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u;
+// Written as explicit ranges rather than `\p{Script=...}`, because Swift has no
+// script property and tests scalar ranges by hand. The two lists must be the same
+// list: this decides the minimum length of a sentence and the size a block must
+// reach to count as a paragraph, so a character one runtime calls CJK and the
+// other does not gives the two different answers about the same page.
+const CJK_PATTERN = /[\u1100-\u11FF\u2E80-\u2EFF\u2F00-\u2FDF\u3005\u3007\u3040-\u30FF\u3130-\u318F\u31F0-\u31FF\u3400-\u4DBF\u4E00-\u9FFF\uA960-\uA97F\uAC00-\uD7AF\uD7B0-\uD7FF\uF900-\uFAFF\uFF66-\uFF9F]|[\u{20000}-\u{3134F}]|[\u{2F800}-\u{2FA1F}]/u;
 
 // Structure thresholds calibrated on live English and Romanian section fronts and
 // articles. Simplified Chinese has no listing measurement yet; only the shorter CJK
@@ -134,7 +139,12 @@ export function normalizeText(value = "") {
 
 function isUsefulSentenceLength(sentence) {
   const minimum = CJK_PATTERN.test(sentence) ? 12 : 35;
-  return sentence.length >= minimum && sentence.length <= 520;
+  // Graphemes, matching Swift's `count`. UTF-16 length is an upper bound on the
+  // grapheme count, so anything short by that measure is certainly short, and the
+  // segmenter is only worth running once that cheap test has passed.
+  if (sentence.length < minimum) return false;
+  const characters = graphemeCount(sentence);
+  return characters >= minimum && characters <= 520;
 }
 
 export function splitSentences(value = "", language = "") {
@@ -395,16 +405,21 @@ export function assessStructure(page) {
   let totalCharacters = 0;
   let longPunctuatedCharacters = 0;
   for (const block of blocks) {
+    // Graphemes, matching Swift's `count`. Measuring in UTF-16 units here put the
+    // two runtimes on opposite sides of the paragraph threshold for the same block
+    // — 219 characters a reader can see, 225 units — so one discounted its
+    // citations and the other did not, and they disagreed about the whole page.
+    const characters = graphemeCount(block);
     const longBlock = CJK_PATTERN.test(block) ? LONG_CJK_BLOCK_CHARACTERS : LONG_BLOCK_CHARACTERS;
     // Only a block already long enough to be a paragraph has its citations
     // discounted. A short teaser ending "…region. [1]" is a list entry whatever
     // the bracket holds, and stripping there would read a headline list as prose.
     const isPunctuated = BLOCK_ENDING_PATTERN.test(
-      block.length >= longBlock ? withoutTrailingCitations(block) : block
+      characters >= longBlock ? withoutTrailingCitations(block) : block
     );
-    totalCharacters += block.length;
+    totalCharacters += characters;
     if (isPunctuated) punctuatedBlocks += 1;
-    if (isPunctuated && block.length >= longBlock) longPunctuatedCharacters += block.length;
+    if (isPunctuated && characters >= longBlock) longPunctuatedCharacters += characters;
   }
 
   // Compare the two shares as integers so both runtimes agree on the boundaries.
