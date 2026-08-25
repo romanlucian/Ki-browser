@@ -236,6 +236,9 @@ public enum LocalAnalysisEngine {
             // Common Hindi words went missing from scoring: 8,404 tokens there
             // against 6,543 here on the same article.
             guard currentWord.unicodeScalars.count >= 2,
+                  // A run holding no letter and no number is not a word in either
+                  // runtime, and saying so here keeps the pair honest.
+                  currentWord.contains(where: { $0.isLetter || $0.isNumber }),
                   !selectedStopWords.contains(currentWord) else {
                 currentWord = ""
                 return

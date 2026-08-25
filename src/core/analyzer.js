@@ -212,7 +212,17 @@ export function tokenize(value = "", language = "") {
     // "\u092E\u0947\u0902" is one cluster and three code points — failed the two-character
     // minimum there and passed it here, and the two runtimes scored Hindi pages
     // differently. Counting scalars is the measure they can share.
-    if ([...current].length >= 2 && !stopWords.has(current)) result.push(current);
+    // A run holding no letter and no number is not a word in either runtime. An
+    // emoji's variation selector and joiner are both word characters and would
+    // otherwise form a token of their own — Swift never produces one, because the
+    // whole emoji is a single cluster that fails its letter test.
+    if (
+      [...current].length >= 2 &&
+      /[\p{L}\p{N}]/u.test(current) &&
+      !stopWords.has(current)
+    ) {
+      result.push(current);
+    }
     current = "";
   };
 
@@ -220,12 +230,15 @@ export function tokenize(value = "", language = "") {
     if (CJK_PATTERN.test(character)) {
       appendCurrent();
       if (!stopWords.has(character)) result.push(character);
-      // The zero-width joiners are word-internal in the scripts that use them:
-      // Persian writes "\u0645\u06CC\u200C\u0634\u0648\u062F" as one word, and a code-point walk sees the
-      // joiner as category Cf and ends the word there, while Swift walks grapheme
-      // clusters and never sees it at all. That split Persian words here and not
-      // there.
-    } else if (/[\p{L}\p{M}\p{N}'’\u200C\u200D-]/u.test(character)) {
+      // A joiner extends a word and cannot begin one. Persian writes
+      // "\u0645\u06CC\u200C\u0634\u0648\u062F" as a single word, and a code-point walk sees the joiner as
+      // category Cf and ends the word there, while Swift walks grapheme clusters
+      // and never sees it — so the joiner has to be a word character here. But a
+      // joiner after a space is its own cluster in Swift and fails its letter test,
+      // so gluing it to whatever follows produced a token this runtime alone had.
+    } else if (character === "\u200C" || character === "\u200D") {
+      if (current) current += character;
+    } else if (/[\p{L}\p{M}\p{N}'’-]/u.test(character)) {
       current += character;
     } else {
       appendCurrent();
@@ -384,13 +397,16 @@ export function summarizeLocally(page) {
   // What makes a sentence checkable is an attribution or an absolute — "according
   // to", "the study found", "always", "best" — or a quantity named as a quantity.
   // "ninety percent" qualifies without a numeral and "14 June 2023" does not
-  // qualify with one. `\d *%` is here so "45%" counts, spaced the same way Swift
+  // qualify with one. `\p{N} *%` is here so "45%" counts — `\p{N}` and not `\d`,
+  // because Swift asks `Character.isNumber`, which is true of every Unicode numeral,
+  // and this repository requires those two tests to agree. With `\d` a Devanagari
+  // percentage counted there and not here. Spaced the same way Swift
   // scans it, since sentences arrive with their whitespace already collapsed.
   //
   // The cost is deliberate: a bare numeral with no unit — "sales rose to 4,300" —
   // is no longer offered. Fewer claims, each one actually a claim.
   const claimPattern =
-    /\b(according|report|study|research|survey|million|billion|percent|guarantee|always|never|only|best|worst|first|potrivit|raport|studiu|cercetare|sondaj|milioane|miliarde|procent|selon|rapport|étude|recherche|sondage|milliard|pour cent)\b|报告|研究|调查|百万|十亿|百分之|保证|最佳|首次|\d *%/iu;
+    /\b(according|report|study|research|survey|million|billion|percent|guarantee|always|never|only|best|worst|first|potrivit|raport|studiu|cercetare|sondaj|milioane|miliarde|procent|selon|rapport|étude|recherche|sondage|milliard|pour cent)\b|报告|研究|调查|百万|十亿|百分之|保证|最佳|首次|\p{N} *%/iu;
   // A claim repeated from the gist or a key point gives the reader nothing new to
   // check, so keep claims to sentences the rest of the result did not already show.
   const presentedSentences = new Set([...summarySentences, ...keyPoints]);

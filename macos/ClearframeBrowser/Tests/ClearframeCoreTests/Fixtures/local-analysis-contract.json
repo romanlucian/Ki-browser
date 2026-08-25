@@ -49,6 +49,28 @@
         "में": 2
       },
       "excluded": []
+    },
+    {
+      "id": "a-joiner-cannot-begin-a-word",
+      "language": "en",
+      "text": "Villagers were ‌attacked overnight and the ‌attacked area was sealed off.",
+      "requiredCounts": {
+        "attacked": 2
+      },
+      "excluded": [
+        "‌attacked"
+      ]
+    },
+    {
+      "id": "an-emoji-joiner-is-not-a-word",
+      "language": "en",
+      "text": "The 🏳️‍🌈 flag was raised above the town hall during the summer festival.",
+      "requiredCounts": {
+        "flag": 1
+      },
+      "excluded": [
+        "️‍"
+      ]
     }
   ],
   "summaryCases": [
