@@ -35,15 +35,24 @@ const MEDIA_INTERFACE_PHRASES = [
 const GRAPHEME_SEGMENTER = new Intl.Segmenter("en", { granularity: "grapheme" });
 
 // Segmentation is exact and costs more than the rest of the analysis put together,
-// and this is called for every candidate sentence on the page. Almost nothing needs
-// it: a string measures the same in UTF-16 units as in graphemes unless it carries
-// a character outside the Basic Multilingual Plane, a combining mark, a zero-width
-// joiner, or a Hangul jamo that composes with its neighbour. Ruling those out is one
-// regex pass, and only the strings that fail it pay for the segmenter.
-const COMPLEX_GRAPHEME_PATTERN = /[\u{10000}-\u{10FFFF}\u200D\u1100-\u11FF\uA960-\uA97F\uD7B0-\uD7FF]|\p{M}/u;
+// and this runs for every candidate sentence on the page. Most text does not need
+// it — but deciding which by listing what breaks clustering was wrong. That list
+// named astral characters, combining marks, the zero-width joiner and Hangul jamo,
+// and missed the zero-width NON-joiner that ordinary Persian is full of, so
+// "\u0645\u06CC\u200C\u0634\u0648\u062F" counted six where a reader sees five. It also missed the
+// Prepend class and a carriage return before a newline. Unicode can add to those
+// categories; it cannot be enumerated safely from the outside.
+//
+// The test is inverted instead. The fast path is taken only for text made entirely
+// of characters checked to be a grapheme of their own and never to cluster with a
+// neighbour — 21,936 of them, verified against the segmenter itself. Everything
+// else segments. Being narrow costs little: the scripts that fall through are the
+// ones that genuinely need segmenting, and they are still faster than before.
+const STANDALONE_GRAPHEME_PATTERN =
+  /^[\t\n\u0020-\u007E\u00A0-\u024F\u2010-\u2027\u2030-\u205E\u3000-\u3029\u3030-\u3098\u309B-\u30FF\u4E00-\u9FFF\uFF01-\uFF60]*$/u;
 
 function graphemeCount(value) {
-  if (!COMPLEX_GRAPHEME_PATTERN.test(value)) return value.length;
+  if (STANDALONE_GRAPHEME_PATTERN.test(value)) return value.length;
   return [...GRAPHEME_SEGMENTER.segment(value)].length;
 }
 
