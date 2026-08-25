@@ -902,7 +902,18 @@ final class BrowserSession: NSObject, ObservableObject {
           seenBlocks.add(key);
           return true;
         });
-      const bodyText = clean(clone.innerText || '');
+      // `clean` collapses every run of whitespace, newlines included. On a page
+      // whose content is not paragraphs — a link aggregator laying its entries out
+      // in table rows — nothing qualifies as a reading block, this fallback runs,
+      // and the whole document arrives as a single line. Structure detection needs
+      // at least twelve blocks before it will judge anything, so such a page could
+      // never be recognised as a listing, and its "key points" read "com)82 points
+      // by …".
+      //
+      // `innerText` already breaks lines where the layout does, so cleaning each
+      // line on its own keeps that structure while still collapsing the spaces
+      // within it.
+      const bodyText = (clone.innerText || '').split('\n').map(clean).filter(Boolean).join('\n');
       const text = (blocks.length >= 2 ? blocks.join('\n') : bodyText).slice(0, 48000);
       const readingUnits = text.match(/[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]|[\p{L}\p{M}\p{N}]+/gu) || [];
       const actions = [...document.forms].map(form => {

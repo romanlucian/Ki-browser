@@ -751,6 +751,29 @@ struct BrowserE2ESmoke {
             try require((assistant.analysis?.content.summary.count ?? 0) > 80, "Analyze anyway produced an unexpectedly short summary")
             print("PASS structure override: Analyze anyway summarized the already-extracted listing snapshot without reading the page again")
 
+            // A link aggregator keeps every entry in a table row, so nothing on the
+            // page is a paragraph and the extractor falls back to the whole
+            // document. That fallback used to collapse every newline, handing
+            // structure detection a single block it could never judge, and handing
+            // the reader key points like "com)82 points by …".
+            let tableListingURL = fixtureURL.appendingPathComponent("table-listing.html")
+            try await loadDeterministicPage(
+                in: session,
+                localURL: tableListingURL,
+                expectedTitle: "Clearframe Table Digest"
+            )
+            await assistant.analyzeCurrentPage(session: session)
+            let fallbackBlocks = (assistant.snapshot?.text ?? "").split(separator: "\n").count
+            try require(
+                fallbackBlocks >= 12,
+                "the whole-document fallback flattened a table listing into \(fallbackBlocks) block(s), so structure detection could never see it"
+            )
+            try require(
+                assistant.state == .structureNotice,
+                "a link-aggregator fixture built from table rows did not stop at a structure notice"
+            )
+            print("PASS extractor fallback: a table listing kept its line structure and stopped at a notice")
+
             try await loadDeterministicPage(in: session, localURL: fixtureURL)
             await assistant.analyzeCurrentPage(session: session)
             try require(assistant.state == .ready, "the ordinary article fixture no longer analyzes straight to a ready summary")

@@ -50,7 +50,20 @@ export function extractPage() {
       return true;
     });
 
-  const fallbackText = clean(clone.innerText || "");
+  // `clean` collapses every run of whitespace, newlines included. On a page whose
+  // content is not paragraphs — a link aggregator laying its entries out in table
+  // rows — nothing qualifies as a reading block, this fallback runs, and the whole
+  // document arrives as a single line. Structure detection needs at least twelve
+  // blocks before it will judge anything, so such a page could never be recognised
+  // as a listing, and its "key points" read "com)82 points by …".
+  //
+  // `innerText` already breaks lines where the layout does, so cleaning each line
+  // on its own keeps that structure while still collapsing the spaces within it.
+  const fallbackText = (clone.innerText || "")
+    .split("\n")
+    .map(clean)
+    .filter(Boolean)
+    .join("\n");
   const text = (paragraphs.length >= 2 ? paragraphs.join("\n") : fallbackText).slice(0, 48000);
 
   const pageUrl = new URL(location.href);
