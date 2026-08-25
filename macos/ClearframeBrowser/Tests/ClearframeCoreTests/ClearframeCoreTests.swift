@@ -1286,6 +1286,17 @@ final class ClearframeCoreTests: XCTestCase {
         }
     }
 
+    func testLocalAnalysisContractSplitsSentencesTheSameWayInBothRuntimes() throws {
+        let contract = try localAnalysisContract()
+        for testCase in contract.segmentationCases {
+            XCTAssertEqual(
+                LocalAnalysisEngine.splitSentences(testCase.text, language: testCase.language),
+                testCase.expected,
+                "\(testCase.id): split differently"
+            )
+        }
+    }
+
     private func localAnalysisContract() throws -> LocalAnalysisContract {
         let url = try XCTUnwrap(
             Bundle.module.url(forResource: "local-analysis-contract", withExtension: "json")
@@ -1305,6 +1316,14 @@ private struct LocalAnalysisContract: Decodable {
     let boilerplateCases: [BoilerplateContractCase]
     let duplicateSentenceCases: [DuplicateSentenceContractCase]
     let emptyAnalysisCases: [EmptyAnalysisContractCase]
+    let segmentationCases: [SegmentationContractCase]
+}
+
+private struct SegmentationContractCase: Decodable {
+    let id: String
+    let language: String
+    let text: String
+    let expected: [String]
 }
 
 private struct DuplicateSentenceContractCase: Decodable {

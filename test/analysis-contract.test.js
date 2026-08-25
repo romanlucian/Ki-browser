@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import {
   assessRisk,
+  splitSentences,
   assessStructure,
   simplifyEnglish,
   summarizeLocally,
@@ -155,5 +156,15 @@ test("shared contract: a page that is only boilerplate analyses to nothing", () 
     assert.equal(result.summary, "", `${testCase.id}: engine produced prose of its own`);
     assert.deepEqual(result.keyPoints, [], `${testCase.id}: unexpected key points`);
     assert.deepEqual(result.claimsToCheck, [], `${testCase.id}: unexpected claims`);
+  }
+});
+
+test("shared contract: sentences split the same way in both runtimes", () => {
+  for (const testCase of contract.segmentationCases) {
+    assert.deepEqual(
+      splitSentences(testCase.text, testCase.language),
+      testCase.expected,
+      `${testCase.id}: split differently`
+    );
   }
 });

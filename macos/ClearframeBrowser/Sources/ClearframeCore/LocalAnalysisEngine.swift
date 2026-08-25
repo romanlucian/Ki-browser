@@ -41,7 +41,22 @@ public enum LocalAnalysisEngine {
     /// mark. A script whose terminator is missing here reads as one endless sentence,
     /// which also makes its pages look unpunctuated to `assessStructure`.
     private static let sentenceEndings: Set<Character> = [
-        ".", "!", "?", "。", "！", "？", "।", "॥", "۔", "؟"
+        ".", "!", "?", "。", "！", "？", "।", "॥", "۔", "؟", "։"
+    ]
+
+    /// Words that take a full stop without ending a sentence, keyed by language and
+    /// deliberately never merged into one set: Italian "es." abbreviates *esempio*
+    /// while Spanish "es" is the verb, so an Italian entry loose in a Spanish page
+    /// would swallow the boundary after "Así es." An unrecognised language gets an
+    /// empty set — no joining, rather than another language's guesses. This is the
+    /// same reason the stop words above are chosen by language.
+    private static let sentenceAbbreviations: [String: Set<String>] = [
+        "en": wordSet("mr mrs ms dr prof sr jr st vs etc inc ltd corp fig vol pp ed al approx dept jan feb mar apr jun jul aug sep sept oct nov dec e.g i.e u.s u.k"),
+        "ro": wordSet("dl dna dr ing nr ex etc pag vol art"),
+        "fr": wordSet("m mme mlle dr pr st ste av ex etc vol pp"),
+        "es": wordSet("sr sra srta dr dra prof ud uds etc núm pág vol"),
+        "de": wordSet("hr dr prof bzw ca evtl ggf inkl usw vgl nr abs z u d"),
+        "it": wordSet("sig dott dr prof avv ecc pag vol num es")
     ]
 
     private static let blockEndings: Set<Character> = [
@@ -66,7 +81,7 @@ public enum LocalAnalysisEngine {
 
     public static func summarize(page: PageSnapshot) -> PageAnalysisContent {
         let source = page.text.isEmpty ? "" : page.text
-        let extracted = sentencesFromReadingBlocks(source)
+        let extracted = sentencesFromReadingBlocks(source, language: page.language)
         let repeated = repeatedInterfaceText(in: extracted)
         let sentences = deduplicated(extracted)
             .filter { !isMediaInterfaceSentence($0) && !repeated.contains($0.lowercased()) }
@@ -166,10 +181,11 @@ public enum LocalAnalysisEngine {
         max(1, Int(ceil(Double(wordCount) / 220.0)))
     }
 
-    public static func splitSentences(_ value: String) -> [String] {
+    public static func splitSentences(_ value: String, language: String = "") -> [String] {
         var sentences: [String] = []
         var current = ""
         let characters = Array(normalize(value))
+        let abbreviations = abbreviations(for: language)
 
         for (index, character) in characters.enumerated() {
             current.append(character)
@@ -181,6 +197,10 @@ public enum LocalAnalysisEngine {
                    index + 1 < characters.count,
                    characters[index - 1].isNumber,
                    characters[index + 1].isNumber {
+                    continue
+                }
+                if character == ".",
+                   !periodEndsSentence(current, characters, index, abbreviations) {
                     continue
                 }
                 let sentence = normalize(current)
@@ -238,8 +258,8 @@ public enum LocalAnalysisEngine {
     /// headlines from fusing into one oversized point without inventing terminal
     /// punctuation — an invented character would leave the sentence unfindable on the
     /// live page, which is exactly what Evidence Mode searches for.
-    private static func sentencesFromReadingBlocks(_ value: String) -> [String] {
-        value.components(separatedBy: .newlines).flatMap { splitSentences($0) }
+    private static func sentencesFromReadingBlocks(_ value: String, language: String = "") -> [String] {
+        value.components(separatedBy: .newlines).flatMap { splitSentences($0, language: language) }
     }
 
     /// Embedded media players sometimes expose their accessibility controls through
@@ -288,6 +308,54 @@ public enum LocalAnalysisEngine {
             total + matchCount(of: phrase, in: trimmed) * phrase.count
         }
         return coveredCharacters * 2 > trimmed.count
+    }
+
+    private static func abbreviations(for language: String) -> Set<String> {
+        let primary = language
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+            .split(whereSeparator: { $0 == "-" || $0 == "_" })
+            .first
+            .map(String.init) ?? ""
+        return sentenceAbbreviations[primary] ?? []
+    }
+
+    /// The word a period follows, so "(e.g." asks about "e.g" and "Dr." about "dr".
+    ///
+    /// The last space is found among unicode scalars rather than `Character`s. A
+    /// combining mark following a space forms one grapheme cluster with it, which
+    /// is not equal to `" "`, so splitting on Characters would run straight past
+    /// the separator that JavaScript's `lastIndexOf(" ")` stops at.
+    private static func trailingWord(_ value: String) -> String {
+        let scalars = Array(String(value.dropLast()).unicodeScalars)
+        var start = scalars.count
+        while start > 0, scalars[start - 1] != " " { start -= 1 }
+        let word = String(String.UnicodeScalarView(scalars[start...]))
+        return String(word.drop { !$0.isLetter && !$0.isNumber }).lowercased()
+    }
+
+    private static func periodEndsSentence(
+        _ current: String,
+        _ characters: [Character],
+        _ index: Int,
+        _ abbreviations: Set<String>
+    ) -> Bool {
+        var next = index + 1
+        while next < characters.count, characters[next] == " " { next += 1 }
+        guard next < characters.count else { return true }
+
+        let following = characters[next]
+        // "e.g. scheduling", "U.S. policy", "approx. 15" — nothing starts a sentence
+        // with a lowercase letter or a digit, so that stop belonged to the word.
+        if following.isLowercase || following.isNumber { return false }
+
+        let word = trailingWord(current)
+        // "U.S. policy", "J. R. R. Tolkien" — a lone letter before a stop is an
+        // initial, not the end of a thought.
+        if word.count == 1, word.first?.isLetter == true { return false }
+        // A capital follows, so only a known abbreviation joins them: "Dr. Alison" is
+        // one sentence and "the office. Analysts" is two.
+        return !abbreviations.contains(word)
     }
 
     private static func deduplicated(_ sentences: [String]) -> [String] {

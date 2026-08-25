@@ -466,5 +466,169 @@
         "formActions": []
       }
     }
+  ],
+  "segmentationCases": [
+    {
+      "id": "abbreviation-before-lowercase-is-not-a-boundary",
+      "language": "en",
+      "text": "Many organisations adopt automation tools (e.g. scheduling systems) to reduce effort. The report explains the details in its second chapter.",
+      "expected": [
+        "Many organisations adopt automation tools (e.g. scheduling systems) to reduce effort.",
+        "The report explains the details in its second chapter."
+      ]
+    },
+    {
+      "id": "title-before-a-name-is-not-a-boundary",
+      "language": "en",
+      "text": "Dr. Alison Pierce has studied urban air quality for more than fifteen years now. Her findings were published last spring in a peer reviewed journal.",
+      "expected": [
+        "Dr. Alison Pierce has studied urban air quality for more than fifteen years now.",
+        "Her findings were published last spring in a peer reviewed journal."
+      ]
+    },
+    {
+      "id": "place-abbreviation-before-a-name-is-not-a-boundary",
+      "language": "en",
+      "text": "St. Petersburg remains a popular destination for winter travellers from Europe. Tourists keep arriving there despite the long and very cold winter season.",
+      "expected": [
+        "St. Petersburg remains a popular destination for winter travellers from Europe.",
+        "Tourists keep arriving there despite the long and very cold winter season."
+      ]
+    },
+    {
+      "id": "decimal-numbers-remain-one-sentence",
+      "language": "en",
+      "text": "The economy grew by 2.7 percent last year according to the statistics office. Analysts had expected considerably less growth over the same twelve months.",
+      "expected": [
+        "The economy grew by 2.7 percent last year according to the statistics office.",
+        "Analysts had expected considerably less growth over the same twelve months."
+      ]
+    },
+    {
+      "id": "romanian-title-before-a-name-is-not-a-boundary",
+      "language": "ro",
+      "text": "Dl. Popescu a explicat situația economică în fața comisiei parlamentare ieri. Raportul complet va fi publicat luna viitoare pe site-ul oficial al comisiei.",
+      "expected": [
+        "Dl. Popescu a explicat situația economică în fața comisiei parlamentare ieri.",
+        "Raportul complet va fi publicat luna viitoare pe site-ul oficial al comisiei."
+      ]
+    },
+    {
+      "id": "french-title-before-a-name-is-not-a-boundary",
+      "language": "fr",
+      "text": "M. Dupont a présenté le rapport annuel devant la commission parlementaire hier. Le document complet sera publié le mois prochain sur le site de la commission.",
+      "expected": [
+        "M. Dupont a présenté le rapport annuel devant la commission parlementaire hier.",
+        "Le document complet sera publié le mois prochain sur le site de la commission."
+      ]
+    },
+    {
+      "id": "spanish-title-before-a-name-is-not-a-boundary",
+      "language": "es",
+      "text": "El Sr. García presentó el informe anual ante la comisión parlamentaria ayer. El documento completo se publicará el próximo mes en el sitio de la comisión.",
+      "expected": [
+        "El Sr. García presentó el informe anual ante la comisión parlamentaria ayer.",
+        "El documento completo se publicará el próximo mes en el sitio de la comisión."
+      ]
+    },
+    {
+      "id": "german-abbreviation-before-a-capital-is-not-a-boundary",
+      "language": "de",
+      "text": "Die Studie untersucht z. B. den Verkehr in mehreren deutschen Großstädten. Die vollständigen Ergebnisse werden im nächsten Monat veröffentlicht werden.",
+      "expected": [
+        "Die Studie untersucht z. B. den Verkehr in mehreren deutschen Großstädten.",
+        "Die vollständigen Ergebnisse werden im nächsten Monat veröffentlicht werden."
+      ]
+    },
+    {
+      "id": "italian-title-before-a-name-is-not-a-boundary",
+      "language": "it",
+      "text": "Il Dott. Rossi ha presentato la relazione annuale alla commissione ieri. Il documento completo sarà pubblicato il mese prossimo sul sito ufficiale.",
+      "expected": [
+        "Il Dott. Rossi ha presentato la relazione annuale alla commissione ieri.",
+        "Il documento completo sarà pubblicato il mese prossimo sul sito ufficiale."
+      ]
+    },
+    {
+      "id": "armenian-full-stop-terminates-sentences",
+      "language": "hy",
+      "text": "Սա առաջին երկար նախադասությունն է այս փաստաթղթի մեջ։ Սա երկրորդ երկար նախադասությունն է նույն փաստաթղթում։",
+      "expected": [
+        "Սա առաջին երկար նախադասությունն է այս փաստաթղթի մեջ։",
+        "Սա երկրորդ երկար նախադասությունն է նույն փաստաթղթում։"
+      ]
+    },
+    {
+      "id": "two-titles-in-one-sentence-are-not-boundaries",
+      "language": "en",
+      "text": "Mr. Brown and Mrs. Davis met the committee yesterday afternoon in the town hall. They asked for a written record of the discussion to be circulated afterwards.",
+      "expected": [
+        "Mr. Brown and Mrs. Davis met the committee yesterday afternoon in the town hall.",
+        "They asked for a written record of the discussion to be circulated afterwards."
+      ]
+    },
+    {
+      "id": "versus-between-two-names-is-not-a-boundary",
+      "language": "en",
+      "text": "Apple vs. Samsung continues to shape how design patents are argued in court. Both companies have filed further briefs ahead of the hearing later this year.",
+      "expected": [
+        "Apple vs. Samsung continues to shape how design patents are argued in court.",
+        "Both companies have filed further briefs ahead of the hearing later this year."
+      ]
+    },
+    {
+      "id": "month-abbreviation-before-a-year-is-not-a-boundary",
+      "language": "en",
+      "text": "The survey ran from Jan. 2026 until the middle of March across four regions. Researchers published the combined results at the end of the following month.",
+      "expected": [
+        "The survey ran from Jan. 2026 until the middle of March across four regions.",
+        "Researchers published the combined results at the end of the following month."
+      ]
+    },
+    {
+      "id": "initialism-before-lowercase-is-not-a-boundary",
+      "language": "en",
+      "text": "The U.S. policy on tariffs changed sharply during the first half of the year. Importers noticed the difference within a few weeks of the announcement.",
+      "expected": [
+        "The U.S. policy on tariffs changed sharply during the first half of the year.",
+        "Importers noticed the difference within a few weeks of the announcement."
+      ]
+    },
+    {
+      "id": "a-full-stop-after-an-ordinary-word-is-a-boundary",
+      "language": "en",
+      "text": "The transit authority published its annual report on ridership last Tuesday. Analysts said the busiest corridor had recovered almost all its earlier volume.",
+      "expected": [
+        "The transit authority published its annual report on ridership last Tuesday.",
+        "Analysts said the busiest corridor had recovered almost all its earlier volume."
+      ]
+    },
+    {
+      "id": "spanish-ordinal-indicator-is-not-a-boundary",
+      "language": "es",
+      "text": "Vive en el 5.º piso del edificio situado junto al parque central de la ciudad. El ascensor lleva funcionando desde el mes de enero sin ninguna avería grave.",
+      "expected": [
+        "Vive en el 5.º piso del edificio situado junto al parque central de la ciudad.",
+        "El ascensor lleva funcionando desde el mes de enero sin ninguna avería grave."
+      ]
+    },
+    {
+      "id": "language-tag-with-stray-spaces-still-finds-its-abbreviations",
+      "language": " en ",
+      "text": "They bought pens, pencils, notebooks, etc. Then they walked back to the office. The receipt was filed with the others in the cabinet beside the meeting room.",
+      "expected": [
+        "They bought pens, pencils, notebooks, etc. Then they walked back to the office.",
+        "The receipt was filed with the others in the cabinet beside the meeting room."
+      ]
+    },
+    {
+      "id": "a-combining-mark-after-a-space-still-separates-words",
+      "language": "en",
+      "text": "They bought pens, pencils, ́etc. Then they walked back to the office building. The receipt was filed with the others in the cabinet beside the meeting room.",
+      "expected": [
+        "They bought pens, pencils, ́etc. Then they walked back to the office building.",
+        "The receipt was filed with the others in the cabinet beside the meeting room."
+      ]
+    }
   ]
 }

@@ -48,8 +48,60 @@ const CJK_PATTERN = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Scr
 // whose terminator is missing here reads as one endless sentence, which also makes its
 // pages look unpunctuated to assessStructure.
 const SENTENCE_ENDING_CHARACTERS = new Set([
-  ".", "!", "?", "。", "！", "？", "।", "॥", "۔", "؟"
+  ".", "!", "?", "。", "！", "？", "।", "॥", "۔", "؟", "։"
 ]);
+// Mirrors Swift's Character.isLowercase, which is the Unicode **Lowercase**
+// binary property — Ll plus Other_Lowercase. Not \p{Ll}: that is the general
+// category alone and excludes the ordinal indicators Spanish and Portuguese use
+// in ordinary prose, so "Vive en el 5.º piso" split here and not in Swift, and
+// this runtime then dropped the short half and reported a sentence starting "º".
+const LOWERCASE_PATTERN = /\p{Lowercase}/u;
+const LEADING_NON_WORD_PATTERN = /^[^\p{L}\p{N}]+/u;
+const LETTER_PATTERN = /\p{L}/u;
+
+// Words that take a full stop without ending a sentence. Keyed by language and
+// never merged into one set: Italian "es." abbreviates esempio, while Spanish
+// "es" is the verb, so an Italian entry loose in a Spanish page would swallow the
+// boundary after "Así es." An unrecognised language gets an empty set — no
+// joining rather than another language's guesses.
+const abbreviationSet = (value) => new Set(value.split(" "));
+const SENTENCE_ABBREVIATIONS_BY_LANGUAGE = {
+  en: abbreviationSet("mr mrs ms dr prof sr jr st vs etc inc ltd corp fig vol pp ed al approx dept jan feb mar apr jun jul aug sep sept oct nov dec e.g i.e u.s u.k"),
+  ro: abbreviationSet("dl dna dr ing nr ex etc pag vol art"),
+  fr: abbreviationSet("m mme mlle dr pr st ste av ex etc vol pp"),
+  es: abbreviationSet("sr sra srta dr dra prof ud uds etc núm pág vol"),
+  de: abbreviationSet("hr dr prof bzw ca evtl ggf inkl usw vgl nr abs z u d"),
+  it: abbreviationSet("sig dott dr prof avv ecc pag vol num es")
+};
+
+function abbreviationsFor(language = "") {
+  const primary = language.trim().toLowerCase().split(/[-_]/u)[0];
+  return SENTENCE_ABBREVIATIONS_BY_LANGUAGE[primary] || new Set();
+}
+
+// The word a period follows, so "(e.g." asks about "e.g" and "Dr." about "dr".
+function trailingWord(value) {
+  const withoutTerminator = value.slice(0, -1);
+  const word = withoutTerminator.slice(withoutTerminator.lastIndexOf(" ") + 1);
+  return word.replace(LEADING_NON_WORD_PATTERN, "").toLowerCase();
+}
+
+function periodEndsSentence(current, characters, index, abbreviations) {
+  let next = index + 1;
+  while (next < characters.length && characters[next] === " ") next += 1;
+  if (next >= characters.length) return true;
+  const following = characters[next];
+  // "e.g. scheduling", "U.S. policy", "approx. 15" — nothing starts a sentence
+  // with a lowercase letter or a digit, so that stop belonged to the word.
+  if (LOWERCASE_PATTERN.test(following) || NUMERIC_PATTERN.test(following)) return false;
+  const word = trailingWord(current);
+  // "U.S. policy", "J. R. R. Tolkien" — a lone letter before a stop is an initial,
+  // not the end of a thought. Counted in graphemes, as Swift counts Characters.
+  if (graphemeCount(word) === 1 && LETTER_PATTERN.test(word)) return false;
+  // A capital follows, so only a known abbreviation joins them: "Dr. Alison" is
+  // one sentence and "the office. Analysts" is two.
+  return !abbreviations.has(word);
+}
 // Mirrors Swift's Character.isNumber, which covers Nd, Nl and No — Devanagari and
 // full-width digits included. Not \d, which is ASCII only.
 const NUMERIC_PATTERN = /\p{N}/u;
@@ -85,8 +137,9 @@ function isUsefulSentenceLength(sentence) {
   return sentence.length >= minimum && sentence.length <= 520;
 }
 
-export function splitSentences(value = "") {
+export function splitSentences(value = "", language = "") {
   const characters = [...normalizeText(value)];
+  const abbreviations = abbreviationsFor(language);
   const sentences = [];
   let current = "";
 
@@ -106,6 +159,9 @@ export function splitSentences(value = "") {
       NUMERIC_PATTERN.test(characters[index - 1]) &&
       NUMERIC_PATTERN.test(characters[index + 1])
     ) {
+      continue;
+    }
+    if (character === "." && !periodEndsSentence(current, characters, index, abbreviations)) {
       continue;
     }
     const sentence = normalizeText(current);
@@ -146,8 +202,8 @@ export function tokenize(value = "", language = "") {
 // fusing into one oversized point without inventing terminal punctuation — an invented
 // character would leave the sentence unfindable on the live page, which is exactly what
 // Evidence Mode searches for.
-function sentencesFromReadingBlocks(value = "") {
-  return value.split(/\r?\n/).flatMap((block) => splitSentences(block));
+function sentencesFromReadingBlocks(value = "", language = "") {
+  return value.split(/\r?\n/).flatMap((block) => splitSentences(block, language));
 }
 
 // Embedded media players sometimes expose their accessibility controls through
@@ -259,7 +315,7 @@ function selectSentences(scored, count) {
 
 export function summarizeLocally(page) {
   const source = page.text || page.description || "";
-  const extracted = sentencesFromReadingBlocks(source);
+  const extracted = sentencesFromReadingBlocks(source, page.language);
   const repeated = repeatedInterfaceText(extracted);
   const sentences = deduplicated(extracted).filter(
     (sentence) =>
@@ -461,7 +517,7 @@ export function simplifyEnglish(value = "") {
     result = result.replace(new RegExp(`\\b${complex}\\b`, "gi"), plain);
   }
 
-  const sentences = splitSentences(result);
+  const sentences = splitSentences(result, "en");
   if (!sentences.length) return result;
 
   return sentences
