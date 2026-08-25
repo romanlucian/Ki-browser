@@ -229,7 +229,14 @@ public enum LocalAnalysisEngine {
         let selectedStopWords = stopWords(for: language)
 
         func appendCurrentWord() {
-            guard currentWord.count >= 2, !selectedStopWords.contains(currentWord) else {
+            // Unicode scalars, not `Character`s. A `Character` is a whole grapheme
+            // cluster, so a Devanagari word written with a vowel sign — "\u{092E}\u{0947}\u{0902}"
+            // is one cluster and three scalars — counted as a single character here
+            // and was dropped by this minimum, while the other runtime kept it.
+            // Common Hindi words went missing from scoring: 8,404 tokens there
+            // against 6,543 here on the same article.
+            guard currentWord.unicodeScalars.count >= 2,
+                  !selectedStopWords.contains(currentWord) else {
                 currentWord = ""
                 return
             }

@@ -28,6 +28,27 @@
         "avec",
         "des"
       ]
+    },
+    {
+      "id": "persian-zero-width-joiner-stays-inside-the-word",
+      "language": "fa",
+      "text": "می‌شود می‌شود ایران",
+      "requiredCounts": {
+        "می‌شود": 2
+      },
+      "excluded": [
+        "می",
+        "شود"
+      ]
+    },
+    {
+      "id": "devanagari-vowel-sign-word-is-long-enough-to-keep",
+      "language": "hi",
+      "text": "भारत में एक देश में है",
+      "requiredCounts": {
+        "में": 2
+      },
+      "excluded": []
     }
   ],
   "summaryCases": [

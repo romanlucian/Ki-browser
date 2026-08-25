@@ -207,7 +207,12 @@ export function tokenize(value = "", language = "") {
   let current = "";
   const stopWords = stopWordsFor(language);
   const appendCurrent = () => {
-    if (current.length >= 2 && !stopWords.has(current)) result.push(current);
+    // Code points, not UTF-16 units. Swift accumulates whole grapheme clusters and
+    // measured them as one apiece, so a Devanagari word written with a vowel sign —
+    // "\u092E\u0947\u0902" is one cluster and three code points — failed the two-character
+    // minimum there and passed it here, and the two runtimes scored Hindi pages
+    // differently. Counting scalars is the measure they can share.
+    if ([...current].length >= 2 && !stopWords.has(current)) result.push(current);
     current = "";
   };
 
@@ -215,7 +220,12 @@ export function tokenize(value = "", language = "") {
     if (CJK_PATTERN.test(character)) {
       appendCurrent();
       if (!stopWords.has(character)) result.push(character);
-    } else if (/[\p{L}\p{M}\p{N}'’-]/u.test(character)) {
+      // The zero-width joiners are word-internal in the scripts that use them:
+      // Persian writes "\u0645\u06CC\u200C\u0634\u0648\u062F" as one word, and a code-point walk sees the
+      // joiner as category Cf and ends the word there, while Swift walks grapheme
+      // clusters and never sees it at all. That split Persian words here and not
+      // there.
+    } else if (/[\p{L}\p{M}\p{N}'’\u200C\u200D-]/u.test(character)) {
       current += character;
     } else {
       appendCurrent();
