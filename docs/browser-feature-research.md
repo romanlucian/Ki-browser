@@ -53,6 +53,8 @@ The gap list was worked in waves. They were agreed in conversation and never wri
 
 **Unwaved but shipped, because using the product surfaced them.** The bookmarks-bar placement research (3.1), the performance work of August 24 (a store that rebuilt its whole bookmark collection on every read, an import that saved once per bookmark, an address bar that rebuilt its suggestions per keystroke), and splitting history onto its own ⌘Y destination. None of these came from the gap list. All of them came from the founder using Clearframe as his own browser with four hundred real bookmarks — which remains the only source of evidence of this kind the project has.
 
+The page-intelligence repair of August 25, 2026 belongs here too, and came from a review rather than from use. Twenty-six commits: the media filter no longer rewrites sentences it was meant to skip; a full stop inside an abbreviation, an initialism or a citation no longer ends a sentence; a page whose entries live in table rows is read and recognised as a listing; Evidence Mode works on a key point drawn from a row; a claim needs more than a digit; and roughly a dozen places where the Swift and JavaScript engines measured the same page differently were settled — whitespace, graphemes, CJK ranges, Persian and Hindi tokenizing, and word boundaries after an accented letter. Analysis came out about three times faster than it went in. None of it is Wave 3, which remains not started.
+
 ## 2. Verified absences
 
 Confirmed absent by source search, grouped by why they are absent. Re-checked against source August 21, 2026; several items present here on August 19 have since shipped and moved to section 1 above.
