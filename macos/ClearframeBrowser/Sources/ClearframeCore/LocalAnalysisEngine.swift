@@ -101,13 +101,6 @@ public enum LocalAnalysisEngine {
             .prefix(4)
             .map(\.sentence)
 
-        let claimTerms = [
-            "according", "report", "study", "research", "survey", "million", "billion",
-            "percent", "guarantee", "always", "never", "only", "best", "worst", "first",
-            "potrivit", "raport", "studiu", "cercetare", "sondaj", "milioane", "miliarde", "procent",
-            "selon", "rapport", "étude", "recherche", "sondage", "million", "milliard", "pour cent",
-            "报告", "研究", "调查", "百万", "十亿", "百分之", "保证", "最佳", "首次"
-        ]
         // A claim repeated from the gist or a key point gives the reader nothing new to
         // check, so keep claims to sentences the rest of the result did not already show.
         let presentedSentences = summarySet.union(keyPoints)
@@ -122,7 +115,7 @@ public enum LocalAnalysisEngine {
                 // "14 June 2023" does not qualify with one. A bare numeral carrying
                 // no unit is deliberately no longer offered.
                 return containsPercentage(entry.sentence) ||
-                claimTerms.contains { containsClaimTerm($0, in: entry.sentence) }
+                containsClaimTerm(in: entry.sentence)
             }
             .sorted { $0.score > $1.score }
             .prefix(3)
@@ -460,12 +453,42 @@ public enum LocalAnalysisEngine {
         return false
     }
 
-    private static func containsClaimTerm(_ term: String, in sentence: String) -> Bool {
-        if term.contains(where: isCJK) {
-            return sentence.localizedCaseInsensitiveContains(term)
+    private static let claimTerms = [
+        "according", "report", "study", "research", "survey", "million", "billion",
+        "percent", "guarantee", "always", "never", "only", "best", "worst", "first",
+        "potrivit", "raport", "studiu", "cercetare", "sondaj", "milioane", "miliarde", "procent",
+        "selon", "rapport", "étude", "recherche", "sondage", "million", "milliard", "pour cent",
+        "报告", "研究", "调查", "百万", "十亿", "百分之", "保证", "最佳", "首次"
+    ]
+
+    /// Every alphabetic term as one alternation, compiled once — the same shape as
+    /// the single pattern the other runtime uses.
+    ///
+    /// `range(of:options:.regularExpression)` compiles its pattern on every call, and
+    /// dropping the cheap any-digit test in front of this scan meant nearly every
+    /// sentence reached all thirty-nine terms and paid for thirty-nine compilations.
+    /// A forty-eight thousand character article went from 85 ms to 532 ms, on the path
+    /// the installed application runs whenever a reader clicks Analyze. Caching the
+    /// terms separately brought that to 119 ms; asking once brings it back.
+    private static let claimTermExpression: NSRegularExpression? = {
+        let alternatives = claimTerms
+            .filter { !$0.contains(where: isCJK) }
+            .map { NSRegularExpression.escapedPattern(for: $0) }
+            .joined(separator: "|")
+        return try? NSRegularExpression(pattern: "\\b(\(alternatives))\\b", options: [.caseInsensitive])
+    }()
+
+    /// The CJK terms cannot use a word boundary — those scripts write no spaces — so
+    /// they stay a plain containment test, exactly as the other runtime lists them
+    /// outside its alternation.
+    private static let cjkClaimTerms = claimTerms.filter { $0.contains(where: isCJK) }
+
+    private static func containsClaimTerm(in sentence: String) -> Bool {
+        if let expression = claimTermExpression {
+            let range = NSRange(sentence.startIndex..., in: sentence)
+            if expression.firstMatch(in: sentence, options: [], range: range) != nil { return true }
         }
-        let pattern = "\\b\(NSRegularExpression.escapedPattern(for: term))\\b"
-        return sentence.range(of: pattern, options: [.regularExpression, .caseInsensitive]) != nil
+        return cjkClaimTerms.contains { sentence.localizedCaseInsensitiveContains($0) }
     }
 
     private static func isUsefulSentenceLength(_ sentence: String) -> Bool {
