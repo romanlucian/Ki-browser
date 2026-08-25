@@ -528,7 +528,13 @@ final class BrowserSession: NSObject, ObservableObject {
             element.removeAttribute('data-clearframe-evidence');
           }));
           const candidates = roots
-            .flatMap(root => [...root.querySelectorAll('h1,h2,h3,h4,p,li,blockquote,td,th,dd,dt,figcaption,a,span')])
+            // `tr` is in this list because the extractor reads table rows as reading
+            // blocks, so a key point can be a whole row. Such a point spans several
+            // cells, and no single `td` contains it — without the row itself as a
+            // candidate, Evidence Mode fails on exactly the pages reading rows
+            // enabled, and fails silently, because a miss looks the same as a page
+            // that changed under the reader.
+            .flatMap(root => [...root.querySelectorAll('h1,h2,h3,h4,p,li,blockquote,tr,td,th,dd,dt,figcaption,a,span')])
             .filter(visible)
             .map(element => ({ element, value: clean(element.innerText || element.textContent) }))
             .filter(candidate => candidate.value.length > 0)

@@ -774,6 +774,21 @@ struct BrowserE2ESmoke {
             )
             print("PASS extractor fallback: a table listing kept its line structure and stopped at a notice")
 
+            // A key point taken from a table row spans several cells, so no single
+            // `td` holds it and the row itself has to be a candidate. Without that,
+            // Evidence Mode fails silently on exactly the pages reading rows enabled.
+            await assistant.analyzeDespiteStructure(session: session)
+            let rowPoint = try requireValue(
+                assistant.analysis?.content.keyPoints.first,
+                "the table listing produced no key point to look for"
+            )
+            await assistant.revealEvidence(for: rowPoint, session: session)
+            try require(
+                assistant.evidenceWasFoundOnPage,
+                "Evidence Mode could not find a key point that came from a table row"
+            )
+            print("PASS evidence in a table: a key point taken from a row was found on the page")
+
             try await loadDeterministicPage(in: session, localURL: fixtureURL)
             await assistant.analyzeCurrentPage(session: session)
             try require(assistant.state == .ready, "the ordinary article fixture no longer analyzes straight to a ready summary")
