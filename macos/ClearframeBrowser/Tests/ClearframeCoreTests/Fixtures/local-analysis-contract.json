@@ -782,6 +782,26 @@
       "mustAppear": [
         "Ibrahim Abubakar said he had identified 13 people among those taken from the village."
       ]
+    },
+    {
+      "id": "an-accented-term-matches-in-both-runtimes",
+      "page": {
+        "title": "Réunion régionale de printemps",
+        "url": "https://example.fr/r",
+        "hostname": "example.fr",
+        "scheme": "https",
+        "language": "fr",
+        "text": "La réunion régionale de printemps a examiné le programme régional numéro 1 de la réunion.\nLa réunion régionale de printemps a examiné le programme régional numéro 2 de la réunion.\nLa réunion régionale de printemps a examiné le programme régional numéro 3 de la réunion.\nLa réunion régionale de printemps a examiné le programme régional numéro 4 de la réunion.\nLa réunion régionale de printemps a examiné le programme régional numéro 5 de la réunion.\nLa réunion régionale de printemps a examiné le programme régional numéro 6 de la réunion.\nLa réunion régionale de printemps a examiné le programme régional numéro 7 de la réunion.\nLa réunion régionale de printemps a examiné le programme régional numéro 8 de la réunion.\nLe ministre a déclaré que 13 personnes avaient été évacuées du village pendant la nuit.\nL'article a été publié à 19:30 un mardi soir au milieu du mois de mars dernier.",
+        "wordCount": 151,
+        "hasPasswordField": false,
+        "formActions": []
+      },
+      "mustNotAppear": [
+        "L'article a été publié à 19:30 un mardi soir au milieu du mois de mars dernier."
+      ],
+      "mustAppear": [
+        "Le ministre a déclaré que 13 personnes avaient été évacuées du village pendant la nuit."
+      ]
     }
   ]
 }

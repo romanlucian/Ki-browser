@@ -479,7 +479,10 @@ public enum LocalAnalysisEngine {
             .filter { !$0.contains(where: isCJK) }
             .map { NSRegularExpression.escapedPattern(for: $0) }
             .joined(separator: "|")
-        return try? NSRegularExpression(pattern: "\\b(\(alternatives))\\b", options: [.caseInsensitive])
+        return try? NSRegularExpression(
+            pattern: "(?<![\\p{L}\\p{N}])(\(alternatives))(?![\\p{L}\\p{N}])",
+            options: [.caseInsensitive]
+        )
     }()
 
     /// The CJK terms cannot use a word boundary — those scripts write no spaces — so
@@ -493,7 +496,10 @@ public enum LocalAnalysisEngine {
     /// visas" are claims; "published at 19:30" is not. These terms count only
     /// alongside a numeral, which is why they are kept apart from `claimTerms`.
     private static let attributedNumberExpression: NSRegularExpression? =
-        try? NSRegularExpression(pattern: "\\b(said|says|told|announced|confirmed|estimated|reported|recorded|revoked|rose|fell|grew|more than|fewer than|less than|at least|up to|a spus|a declarat|a anunțat|a confirmat|peste|cel puțin|a déclaré|a annoncé|a confirmé|plus de|au moins)\\b", options: [.caseInsensitive])
+    /// Written with lookarounds rather than `\b`, because the other runtime's `\b` is
+    /// ASCII and finds no boundary after an accented letter. ICU's is Unicode-aware,
+    /// so every French term here matched in Swift and none of them matched there.
+        try? NSRegularExpression(pattern: "(?<![\\p{L}\\p{N}])(said|says|told|announced|confirmed|estimated|reported|recorded|revoked|rose|fell|grew|more than|fewer than|less than|at least|up to|a spus|a declarat|a anunțat|a confirmat|peste|cel puțin|a déclaré|a annoncé|a confirmé|plus de|au moins)(?![\\p{L}\\p{N}])", options: [.caseInsensitive])
 
     private static let cjkAttributionTerms = ["表示", "宣布", "确认", "超过", "至少"]
 

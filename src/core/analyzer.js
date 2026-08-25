@@ -406,7 +406,7 @@ export function summarizeLocally(page) {
   // The cost is deliberate: a bare numeral with no unit — "sales rose to 4,300" —
   // is no longer offered. Fewer claims, each one actually a claim.
   const claimPattern =
-    /\b(according|report|study|research|survey|million|billion|percent|guarantee|always|never|only|best|worst|first|potrivit|raport|studiu|cercetare|sondaj|milioane|miliarde|procent|selon|rapport|étude|recherche|sondage|milliard|pour cent)\b|报告|研究|调查|百万|十亿|百分之|保证|最佳|首次|\p{N} *%/iu;
+    /(?<![\p{L}\p{N}])(according|report|study|research|survey|million|billion|percent|guarantee|always|never|only|best|worst|first|potrivit|raport|studiu|cercetare|sondaj|milioane|miliarde|procent|selon|rapport|étude|recherche|sondage|milliard|pour cent)(?![\p{L}\p{N}])|报告|研究|调查|百万|十亿|百分之|保证|最佳|首次|\p{N} *%/iu;
   // A claim repeated from the gist or a key point gives the reader nothing new to
   // check, so keep claims to sentences the rest of the result did not already show.
   // A number nobody asserts is furniture; a number somebody asserts, or one carried
@@ -414,7 +414,12 @@ export function summarizeLocally(page) {
   // said he had identified 13 people" and "revoked more than 175,000 visas" are
   // claims; "published at 19:30" is not. These terms only count alongside a numeral,
   // which is why they are separate from the list above.
-  const attributedNumberPattern = /\b(said|says|told|announced|confirmed|estimated|reported|recorded|revoked|rose|fell|grew|more than|fewer than|less than|at least|up to|a spus|a declarat|a anunțat|a confirmat|peste|cel puțin|a déclaré|a annoncé|a confirmé|plus de|au moins)\b|表示|宣布|确认|超过|至少/iu;
+  // `(?<!\p{L}\p{N})…(?!\p{L}\p{N})` and not `\b`. JavaScript's `\b` is ASCII, so it
+  // finds no boundary after an accented letter: `\bétude\b` and `\b(a déclaré)\b`
+  // never matched here, while ICU's Unicode-aware `\b` matched in Swift. Every
+  // French term ends in one — "a déclaré", "a annoncé", "a confirmé" — so a French
+  // page offered claims in one runtime and none in the other.
+  const attributedNumberPattern = /(?<![\p{L}\p{N}])(said|says|told|announced|confirmed|estimated|reported|recorded|revoked|rose|fell|grew|more than|fewer than|less than|at least|up to|a spus|a declarat|a anunțat|a confirmat|peste|cel puțin|a déclaré|a annoncé|a confirmé|plus de|au moins)(?![\p{L}\p{N}])|表示|宣布|确认|超过|至少/iu;
   const numeralPattern = /\p{N}/u;
   const presentedSentences = new Set([...summarySentences, ...keyPoints]);
   const claimsToCheck = scored
