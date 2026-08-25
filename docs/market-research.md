@@ -101,7 +101,7 @@ Avoid starting with vulnerable scam victims, children, regulated medical/legal d
 
 > Open any page. In one click, see its gist, key claims, translation, comparison context, and obvious risk signals—with local analysis first and no passive history collection.
 
-The native foundation correctly limits scope to a WebKit browsing surface, on-demand extraction, local summaries and candidate claims, English-source Plain English mode, optional AI translation, a two-source comparison, and explained risk signals. An initial local Evidence Mode now reveals and highlights exact extracted key-point text. The next high-value step is citation-grade evidence across gist, claims, translation, and provider-assisted output—not autonomous browsing.
+The native foundation correctly limits scope to a WebKit browsing surface, on-demand extraction, local summaries and candidate claims, English-source Plain English mode, optional AI translation, a two-source comparison, and explained risk signals. (The two-source comparison was removed on August 25, 2026; see the note in [project-context.md](project-context.md).) An initial local Evidence Mode now reveals and highlights exact extracted key-point text. The next high-value step is citation-grade evidence across gist, claims, translation, and provider-assisted output—not autonomous browsing.
 
 ## 6. Material risks
 

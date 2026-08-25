@@ -282,32 +282,6 @@ final class ClearframeCoreTests: XCTestCase {
             XCTAssertEqual(error.localizedDescription, PageIntelligenceError.localTranslationUnavailable.localizedDescription)
         }
     }
-
-    func testComparisonDoesNotClaimAgreement() {
-        let analysis = PageAnalysis(
-            content: LocalAnalysisEngine.summarize(page: article),
-            risk: RiskAnalyzer.assess(page: article),
-            readingTimeMinutes: 1,
-            mode: .local
-        )
-        let first = AnalyzedSource(snapshot: article, analysis: analysis)
-        let secondPage = PageSnapshot(
-            title: "Shade plans at transit stops",
-            url: "https://second.example/shade",
-            hostname: "second.example",
-            scheme: "https",
-            language: "en",
-            text: article.text,
-            wordCount: article.wordCount,
-            hasPasswordField: false,
-            formActions: []
-        )
-        let second = AnalyzedSource(snapshot: secondPage, analysis: analysis)
-        let comparison = SourceComparisonEngine.compare(first, second)
-        XCTAssertGreaterThan(comparison.overlapPercent, 0)
-        XCTAssertTrue(comparison.note.contains("not factual agreement"))
-    }
-
     func testSessionRestoreRejectsNonWebURLs() {
         let record = BrowserTabRecord(
             id: UUID(),

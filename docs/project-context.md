@@ -10,7 +10,7 @@ Clearframe is a real, standalone, macOS-first browser for ordinary users. Its in
 
 The selected migration path for a future Chromium-based Clearframe is the official Chromium Embedded Framework (CEF), hosted behind a narrow Objective-C++ bridge while retaining SwiftUI and `ClearframeCore`. The isolated scaffold at `chromium/cef-spike` is architecture validation only: it is not linked into the current app, does not make the installed app Chromium, and is not a full Chromium source fork. Keep WebKit as the working baseline until the CEF build meets documented parity, privacy, security-update, and distribution gates.
 
-The focused promise is to help people understand unfamiliar pages quickly: summarize readable content, surface claims worth checking, simplify or translate content, compare two sources, and explain obvious visible risk signals. It is not a generic Chrome clone, a truth engine, or an antivirus product.
+The focused promise is to help people understand unfamiliar pages quickly: summarize readable content, surface claims worth checking, simplify or translate content, and explain obvious visible risk signals. It is not a generic Chrome clone, a truth engine, or an antivirus product.
 
 The primary user promise is **“Clearframe makes the AI world simple for ordinary people.”** Clarity outranks feature count. The magic first minute should begin from a recognizable goal, show a small useful set of AI paths, and make an open page understandable with honest grounding. The current AI home and extractive Analyze Page are the foundation. Local Evidence Mode lets a user reveal the extracted sentence behind a key point and attempts to highlight it in the live page; highlighting is best-effort because page DOMs can change.
 
@@ -45,6 +45,17 @@ Building an independent search index is a separate, capital-intensive future bus
 
 ## Scope boundaries
 
+Two-source comparison was removed on August 25, 2026 and should not be rebuilt on word counting. It saved one analyzed page, then reported how many words it shared with a second. Measured through the real engine, two Wikipedia articles on the same subject scored 4% and two unrelated ones scored 2%, so the number could not tell the cases apart. Comparing full page text with cosine similarity fixes that much — 74% against 11% — but not the thing the feature is for:
+
+    "Turnout rose to forty percent"   vs  "Turnout fell to twenty percent"    80% similar
+    "The council approved the repair" vs  "The council rejected the repair"   82% similar
+    "the drug reduced symptoms"       vs  "the drug increased symptoms"       90% similar
+
+Counting words does not merely fail to notice disagreement; it scores disagreement as agreement, because a contradiction shares every word but one. Comparing sources means comparing claims, and that needs something that knows "rose" and "fell" are opposites. Local analysis has no semantics and never will.
+
+If it returns, it belongs on the optional-AI path, and the model should point at which verbatim key points conflict rather than write prose about them — the index-selection design in [on-device-ai-design.md](on-device-ai-design.md) preserves Evidence Mode's grounding. Note that Apple's on-device model does not support Romanian, so that route would not cover the founder's own daily reading. One piece would work locally and honestly: showing the two sources' extracted figures side by side, which points at where to look without claiming who is right.
+
+
 A programmer-focused browsing workspace is documented as a separate future concept. It may connect documentation, GitHub, code explanation, research, and VS Code workflows, but it must not redirect the current general-audience browser or create a second browser product now.
 
 A later Windows client may reproduce the language-neutral page-intelligence contract, but the current native SwiftUI UI is intentionally macOS-specific. The macOS Chromium migration work does not select a Windows UI or packaging stack.
@@ -67,7 +78,7 @@ Do not switch rendering engines now. CEF remains a future gated path for demonst
 - A unified single-row dark chrome with inline traffic lights in the tab strip, one toolbar/address-pill row, and per-site icons captured only while visiting a site, from the page's own origin or a host that page already loaded something from during the same visit (its own CDN, in practice), cached locally, memory-only in private tabs, cleared by the browsing-data reset, with a locally derived identity-color square for unvisited hosts—never a third-party icon service, which no page ever loads from and so cannot be reached by this rule at all.
 - A full-page bookmarks home (⌘⌥B or the bookmarks bar) with folder cards showing rolled-up bookmark/subfolder counts, search across bookmarks and folder titles, and drill-down navigation. History is a separate destination on ⌘Y, grouped by day, matching where every mainstream Mac browser puts it.
 - Local bookmark organization with emoji-labeled nested folders, safe legacy migration, move/rename/delete controls, and searchable capped history with remove, clear, and disable controls.
-- User-triggered source-language local gist, key points, candidate claims, reading time, initial exact-text Evidence Mode, English-only local Plain English simplification, visible risk signals, and two-source comparison. A candidate claim needs an attribution, an absolute, a named quantity, or a numeral alongside an attribution verb or a comparison — a bare number is not one, so a publication time, a ticket price and a photograph's date are no longer offered as things to check.
+- User-triggered source-language local gist, key points, candidate claims, reading time, initial exact-text Evidence Mode, English-only local Plain English simplification, and visible risk signals. A candidate claim needs an attribution, an absolute, a named quantity, or a numeral alongside an attribution verb or a comparison — a bare number is not one, so a publication time, a ticket price and a photograph's date are no longer offered as things to check.
 - Optional OpenAI provider through a reusable protocol and macOS Keychain-backed prototype settings. Requests use constrained Responses API output, omit the full page URL, and preserve the local result on provider failure.
 - User-confirmed removal of tabs, history, bookmarks, in-app download metadata, per-site tracker-blocking exceptions, WebKit cookies/caches/website storage, workspace records, and recovery backups without deleting saved download files or general preferences.
 - Visible page dialogs and media permission prompts, WebKit renderer-termination state, same-document URL/title synchronization, and local last-known-good persistence recovery.

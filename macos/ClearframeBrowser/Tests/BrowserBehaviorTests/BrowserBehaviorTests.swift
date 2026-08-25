@@ -61,7 +61,6 @@ final class BrowserBehaviorTests: XCTestCase {
         XCTAssertEqual(model.state, .idle)
         XCTAssertNil(model.snapshot)
         XCTAssertNil(model.analysis)
-        XCTAssertNil(model.savedSource)
         XCTAssertNil(model.operationMessage)
     }
 

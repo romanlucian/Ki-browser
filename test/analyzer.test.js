@@ -8,7 +8,6 @@ import {
   summarizeLocally,
   tokenize
 } from "../src/core/analyzer.js";
-import { compareSources } from "../src/core/compare.js";
 
 const article = {
   title: "Cities expand shaded public spaces",
@@ -156,13 +155,4 @@ test("full analysis estimates read time", () => {
 
 test("read time rounds partial minutes up", () => {
   assert.equal(analyzePage({ ...article, wordCount: 221 }).readMinutes, 2);
-});
-
-test("comparison exposes overlap without claiming agreement", () => {
-  const result = compareSources(
-    { title: "City shade plans", summary: "Cities add trees and shade.", keyPoints: ["The plan covers transit stops."] },
-    { title: "Shade in cities", summary: "New trees bring shade to streets.", keyPoints: ["Transit riders want shade."] }
-  );
-  assert.ok(result.overlapPercent > 0);
-  assert.match(result.note, /not factual agreement/i);
 });

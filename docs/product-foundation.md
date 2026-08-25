@@ -38,7 +38,6 @@ Scam signals are a supporting trust feature, not the initial positioning. A smal
 2. Only after the user clicks Analyze Page, Clearframe extracts visible reading content and analyzes it locally.
 3. The panel leads with the source, a short summary, key points, and claims to check.
 4. The user can reveal exact local evidence, simplify an English-source summary locally, or explicitly send the disclosed minimized payload for an AI summary or translation.
-5. The user can save a compact summary, navigate to a second source, and compare themes and figures.
 6. The native browser can keep bookmarks, a capped local history, and recent-tab metadata in the Mac user profile. History and tab restoration can be disabled; browsing history is never uploaded to the AI provider or sold.
 7. A new tab can help an ordinary user choose an AI service by task from a small static catalog, then open the service's official website without transferring the current page or an inferred prompt.
 
@@ -53,7 +52,7 @@ Scam signals are a supporting trust feature, not the initial positioning. A smal
 - Task-first native AI-guide start page with locally defined task categories, local filtering, an explicit All Tools view, broad access hints, and ordinary links to listed services' official websites.
 - User-confirmed downloads plus local bookmark/history organization, recovery backups, and an explicit local browsing-data reset.
 - On-demand visible-page extraction from the app’s current web view.
-- Local summary, candidate claims, read-time estimate, exact-text Evidence Mode, risk signals, English-source Plain English, and two-source comparison.
+- Local summary, candidate claims, read-time estimate, exact-text Evidence Mode, risk signals, and English-source Plain English.
 - Optional OpenAI provider behind a core protocol; user-owned prototype key stored in macOS Keychain.
 - Clear separation between the Foundation-only analysis/service core and macOS-specific browser UI.
 
@@ -107,7 +106,6 @@ The extension code is separated into:
 
 - `src/content/extract-page.js` — visible page extraction;
 - `src/core/analyzer.js` — local summary, simplification, and risk heuristics;
-- `src/core/compare.js` — deterministic two-source comparison;
 - `src/providers/openai.js` — optional AI adapter;
 - `src/sidepanel.js` — product state and rendering.
 

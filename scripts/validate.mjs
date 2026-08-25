@@ -9,7 +9,6 @@ const required = [
   manifest.options_page,
   "src/sidepanel.js",
   "src/core/analyzer.js",
-  "src/core/compare.js",
   "src/providers/openai.js"
 ];
 

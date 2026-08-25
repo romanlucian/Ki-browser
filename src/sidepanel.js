@@ -1,5 +1,4 @@
 import { analyzePage, assessStructure, canSimplifyToPlainEnglish, simplifyEnglish } from "./core/analyzer.js";
-import { compareSources } from "./core/compare.js";
 import { extractPage } from "./content/extract-page.js";
 import { createAiAnalysis, DEFAULT_AI_SETTINGS, translateText } from "./providers/openai.js";
 
@@ -9,7 +8,6 @@ let currentPage = null;
 let currentAnalysis = null;
 let originalSummary = "";
 let structureOverridden = false;
-let savedSource = null;
 let settings = { ...DEFAULT_AI_SETTINGS };
 let toastTimer = null;
 let currentTabId = null;
@@ -101,7 +99,6 @@ function renderAnalysis() {
   textList($("#claimsList"), currentAnalysis.claimsToCheck);
   $("#claimsSection").classList.toggle("hidden", currentAnalysis.claimsToCheck.length === 0);
   renderRisk(currentAnalysis.risk);
-  renderCompareState();
   $("#translationOutput").classList.add("hidden");
   $("#aiButton").disabled = false;
   $("#aiButtonLabel").textContent = settings.enabled && settings.apiKey ? "Improve with AI" : "Add AI for a richer summary";
@@ -109,31 +106,9 @@ function renderAnalysis() {
   $("#translateButton").textContent = "Translate";
   showView($("#resultsView"));
 }
-
-function renderCompareState() {
-  const isSame = savedSource?.url === currentPage?.url;
-  if (!savedSource) {
-    $("#compareTitle").textContent = "Compare another page";
-    $("#compareDescription").textContent = "Save this view, open a second source, then compare their themes and figures.";
-    $("#compareButton").textContent = "Save as source one";
-  } else if (isSame) {
-    $("#compareTitle").textContent = "Source one is saved";
-    $("#compareDescription").textContent = "Open another page and click the Clearframe toolbar icon, then analyze it.";
-    $("#compareButton").textContent = "Saved";
-  } else {
-    $("#compareTitle").textContent = "Ready to compare";
-    $("#compareDescription").textContent = `${savedSource.hostname} ↔ ${currentPage.hostname}`;
-    $("#compareButton").textContent = "Compare these sources";
-  }
-  $("#compareButton").disabled = Boolean(savedSource && isSame);
-  $("#clearCompareButton").classList.toggle("hidden", !savedSource);
-  $("#comparisonOutput").classList.add("hidden");
-}
-
 async function loadSettings() {
-  const stored = await chrome.storage.local.get(["aiSettings", "comparisonSource"]);
+  const stored = await chrome.storage.local.get(["aiSettings"]);
   settings = { ...DEFAULT_AI_SETTINGS, ...(stored.aiSettings || {}) };
-  savedSource = stored.comparisonSource || null;
 }
 
 async function analyzeActivePage() {
@@ -255,40 +230,6 @@ async function translateSummary() {
     }
   }
 }
-
-async function handleCompare() {
-  if (!savedSource) {
-    savedSource = sourceSnapshot();
-    await chrome.storage.local.set({ comparisonSource: savedSource });
-    renderCompareState();
-    showToast("Source one saved. Open a second page to compare.");
-    return;
-  }
-  if (savedSource.url === currentPage.url) return;
-
-  const current = sourceSnapshot();
-  const comparison = compareSources(savedSource, current);
-  const output = $("#comparisonOutput");
-  const themes = comparison.sharedThemes.length
-    ? comparison.sharedThemes.join(" · ")
-    : "No strong shared themes found";
-  const makeItems = (items) =>
-    items.length ? `<ul>${items.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>` : "<p>None extracted.</p>";
-
-  output.innerHTML = `
-    <h3>${comparison.overlapPercent}% topical overlap</h3>
-    <div class="comparison-meter"><span style="width:${comparison.overlapPercent}%"></span></div>
-    <p>${escapeHtml(themes)}</p>
-    <h3>${escapeHtml(savedSource.hostname)}</h3>
-    ${makeItems(comparison.firstPoints)}
-    <p><strong>Figures:</strong> ${escapeHtml(comparison.firstNumbers.join(", ") || "none extracted")}</p>
-    <h3>${escapeHtml(current.hostname)}</h3>
-    ${makeItems(comparison.secondPoints)}
-    <p><strong>Figures:</strong> ${escapeHtml(comparison.secondNumbers.join(", ") || "none extracted")}</p>
-    <p>${escapeHtml(comparison.note)}</p>`;
-  output.classList.remove("hidden");
-}
-
 function escapeHtml(value = "") {
   return value.replace(/[&<>'"]/g, (character) => ({
     "&": "&amp;",
@@ -298,22 +239,12 @@ function escapeHtml(value = "") {
     '"': "&quot;"
   })[character]);
 }
-
-async function clearComparison() {
-  savedSource = null;
-  await chrome.storage.local.remove("comparisonSource");
-  renderCompareState();
-  showToast("Saved source cleared.");
-}
-
 $("#analyzeButton").addEventListener("click", analyzeActivePage);
 $("#refreshButton").addEventListener("click", analyzeActivePage);
 $("#retryButton").addEventListener("click", analyzeActivePage);
 $("#settingsButton").addEventListener("click", () => chrome.runtime.openOptionsPage());
 $("#aiButton").addEventListener("click", improveWithAi);
 $("#translateButton").addEventListener("click", translateSummary);
-$("#compareButton").addEventListener("click", handleCompare);
-$("#clearCompareButton").addEventListener("click", clearComparison);
 $("#analyzeAnywayButton").addEventListener("click", analyzeDespiteStructure);
 $("#riskToggle").addEventListener("click", () => {
   const signals = $("#riskSignals");

@@ -31,7 +31,6 @@ The native app provides:
 - key points and page claims worth checking, with best-effort highlighting of the exact extracted evidence on the live page;
 - visible risk signals such as unencrypted password forms, encoded domains, urgent payment language, wallet-secret requests, and contextual remote-access requests;
 - a Plain English mode plus optional AI translation;
-- a two-source comparison that highlights shared themes and extracted figures without pretending to decide which source is true.
 
 ## Open the standalone macOS browser
 

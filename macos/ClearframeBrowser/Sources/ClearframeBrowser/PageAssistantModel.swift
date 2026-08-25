@@ -36,8 +36,6 @@ final class PageAssistantModel: ObservableObject {
     @Published var snapshot: PageSnapshot?
     @Published var analysis: PageAnalysis?
     @Published var translatedSummary: String?
-    @Published var savedSource: AnalyzedSource?
-    @Published var comparison: SourceComparison?
     @Published var revealedEvidence: String?
     @Published var evidenceWasFoundOnPage = false
     @Published var operationMessage: String?
@@ -66,7 +64,6 @@ final class PageAssistantModel: ObservableObject {
         snapshot = nil
         analysis = nil
         translatedSummary = nil
-        comparison = nil
         revealedEvidence = nil
         evidenceWasFoundOnPage = false
         operationMessage = nil
@@ -81,8 +78,6 @@ final class PageAssistantModel: ObservableObject {
         snapshot = nil
         analysis = nil
         translatedSummary = nil
-        savedSource = nil
-        comparison = nil
         revealedEvidence = nil
         evidenceWasFoundOnPage = false
         operationMessage = nil
@@ -99,13 +94,11 @@ final class PageAssistantModel: ObservableObject {
         // the refusal happens here instead, before any work starts.
         guard WebURLPolicy.validatedURL(session.currentURLString) != nil else {
             // Having just said there is no page to read, do not keep showing
-            // what the last one said. The saved source survives: it is the
-            // reader's own choice, held for a comparison.
+            // what the last one said.
             snapshot = nil
             analysis = nil
             translatedSummary = nil
-            comparison = nil
-            revealedEvidence = nil
+                revealedEvidence = nil
             evidenceWasFoundOnPage = false
             snapshotNavigationVersion = nil
             state = .needsPage
@@ -162,7 +155,6 @@ final class PageAssistantModel: ObservableObject {
                     mode: .local
                 )
                 self.translatedSummary = nil
-                self.comparison = nil
                 self.revealedEvidence = nil
                 self.evidenceWasFoundOnPage = false
                 self.state = .ready
@@ -214,7 +206,6 @@ final class PageAssistantModel: ObservableObject {
                     mode: .local
                 )
                 self.translatedSummary = nil
-                self.comparison = nil
                 self.revealedEvidence = nil
                 self.evidenceWasFoundOnPage = false
                 self.state = .ready
@@ -328,23 +319,6 @@ final class PageAssistantModel: ObservableObject {
         await task.value
         finishOperation(generation)
     }
-
-    func saveOrCompare() {
-        guard let snapshot, let analysis else { return }
-        let current = AnalyzedSource(snapshot: snapshot, analysis: analysis)
-        if let savedSource, savedSource.url != current.url {
-            comparison = SourceComparisonEngine.compare(savedSource, current)
-        } else {
-            savedSource = current
-            comparison = nil
-        }
-    }
-
-    func clearSavedSource() {
-        savedSource = nil
-        comparison = nil
-    }
-
     private func beginOperation() -> Int {
         activeTask?.cancel()
         operationGeneration &+= 1

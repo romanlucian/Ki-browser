@@ -108,43 +108,6 @@ public struct PageAnalysis: Codable, Equatable, Sendable {
         self.mode = mode
     }
 }
-
-public struct AnalyzedSource: Codable, Equatable, Sendable {
-    public let title: String
-    public let url: String
-    public let hostname: String
-    public let content: PageAnalysisContent
-
-    public init(snapshot: PageSnapshot, analysis: PageAnalysis) {
-        title = snapshot.title
-        url = snapshot.url
-        hostname = snapshot.hostname
-        content = analysis.content
-    }
-}
-
-public struct SourceComparison: Codable, Equatable, Sendable {
-    public let overlapPercent: Int
-    public let sharedThemes: [String]
-    public let firstNumbers: [String]
-    public let secondNumbers: [String]
-    public let note: String
-
-    public init(
-        overlapPercent: Int,
-        sharedThemes: [String],
-        firstNumbers: [String],
-        secondNumbers: [String],
-        note: String
-    ) {
-        self.overlapPercent = overlapPercent
-        self.sharedThemes = sharedThemes
-        self.firstNumbers = firstNumbers
-        self.secondNumbers = secondNumbers
-        self.note = note
-    }
-}
-
 public enum PageIntelligenceError: LocalizedError, Sendable {
     case noReadableText
     case localTranslationUnavailable

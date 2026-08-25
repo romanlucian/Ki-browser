@@ -323,7 +323,6 @@ struct AssistantPanel: View {
                     }
                 }
 
-                SourceComparisonCard(model: model, currentURL: snapshot.url)
 
                 Text("Summaries can miss context. AI can be wrong. Risk signals are not a security verdict.")
                     .font(.caption2)
@@ -395,63 +394,5 @@ private struct RiskCard: View {
         .padding(14)
         .background(tint.opacity(0.09), in: RoundedRectangle(cornerRadius: 13))
         .overlay(RoundedRectangle(cornerRadius: 13).stroke(tint.opacity(0.24)))
-    }
-}
-
-private struct SourceComparisonCard: View {
-    @ObservedObject var model: PageAssistantModel
-    let currentURL: String
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("SOURCE CHECK")
-                .font(.system(size: 10, weight: .bold))
-                .tracking(1.1)
-                .foregroundStyle(ClearframeTheme.accent)
-            if let saved = model.savedSource {
-                Text(saved.url == currentURL ? "Source one is saved" : "Ready to compare")
-                    .font(.system(size: 18, weight: .bold, design: .serif))
-                Text(saved.url == currentURL ? "Open another page, analyze it, then compare." : "\(saved.hostname) ↔ \(model.snapshot?.hostname ?? "current page")")
-                    .font(.caption)
-                    .foregroundStyle(.white.opacity(0.74))
-            } else {
-                Text("Compare another page")
-                    .font(.system(size: 18, weight: .bold, design: .serif))
-                Text("Save this result, open a second source, then analyze and compare.")
-                    .font(.caption)
-                    .foregroundStyle(.white.opacity(0.74))
-            }
-            Button(model.savedSource == nil ? "Save as source one" : "Compare these sources") {
-                model.saveOrCompare()
-            }
-            .buttonStyle(.borderedProminent)
-            .tint(.white)
-            .foregroundStyle(ClearframeTheme.onAccent)
-            .disabled(model.savedSource?.url == currentURL)
-
-            if let comparison = model.comparison {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("\(comparison.overlapPercent)% topical overlap").font(.callout.bold())
-                    ProgressView(value: Double(comparison.overlapPercent), total: 100).tint(ClearframeTheme.accent)
-                    Text(comparison.sharedThemes.isEmpty ? "No strong shared themes extracted." : comparison.sharedThemes.joined(separator: " · "))
-                    if !comparison.firstNumbers.isEmpty || !comparison.secondNumbers.isEmpty {
-                        Text("Figures: \(comparison.firstNumbers.joined(separator: ", ")) ↔ \(comparison.secondNumbers.joined(separator: ", "))")
-                    }
-                    Text(comparison.note).foregroundStyle(.white.opacity(0.7))
-                }
-                .font(.caption)
-                .padding(.top, 4)
-            }
-
-            if model.savedSource != nil {
-                Button("Clear saved source", role: .destructive) { model.clearSavedSource() }
-                    .buttonStyle(.plain)
-                    .font(.caption)
-                    .foregroundStyle(.white.opacity(0.7))
-            }
-        }
-        .padding(15)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(ClearframeTheme.accentDimStrong, in: RoundedRectangle(cornerRadius: 13))
     }
 }
