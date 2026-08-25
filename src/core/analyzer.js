@@ -377,8 +377,20 @@ export function summarizeLocally(page) {
     .slice(0, 4)
     .map((entry) => entry.sentence);
 
+  // A digit on its own used to qualify, so the reader was handed a publication
+  // time, a ticket price and the date a photograph was taken as things to go and
+  // check. Eight of nine probe sentences containing a number were selected.
+  //
+  // What makes a sentence checkable is an attribution or an absolute — "according
+  // to", "the study found", "always", "best" — or a quantity named as a quantity.
+  // "ninety percent" qualifies without a numeral and "14 June 2023" does not
+  // qualify with one. `\d *%` is here so "45%" counts, spaced the same way Swift
+  // scans it, since sentences arrive with their whitespace already collapsed.
+  //
+  // The cost is deliberate: a bare numeral with no unit — "sales rose to 4,300" —
+  // is no longer offered. Fewer claims, each one actually a claim.
   const claimPattern =
-    /\b(according|report|study|research|survey|million|billion|percent|guarantee|always|never|only|best|worst|first|potrivit|raport|studiu|cercetare|sondaj|milioane|miliarde|procent|selon|rapport|étude|recherche|sondage|milliard|pour cent)\b|报告|研究|调查|百万|十亿|百分之|保证|最佳|首次|\d[%\d,.:/-]*/iu;
+    /\b(according|report|study|research|survey|million|billion|percent|guarantee|always|never|only|best|worst|first|potrivit|raport|studiu|cercetare|sondaj|milioane|miliarde|procent|selon|rapport|étude|recherche|sondage|milliard|pour cent)\b|报告|研究|调查|百万|十亿|百分之|保证|最佳|首次|\d *%/iu;
   // A claim repeated from the gist or a key point gives the reader nothing new to
   // check, so keep claims to sentences the rest of the result did not already show.
   const presentedSentences = new Set([...summarySentences, ...keyPoints]);

@@ -168,3 +168,18 @@ test("shared contract: sentences split the same way in both runtimes", () => {
     );
   }
 });
+
+test("shared contract: a number alone is not a claim worth checking", () => {
+  for (const testCase of contract.claimCases) {
+    const result = summarizeLocally(extensionPage(testCase.page));
+    assert.ok(result.claimsToCheck.length > 0, `${testCase.id}: produced no claims at all`);
+    // A timestamp, a price and a date are facts about the page, not assertions a
+    // reader could go and check.
+    for (const forbidden of testCase.mustNotAppear) {
+      assert.ok(
+        !result.claimsToCheck.includes(forbidden),
+        `${testCase.id}: offered as a claim — ${forbidden}`
+      );
+    }
+  }
+});

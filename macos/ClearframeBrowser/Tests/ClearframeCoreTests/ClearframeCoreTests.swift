@@ -1297,6 +1297,22 @@ final class ClearframeCoreTests: XCTestCase {
         }
     }
 
+    func testLocalAnalysisContractDoesNotOfferATimestampAsAClaim() throws {
+        let contract = try localAnalysisContract()
+        for testCase in contract.claimCases {
+            let content = LocalAnalysisEngine.summarize(page: testCase.page)
+            XCTAssertFalse(content.claimsToCheck.isEmpty, "\(testCase.id): produced no claims at all")
+            // A timestamp, a price and a date are facts about the page, not
+            // assertions a reader could go and check.
+            for forbidden in testCase.mustNotAppear {
+                XCTAssertFalse(
+                    content.claimsToCheck.contains(forbidden),
+                    "\(testCase.id): offered as a claim — \(forbidden)"
+                )
+            }
+        }
+    }
+
     private func localAnalysisContract() throws -> LocalAnalysisContract {
         let url = try XCTUnwrap(
             Bundle.module.url(forResource: "local-analysis-contract", withExtension: "json")
@@ -1317,6 +1333,13 @@ private struct LocalAnalysisContract: Decodable {
     let duplicateSentenceCases: [DuplicateSentenceContractCase]
     let emptyAnalysisCases: [EmptyAnalysisContractCase]
     let segmentationCases: [SegmentationContractCase]
+    let claimCases: [ClaimContractCase]
+}
+
+private struct ClaimContractCase: Decodable {
+    let id: String
+    let page: PageSnapshot
+    let mustNotAppear: [String]
 }
 
 private struct SegmentationContractCase: Decodable {

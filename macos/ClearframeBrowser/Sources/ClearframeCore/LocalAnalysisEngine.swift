@@ -114,7 +114,14 @@ public enum LocalAnalysisEngine {
         let claims = scored
             .filter { entry in
                 guard !presentedSentences.contains(entry.sentence) else { return false }
-                return entry.sentence.rangeOfCharacter(from: .decimalDigits) != nil ||
+                // A digit on its own used to qualify, so the reader was handed a
+                // publication time, a ticket price and the date a photograph was
+                // taken as things to go and check. What makes a sentence checkable
+                // is an attribution or an absolute, or a quantity named as a
+                // quantity: "ninety percent" qualifies without a numeral, and
+                // "14 June 2023" does not qualify with one. A bare numeral carrying
+                // no unit is deliberately no longer offered.
+                return containsPercentage(entry.sentence) ||
                 claimTerms.contains { containsClaimTerm($0, in: entry.sentence) }
             }
             .sorted { $0.score > $1.score }
@@ -438,6 +445,19 @@ public enum LocalAnalysisEngine {
             searchRange = match.upperBound..<value.endIndex
         }
         return count
+    }
+
+    /// A digit immediately before a per-cent sign, so "45%" reads as a quantity.
+    /// Matches `\d *%` in the other runtime; sentences reach here with their
+    /// whitespace already collapsed to single spaces, so only a space can intervene.
+    private static func containsPercentage(_ sentence: String) -> Bool {
+        let characters = Array(sentence)
+        for (index, character) in characters.enumerated() where character == "%" {
+            var back = index - 1
+            while back >= 0, characters[back] == " " { back -= 1 }
+            if back >= 0, characters[back].isNumber { return true }
+        }
+        return false
     }
 
     private static func containsClaimTerm(_ term: String, in sentence: String) -> Bool {

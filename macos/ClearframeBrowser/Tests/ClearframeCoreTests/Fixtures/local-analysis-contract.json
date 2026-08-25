@@ -718,5 +718,26 @@
         "The harbour​bridge and the eastern span reopened after a longclosure here."
       ]
     }
+  ],
+  "claimCases": [
+    {
+      "id": "a-number-alone-does-not-make-a-claim-worth-checking",
+      "page": {
+        "title": "Seasonal timetable review",
+        "url": "https://example.org/t",
+        "hostname": "example.org",
+        "scheme": "https",
+        "language": "en",
+        "text": "The seasonal timetable review continues through the spring across the whole network.\nOfficials described the timetable review as the largest undertaken in a decade here.\nThe timetable review will report to the council before the end of the current year.\nRidership on the eastern corridor recovered to almost ninety percent of its earlier volume.\nAccording to the transport authority, the signalling replacement will finish next winter.\nThe study found that 2.7 million journeys were made on the network during the quarter.\nThe article was published at 19:30 on a Tuesday evening in the middle of March.\nA single day pass for the exhibition now costs $19.99 at the door on weekends.\nThe photograph on this page was taken on 14 June 2023 near the harbour wall.",
+        "wordCount": 126,
+        "hasPasswordField": false,
+        "formActions": []
+      },
+      "mustNotAppear": [
+        "The article was published at 19:30 on a Tuesday evening in the middle of March.",
+        "A single day pass for the exhibition now costs $19.99 at the door on weekends.",
+        "The photograph on this page was taken on 14 June 2023 near the harbour wall."
+      ]
+    }
   ]
 }
