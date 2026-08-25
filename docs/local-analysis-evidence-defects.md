@@ -2,6 +2,19 @@
 
 **Status:** August 20, 2026. Findings only — no fix applied at the time of writing. This is the spec that `docs/superpowers/plans/2026-08-20-local-analysis-evidence-integrity.md` implements.
 
+**Where each defect stands, August 25, 2026.** The findings below are left as they were written; this is what has since changed.
+
+| | State | By what |
+|---|---|---|
+| D1 synthetic terminator | Closed for extraction | No terminator is invented for a key point or claim. One remains inside `simplifyEnglish`, which rewrites English by design and is not the verbatim path Evidence Mode reads. |
+| D2 colon and semicolon fusion | Not re-measured | Still open as written until someone re-runs it. |
+| D3 decimal splits | Closed | The digit guard is in both runtimes and has a contract case. |
+| D4 body-text fallback | Closed | `tr` joined the reading selector (`3df4151`, nested rows `55137c7`), so an aggregator no longer reaches the fallback: live `news.ycombinator.com` goes from nothing recognised to sixty per-entry blocks. `tr` also joined the Evidence Mode candidates (`5a75e28`), because a row-derived key point spans several cells and no `td` holds it. The fallback itself remains unusable for its stated purpose and this is worth recording: it reads `innerText` from a **detached clone**, which WebKit gives textContent semantics, so it never sees a layout line break at all. |
+| D5 Indic and other terminators | Closed except Thai | The danda is in the terminator sets, and Armenian `։` was added in `648ce48`. Thai stays out because it separates sentences with spaces and has no terminator character to recognise — measured, not assumed. |
+| D6 false user-facing strings | Substantially closed | The engine no longer alters a sentence on the extraction path, so "This is extracted page text" is true again: the media-control filter stopped editing prose (`e4417e5`) and Swift stopped collapsing zero-width spaces the page still contains (`3df4151`). A miss now means what the string says. |
+
+Two further defects of this class were found and fixed while closing the above, neither of them in the list: the media-control filter deleted its phrases from inside ordinary sentences, and Swift's whitespace set disagreed with the JavaScript extractor's on U+200B, U+0085 and U+FEFF. Both emitted text the page did not contain.
+
 ## The invariant that is currently unstated and currently violated
 
 Evidence Mode works by string identity. `PageAssistantModel.revealEvidence(for:session:)` hands a key point verbatim to `BrowserSession.revealEvidence(_:expectedNavigationVersion:)`, which searches the live page for that exact text and highlights it. The assistant panel states the guarantee to the user: *"This is extracted page text, not an AI citation."*
