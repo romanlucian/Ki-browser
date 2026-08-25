@@ -901,9 +901,11 @@ final class BrowserSession: NSObject, ObservableObject {
       // live, so their `innerText` breaks lines where the layout does.
       const blocks = readingNodes('h1,h2,h3,p,li,blockquote,tr')
         .filter(node => !node.closest(excludedSelector) && isRendered(node))
-      // A row counts as a reading block only when nothing inside it already is,
-      // so a documentation table whose cells hold paragraphs is not read twice.
-      .filter(node => node.tagName !== 'TR' || !node.querySelector('h1,h2,h3,p,li,blockquote'))
+      // A row counts as a reading block only when nothing inside it already is, so
+      // a documentation table whose cells hold paragraphs is not read twice — and
+      // `tr` is in that list because sites lay tables out inside tables. Hacker News
+      // does, and without it every outer row repeated the rows nested within it.
+      .filter(node => node.tagName !== 'TR' || !node.querySelector('h1,h2,h3,p,li,blockquote,tr'))
         .map(node => clean(node.innerText))
         .filter(text => text.length >= 45 && text.length <= 1800)
         .filter(text => {
