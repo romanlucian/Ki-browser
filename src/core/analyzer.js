@@ -34,7 +34,16 @@ const MEDIA_INTERFACE_PHRASES = [
 // `Character` means, so it is what this uses.
 const GRAPHEME_SEGMENTER = new Intl.Segmenter("en", { granularity: "grapheme" });
 
+// Segmentation is exact and costs more than the rest of the analysis put together,
+// and this is called for every candidate sentence on the page. Almost nothing needs
+// it: a string measures the same in UTF-16 units as in graphemes unless it carries
+// a character outside the Basic Multilingual Plane, a combining mark, a zero-width
+// joiner, or a Hangul jamo that composes with its neighbour. Ruling those out is one
+// regex pass, and only the strings that fail it pay for the segmenter.
+const COMPLEX_GRAPHEME_PATTERN = /[\u{10000}-\u{10FFFF}\u200D\u1100-\u11FF\uA960-\uA97F\uD7B0-\uD7FF]|\p{M}/u;
+
 function graphemeCount(value) {
+  if (!COMPLEX_GRAPHEME_PATTERN.test(value)) return value.length;
   return [...GRAPHEME_SEGMENTER.segment(value)].length;
 }
 
