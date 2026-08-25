@@ -760,6 +760,28 @@
         "A single day pass for the exhibition now costs $19.99 at the door on weekends.",
         "The photograph on this page was taken on 14 June 2023 near the harbour wall."
       ]
+    },
+    {
+      "id": "an-attributed-number-is-a-claim-worth-checking",
+      "page": {
+        "title": "Regional briefing",
+        "url": "https://example.org/b",
+        "hostname": "example.org",
+        "scheme": "https",
+        "language": "en",
+        "text": "The regional briefing continues through the spring across the whole of the country.\nCorrespondents described the briefing as the longest held in the capital this year.\nThe briefing will be repeated before the end of the current parliamentary session.\nIbrahim Abubakar said he had identified 13 people among those taken from the village.\nThe agency revoked more than 175,000 visas during the first half of the current year.\nOfficials confirmed that at least 2,000 further cases were recorded across the region.\nThe article was published at 19:30 on a Tuesday evening in the middle of March.\nA single day pass for the exhibition now costs $19.99 at the door on weekends.\nThe photograph on this page was taken on 14 June 2023 near the harbour wall.",
+        "wordCount": 126,
+        "hasPasswordField": false,
+        "formActions": []
+      },
+      "mustNotAppear": [
+        "The article was published at 19:30 on a Tuesday evening in the middle of March.",
+        "A single day pass for the exhibition now costs $19.99 at the door on weekends.",
+        "The photograph on this page was taken on 14 June 2023 near the harbour wall."
+      ],
+      "mustAppear": [
+        "Ibrahim Abubakar said he had identified 13 people among those taken from the village."
+      ]
     }
   ]
 }

@@ -181,5 +181,13 @@ test("shared contract: a number alone is not a claim worth checking", () => {
         `${testCase.id}: offered as a claim — ${forbidden}`
       );
     }
+    // Removing noise is only half of it: a sentence somebody is quoted asserting a
+    // number in has to survive.
+    for (const required of testCase.mustAppear || []) {
+      assert.ok(
+        result.claimsToCheck.includes(required),
+        `${testCase.id}: dropped a real claim — ${required}`
+      );
+    }
   }
 });

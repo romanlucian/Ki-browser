@@ -1310,6 +1310,14 @@ final class ClearframeCoreTests: XCTestCase {
                     "\(testCase.id): offered as a claim — \(forbidden)"
                 )
             }
+            // Removing noise is only half of it: a sentence somebody is quoted
+            // asserting a number in has to survive.
+            for required in testCase.mustAppear ?? [] {
+                XCTAssertTrue(
+                    content.claimsToCheck.contains(required),
+                    "\(testCase.id): dropped a real claim — \(required)"
+                )
+            }
         }
     }
 
@@ -1340,6 +1348,7 @@ private struct ClaimContractCase: Decodable {
     let id: String
     let page: PageSnapshot
     let mustNotAppear: [String]
+    let mustAppear: [String]?
 }
 
 private struct SegmentationContractCase: Decodable {

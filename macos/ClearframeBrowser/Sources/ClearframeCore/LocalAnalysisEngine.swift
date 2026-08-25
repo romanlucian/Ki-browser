@@ -115,7 +115,8 @@ public enum LocalAnalysisEngine {
                 // "14 June 2023" does not qualify with one. A bare numeral carrying
                 // no unit is deliberately no longer offered.
                 return containsPercentage(entry.sentence) ||
-                containsClaimTerm(in: entry.sentence)
+                containsClaimTerm(in: entry.sentence) ||
+                containsAttributedNumber(entry.sentence)
             }
             .sorted { $0.score > $1.score }
             .prefix(3)
@@ -485,6 +486,25 @@ public enum LocalAnalysisEngine {
     /// they stay a plain containment test, exactly as the other runtime lists them
     /// outside its alternation.
     private static let cjkClaimTerms = claimTerms.filter { $0.contains(where: isCJK) }
+
+    /// A number nobody asserts is furniture; a number somebody asserts, or one
+    /// carried by a comparison, is what a reader might go and check. "Ibrahim
+    /// Abubakar said he had identified 13 people" and "revoked more than 175,000
+    /// visas" are claims; "published at 19:30" is not. These terms count only
+    /// alongside a numeral, which is why they are kept apart from `claimTerms`.
+    private static let attributedNumberExpression: NSRegularExpression? =
+        try? NSRegularExpression(pattern: "\\b(said|says|told|announced|confirmed|estimated|reported|recorded|revoked|rose|fell|grew|more than|fewer than|less than|at least|up to|a spus|a declarat|a anunțat|a confirmat|peste|cel puțin|a déclaré|a annoncé|a confirmé|plus de|au moins)\\b", options: [.caseInsensitive])
+
+    private static let cjkAttributionTerms = ["表示", "宣布", "确认", "超过", "至少"]
+
+    private static func containsAttributedNumber(_ sentence: String) -> Bool {
+        guard sentence.contains(where: { $0.isNumber }) else { return false }
+        if let expression = attributedNumberExpression {
+            let range = NSRange(sentence.startIndex..., in: sentence)
+            if expression.firstMatch(in: sentence, options: [], range: range) != nil { return true }
+        }
+        return cjkAttributionTerms.contains { sentence.localizedCaseInsensitiveContains($0) }
+    }
 
     private static func containsClaimTerm(in sentence: String) -> Bool {
         if let expression = claimTermExpression {

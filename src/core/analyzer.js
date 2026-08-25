@@ -409,9 +409,22 @@ export function summarizeLocally(page) {
     /\b(according|report|study|research|survey|million|billion|percent|guarantee|always|never|only|best|worst|first|potrivit|raport|studiu|cercetare|sondaj|milioane|miliarde|procent|selon|rapport|étude|recherche|sondage|milliard|pour cent)\b|报告|研究|调查|百万|十亿|百分之|保证|最佳|首次|\p{N} *%/iu;
   // A claim repeated from the gist or a key point gives the reader nothing new to
   // check, so keep claims to sentences the rest of the result did not already show.
+  // A number nobody asserts is furniture; a number somebody asserts, or one carried
+  // by a comparison, is the thing a reader might go and check. "Ibrahim Abubakar
+  // said he had identified 13 people" and "revoked more than 175,000 visas" are
+  // claims; "published at 19:30" is not. These terms only count alongside a numeral,
+  // which is why they are separate from the list above.
+  const attributedNumberPattern = /\b(said|says|told|announced|confirmed|estimated|reported|recorded|revoked|rose|fell|grew|more than|fewer than|less than|at least|up to|a spus|a declarat|a anunțat|a confirmat|peste|cel puțin|a déclaré|a annoncé|a confirmé|plus de|au moins)\b|表示|宣布|确认|超过|至少/iu;
+  const numeralPattern = /\p{N}/u;
   const presentedSentences = new Set([...summarySentences, ...keyPoints]);
   const claimsToCheck = scored
-    .filter((entry) => !presentedSentences.has(entry.sentence) && claimPattern.test(entry.sentence))
+    .filter(
+      (entry) =>
+        !presentedSentences.has(entry.sentence) &&
+        (claimPattern.test(entry.sentence) ||
+          (numeralPattern.test(entry.sentence) &&
+            attributedNumberPattern.test(entry.sentence)))
+    )
     .sort((a, b) => b.score - a.score)
     .slice(0, 3)
     .map((entry) => entry.sentence);
