@@ -251,8 +251,13 @@ public enum LocalAnalysisEngine {
         for character in value.lowercased() {
             if isCJK(character) {
                 appendCurrentWord()
-                let token = String(character)
-                if !selectedStopWords.contains(token) { result.append(token) }
+                // A joiner rides on the character before it and forms one cluster
+                // here, so the token carried it — "\u{6D4B}\u{200C}" where the other runtime, walking
+                // code points, pushes "\u{6D4B}" and drops the joiner on the floor.
+                let token = String(String.UnicodeScalarView(
+                    character.unicodeScalars.filter { $0 != "\u{200C}" && $0 != "\u{200D}" }
+                ))
+                if !token.isEmpty, !selectedStopWords.contains(token) { result.append(token) }
             } else if character.isLetter || character.isNumber || character == "'" || character == "’" || character == "-" {
                 currentWord.append(character)
             } else {
@@ -452,7 +457,13 @@ public enum LocalAnalysisEngine {
         for (index, character) in characters.enumerated() where character == "%" {
             var back = index - 1
             while back >= 0, characters[back] == " " { back -= 1 }
-            if back >= 0, characters[back].isNumber { return true }
+            // One scalar, because the other runtime asks `\p{N}`, which matches a
+            // single code point. A keycap is a digit, a variation selector and a
+            // combining mark in one cluster: `isNumber` is true of the whole thing,
+            // so "1\u{FE0F}\u{20E3} %" was a quantity here and not there. Absurd input, but the
+            // two have to answer it alike.
+            if back >= 0, characters[back].unicodeScalars.count == 1,
+               characters[back].isNumber { return true }
         }
         return false
     }

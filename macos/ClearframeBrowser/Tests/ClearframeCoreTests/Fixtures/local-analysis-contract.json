@@ -71,6 +71,18 @@
       "excluded": [
         "️‍"
       ]
+    },
+    {
+      "id": "a-joiner-after-a-cjk-character-is-not-part-of-it",
+      "language": "zh",
+      "text": "测试‌数据 测试‌数据",
+      "requiredCounts": {
+        "试": 2,
+        "数": 2
+      },
+      "excluded": [
+        "试‌"
+      ]
     }
   ],
   "summaryCases": [
@@ -801,6 +813,26 @@
       ],
       "mustAppear": [
         "Le ministre a déclaré que 13 personnes avaient été évacuées du village pendant la nuit."
+      ]
+    },
+    {
+      "id": "a-keycap-before-a-per-cent-sign-is-not-a-quantity",
+      "page": {
+        "title": "Quarterly briefing",
+        "url": "https://example.org/q",
+        "hostname": "example.org",
+        "scheme": "https",
+        "language": "en",
+        "text": "The quarterly briefing reviewed the quarterly programme number 1 of the briefing.\nThe quarterly briefing reviewed the quarterly programme number 2 of the briefing.\nThe quarterly briefing reviewed the quarterly programme number 3 of the briefing.\nThe quarterly briefing reviewed the quarterly programme number 4 of the briefing.\nThe quarterly briefing reviewed the quarterly programme number 5 of the briefing.\nThe quarterly briefing reviewed the quarterly programme number 6 of the briefing.\nThe quarterly briefing reviewed the quarterly programme number 7 of the briefing.\nThe quarterly briefing reviewed the quarterly programme number 8 of the briefing.\nThe board confirmed that 2,400 further seats were added to the service this year.\nThe dashboard showed 1️⃣ % beside an icon with no other figure on the row.",
+        "wordCount": 125,
+        "hasPasswordField": false,
+        "formActions": []
+      },
+      "mustNotAppear": [
+        "The dashboard showed 1️⃣ % beside an icon with no other figure on the row."
+      ],
+      "mustAppear": [
+        "The board confirmed that 2,400 further seats were added to the service this year."
       ]
     }
   ]
