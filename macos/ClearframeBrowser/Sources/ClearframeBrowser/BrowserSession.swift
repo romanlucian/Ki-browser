@@ -929,7 +929,18 @@ final class BrowserSession: NSObject, ObservableObject {
       // of the article. Asking for rows only when there are no paragraphs keeps the
       // aggregator readable and leaves the article alone.
       const prose = gatherBlocks('h1,h2,h3,p,li,blockquote');
-      const blocks = prose.length >= 2 ? prose : gatherBlocks('h1,h2,h3,p,li,blockquote,tr');
+      // Measured in characters, not in blocks. Counting blocks asked the wrong
+      // question: a phone specification page carries eight paragraphs — a
+      // disclaimer, a review teaser, two comments, a copyright line — totalling
+      // nine hundred characters, and its twenty-four specification rows, which are
+      // the entire substance of the page, were refused because eight is more than
+      // two. Fifteen hundred characters is roughly one solid paragraph; a page
+      // whose every paragraph together does not reach that is not a page made of
+      // paragraphs. The encyclopedia article that prompted the gate has a hundred
+      // and fifty thousand, and the nearest ordinary page measured has thirteen
+      // thousand, so nothing sits near the line.
+      const proseMass = prose.reduce((total, block) => total + block.length, 0);
+      const blocks = proseMass >= 1500 ? prose : gatherBlocks('h1,h2,h3,p,li,blockquote,tr');
       // `clean` collapses every run of whitespace, newlines included. On a page
       // whose content is not paragraphs — a link aggregator laying its entries out
       // in table rows — nothing qualifies as a reading block, this fallback runs,

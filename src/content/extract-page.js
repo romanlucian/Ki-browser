@@ -69,7 +69,15 @@ export function extractPage() {
   // sentence. Asking for rows only when there are no paragraphs keeps the
   // aggregator readable and leaves the article alone.
   const prose = gatherBlocks("h1, h2, h3, p, li, blockquote");
-  const paragraphs = prose.length >= 2 ? prose : gatherBlocks("h1, h2, h3, p, li, blockquote, tr");
+  // Measured in characters, not in blocks. Counting blocks asked the wrong
+  // question: a phone specification page carries eight paragraphs — a disclaimer, a
+  // review teaser, two comments, a copyright line — totalling nine hundred
+  // characters, and its twenty-four specification rows, which are the entire
+  // substance of the page, were refused because eight is more than two. Fifteen
+  // hundred characters is roughly one solid paragraph; a page whose every paragraph
+  // together does not reach that is not a page made of paragraphs.
+  const proseMass = prose.reduce((total, block) => total + block.length, 0);
+  const paragraphs = proseMass >= 1500 ? prose : gatherBlocks("h1, h2, h3, p, li, blockquote, tr");
 
   // `clean` collapses every run of whitespace, newlines included. On a page whose
   // content is not paragraphs — a link aggregator laying its entries out in table

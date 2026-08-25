@@ -789,6 +789,28 @@ struct BrowserE2ESmoke {
             )
             print("PASS evidence in a table: a key point taken from a row was found on the page")
 
+            // A specification page carries a few short paragraphs — a disclaimer, a
+            // review teaser, two comments — and keeps its substance in a table. A
+            // count of paragraphs called that a page of prose and refused to read
+            // the table at all; a measure of how much prose there is does not.
+            let specSheetURL = fixtureURL.appendingPathComponent("spec-sheet.html")
+            try await loadDeterministicPage(
+                in: session,
+                localURL: specSheetURL,
+                expectedTitle: "Clearframe Spec Sheet"
+            )
+            await assistant.analyzeCurrentPage(session: session)
+            let specText = assistant.snapshot?.text ?? ""
+            try require(
+                specText.contains("Super Retina XDR OLED"),
+                "the specification table was refused because four short paragraphs counted as prose"
+            )
+            try require(
+                specText.contains("Disclaimer."),
+                "the page's own paragraphs went missing when its table was read"
+            )
+            print("PASS specification page: a table kept its content beside four short paragraphs")
+
             try await loadDeterministicPage(in: session, localURL: fixtureURL)
             await assistant.analyzeCurrentPage(session: session)
             try require(assistant.state == .ready, "the ordinary article fixture no longer analyzes straight to a ready summary")
