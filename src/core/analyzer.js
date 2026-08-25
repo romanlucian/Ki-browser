@@ -24,6 +24,20 @@ const MEDIA_INTERFACE_PHRASES = [
   "picture-in-picture"
 ];
 
+// Swift counts `Character`s — extended grapheme clusters — so JavaScript has to
+// count the same units or the two runtimes measure different sentences.
+//
+// `.length` counts UTF-16 units, which double-counts a combining accent and every
+// astral character. The same French sentence written in decomposed form measures 73
+// there and 53 here, so identical control text looks like a smaller share of it and
+// only one runtime calls it player interface. UAX#29 grapheme segmentation is what
+// `Character` means, so it is what this uses.
+const GRAPHEME_SEGMENTER = new Intl.Segmenter("en", { granularity: "grapheme" });
+
+function graphemeCount(value) {
+  return [...GRAPHEME_SEGMENTER.segment(value)].length;
+}
+
 const CJK_PATTERN = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u;
 
 // Structure thresholds calibrated on live English and Romanian section fronts and
@@ -136,16 +150,57 @@ function sentencesFromReadingBlocks(value = "") {
   return value.split(/\r?\n/).flatMap((block) => splitSentences(block));
 }
 
-function removeRepeatedMediaInterfaceText(value = "") {
-  const lower = value.toLocaleLowerCase();
-  const controlMatchCount = MEDIA_INTERFACE_PHRASES.reduce((count, phrase) => {
-    return count + lower.split(phrase).length - 1;
-  }, 0);
-  if (controlMatchCount < 2) return value;
-  return MEDIA_INTERFACE_PHRASES.reduce(
-    (result, phrase) => result.replaceAll(new RegExp(phrase.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi"), " "),
-    value
+// Embedded media players sometimes expose their accessibility controls through
+// `innerText`, and that boilerplate lands among the reading blocks beside real
+// sentences.
+//
+// A sentence is player UI when control phrases account for most of it, and it is
+// dropped whole. A sentence that merely mentions one — an article about
+// picture-in-picture — is ordinary prose and is kept exactly as the page wrote it.
+//
+// The distinction is the point. Deleting the phrase from inside a real sentence
+// emits text the page never contained: "Apple introduced picture-in-picture on the
+// iPad" became "Apple introduced on the iPad", which still reads as a sentence, so
+// nothing warns the reader. Evidence Mode could never highlight it, and the panel
+// claims it is extracted page text. Judging whole sentences keeps that claim true.
+// Text a page repeats verbatim, many times over, is not what the page is about.
+//
+// Player controls arrive this way, and they arrive in the language the site is
+// written in — which a fixed English phrase list cannot follow. Counting how often
+// a sentence repeats needs no vocabulary at all, so it recognises a Romanian or
+// Chinese player exactly as well as an English one, and it catches control text
+// whose extra wording dilutes it below the phrase-coverage test.
+//
+// Three occurrences: prose repeats a whole sentence twice often enough to be
+// innocent, and three times almost never.
+//
+// `toLowerCase`, not `toLocaleLowerCase`, to match Swift's locale-independent
+// `lowercased()`. Turkish casing rules applied on one side only would key the two
+// runtimes differently.
+function repeatedInterfaceText(sentences) {
+  const counts = new Map();
+  for (const sentence of sentences) {
+    const key = sentence.toLowerCase();
+    counts.set(key, (counts.get(key) || 0) + 1);
+  }
+  return new Set(
+    [...counts].filter(([, occurrences]) => occurrences >= 3).map(([key]) => key)
   );
+}
+
+function isMediaInterfaceSentence(sentence = "") {
+  const trimmed = sentence.trim();
+  if (!trimmed) return false;
+
+  // `toLowerCase`, not `toLocaleLowerCase`, for the same reason as the repetition
+  // key below: in a Turkish locale "PICTURE-IN-PICTURE" folds to "pıcture-ın-pıcture"
+  // and stops matching, while Swift's case-insensitive search is locale-independent.
+  const lower = trimmed.toLowerCase();
+  const coveredCharacters = MEDIA_INTERFACE_PHRASES.reduce(
+    (total, phrase) => total + (lower.split(phrase).length - 1) * graphemeCount(phrase),
+    0
+  );
+  return coveredCharacters * 2 > graphemeCount(trimmed);
 }
 
 function sentenceScores(sentences, title = "", language = "") {
@@ -186,8 +241,13 @@ function selectSentences(scored, count) {
 }
 
 export function summarizeLocally(page) {
-  const source = removeRepeatedMediaInterfaceText(page.text || page.description || "");
-  const sentences = sentencesFromReadingBlocks(source);
+  const source = page.text || page.description || "";
+  const extracted = sentencesFromReadingBlocks(source);
+  const repeated = repeatedInterfaceText(extracted);
+  const sentences = extracted.filter(
+    (sentence) =>
+      !isMediaInterfaceSentence(sentence) && !repeated.has(sentence.toLowerCase())
+  );
 
   if (!sentences.length) {
     return {

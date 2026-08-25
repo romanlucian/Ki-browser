@@ -362,6 +362,76 @@
         "hasPasswordField": false,
         "formActions": []
       }
+    },
+    {
+      "id": "media-phrase-in-prose-stays-verbatim",
+      "page": {
+        "title": "How floating video changed phones",
+        "url": "https://example.com/floating-video",
+        "hostname": "example.com",
+        "scheme": "https",
+        "language": "en",
+        "text": "Floating video changed how people use phones, and the change arrived faster than most reviewers expected.\nPhones gained floating video slowly, because every platform solved the same problem in a different way.\nThe floating video feature on phones is now expected by reviewers and by ordinary people alike.\nApple introduced picture-in-picture on the iPad in 2015, letting a video float above other applications.\nDevelopers had to opt in, and several streaming services delayed adoption for licensing reasons.\nSupport for picture-in-picture on Android arrived with Oreo and reached most handsets by 2019.\nBrowser vendors shipped their own controls, which behave differently from the operating system version.\nToday the capability is treated as a defect when it is missing from a major application.",
+        "wordCount": 121,
+        "hasPasswordField": false,
+        "formActions": []
+      }
+    }
+  ],
+  "boilerplateCases": [
+    {
+      "id": "english-player-controls-do-not-reach-the-reader",
+      "page": {
+        "title": "Transit report",
+        "url": "https://example.org/",
+        "hostname": "example.org",
+        "scheme": "https",
+        "language": "en",
+        "text": "subtitles settings, opens subtitles settings dialog.\nsubtitles settings, opens subtitles settings dialog.\nsubtitles settings, opens subtitles settings dialog.\nsubtitles settings, opens subtitles settings dialog.\nsubtitles settings, opens subtitles settings dialog.\nsubtitles settings, opens subtitles settings dialog.\nsubtitles settings, opens subtitles settings dialog.\nsubtitles settings, opens subtitles settings dialog.\nvideo player is loading, please wait a moment.\nvideo player is loading, please wait a moment.\nvideo player is loading, please wait a moment.\nvideo player is loading, please wait a moment.\nvideo player is loading, please wait a moment.\nvideo player is loading, please wait a moment.\nvideo player is loading, please wait a moment.\nvideo player is loading, please wait a moment.\nThe transit authority published its annual report on weekday ridership across the network.\nOfficials said the busiest corridor recovered to almost ninety percent of its earlier volume.\nEngineers will replace signalling equipment on the eastern line during the coming winter.\nThe report says fares will stay unchanged until the next council review in September 2026.\nPassenger groups asked for clearer information screens at the four largest interchange stations.",
+        "wordCount": 180,
+        "hasPasswordField": false,
+        "formActions": []
+      },
+      "mustNotAppear": [
+        "subtitles settings",
+        "video player is loading"
+      ]
+    },
+    {
+      "id": "localised-player-controls-do-not-reach-the-reader",
+      "page": {
+        "title": "Ziarul Financiar",
+        "url": "https://example.ro/",
+        "hostname": "example.ro",
+        "scheme": "https",
+        "language": "ro",
+        "text": "setări subtitrare, deschide dialogul de setări subtitrare.\nsetări subtitrare, deschide dialogul de setări subtitrare.\nsetări subtitrare, deschide dialogul de setări subtitrare.\nsetări subtitrare, deschide dialogul de setări subtitrare.\nsetări subtitrare, deschide dialogul de setări subtitrare.\nsetări subtitrare, deschide dialogul de setări subtitrare.\nsetări subtitrare, deschide dialogul de setări subtitrare.\nsetări subtitrare, deschide dialogul de setări subtitrare.\nplayerul video se încarcă, vă rugăm să așteptați puțin.\nplayerul video se încarcă, vă rugăm să așteptați puțin.\nplayerul video se încarcă, vă rugăm să așteptați puțin.\nplayerul video se încarcă, vă rugăm să așteptați puțin.\nplayerul video se încarcă, vă rugăm să așteptați puțin.\nplayerul video se încarcă, vă rugăm să așteptați puțin.\nplayerul video se încarcă, vă rugăm să așteptați puțin.\nplayerul video se încarcă, vă rugăm să așteptați puțin.\nBursa de Valori București a deschis ședința de tranzacționare cu un nou maxim al indicelui principal.\nInvestitorul Corneliu Manole a discutat despre evoluția pieței și companiile urmărite în portofoliu.\nRomânia continuă să atragă centre de tehnologie și servicii ale unor grupuri internaționale mari.\nCompaniile au anunțat zece proiecte majore în ultimul an, potrivit informațiilor publicate de presă.\nEvoluția dobânzilor și rezultatele trimestriale rămân importante pentru investitorii de la bursă.",
+        "wordCount": 197,
+        "hasPasswordField": false,
+        "formActions": []
+      },
+      "mustNotAppear": [
+        "setări subtitrare",
+        "playerul video se încarcă"
+      ]
+    },
+    {
+      "id": "decomposed-text-does-not-change-which-sentences-are-player-controls",
+      "page": {
+        "title": "Rapport annuel des transports",
+        "url": "https://example.fr/",
+        "hostname": "example.fr",
+        "scheme": "https",
+        "language": "fr",
+        "text": "Playback controls playback rate éééééééééééééééééééé.\nLe réseau de transport a publié son rapport annuel sur la fréquentation en semaine.\nLes responsables ont déclaré que le corridor le plus chargé avait retrouvé son volume.\nLes ingénieurs remplaceront la signalisation de la ligne est pendant l'hiver prochain.\nLe rapport indique que les tarifs resteront inchangés jusqu'à la revue de septembre.\nLes associations demandent des écrans d'information plus clairs dans les grandes gares.",
+        "wordCount": 70,
+        "hasPasswordField": false,
+        "formActions": []
+      },
+      "mustNotAppear": [
+        "playback controls",
+        "playback rate"
+      ]
     }
   ]
 }

@@ -1233,6 +1233,28 @@ final class ClearframeCoreTests: XCTestCase {
         }
     }
 
+    func testLocalAnalysisContractKeepsPlayerInterfaceTextAwayFromTheReader() throws {
+        let contract = try localAnalysisContract()
+        for testCase in contract.boilerplateCases {
+            let content = LocalAnalysisEngine.summarize(page: testCase.page)
+            XCTAssertFalse(
+                content.summary.isEmpty && content.keyPoints.isEmpty,
+                "\(testCase.id): produced nothing to check"
+            )
+            // Recognising this boilerplate must not depend on knowing the language it
+            // is written in: a site that translates its player is still a site whose
+            // player controls are not the article.
+            let produced = ([content.summary] + content.keyPoints + content.claimsToCheck)
+                .joined(separator: " ")
+            for phrase in testCase.mustNotAppear {
+                XCTAssertFalse(
+                    produced.localizedCaseInsensitiveContains(phrase),
+                    "\(testCase.id): player interface text reached the reader — \(phrase)"
+                )
+            }
+        }
+    }
+
     private func localAnalysisContract() throws -> LocalAnalysisContract {
         let url = try XCTUnwrap(
             Bundle.module.url(forResource: "local-analysis-contract", withExtension: "json")
@@ -1249,11 +1271,18 @@ private struct LocalAnalysisContract: Decodable {
     let plainEnglishCases: [PlainEnglishContractCase]
     let readingTimeCases: [ReadingTimeContractCase]
     let evidenceCases: [EvidenceContractCase]
+    let boilerplateCases: [BoilerplateContractCase]
 }
 
 private struct EvidenceContractCase: Decodable {
     let id: String
     let page: PageSnapshot
+}
+
+private struct BoilerplateContractCase: Decodable {
+    let id: String
+    let page: PageSnapshot
+    let mustNotAppear: [String]
 }
 
 private struct TokenContractCase: Decodable {

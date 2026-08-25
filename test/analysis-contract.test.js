@@ -108,3 +108,26 @@ test("shared contract: key points and claims are verbatim page text", () => {
     }
   }
 });
+
+test("shared contract: player interface text never reaches the reader, in any language", () => {
+  for (const testCase of contract.boilerplateCases) {
+    const page = extensionPage(testCase.page);
+    const result = summarizeLocally(page);
+    assert.ok(
+      result.summary.length > 0 || result.keyPoints.length > 0,
+      `${testCase.id}: produced nothing to check`
+    );
+    // Recognising this boilerplate must not depend on knowing the language it is
+    // written in: a site that translates its player is still a site whose player
+    // controls are not the article.
+    const produced = [result.summary, ...result.keyPoints, ...result.claimsToCheck]
+      .join(" ")
+      .toLocaleLowerCase();
+    for (const phrase of testCase.mustNotAppear) {
+      assert.ok(
+        !produced.includes(phrase.toLocaleLowerCase()),
+        `${testCase.id}: player interface text reached the reader — ${phrase}`
+      );
+    }
+  }
+});

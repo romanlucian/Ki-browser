@@ -65,8 +65,11 @@ public enum LocalAnalysisEngine {
     ]
 
     public static func summarize(page: PageSnapshot) -> PageAnalysisContent {
-        let source = removeRepeatedMediaInterfaceText(page.text.isEmpty ? "" : page.text)
-        let sentences = deduplicated(sentencesFromReadingBlocks(source))
+        let source = page.text.isEmpty ? "" : page.text
+        let extracted = sentencesFromReadingBlocks(source)
+        let repeated = repeatedInterfaceText(in: extracted)
+        let sentences = deduplicated(extracted)
+            .filter { !isMediaInterfaceSentence($0) && !repeated.contains($0.lowercased()) }
 
         guard !sentences.isEmpty else {
             return PageAnalysisContent(summary: "", keyPoints: [], claimsToCheck: [])
@@ -239,18 +242,52 @@ public enum LocalAnalysisEngine {
         value.components(separatedBy: .newlines).flatMap { splitSentences($0) }
     }
 
-    /// Embedded media players sometimes expose repeated accessibility controls through
-    /// `innerText`. Remove that boilerplate only when a repeated control phrase proves
-    /// the page extraction contains a player UI, preserving ordinary article wording.
-    private static func removeRepeatedMediaInterfaceText(_ value: String) -> String {
-        let controlMatchCount = mediaInterfacePhrases.reduce(0) { count, phrase in
-            count + matchCount(of: phrase, in: value)
+    /// Embedded media players sometimes expose their accessibility controls through
+    /// `innerText`, and that boilerplate lands among the reading blocks beside real
+    /// sentences.
+    ///
+    /// A sentence is player UI when control phrases account for most of it, and it is
+    /// dropped whole. A sentence that merely mentions one — an article about
+    /// picture-in-picture — is ordinary prose and is kept exactly as the page wrote it.
+    ///
+    /// The distinction is the point. Deleting the phrase from inside a real sentence
+    /// emits text the page never contained: "Apple introduced picture-in-picture on the
+    /// iPad" became "Apple introduced on the iPad", which still reads as a sentence, so
+    /// nothing warns the reader. Evidence Mode could never highlight it, and the panel
+    /// claims it is extracted page text. Judging whole sentences keeps that claim true.
+    /// Text a page repeats verbatim, many times over, is not what the page is about.
+    ///
+    /// Player controls arrive this way, and they arrive in the language the site is
+    /// written in — which a fixed English phrase list cannot follow. Counting how
+    /// often a sentence repeats needs no vocabulary at all, so it recognises a
+    /// Romanian or Chinese player exactly as well as an English one, and it catches
+    /// control text whose extra wording dilutes it below the phrase-coverage test.
+    ///
+    /// Three occurrences: prose repeats a whole sentence twice often enough to be
+    /// innocent, and three times almost never.
+    private static func repeatedInterfaceText(in sentences: [String]) -> Set<String> {
+        var counts: [String: Int] = [:]
+        for sentence in sentences {
+            counts[sentence.lowercased(), default: 0] += 1
         }
-        guard controlMatchCount >= 2 else { return value }
+        return Set(counts.filter { $0.value >= 3 }.keys)
+    }
 
-        return mediaInterfacePhrases.reduce(value) { result, phrase in
-            result.replacingOccurrences(of: phrase, with: " ", options: .caseInsensitive)
+    private static func isMediaInterfaceSentence(_ sentence: String) -> Bool {
+        let trimmed = sentence.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return false }
+
+        // `count` is a count of `Character`s — extended grapheme clusters. The
+        // JavaScript runtime segments graphemes to match it, because its native
+        // `.length` counts UTF-16 units and would measure the same decomposed
+        // sentence as longer, putting the two runtimes on opposite sides of the
+        // half-way test. Every phrase here is ASCII; a non-ASCII one would need
+        // checking too, since Swift matches across normalisation forms and
+        // JavaScript's `split` does not.
+        let coveredCharacters = mediaInterfacePhrases.reduce(0) { total, phrase in
+            total + matchCount(of: phrase, in: trimmed) * phrase.count
         }
+        return coveredCharacters * 2 > trimmed.count
     }
 
     private static func deduplicated(_ sentences: [String]) -> [String] {
