@@ -851,6 +851,94 @@ final class BrowserBehaviorTests: XCTestCase {
         XCTAssertTrue(workspace.tabs.allSatisfy { $0.startSurface == .aiHome })
     }
 
+    func testTabsOpenWithoutTheAssistantPanelUnlessTheSettingAsksForIt() throws {
+        let suiteName = "clearframe.assistantPanel.default.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { TestSuiteCleanup.destroy(suiteName, defaults: defaults) }
+        let store = BrowserDataStore(defaults: defaults)
+        XCTAssertFalse(store.showsAssistantPanel, "a profile that has never chosen opens tabs without the panel")
+
+        let blocking = try Self.makeTestContentBlocking(defaults: defaults)
+        defer { blocking.removeStore() }
+        let workspace = BrowserWorkspace(
+            dataStore: store,
+            downloads: DownloadCenter(),
+            searchSettings: SearchSettingsStore(defaults: defaults),
+            contentBlocking: blocking.provider
+        )
+        XCTAssertEqual(workspace.tabs.first?.showsAssistantPanel, false, "the window's first tab opens without it")
+        workspace.addTab()
+        XCTAssertEqual(workspace.selectedTab?.showsAssistantPanel, false, "so does a new tab")
+
+        // Asked for in Settings, every tab opened afterwards starts showing it.
+        store.showsAssistantPanel = true
+        workspace.addTab()
+        XCTAssertEqual(workspace.selectedTab?.showsAssistantPanel, true)
+        XCTAssertTrue(defaults.bool(forKey: "clearframe.showAssistantPanel"), "the choice is remembered")
+
+        // And a window opened later reads the same answer, including the tabs
+        // it restores rather than creates.
+        let record = BrowserTabRecord(
+            id: UUID(),
+            url: "https://example.com/restored",
+            title: "Restored",
+            lastActivatedAt: Date()
+        )
+        store.saveWorkspace(BrowserWorkspaceSnapshot(tabs: [record], selectedTabID: record.id))
+        let reopened = BrowserWorkspace(
+            dataStore: BrowserDataStore(defaults: defaults),
+            downloads: DownloadCenter(),
+            searchSettings: SearchSettingsStore(defaults: defaults),
+            contentBlocking: blocking.provider
+        )
+        XCTAssertEqual(reopened.tabs.first?.showsAssistantPanel, true, "a restored tab honours the setting too")
+    }
+
+    func testTheAssistantPanelButtonStaysLocalToItsTabAndSurvivesSwitchingAway() throws {
+        let workspace = try makeSurfaceTestWorkspace()
+        let first = try XCTUnwrap(workspace.selectedTab)
+        workspace.addTab()
+        let second = try XCTUnwrap(workspace.selectedTab)
+        XCTAssertNotEqual(first.id, second.id)
+
+        // What the toolbar button does.
+        first.showsAssistantPanel = true
+
+        XCTAssertFalse(second.showsAssistantPanel, "opening it in one tab does not open it in another")
+        workspace.selectTab(second.id)
+        workspace.selectTab(first.id)
+        // Held as view state this could not have been true: SwiftUI rebuilds
+        // the tab's view on every selection change, so the panel closed itself
+        // the moment you looked at another tab. The model is where it belongs.
+        XCTAssertTrue(first.showsAssistantPanel, "the panel is still open on the tab it was opened on")
+    }
+
+    func testChangingTheAssistantPanelSettingReachesWindowsThatAreAlreadyOpen() throws {
+        let suiteName = "clearframe.assistantPanel.live.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { TestSuiteCleanup.destroy(suiteName, defaults: defaults) }
+        let store = BrowserDataStore(defaults: defaults)
+        let blocking = try Self.makeTestContentBlocking(defaults: defaults)
+        defer { blocking.removeStore() }
+        let workspace = BrowserWorkspace(
+            dataStore: store,
+            downloads: DownloadCenter(),
+            searchSettings: SearchSettingsStore(defaults: defaults),
+            contentBlocking: blocking.provider
+        )
+        workspace.addTab()
+        XCTAssertEqual(workspace.tabs.count, 2)
+        XCTAssertTrue(workspace.tabs.allSatisfy { !$0.showsAssistantPanel })
+
+        // Settings is a separate window: without this the switch would appear
+        // to do nothing until the next new tab.
+        store.showsAssistantPanel = true
+        XCTAssertTrue(workspace.tabs.allSatisfy(\.showsAssistantPanel))
+
+        store.showsAssistantPanel = false
+        XCTAssertTrue(workspace.tabs.allSatisfy { !$0.showsAssistantPanel })
+    }
+
     func testOpenBookmarksHomeShowsTheBookmarksSurfaceOnTheSelectedTab() throws {
         let workspace = try makeSurfaceTestWorkspace()
         let tab = try XCTUnwrap(workspace.selectedTab)

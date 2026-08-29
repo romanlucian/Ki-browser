@@ -53,7 +53,6 @@ private struct BrowserTabContent: View {
     @ObservedObject private var find: PageFindController
     @ObservedObject var workspace: BrowserWorkspace
     @State private var addressText: String
-    @State private var showsAssistant = true
     @State private var showsLibrary = false
     @State private var addressFocused = false
 
@@ -76,7 +75,7 @@ private struct BrowserTabContent: View {
                 searchSettings: workspace.searchSettings,
                 addressText: $addressText,
                 addressFocused: $addressFocused,
-                showsAssistant: $showsAssistant,
+                showsAssistant: $tab.showsAssistantPanel,
                 showsLibrary: $showsLibrary,
                 goHome: { tab.goHome() }
             )
@@ -118,7 +117,7 @@ private struct BrowserTabContent: View {
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                     stateOverlay
                 }
-                if showsAssistant {
+                if tab.showsAssistantPanel {
                     Divider()
                     AssistantPanel(model: assistant, session: session)
                         .frame(width: 380)
@@ -126,7 +125,7 @@ private struct BrowserTabContent: View {
                 }
             }
         }
-        .animation(.easeInOut(duration: 0.18), value: showsAssistant)
+        .animation(.easeInOut(duration: 0.18), value: tab.showsAssistantPanel)
         // A restored tab starts loading before this view exists, so the change
         // that would have filled the address field has already happened by the
         // time anything is watching for it. Reopening the browser then showed a

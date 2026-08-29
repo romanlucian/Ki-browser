@@ -16,6 +16,16 @@ final class BrowserDataStore: ObservableObject {
     @Published var showsBookmarksBar: Bool {
         didSet { defaults.set(showsBookmarksBar, forKey: showsBookmarksBarKey) }
     }
+    /// Whether a tab opens with the page assistant panel already showing.
+    ///
+    /// Off unless asked for. Analysis has always been something you click, but
+    /// the panel arrived open anyway, so every new tab spent 380 points of a
+    /// window offering a button nobody had asked for yet. This decides the
+    /// state a tab *starts* in; the toolbar button still opens and closes the
+    /// panel for the tab in front of you, and that stays a local decision.
+    @Published var showsAssistantPanel: Bool {
+        didSet { defaults.set(showsAssistantPanel, forKey: showsAssistantPanelKey) }
+    }
 
     private let defaults: UserDefaults
     private let encoder = JSONEncoder()
@@ -28,6 +38,7 @@ final class BrowserDataStore: ObservableObject {
     private let reloadRestoredTabsKey = "clearframe.reloadRestoredTabs"
     private let saveHistoryKey = "clearframe.saveHistory"
     private let showsBookmarksBarKey = "clearframe.showBookmarksBar"
+    private let showsAssistantPanelKey = "clearframe.showAssistantPanel"
     private let maximumHistoryItems = 500
 
     init(defaults: UserDefaults = .standard) {
@@ -55,6 +66,9 @@ final class BrowserDataStore: ObservableObject {
         bookmarkFolders = bookmarkCollection.folders
         history = historyLoad.value ?? []
         showsBookmarksBar = defaults.bool(forKey: showsBookmarksBarKey)
+        // No seeding: an absent key already reads false, which is the
+        // default this one wants.
+        showsAssistantPanel = defaults.bool(forKey: showsAssistantPanelKey)
         let recoveredNames = [
             bookmarkLoad.wasRecovered ? "bookmarks" : nil,
             folderLoad.wasRecovered ? "bookmark folders" : nil,

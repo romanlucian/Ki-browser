@@ -12,6 +12,11 @@ Dates are commit dates. Test counts are the totals at the end of each period, ve
 
 ### Week of August 24, 2026
 
+**The page assistant is no longer always there**
+- A tab opens without the assistant panel now, and Settings ▸ Page assistant has the switch that says otherwise. Analysis had always been something you click, but the panel arrived open regardless, so every new tab gave 380 points of a window to a button nobody had asked for yet. The sparkles button in the toolbar still opens and closes it for the tab in front of you, whichever way the setting is left.
+- That button's effect now lasts as long as the tab does. Panel visibility used to be view state, and SwiftUI rebuilds a tab's view whenever the selection changes — so the panel you opened closed itself the moment you looked at another tab and came back. It lives on the tab.
+- Changing the setting reaches the windows already open. Settings is its own window, so without that the switch appeared to do nothing until the next new tab.
+
 **Bookmarks, on arriving from another browser**
 - Importing can put the other browser's bar folders straight onto Clearframe's bar, instead of burying everything in one dated folder. The preview asks, and defaults by what is already there: an empty bar takes the import, a bar somebody has arranged gets the removable-in-one-gesture shape. Anything the source kept off its own bar goes into a single dated chip. Chromium makes the same call, and its own source calls the alternative "unnecessary nesting"; Firefox no longer wraps at all.
 - The source's own root level is collapsed away in both shapes. It is a container the exporting browser writes on its way out, not a folder anybody made, and keeping it was a whole extra click on every folder.

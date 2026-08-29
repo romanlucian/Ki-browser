@@ -24,6 +24,17 @@ final class BrowserTab: ObservableObject, Identifiable {
     @Published private(set) var displayTitle: String
     @Published private(set) var lastActivatedAt: Date
     @Published var startSurface: StartSurface = .aiHome
+    /// Whether this tab is showing the page assistant panel.
+    ///
+    /// Per tab, and only for as long as the tab lives: the toolbar button is a
+    /// decision about the page in front of you, not a setting. It starts at
+    /// whatever `BrowserDataStore.showsAssistantPanel` says, so a window full
+    /// of tabs opens the same way, and then each tab goes its own way.
+    ///
+    /// This lives on the tab rather than in the view because the view is
+    /// rebuilt from scratch every time the selection changes — held there, the
+    /// panel you opened closed itself the moment you looked at another tab.
+    @Published var showsAssistantPanel: Bool
     /// The tab group this tab belongs to. `BrowserWorkspace` owns every write
     /// so grouped tabs stay contiguous in the strip.
     @Published fileprivate(set) var groupID: UUID?
@@ -46,6 +57,7 @@ final class BrowserTab: ObservableObject, Identifiable {
         isPrivate: Bool = false,
         groupID: UUID? = nil,
         isPinned: Bool = false,
+        showsAssistantPanel: Bool = false,
         contentBlocking: ContentRuleListProvider? = nil,
         favicons: FaviconStore? = nil,
         webFeatures: WebFeatureSettingsStore? = nil,
@@ -58,6 +70,7 @@ final class BrowserTab: ObservableObject, Identifiable {
         self.isPrivate = isPrivate
         self.groupID = groupID
         self.isPinned = isPinned
+        self.showsAssistantPanel = showsAssistantPanel
         assistant = PageAssistantModel()
         // Built as a local first: the find controller needs the session's web
         // view, and `self` cannot be read until every stored property is set.
@@ -258,6 +271,7 @@ final class BrowserWorkspace: ObservableObject {
     private var downloadSubscription: AnyCancellable?
     private var dataStoreSubscription: AnyCancellable?
     private var contentBlockingSubscription: AnyCancellable?
+    private var assistantPanelSubscription: AnyCancellable?
     private var persistenceTask: Task<Void, Never>?
 
     init(
@@ -306,6 +320,17 @@ final class BrowserWorkspace: ObservableObject {
         contentBlockingSubscription = resolvedContentBlocking.objectWillChange.sink { [weak self] _ in
             self?.objectWillChange.send()
         }
+        // Settings is its own window, so a change made there has to reach the
+        // browser windows that are already open — otherwise turning the panel
+        // on looks like it did nothing until you happen to open a new tab.
+        // `dropFirst` skips the value the publisher replays on subscription,
+        // which would otherwise overwrite the tabs this window is still
+        // building with the same value they were built from.
+        assistantPanelSubscription = resolvedDataStore.$showsAssistantPanel
+            .dropFirst()
+            .sink { [weak self] shows in
+                self?.tabs.forEach { $0.showsAssistantPanel = shows }
+            }
 
         // A private window opens blank: it adopts nothing and restores
         // nothing, because neither would be private.
@@ -331,6 +356,7 @@ final class BrowserWorkspace: ObservableObject {
                     searchSettings: resolvedSearchSettings,
                     groupID: record.groupID,
                     isPinned: record.isPinned,
+                    showsAssistantPanel: resolvedDataStore.showsAssistantPanel,
                     contentBlocking: resolvedContentBlocking,
                     favicons: resolvedFavicons,
                     webFeatures: resolvedWebFeatures,
@@ -347,6 +373,7 @@ final class BrowserWorkspace: ObservableObject {
                 downloadCenter: resolvedDownloads,
                 searchSettings: resolvedSearchSettings,
                 isPrivate: isPrivate,
+                showsAssistantPanel: resolvedDataStore.showsAssistantPanel,
                 contentBlocking: resolvedContentBlocking,
                 favicons: resolvedFavicons,
                 webFeatures: resolvedWebFeatures,
@@ -980,6 +1007,7 @@ final class BrowserWorkspace: ObservableObject {
             downloadCenter: downloads,
             searchSettings: searchSettings,
             isPrivate: isPrivate,
+            showsAssistantPanel: dataStore.showsAssistantPanel,
             contentBlocking: contentBlocking,
             favicons: favicons,
             adoptingPopupConfiguration: configuration
@@ -996,6 +1024,7 @@ final class BrowserWorkspace: ObservableObject {
             downloadCenter: downloads,
             searchSettings: searchSettings,
             isPrivate: isPrivate,
+            showsAssistantPanel: dataStore.showsAssistantPanel,
             contentBlocking: contentBlocking,
             favicons: favicons,
             webFeatures: webFeatures,
