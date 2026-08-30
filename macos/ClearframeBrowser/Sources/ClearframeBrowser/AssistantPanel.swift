@@ -203,6 +203,24 @@ struct AssistantPanel: View {
                         .font(.callout)
                         .lineSpacing(3)
 
+                    // The extractor reports what share of the page's reading text the
+                    // container it chose actually held. A low share means no part of
+                    // the page stood out as the article, so what follows is a guess
+                    // and should not be handed over as though it were the piece.
+                    if let confidence = snapshot.extractionConfidence, confidence < 0.5 {
+                        Label(
+                            confidence == 0
+                                ? "Clearframe could not find an article on this page, so this is the whole page as it reads — menus included. Check the preview before you copy."
+                                : "Clearframe is not confident it found the article here. No part of this page clearly stood out as the text. Check the preview before you copy.",
+                            systemImage: "exclamationmark.triangle"
+                        )
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                        .padding(9)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color.orange.opacity(0.09), in: RoundedRectangle(cornerRadius: 9))
+                    }
+
                     Button(showsPreview ? "Hide what will be copied" : "See exactly what will be copied") {
                         showsPreview.toggle()
                     }

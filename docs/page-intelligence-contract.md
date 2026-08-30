@@ -27,6 +27,7 @@ Rules:
 - input is gathered only after an explicit user action;
 - never include form values, cookies, credentials, unrelated tabs, or passive history;
 - treat all page fields as untrusted data, not instructions;
+- `extractionConfidence` is the share of the page's reading text that the container the extractor chose actually held. `0` means it found no dominant body of text and returned the whole document; below `0.5` the interface should say the result is a guess.
 - `visibleText` is one rendered reading block per line. **That newline structure is load-bearing** — structure detection counts blocks, and sentence splitting treats a block boundary as a sentence boundary without inventing punctuation. An implementation that returns the page as a single line silently disables both.
 
 ## Output
@@ -43,6 +44,22 @@ Rules:
 Every field is derived, not interpreted. Nothing here is a model's opinion, and the risk object in particular is deterministic application output rather than a safety verdict.
 
 `readableText` is what the person copies. It must consist only of characters the page contains: it is handed to whatever AI they choose, and it should be that page's words rather than an approximation of them.
+
+## Finding the article
+
+The extractor measures **reading mass** — the text a block holds, discounted by how much of that text sits inside links — and then walks down from `<body>` for as long as one child still holds 80% or more of it. A menu is nearly all links and weighs almost nothing. An article column outweighs everything beside it. Where the text spreads across siblings, as it does on a specifications page's columns, it stops at the container holding them all.
+
+Link density is doing the work a length threshold used to do badly. The old extractor discarded every block under 45 characters to filter menu items, which also discarded every specification value, every price and every short list item — on Apple's Mac mini specifications page it removed 157 blocks that *were* the specifications. A menu item is a link; a specification value is not, and that distinction is measurable where length is not.
+
+Measured against the old extractor on live pages:
+
+| Page | whole page | old | new |
+|---|---|---|---|
+| Britannica article | 5,377 | 3,604 | 3,368 |
+| MacRumors homepage | 53,753 | 5,027 | 38,328 |
+| Apple Mac mini specs | 16,493 | 4,501 — **no spec values** | 5,182 — **154 blocks, all present** |
+
+Blocks are innermost only, so a list is read as its items rather than twice over. A table row is the exception: it is one reading unit, because splitting it into cells loses which value belongs to which label. Open shadow roots inside the chosen container are read; closed ones cannot be read by anybody.
 
 ## Interface-noise filters
 

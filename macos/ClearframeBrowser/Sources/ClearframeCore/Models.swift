@@ -10,6 +10,14 @@ public struct PageSnapshot: Codable, Equatable, Sendable {
     public let wordCount: Int
     public let hasPasswordField: Bool
     public let formActions: [String]
+    /// What share of the page's reading text the extractor's chosen container held.
+    ///
+    /// Optional because the shared contract's fixtures predate it and describe text
+    /// directly rather than a page it was pulled from. `0` means extraction found no
+    /// dominant body of text and fell back to reading the whole document, so the
+    /// result is a guess and the interface should say so rather than present it
+    /// as the article.
+    public let extractionConfidence: Double?
 
     public init(
         title: String,
@@ -20,7 +28,8 @@ public struct PageSnapshot: Codable, Equatable, Sendable {
         text: String,
         wordCount: Int,
         hasPasswordField: Bool,
-        formActions: [String]
+        formActions: [String],
+        extractionConfidence: Double? = nil
     ) {
         self.title = title
         self.url = url
@@ -31,6 +40,7 @@ public struct PageSnapshot: Codable, Equatable, Sendable {
         self.wordCount = wordCount
         self.hasPasswordField = hasPasswordField
         self.formActions = formActions
+        self.extractionConfidence = extractionConfidence
     }
 }
 
