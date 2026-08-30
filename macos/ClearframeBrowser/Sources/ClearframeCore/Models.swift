@@ -34,18 +34,6 @@ public struct PageSnapshot: Codable, Equatable, Sendable {
     }
 }
 
-public struct PageAnalysisContent: Codable, Equatable, Sendable {
-    public let summary: String
-    public let keyPoints: [String]
-    public let claimsToCheck: [String]
-
-    public init(summary: String, keyPoints: [String], claimsToCheck: [String]) {
-        self.summary = summary
-        self.keyPoints = keyPoints
-        self.claimsToCheck = claimsToCheck
-    }
-}
-
 public struct RiskSignal: Codable, Equatable, Identifiable, Sendable {
     public let id: UUID
     public let points: Int
@@ -85,27 +73,18 @@ public enum PageStructure: String, Codable, Sendable {
     case listing
 }
 
-public enum AnalysisMode: String, Codable, Sendable {
-    case local = "Local"
-    case remoteAI = "AI"
-}
-
+/// What Analyze Page can say about a page without reading it.
+///
+/// Both members are computed, not judged: the risk assessment is a fixed set of
+/// signals with published rules, and the reading time is a word count divided by a
+/// constant. Nothing here claims to know what the page is about.
 public struct PageAnalysis: Codable, Equatable, Sendable {
-    public let content: PageAnalysisContent
     public let risk: RiskAssessment
     public let readingTimeMinutes: Int
-    public let mode: AnalysisMode
 
-    public init(
-        content: PageAnalysisContent,
-        risk: RiskAssessment,
-        readingTimeMinutes: Int,
-        mode: AnalysisMode
-    ) {
-        self.content = content
+    public init(risk: RiskAssessment, readingTimeMinutes: Int) {
         self.risk = risk
         self.readingTimeMinutes = readingTimeMinutes
-        self.mode = mode
     }
 }
 public enum PageIntelligenceError: LocalizedError, Sendable {
@@ -119,7 +98,7 @@ public enum PageIntelligenceError: LocalizedError, Sendable {
         case .noReadableText:
             return "This page does not expose enough readable text."
         case .localTranslationUnavailable:
-            return "Translation needs Optional AI. Plain English simplification is local only for English pages."
+            return "Translation needs Optional AI."
         case .invalidResponse:
             return "The AI returned an unexpected response."
         case .remoteFailure(let message):

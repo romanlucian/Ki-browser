@@ -1,16 +1,12 @@
+import AppKit
 import ClearframeCore
 import SwiftUI
 
 struct AssistantPanel: View {
     @ObservedObject var model: PageAssistantModel
     @ObservedObject var session: BrowserSession
-    @EnvironmentObject private var aiConfiguration: AIConfigurationStore
-    @Environment(\.openSettings) private var openSettings
-    @State private var translationLanguage = "Plain English"
-
-    private let translationLanguages = [
-        "Plain English", "Spanish", "French", "German", "Romanian", "Portuguese", "Japanese"
-    ]
+    @State private var showsPreview = false
+    @State private var didCopy = false
 
     var body: some View {
         ZStack {
@@ -54,7 +50,7 @@ struct AssistantPanel: View {
                 .foregroundStyle(ClearframeTheme.accent)
             Text("Understand this page")
                 .font(.system(size: 27, weight: .bold, design: .serif))
-            Text("Create a local summary, surface claims worth checking, and notice obvious visible risk signals.")
+            Text("Check a page for visible risk signals, and get its readable text ready for the AI you use.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -197,134 +193,52 @@ struct AssistantPanel: View {
 
                 assistantCard {
                     HStack {
-                        sectionLabel("THE GIST")
+                        sectionLabel("COPY FOR AI")
                         Spacer()
-                        Text(analysis.mode == .local ? "LOCAL · EXTRACTIVE" : "OPTIONAL AI")
+                        Text("\(model.readableText.count) CHARACTERS")
                             .font(.system(size: 9, weight: .bold))
-                            .padding(.horizontal, 7)
-                            .padding(.vertical, 4)
-                            .background(Color.green.opacity(0.14), in: Capsule())
-                    }
-                    Text(analysis.content.summary)
-                        .font(.callout)
-                        .lineSpacing(4)
-                        .textSelection(.enabled)
-                    Text(analysis.mode == .local
-                         ? "Private structured extraction · keeps the page language"
-                         : "Provider-assisted result · check important points against the page")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                    Button {
-                        guard let configuration = aiConfiguration.providerConfiguration else {
-                            openSettings()
-                            return
-                        }
-                        Task { await model.improveWithAI(configuration: configuration) }
-                    } label: {
-                        Label(
-                            aiConfiguration.canUseRemoteAI ? "Improve with AI" : "Configure Optional AI",
-                            systemImage: "sparkles"
-                        )
-                        .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.bordered)
-                    .disabled(model.operationMessage != nil)
-                }
-
-                if !analysis.content.keyPoints.isEmpty {
-                    assistantCard {
-                        sectionLabel("KEY POINTS")
-                        ForEach(Array(analysis.content.keyPoints.enumerated()), id: \.offset) { _, point in
-                            VStack(alignment: .leading, spacing: 7) {
-                                Label {
-                                    Text(point).font(.callout).lineSpacing(3)
-                                } icon: {
-                                    Image(systemName: "arrow.turn.down.right").foregroundStyle(.green)
-                                }
-                                if analysis.mode == .local {
-                                    Button {
-                                        Task { await model.revealEvidence(for: point, session: session) }
-                                    } label: {
-                                        Label("View evidence", systemImage: "text.magnifyingglass")
-                                    }
-                                    .buttonStyle(.borderless)
-                                    .font(.caption.weight(.semibold))
-                                    .disabled(model.operationMessage != nil)
-                                    if model.revealedEvidence == point {
-                                        Text(point)
-                                            .font(.caption)
-                                            .lineSpacing(3)
-                                            .padding(8)
-                                            .frame(maxWidth: .infinity, alignment: .leading)
-                                            .background(Color.green.opacity(0.10), in: RoundedRectangle(cornerRadius: 7))
-                                        // A miss has several causes — the page moved on,
-                                        // the text sits in an element the highlighter
-                                        // cannot reach — and Clearframe does not know
-                                        // which. Say what happened, not why.
-                                        Text(model.evidenceWasFoundOnPage
-                                             ? "Highlighted in the page. This is extracted page text, not an AI citation."
-                                             : "This is extracted page text. Clearframe could not locate it in the live page.")
-                                            .font(.caption2)
-                                            .foregroundStyle(.secondary)
-                                    }
-                                }
-                            }
-                            Divider()
-                        }
-                    }
-                }
-
-                if !analysis.content.claimsToCheck.isEmpty {
-                    assistantCard(accent: .orange) {
-                        sectionLabel("CLAIMS TO CHECK")
-                        ForEach(Array(analysis.content.claimsToCheck.enumerated()), id: \.offset) { _, claim in
-                            Label {
-                                Text(claim).font(.callout).lineSpacing(3)
-                            } icon: {
-                                Image(systemName: "questionmark.circle.fill").foregroundStyle(.orange)
-                            }
-                        }
-                        Text("These are claims from the page, not Clearframe’s conclusions.")
-                            .font(.caption2)
                             .foregroundStyle(.secondary)
                     }
-                }
+                    Text("Clearframe pulled \(LocalAnalysisEngine.wordCount(of: model.readableText)) words of readable text off this page, without the menus, footers and player controls.")
+                        .font(.callout)
+                        .lineSpacing(3)
 
-                assistantCard {
-                    sectionLabel("TRANSLATE")
-                    Picker("Language", selection: $translationLanguage) {
-                        ForEach(translationLanguages, id: \.self) { Text($0).tag($0) }
+                    Button(showsPreview ? "Hide what will be copied" : "See exactly what will be copied") {
+                        showsPreview.toggle()
                     }
-                    .labelsHidden()
-                    .frame(maxWidth: .infinity)
-                    Button("Translate summary") {
-                        let canSimplifyLocally = translationLanguage == "Plain English" &&
-                            LocalAnalysisEngine.canSimplifyToPlainEnglish(sourceLanguage: snapshot.language)
-                        if !canSimplifyLocally && !aiConfiguration.canUseRemoteAI {
-                            openSettings()
-                        } else {
-                            Task {
-                                await model.translateSummary(
-                                    targetLanguage: translationLanguage,
-                                    configuration: aiConfiguration.providerConfiguration
-                                )
-                            }
+                    .buttonStyle(.link)
+                    .font(.caption)
+
+                    if showsPreview {
+                        ScrollView {
+                            Text(model.readableText)
+                                .font(.system(size: 11))
+                                .textSelection(.enabled)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(9)
                         }
+                        .frame(maxHeight: 260)
+                        .background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: 9))
+                        .overlay(RoundedRectangle(cornerRadius: 9).stroke(Color.primary.opacity(0.08)))
                     }
-                    .buttonStyle(.bordered)
-                    .disabled(model.operationMessage != nil)
-                    if let translated = model.translatedSummary {
-                        Text(translated)
-                            .font(.callout)
-                            .lineSpacing(4)
-                            .padding(10)
-                            .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 8))
-                            .textSelection(.enabled)
+
+                    Button {
+                        copyForAI(snapshot: snapshot)
+                    } label: {
+                        Label(didCopy ? "Copied — paste it into your AI" : "Copy page for AI", systemImage: didCopy ? "checkmark" : "doc.on.doc")
+                            .frame(maxWidth: .infinity)
                     }
+                    .buttonStyle(.borderedProminent)
+                    .tint(ClearframeTheme.accent)
+                    .disabled(model.readableText.isEmpty)
+
+                    Text("Nothing is sent anywhere by Clearframe. Copying puts this text on the Mac's clipboard, which other apps — and Universal Clipboard, if it is on — can read.")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineSpacing(2)
                 }
 
-
-                Text("Summaries can miss context. AI can be wrong. Risk signals are not a security verdict.")
+                Text("Clearframe does not summarise this page or judge what matters in it. Risk signals are visible-page heuristics, not a security verdict.")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                     .lineSpacing(3)
@@ -332,6 +246,23 @@ struct AssistantPanel: View {
             }
             .padding(14)
         }
+    }
+
+    /// Puts the readable text on the clipboard, headed by where it came from, so the
+    /// person pasting it — and whatever reads it afterwards — can see the source.
+    private func copyForAI(snapshot: PageSnapshot) {
+        let words = LocalAnalysisEngine.wordCount(of: model.readableText)
+        let payload = """
+        Title:  \(snapshot.title)
+        URL:    \(snapshot.url)
+        \(words) words extracted from the visible page
+
+        \(model.readableText)
+        """
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(payload, forType: .string)
+        didCopy = true
     }
 
     private func assistantCard<Content: View>(

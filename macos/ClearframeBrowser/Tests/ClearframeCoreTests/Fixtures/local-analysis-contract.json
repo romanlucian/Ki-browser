@@ -1,227 +1,4 @@
 {
-  "tokenCases": [
-    {
-      "id": "english-cross-language-collisions",
-      "language": "en-US",
-      "text": "The new health care law will care for children and their care needs. A son and his father discussed care options.",
-      "requiredCounts": {
-        "care": 4,
-        "son": 1
-      },
-      "excluded": [
-        "the",
-        "and",
-        "will"
-      ]
-    },
-    {
-      "id": "french-language-filtering",
-      "language": "fr-FR",
-      "text": "Son rapport présente une bibliothèque locale avec des activités utiles.",
-      "requiredCounts": {
-        "rapport": 1,
-        "bibliothèque": 1
-      },
-      "excluded": [
-        "son",
-        "une",
-        "avec",
-        "des"
-      ]
-    },
-    {
-      "id": "persian-zero-width-joiner-stays-inside-the-word",
-      "language": "fa",
-      "text": "می‌شود می‌شود ایران",
-      "requiredCounts": {
-        "می‌شود": 2
-      },
-      "excluded": [
-        "می",
-        "شود"
-      ]
-    },
-    {
-      "id": "devanagari-vowel-sign-word-is-long-enough-to-keep",
-      "language": "hi",
-      "text": "भारत में एक देश में है",
-      "requiredCounts": {
-        "में": 2
-      },
-      "excluded": []
-    },
-    {
-      "id": "a-joiner-cannot-begin-a-word",
-      "language": "en",
-      "text": "Villagers were ‌attacked overnight and the ‌attacked area was sealed off.",
-      "requiredCounts": {
-        "attacked": 2
-      },
-      "excluded": [
-        "‌attacked"
-      ]
-    },
-    {
-      "id": "an-emoji-joiner-is-not-a-word",
-      "language": "en",
-      "text": "The 🏳️‍🌈 flag was raised above the town hall during the summer festival.",
-      "requiredCounts": {
-        "flag": 1
-      },
-      "excluded": [
-        "️‍"
-      ]
-    },
-    {
-      "id": "a-joiner-after-a-cjk-character-is-not-part-of-it",
-      "language": "zh",
-      "text": "测试‌数据 测试‌数据",
-      "requiredCounts": {
-        "试": 2,
-        "数": 2
-      },
-      "excluded": [
-        "试‌"
-      ]
-    }
-  ],
-  "summaryCases": [
-    {
-      "id": "english-healthcare",
-      "page": {
-        "title": "Care law options for families",
-        "url": "https://example.org/care",
-        "hostname": "example.org",
-        "scheme": "https",
-        "language": "en-US",
-        "text": "The new health care law will care for children and their care needs. A son and his father discussed care options with local health advisers. The report says families can compare four care plans before enrollment. Researchers will measure whether children receive faster support next year. Officials said the final guidance will appear online in September 2026.",
-        "wordCount": 58,
-        "hasPasswordField": false,
-        "formActions": []
-      },
-      "expected": {
-        "summary": "The new health care law will care for children and their care needs. A son and his father discussed care options with local health advisers. The report says families can compare four care plans before enrollment.",
-        "keyPoints": [
-          "Researchers will measure whether children receive faster support next year.",
-          "Officials said the final guidance will appear online in September 2026."
-        ],
-        "claimsToCheck": []
-      }
-    },
-    {
-      "id": "romanian-library",
-      "page": {
-        "title": "Program de bibliotecă pentru familii",
-        "url": "https://example.org/biblioteca",
-        "hostname": "example.org",
-        "scheme": "https",
-        "language": "ro",
-        "text": "Biblioteca municipală va prelungi programul în trei seri pentru familiile care lucrează. Un sondaj din 2026 va măsura participarea și nevoile vizitatorilor. Copiii vor primi spații liniștite pentru studiu și activități ghidate. Primăria va publica rezultatele proiectului pilot după șase luni. Locuitorii pot trimite observații prin formularul public al bibliotecii.",
-        "wordCount": 61,
-        "hasPasswordField": false,
-        "formActions": []
-      },
-      "expected": {
-        "summary": "Biblioteca municipală va prelungi programul în trei seri pentru familiile care lucrează. Un sondaj din 2026 va măsura participarea și nevoile vizitatorilor. Copiii vor primi spații liniștite pentru studiu și activități ghidate.",
-        "keyPoints": [
-          "Primăria va publica rezultatele proiectului pilot după șase luni.",
-          "Locuitorii pot trimite observații prin formularul public al bibliotecii."
-        ],
-        "claimsToCheck": []
-      }
-    },
-    {
-      "id": "french-library",
-      "page": {
-        "title": "Horaires élargis de la bibliothèque",
-        "url": "https://example.org/bibliotheque",
-        "hostname": "example.org",
-        "scheme": "https",
-        "language": "fr-FR",
-        "text": "La bibliothèque municipale ouvrira plus tard trois soirs par semaine pour les familles. Une étude menée en 2026 mesurera la fréquentation et les besoins des visiteurs. Les enfants disposeront de salles calmes pour étudier et participer aux activités. La ville publiera les résultats du projet pilote après six mois. Les habitants pourront envoyer leurs commentaires avec un formulaire public.",
-        "wordCount": 62,
-        "hasPasswordField": false,
-        "formActions": []
-      },
-      "expected": {
-        "summary": "La bibliothèque municipale ouvrira plus tard trois soirs par semaine pour les familles. Une étude menée en 2026 mesurera la fréquentation et les besoins des visiteurs. Les enfants disposeront de salles calmes pour étudier et participer aux activités.",
-        "keyPoints": [
-          "La ville publiera les résultats du projet pilote après six mois.",
-          "Les habitants pourront envoyer leurs commentaires avec un formulaire public."
-        ],
-        "claimsToCheck": []
-      }
-    },
-    {
-      "id": "simplified-chinese-library",
-      "page": {
-        "title": "城市图书馆晚间计划",
-        "url": "https://example.org/library",
-        "hostname": "example.org",
-        "scheme": "https",
-        "language": "zh-Hans",
-        "text": "城市图书馆每周增加三个晚间开放时段。2026年的调查将记录到访人数和家庭需求。儿童可以使用安静的学习空间和活动区域。市政府将在六个月后公布试点项目结果。居民可以通过公开表格提交意见和建议。",
-        "wordCount": 83,
-        "hasPasswordField": false,
-        "formActions": []
-      },
-      "expected": {
-        "summary": "城市图书馆每周增加三个晚间开放时段。 儿童可以使用安静的学习空间和活动区域。 居民可以通过公开表格提交意见和建议。",
-        "keyPoints": [
-          "2026年的调查将记录到访人数和家庭需求。",
-          "市政府将在六个月后公布试点项目结果。"
-        ],
-        "claimsToCheck": []
-      }
-    },
-    {
-      "id": "english-transit-report-claim-overlap",
-      "page": {
-        "title": "Transit report reviews weekend bus service",
-        "url": "https://example.org/transit-report",
-        "hostname": "example.org",
-        "scheme": "https",
-        "language": "en-US",
-        "text": "The city transit report says weekend bus service will expand on four routes next spring. Weekend ridership grew 18 percent last year, and the report expects a similar rise in 2027. Planners will add a Saturday evening bus between the harbour and the university district. The transit agency will publish a full weekend timetable before the change begins. Drivers asked for longer breaks at the depot, and the agency agreed to review the rosters. Residents of the eastern suburbs told the agency that Sunday service is still too thin. The report recommends measuring waiting times at ten stops before and after the change. A shorter school route will keep its current timetable until the summer holidays end. Bicycle racks will be fitted to buses so riders can combine cycling and public transit. Only the night route will lose a departure, according to a footnote in the same document.",
-        "wordCount": 148,
-        "hasPasswordField": false,
-        "formActions": []
-      },
-      "expected": {
-        "summary": "The city transit report says weekend bus service will expand on four routes next spring. Weekend ridership grew 18 percent last year, and the report expects a similar rise in 2027. The transit agency will publish a full weekend timetable before the change begins.",
-        "keyPoints": [
-          "Planners will add a Saturday evening bus between the harbour and the university district.",
-          "Residents of the eastern suburbs told the agency that Sunday service is still too thin.",
-          "The report recommends measuring waiting times at ten stops before and after the change.",
-          "Bicycle racks will be fitted to buses so riders can combine cycling and public transit."
-        ],
-        "claimsToCheck": [
-          "Only the night route will lose a departure, according to a footnote in the same document."
-        ]
-      }
-    },
-    {
-      "id": "devanagari-decimal-is-not-a-sentence-boundary",
-      "page": {
-        "title": "जनसंख्या",
-        "url": "https://hi.example/jansankhya",
-        "hostname": "hi.example",
-        "scheme": "https",
-        "language": "hi",
-        "text": "भारत की जनसंख्या पिछले दशक में २.५ प्रतिशत बढ़ी और यह वृद्धि अब भी लगातार जारी है।\nनई रिपोर्ट के अनुसार शहरी क्षेत्रों में यह दर १.८ प्रतिशत रही जो ग्रामीण दर से कम है।\nविशेषज्ञों का मानना है कि आने वाले वर्षों में यह अंतर और अधिक स्पष्ट रूप से दिखाई देगा।\nसरकार ने इस विषय पर एक विस्तृत अध्ययन कराने की घोषणा की है जिसकी रिपोर्ट अगले वर्ष आएगी।",
-        "wordCount": 71,
-        "hasPasswordField": false,
-        "formActions": []
-      },
-      "expected": {
-        "summary": "भारत की जनसंख्या पिछले दशक में २.५ प्रतिशत बढ़ी और यह वृद्धि अब भी लगातार जारी है। नई रिपोर्ट के अनुसार शहरी क्षेत्रों में यह दर १.८ प्रतिशत रही जो ग्रामीण दर से कम है। विशेषज्ञों का मानना है कि आने वाले वर्षों में यह अंतर और अधिक स्पष्ट रूप से दिखाई देगा।",
-        "keyPoints": [
-          "सरकार ने इस विषय पर एक विस्तृत अध्ययन कराने की घोषणा की है जिसकी रिपोर्ट अगले वर्ष आएगी।"
-        ],
-        "claimsToCheck": []
-      }
-    }
-  ],
   "structureCases": [
     {
       "id": "romanian-news-section-listing",
@@ -386,12 +163,6 @@
       }
     }
   ],
-  "plainEnglishCases": [
-    {
-      "input": "Individuals subsequently utilize numerous additional tools.",
-      "expected": "people later use many more tools."
-    }
-  ],
   "readingTimeCases": [
     {
       "wordCount": 1,
@@ -404,181 +175,6 @@
     {
       "wordCount": 221,
       "expectedMinutes": 2
-    }
-  ],
-  "evidenceCases": [
-    {
-      "id": "headline-listing-has-no-terminal-punctuation",
-      "page": {
-        "title": "Daily news",
-        "url": "https://news.example/",
-        "hostname": "news.example",
-        "scheme": "https",
-        "language": "en",
-        "text": "Trump threatens Iran trade partners as strikes make way for economic pressure\nFamily of killed aid worker say she deserved more after investigation rejected\nVerstappen signs new Red Bull contract to stay in Formula One until 2030\nMagicians and margarine: ten of the funniest jokes from the Edinburgh fringe\nPremier League preview: Newcastle braced for a transitional season this year\nInstant classics, odd inspirations and barcodes: the best and worst kits seen\nSupreme Court rejects Verizon bid for a refund of its large regulatory fine\nVaccination rates fall again as exemptions continue to rise, new data shows\nFlight attendants raise the alarm that a large firm is buying location data\nAgainst all odds, a rocket company finally tugs its booster back into port\nPixel handset series review: is the magic finally starting to fade away now\nRegulator decides one gigabit per second is too fast for the new standard",
-        "wordCount": 160,
-        "hasPasswordField": false,
-        "formActions": []
-      }
-    },
-    {
-      "id": "documentation-block-ending-in-colon",
-      "page": {
-        "title": "Tutorial",
-        "url": "https://docs.example/tutorial",
-        "hostname": "docs.example",
-        "scheme": "https",
-        "language": "en",
-        "text": "Python is an easy to learn, powerful programming language with efficient high-level data structures.\nStrings can be enclosed in single quotes or double quotes with exactly the same result:\nIn the interactive interpreter, the output string is enclosed in quotes and special characters are escaped with backslashes.\nThe print function produces a more readable output by omitting the enclosing quotes around the printed string.\nThere are two ways to avoid a backslash being read as an escape character:\nRaw strings are written by adding an r before the first quote of the string literal itself.\nString literals can span multiple lines in a single statement, and one common way is to use triple quotes.\nThe interpreter acts as a simple calculator and you can type an expression at it to see a result:\nDivision always returns a floating point number in Python 3 regardless of the operand types involved.\nThe equal sign is used to assign a value to a variable, and no result is displayed before the next prompt.",
-        "wordCount": 168,
-        "hasPasswordField": false,
-        "formActions": []
-      }
-    },
-    {
-      "id": "decimal-numbers-are-not-sentence-boundaries",
-      "page": {
-        "title": "Laptop",
-        "url": "https://shop.example/laptop",
-        "hostname": "shop.example",
-        "scheme": "https",
-        "language": "en",
-        "text": "The notebook is remarkably light at just 2.7 pounds and less than half an inch thin, according to the published specification sheet.\nBattery life is rated at 18.5 hours of video playback, which the manufacturer measured under a fixed brightness setting.\nThe display measures 13.6 inches diagonally and reaches 500 nits of sustained brightness in ordinary indoor conditions.\nStorage starts at 256 GB and the review unit shipped with 16 GB of unified memory installed at the factory.",
-        "wordCount": 88,
-        "hasPasswordField": false,
-        "formActions": []
-      }
-    },
-    {
-      "id": "devanagari-danda-terminates-sentences",
-      "page": {
-        "title": "भारत",
-        "url": "https://hi.example/bharat",
-        "hostname": "hi.example",
-        "scheme": "https",
-        "language": "hi",
-        "text": "भारत दक्षिण एशिया में स्थित एक विशाल देश है जिसकी जनसंख्या विश्व में सबसे अधिक है।\nयहाँ अनेक भाषाएँ बोली जाती हैं और प्रत्येक राज्य की अपनी सांस्कृतिक परंपरा है।\nदेश की अर्थव्यवस्था कृषि, उद्योग और सेवा क्षेत्र पर आधारित मानी जाती है।\nभारत की सीमाएँ अनेक देशों से मिलती हैं और इसके तीन ओर समुद्र स्थित है।",
-        "wordCount": 62,
-        "hasPasswordField": false,
-        "formActions": []
-      }
-    },
-    {
-      "id": "media-phrase-in-prose-stays-verbatim",
-      "page": {
-        "title": "How floating video changed phones",
-        "url": "https://example.com/floating-video",
-        "hostname": "example.com",
-        "scheme": "https",
-        "language": "en",
-        "text": "Floating video changed how people use phones, and the change arrived faster than most reviewers expected.\nPhones gained floating video slowly, because every platform solved the same problem in a different way.\nThe floating video feature on phones is now expected by reviewers and by ordinary people alike.\nApple introduced picture-in-picture on the iPad in 2015, letting a video float above other applications.\nDevelopers had to opt in, and several streaming services delayed adoption for licensing reasons.\nSupport for picture-in-picture on Android arrived with Oreo and reached most handsets by 2019.\nBrowser vendors shipped their own controls, which behave differently from the operating system version.\nToday the capability is treated as a defect when it is missing from a major application.",
-        "wordCount": 121,
-        "hasPasswordField": false,
-        "formActions": []
-      }
-    },
-    {
-      "id": "zero-width-space-in-page-text-stays-in-the-key-point",
-      "page": {
-        "title": "Harbour bridge reopens",
-        "url": "https://example.org/bridge",
-        "hostname": "example.org",
-        "scheme": "https",
-        "language": "en",
-        "text": "The harbour​bridge reopened this week after eighteen months of structural repair work.\nEngineers said the eastern​span needed more attention than the original survey suggested.\nFerry​operators kept a reduced timetable running throughout the closure for local commuters.\nThe council​published a full account of the overspend alongside the completion notice today.\nCyclists​regained a dedicated lane that had been closed since the beginning of the project.\nLocal​businesses on the north shore reported a clear rise in trade during the first weekend.\nTraffic​counts will be published each month until the temporary restrictions are lifted.",
-        "wordCount": 90,
-        "hasPasswordField": false,
-        "formActions": []
-      }
-    }
-  ],
-  "boilerplateCases": [
-    {
-      "id": "english-player-controls-do-not-reach-the-reader",
-      "page": {
-        "title": "Transit report",
-        "url": "https://example.org/",
-        "hostname": "example.org",
-        "scheme": "https",
-        "language": "en",
-        "text": "subtitles settings, opens subtitles settings dialog.\nsubtitles settings, opens subtitles settings dialog.\nsubtitles settings, opens subtitles settings dialog.\nsubtitles settings, opens subtitles settings dialog.\nsubtitles settings, opens subtitles settings dialog.\nsubtitles settings, opens subtitles settings dialog.\nsubtitles settings, opens subtitles settings dialog.\nsubtitles settings, opens subtitles settings dialog.\nvideo player is loading, please wait a moment.\nvideo player is loading, please wait a moment.\nvideo player is loading, please wait a moment.\nvideo player is loading, please wait a moment.\nvideo player is loading, please wait a moment.\nvideo player is loading, please wait a moment.\nvideo player is loading, please wait a moment.\nvideo player is loading, please wait a moment.\nThe transit authority published its annual report on weekday ridership across the network.\nOfficials said the busiest corridor recovered to almost ninety percent of its earlier volume.\nEngineers will replace signalling equipment on the eastern line during the coming winter.\nThe report says fares will stay unchanged until the next council review in September 2026.\nPassenger groups asked for clearer information screens at the four largest interchange stations.",
-        "wordCount": 180,
-        "hasPasswordField": false,
-        "formActions": []
-      },
-      "mustNotAppear": [
-        "subtitles settings",
-        "video player is loading"
-      ]
-    },
-    {
-      "id": "localised-player-controls-do-not-reach-the-reader",
-      "page": {
-        "title": "Ziarul Financiar",
-        "url": "https://example.ro/",
-        "hostname": "example.ro",
-        "scheme": "https",
-        "language": "ro",
-        "text": "setări subtitrare, deschide dialogul de setări subtitrare.\nsetări subtitrare, deschide dialogul de setări subtitrare.\nsetări subtitrare, deschide dialogul de setări subtitrare.\nsetări subtitrare, deschide dialogul de setări subtitrare.\nsetări subtitrare, deschide dialogul de setări subtitrare.\nsetări subtitrare, deschide dialogul de setări subtitrare.\nsetări subtitrare, deschide dialogul de setări subtitrare.\nsetări subtitrare, deschide dialogul de setări subtitrare.\nplayerul video se încarcă, vă rugăm să așteptați puțin.\nplayerul video se încarcă, vă rugăm să așteptați puțin.\nplayerul video se încarcă, vă rugăm să așteptați puțin.\nplayerul video se încarcă, vă rugăm să așteptați puțin.\nplayerul video se încarcă, vă rugăm să așteptați puțin.\nplayerul video se încarcă, vă rugăm să așteptați puțin.\nplayerul video se încarcă, vă rugăm să așteptați puțin.\nplayerul video se încarcă, vă rugăm să așteptați puțin.\nBursa de Valori București a deschis ședința de tranzacționare cu un nou maxim al indicelui principal.\nInvestitorul Corneliu Manole a discutat despre evoluția pieței și companiile urmărite în portofoliu.\nRomânia continuă să atragă centre de tehnologie și servicii ale unor grupuri internaționale mari.\nCompaniile au anunțat zece proiecte majore în ultimul an, potrivit informațiilor publicate de presă.\nEvoluția dobânzilor și rezultatele trimestriale rămân importante pentru investitorii de la bursă.",
-        "wordCount": 197,
-        "hasPasswordField": false,
-        "formActions": []
-      },
-      "mustNotAppear": [
-        "setări subtitrare",
-        "playerul video se încarcă"
-      ]
-    },
-    {
-      "id": "decomposed-text-does-not-change-which-sentences-are-player-controls",
-      "page": {
-        "title": "Rapport annuel des transports",
-        "url": "https://example.fr/",
-        "hostname": "example.fr",
-        "scheme": "https",
-        "language": "fr",
-        "text": "Playback controls playback rate éééééééééééééééééééé.\nLe réseau de transport a publié son rapport annuel sur la fréquentation en semaine.\nLes responsables ont déclaré que le corridor le plus chargé avait retrouvé son volume.\nLes ingénieurs remplaceront la signalisation de la ligne est pendant l'hiver prochain.\nLe rapport indique que les tarifs resteront inchangés jusqu'à la revue de septembre.\nLes associations demandent des écrans d'information plus clairs dans les grandes gares.",
-        "wordCount": 70,
-        "hasPasswordField": false,
-        "formActions": []
-      },
-      "mustNotAppear": [
-        "playback controls",
-        "playback rate"
-      ]
-    }
-  ],
-  "duplicateSentenceCases": [
-    {
-      "id": "a-sentence-printed-twice-is-reported-once",
-      "page": {
-        "title": "Winter timetable",
-        "url": "https://example.org/",
-        "hostname": "example.org",
-        "scheme": "https",
-        "language": "en",
-        "text": "The winter timetable changes the winter service on every winter route this year.\nThe winter timetable changes the winter service on every winter route this year.\nEngineers reported that the eastern line signalling work remains on its original schedule.\nPassenger groups asked for clearer information screens at the four busiest stations.\nOfficials confirmed that fares will not change before the next review in September.",
-        "wordCount": 64,
-        "hasPasswordField": false,
-        "formActions": []
-      },
-      "repeatedSentence": "The winter timetable changes the winter service on every winter route this year."
-    }
-  ],
-  "emptyAnalysisCases": [
-    {
-      "id": "a-page-of-nothing-but-boilerplate-analyses-to-nothing",
-      "page": {
-        "title": "Cookie notice",
-        "url": "https://example.org/notice",
-        "hostname": "example.org",
-        "scheme": "https",
-        "language": "en",
-        "text": "Accept all cookies to continue browsing this website and see personalised content.\nAccept all cookies to continue browsing this website and see personalised content.\nAccept all cookies to continue browsing this website and see personalised content.",
-        "wordCount": 36,
-        "hasPasswordField": false,
-        "formActions": []
-      }
     }
   ],
   "segmentationCases": [
@@ -753,87 +349,93 @@
       ]
     }
   ],
-  "claimCases": [
+  "boilerplateCases": [
     {
-      "id": "a-number-alone-does-not-make-a-claim-worth-checking",
+      "id": "english-player-controls-do-not-reach-the-reader",
       "page": {
-        "title": "Seasonal timetable review",
-        "url": "https://example.org/t",
+        "title": "Transit report",
+        "url": "https://example.org/",
         "hostname": "example.org",
         "scheme": "https",
         "language": "en",
-        "text": "The seasonal timetable review continues through the spring across the whole network.\nOfficials described the timetable review as the largest undertaken in a decade here.\nThe timetable review will report to the council before the end of the current year.\nRidership on the eastern corridor recovered to almost ninety percent of its earlier volume.\nAccording to the transport authority, the signalling replacement will finish next winter.\nThe study found that 2.7 million journeys were made on the network during the quarter.\nThe article was published at 19:30 on a Tuesday evening in the middle of March.\nA single day pass for the exhibition now costs $19.99 at the door on weekends.\nThe photograph on this page was taken on 14 June 2023 near the harbour wall.",
-        "wordCount": 126,
+        "text": "subtitles settings, opens subtitles settings dialog.\nsubtitles settings, opens subtitles settings dialog.\nsubtitles settings, opens subtitles settings dialog.\nsubtitles settings, opens subtitles settings dialog.\nsubtitles settings, opens subtitles settings dialog.\nsubtitles settings, opens subtitles settings dialog.\nsubtitles settings, opens subtitles settings dialog.\nsubtitles settings, opens subtitles settings dialog.\nvideo player is loading, please wait a moment.\nvideo player is loading, please wait a moment.\nvideo player is loading, please wait a moment.\nvideo player is loading, please wait a moment.\nvideo player is loading, please wait a moment.\nvideo player is loading, please wait a moment.\nvideo player is loading, please wait a moment.\nvideo player is loading, please wait a moment.\nThe transit authority published its annual report on weekday ridership across the network.\nOfficials said the busiest corridor recovered to almost ninety percent of its earlier volume.\nEngineers will replace signalling equipment on the eastern line during the coming winter.\nThe report says fares will stay unchanged until the next council review in September 2026.\nPassenger groups asked for clearer information screens at the four largest interchange stations.",
+        "wordCount": 180,
         "hasPasswordField": false,
         "formActions": []
       },
       "mustNotAppear": [
-        "The article was published at 19:30 on a Tuesday evening in the middle of March.",
-        "A single day pass for the exhibition now costs $19.99 at the door on weekends.",
-        "The photograph on this page was taken on 14 June 2023 near the harbour wall."
+        "subtitles settings",
+        "video player is loading"
       ]
     },
     {
-      "id": "an-attributed-number-is-a-claim-worth-checking",
+      "id": "localised-player-controls-do-not-reach-the-reader",
       "page": {
-        "title": "Regional briefing",
-        "url": "https://example.org/b",
-        "hostname": "example.org",
+        "title": "Ziarul Financiar",
+        "url": "https://example.ro/",
+        "hostname": "example.ro",
         "scheme": "https",
-        "language": "en",
-        "text": "The regional briefing continues through the spring across the whole of the country.\nCorrespondents described the briefing as the longest held in the capital this year.\nThe briefing will be repeated before the end of the current parliamentary session.\nIbrahim Abubakar said he had identified 13 people among those taken from the village.\nThe agency revoked more than 175,000 visas during the first half of the current year.\nOfficials confirmed that at least 2,000 further cases were recorded across the region.\nThe article was published at 19:30 on a Tuesday evening in the middle of March.\nA single day pass for the exhibition now costs $19.99 at the door on weekends.\nThe photograph on this page was taken on 14 June 2023 near the harbour wall.",
-        "wordCount": 126,
+        "language": "ro",
+        "text": "setări subtitrare, deschide dialogul de setări subtitrare.\nsetări subtitrare, deschide dialogul de setări subtitrare.\nsetări subtitrare, deschide dialogul de setări subtitrare.\nsetări subtitrare, deschide dialogul de setări subtitrare.\nsetări subtitrare, deschide dialogul de setări subtitrare.\nsetări subtitrare, deschide dialogul de setări subtitrare.\nsetări subtitrare, deschide dialogul de setări subtitrare.\nsetări subtitrare, deschide dialogul de setări subtitrare.\nplayerul video se încarcă, vă rugăm să așteptați puțin.\nplayerul video se încarcă, vă rugăm să așteptați puțin.\nplayerul video se încarcă, vă rugăm să așteptați puțin.\nplayerul video se încarcă, vă rugăm să așteptați puțin.\nplayerul video se încarcă, vă rugăm să așteptați puțin.\nplayerul video se încarcă, vă rugăm să așteptați puțin.\nplayerul video se încarcă, vă rugăm să așteptați puțin.\nplayerul video se încarcă, vă rugăm să așteptați puțin.\nBursa de Valori București a deschis ședința de tranzacționare cu un nou maxim al indicelui principal.\nInvestitorul Corneliu Manole a discutat despre evoluția pieței și companiile urmărite în portofoliu.\nRomânia continuă să atragă centre de tehnologie și servicii ale unor grupuri internaționale mari.\nCompaniile au anunțat zece proiecte majore în ultimul an, potrivit informațiilor publicate de presă.\nEvoluția dobânzilor și rezultatele trimestriale rămân importante pentru investitorii de la bursă.",
+        "wordCount": 197,
         "hasPasswordField": false,
         "formActions": []
       },
       "mustNotAppear": [
-        "The article was published at 19:30 on a Tuesday evening in the middle of March.",
-        "A single day pass for the exhibition now costs $19.99 at the door on weekends.",
-        "The photograph on this page was taken on 14 June 2023 near the harbour wall."
-      ],
-      "mustAppear": [
-        "Ibrahim Abubakar said he had identified 13 people among those taken from the village."
+        "setări subtitrare",
+        "playerul video se încarcă"
       ]
     },
     {
-      "id": "an-accented-term-matches-in-both-runtimes",
+      "id": "decomposed-text-does-not-change-which-sentences-are-player-controls",
       "page": {
-        "title": "Réunion régionale de printemps",
-        "url": "https://example.fr/r",
+        "title": "Rapport annuel des transports",
+        "url": "https://example.fr/",
         "hostname": "example.fr",
         "scheme": "https",
         "language": "fr",
-        "text": "La réunion régionale de printemps a examiné le programme régional numéro 1 de la réunion.\nLa réunion régionale de printemps a examiné le programme régional numéro 2 de la réunion.\nLa réunion régionale de printemps a examiné le programme régional numéro 3 de la réunion.\nLa réunion régionale de printemps a examiné le programme régional numéro 4 de la réunion.\nLa réunion régionale de printemps a examiné le programme régional numéro 5 de la réunion.\nLa réunion régionale de printemps a examiné le programme régional numéro 6 de la réunion.\nLa réunion régionale de printemps a examiné le programme régional numéro 7 de la réunion.\nLa réunion régionale de printemps a examiné le programme régional numéro 8 de la réunion.\nLe ministre a déclaré que 13 personnes avaient été évacuées du village pendant la nuit.\nL'article a été publié à 19:30 un mardi soir au milieu du mois de mars dernier.",
-        "wordCount": 151,
+        "text": "Playback controls playback rate éééééééééééééééééééé.\nLe réseau de transport a publié son rapport annuel sur la fréquentation en semaine.\nLes responsables ont déclaré que le corridor le plus chargé avait retrouvé son volume.\nLes ingénieurs remplaceront la signalisation de la ligne est pendant l'hiver prochain.\nLe rapport indique que les tarifs resteront inchangés jusqu'à la revue de septembre.\nLes associations demandent des écrans d'information plus clairs dans les grandes gares.",
+        "wordCount": 70,
         "hasPasswordField": false,
         "formActions": []
       },
       "mustNotAppear": [
-        "L'article a été publié à 19:30 un mardi soir au milieu du mois de mars dernier."
-      ],
-      "mustAppear": [
-        "Le ministre a déclaré que 13 personnes avaient été évacuées du village pendant la nuit."
+        "playback controls",
+        "playback rate"
       ]
-    },
+    }
+  ],
+  "duplicateSentenceCases": [
     {
-      "id": "a-keycap-before-a-per-cent-sign-is-not-a-quantity",
+      "id": "a-sentence-printed-twice-is-reported-once",
       "page": {
-        "title": "Quarterly briefing",
-        "url": "https://example.org/q",
+        "title": "Winter timetable",
+        "url": "https://example.org/",
         "hostname": "example.org",
         "scheme": "https",
         "language": "en",
-        "text": "The quarterly briefing reviewed the quarterly programme number 1 of the briefing.\nThe quarterly briefing reviewed the quarterly programme number 2 of the briefing.\nThe quarterly briefing reviewed the quarterly programme number 3 of the briefing.\nThe quarterly briefing reviewed the quarterly programme number 4 of the briefing.\nThe quarterly briefing reviewed the quarterly programme number 5 of the briefing.\nThe quarterly briefing reviewed the quarterly programme number 6 of the briefing.\nThe quarterly briefing reviewed the quarterly programme number 7 of the briefing.\nThe quarterly briefing reviewed the quarterly programme number 8 of the briefing.\nThe board confirmed that 2,400 further seats were added to the service this year.\nThe dashboard showed 1️⃣ % beside an icon with no other figure on the row.",
-        "wordCount": 125,
+        "text": "The winter timetable changes the winter service on every winter route this year.\nThe winter timetable changes the winter service on every winter route this year.\nEngineers reported that the eastern line signalling work remains on its original schedule.\nPassenger groups asked for clearer information screens at the four busiest stations.\nOfficials confirmed that fares will not change before the next review in September.",
+        "wordCount": 64,
         "hasPasswordField": false,
         "formActions": []
       },
-      "mustNotAppear": [
-        "The dashboard showed 1️⃣ % beside an icon with no other figure on the row."
-      ],
-      "mustAppear": [
-        "The board confirmed that 2,400 further seats were added to the service this year."
-      ]
+      "repeatedSentence": "The winter timetable changes the winter service on every winter route this year."
+    }
+  ],
+  "emptyAnalysisCases": [
+    {
+      "id": "a-page-of-nothing-but-boilerplate-analyses-to-nothing",
+      "page": {
+        "title": "Cookie notice",
+        "url": "https://example.org/notice",
+        "hostname": "example.org",
+        "scheme": "https",
+        "language": "en",
+        "text": "Accept all cookies to continue browsing this website and see personalised content.\nAccept all cookies to continue browsing this website and see personalised content.\nAccept all cookies to continue browsing this website and see personalised content.",
+        "wordCount": 36,
+        "hasPasswordField": false,
+        "formActions": []
+      }
     }
   ]
 }

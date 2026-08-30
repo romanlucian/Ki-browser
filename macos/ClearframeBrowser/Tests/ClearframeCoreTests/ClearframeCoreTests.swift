@@ -15,166 +15,6 @@ final class ClearframeCoreTests: XCTestCase {
         formActions: []
     )
 
-    func testLocalSummaryIsGroundedAndFindsClaims() {
-        let result = LocalAnalysisEngine.summarize(page: article)
-        XCTAssertGreaterThan(result.summary.count, 80)
-        XCTAssertFalse(result.keyPoints.isEmpty)
-        XCTAssertTrue(result.claimsToCheck.contains { $0.contains("report") })
-    }
-
-    func testClaimsNeverRepeatTheSummaryOrKeyPoints() {
-        let result = LocalAnalysisEngine.summarize(page: article)
-        XCTAssertFalse(result.claimsToCheck.isEmpty)
-        for claim in result.claimsToCheck {
-            XCTAssertFalse(result.summary.contains(claim), "claim repeated the gist: \(claim)")
-            XCTAssertFalse(result.keyPoints.contains(claim), "claim repeated a key point: \(claim)")
-        }
-    }
-
-    func testEnglishTopicWordsAreNotRemovedByOtherLanguageStopWords() {
-        let tokens = LocalAnalysisEngine.tokens(
-            "The new health care law will care for children and their care needs. A son and his father discussed care options.",
-            language: "en-US"
-        )
-
-        XCTAssertEqual(tokens.filter { $0 == "care" }.count, 4)
-        XCTAssertTrue(tokens.contains("son"))
-        XCTAssertFalse(tokens.contains("the"))
-        XCTAssertFalse(LocalAnalysisEngine.tokens("son sont avec", language: "fr").contains("son"))
-    }
-
-    func testRomanianSummaryIgnoresRepeatedMediaControlBoilerplate() {
-        let repeatedPlayerText = Array(
-            repeating: "subtitles settings, opens subtitles settings dialog ",
-            count: 8
-        ).joined() + "Video Player is loading. Stream Type LIVE. Playback controls. "
-        let romanianText = """
-        Bursa de Valori București a deschis ședința de tranzacționare cu un nou maxim al indicelui principal. Investitorul Corneliu Manole a discutat despre evoluția pieței și companiile urmărite în portofoliu. România continuă să atragă centre de tehnologie și servicii ale unor grupuri internaționale. Companiile au anunțat zece proiecte majore în ultimul an, potrivit informațiilor publicate de Ziarul Financiar. Evoluția dobânzilor și rezultatele trimestriale rămân importante pentru investitori.
-        """
-        let page = PageSnapshot(
-            title: "Ziarul Financiar - știri economice",
-            url: "https://www.zf.ro/",
-            hostname: "www.zf.ro",
-            scheme: "https",
-            language: "ro",
-            text: repeatedPlayerText + romanianText,
-            wordCount: 126,
-            hasPasswordField: false,
-            formActions: []
-        )
-
-        let result = LocalAnalysisEngine.summarize(page: page)
-
-        XCTAssertGreaterThan(result.summary.count, 120)
-        XCTAssertTrue(result.summary.contains("Bursa de Valori București"))
-        let allAnalysisText = ([result.summary] + result.keyPoints + result.claimsToCheck)
-            .joined(separator: " ")
-        for pollutedPhrase in [
-            "subtitles settings",
-            "Video Player is loading",
-            "Stream Type LIVE",
-            "Playback controls"
-        ] {
-            XCTAssertFalse(
-                allAnalysisText.localizedCaseInsensitiveContains(pollutedPhrase),
-                "Media-player UI leaked into local analysis: \(pollutedPhrase)"
-            )
-        }
-    }
-
-    func testLocalExtractionProducesSourceLanguageResultsAcrossTestedLanguages() {
-        let mediaPollution = """
-        subtitles settings, opens subtitles settings dialog
-        Video Player is loading. Stream Type LIVE. Playback controls.
-        """
-        let cases: [(language: String, title: String, text: String, expectedFragment: String)] = [
-            (
-                "en",
-                "Community library expands evening access",
-                """
-                The community library will open three evenings each week so working families can visit after normal office hours.
-                The pilot begins in September and includes study rooms, children's activities, and help with digital public services.
-                Librarians will record attendance and ask visitors which evening programs are most useful.
-                The city approved funding for six months before deciding whether the longer schedule should continue.
-                Residents can submit feedback in person or through a short form on the library website.
-                """,
-                "community library"
-            ),
-            (
-                "fr",
-                "La bibliothèque municipale élargit ses horaires",
-                """
-                La bibliothèque municipale ouvrira trois soirs par semaine afin que les familles puissent venir après leur journée de travail.
-                Le projet commencera en septembre avec des salles d'étude, des activités pour enfants et une aide aux démarches numériques.
-                Les bibliothécaires mesureront la fréquentation et demanderont aux visiteurs quels services sont les plus utiles.
-                La ville a financé une période pilote de six mois avant de décider si ces horaires doivent devenir permanents.
-                Les habitants pourront transmettre leurs commentaires sur place ou au moyen d'un formulaire public.
-                """,
-                "bibliothèque municipale"
-            ),
-            (
-                "zh-Hans",
-                "城市图书馆延长晚间开放时间",
-                """
-                城市图书馆将每周增加三个晚间开放时段，方便上班家庭在工作结束后使用公共服务。
-                试点计划将于九月开始，并提供自习空间、儿童活动以及数字政务咨询服务。
-                图书馆工作人员会记录到访人数，并询问读者哪些晚间项目最有帮助。
-                市政府已经批准六个月的试点经费，之后再决定是否长期保留新的开放时间。
-                居民可以在现场提交意见，也可以通过图书馆网站上的公开表格提供反馈。
-                """,
-                "城市图书馆"
-            )
-        ]
-
-        for testCase in cases {
-            let page = PageSnapshot(
-                title: testCase.title,
-                url: "https://example.org/\(testCase.language)",
-                hostname: "example.org",
-                scheme: "https",
-                language: testCase.language,
-                text: mediaPollution + "\n" + testCase.text,
-                wordCount: 120,
-                hasPasswordField: false,
-                formActions: []
-            )
-
-            let result = LocalAnalysisEngine.summarize(page: page)
-            let allAnalysisText = ([result.summary] + result.keyPoints + result.claimsToCheck)
-                .joined(separator: " ")
-
-            XCTAssertFalse(result.summary.isEmpty, "\(testCase.language) needs a local gist")
-            XCTAssertFalse(result.keyPoints.isEmpty, "\(testCase.language) needs local key points")
-            XCTAssertTrue(
-                result.summary.localizedCaseInsensitiveContains(testCase.expectedFragment),
-                "\(testCase.language) should preserve the source language"
-            )
-            for pollutedPhrase in ["subtitles settings", "Video Player is loading", "Stream Type LIVE", "Playback controls"] {
-                XCTAssertFalse(
-                    allAnalysisText.localizedCaseInsensitiveContains(pollutedPhrase),
-                    "Media-player UI leaked into \(testCase.language) analysis: \(pollutedPhrase)"
-                )
-            }
-        }
-    }
-
-    func testSingleMediaPhraseInLegitimateArticleTextIsPreserved() {
-        let page = PageSnapshot(
-            title: "Troubleshooting a training video",
-            url: "https://example.org/troubleshooting",
-            hostname: "example.org",
-            scheme: "https",
-            language: "en",
-            text: "The support guide explains why a video player is loading slowly on older computers. Readers should verify the connection before changing browser settings. The guide also recommends testing the same lesson on a second network. These steps preserve the original course progress and do not require sharing private information.",
-            wordCount: 48,
-            hasPasswordField: false,
-            formActions: []
-        )
-
-        let result = LocalAnalysisEngine.summarize(page: page)
-        XCTAssertTrue(result.summary.localizedCaseInsensitiveContains("video player is loading"))
-    }
-
     func testOrdinaryHTTPSArticleHasLowSignals() {
         let result = RiskAnalyzer.assess(page: article)
         XCTAssertEqual(result.level, .low)
@@ -258,30 +98,6 @@ final class ClearframeCoreTests: XCTestCase {
         XCTAssertEqual(LocalAnalysisEngine.readingTime(wordCount: 221), 2)
     }
 
-    func testPlainEnglishRewritesFormalWords() {
-        XCTAssertEqual(LocalAnalysisEngine.simplifyEnglish("Individuals utilize numerous tools."), "people use many tools.")
-    }
-
-    func testPlainEnglishLocalSimplifierIsLimitedToEnglishSources() async throws {
-        let provider = LocalPageIntelligenceProvider()
-        let simplified = try await provider.translate(
-            text: "Individuals utilize numerous tools.",
-            sourceLanguage: "en-US",
-            targetLanguage: "Plain English"
-        )
-        XCTAssertEqual(simplified, "people use many tools.")
-
-        do {
-            _ = try await provider.translate(
-                text: "La bibliothèque municipale ouvre plus tard.",
-                sourceLanguage: "fr",
-                targetLanguage: "Plain English"
-            )
-            XCTFail("French-to-English translation must not be presented as a local simplification")
-        } catch let error as PageIntelligenceError {
-            XCTAssertEqual(error.localizedDescription, PageIntelligenceError.localTranslationUnavailable.localizedDescription)
-        }
-    }
     func testSessionRestoreRejectsNonWebURLs() {
         let record = BrowserTabRecord(
             id: UUID(),
@@ -1108,32 +924,6 @@ final class ClearframeCoreTests: XCTestCase {
         )
     }
 
-    func testSharedContractLanguageAwareTokenization() throws {
-        for testCase in try localAnalysisContract().tokenCases {
-            let tokens = LocalAnalysisEngine.tokens(testCase.text, language: testCase.language)
-            for (token, expectedCount) in testCase.requiredCounts {
-                XCTAssertEqual(
-                    tokens.filter { $0 == token }.count,
-                    expectedCount,
-                    "\(testCase.id): \(token)"
-                )
-            }
-            for excluded in testCase.excluded {
-                XCTAssertFalse(tokens.contains(excluded), "\(testCase.id): retained \(excluded)")
-            }
-        }
-    }
-
-    func testSharedContractDeterministicSummaries() throws {
-        for testCase in try localAnalysisContract().summaryCases {
-            XCTAssertEqual(
-                LocalAnalysisEngine.summarize(page: testCase.page),
-                testCase.expected,
-                testCase.id
-            )
-        }
-    }
-
     func testSharedContractPageStructure() throws {
         for testCase in try localAnalysisContract().structureCases {
             XCTAssertEqual(
@@ -1153,11 +943,8 @@ final class ClearframeCoreTests: XCTestCase {
         }
     }
 
-    func testSharedContractPlainEnglishAndReadingTime() throws {
+    func testSharedContractReadingTime() throws {
         let contract = try localAnalysisContract()
-        for testCase in contract.plainEnglishCases {
-            XCTAssertEqual(LocalAnalysisEngine.simplifyEnglish(testCase.input), testCase.expected)
-        }
         for testCase in contract.readingTimeCases {
             XCTAssertEqual(
                 LocalAnalysisEngine.readingTime(wordCount: testCase.wordCount),
@@ -1166,97 +953,47 @@ final class ClearframeCoreTests: XCTestCase {
         }
     }
 
-    func testLocalAnalysisContractKeyPointsAndClaimsAreVerbatimPageText() throws {
-        let contract = try localAnalysisContract()
-        for testCase in contract.evidenceCases {
-            let page = testCase.page
-            let content = LocalAnalysisEngine.summarize(page: page)
-            XCTAssertFalse(
-                content.keyPoints.isEmpty && content.claimsToCheck.isEmpty,
-                "\(testCase.id): produced no key points or claims to verify"
-            )
-            for point in content.keyPoints {
-                XCTAssertTrue(
-                    page.text.contains(point),
-                    "\(testCase.id): key point is not verbatim page text — \(point)"
-                )
-            }
-            for claim in content.claimsToCheck {
-                XCTAssertTrue(
-                    page.text.contains(claim),
-                    "\(testCase.id): claim is not verbatim page text — \(claim)"
-                )
-            }
-            // A verbatim sentence can still be cut in the wrong place: "2.7" is one
-            // number, not the end of one sentence and the start of another. Every
-            // occurrence must therefore not be followed by a digit on the page.
-            for sentence in content.keyPoints + content.claimsToCheck {
-                guard sentence.hasSuffix(".") else { continue }
-                var searchStart = page.text.startIndex
-                while let found = page.text.range(
-                    of: sentence,
-                    range: searchStart..<page.text.endIndex
-                ) {
-                    if found.upperBound < page.text.endIndex,
-                       page.text[found.upperBound].isNumber {
-                        XCTFail("\(testCase.id): sentence ends inside a number — \(sentence)")
-                    }
-                    searchStart = found.upperBound
-                }
-            }
-        }
-    }
-
-    func testLocalAnalysisContractKeepsPlayerInterfaceTextAwayFromTheReader() throws {
+    func testLocalAnalysisContractKeepsPlayerInterfaceTextOutOfTheReadableText() throws {
         let contract = try localAnalysisContract()
         for testCase in contract.boilerplateCases {
-            let content = LocalAnalysisEngine.summarize(page: testCase.page)
-            XCTAssertFalse(
-                content.summary.isEmpty && content.keyPoints.isEmpty,
-                "\(testCase.id): produced nothing to check"
-            )
+            let text = LocalAnalysisEngine.readableText(page: testCase.page)
+            XCTAssertFalse(text.isEmpty, "\(testCase.id): produced nothing to check")
             // Recognising this boilerplate must not depend on knowing the language it
             // is written in: a site that translates its player is still a site whose
             // player controls are not the article.
-            let produced = ([content.summary] + content.keyPoints + content.claimsToCheck)
-                .joined(separator: " ")
             for phrase in testCase.mustNotAppear {
                 XCTAssertFalse(
-                    produced.localizedCaseInsensitiveContains(phrase),
-                    "\(testCase.id): player interface text reached the reader — \(phrase)"
+                    text.localizedCaseInsensitiveContains(phrase),
+                    "\(testCase.id): player interface text survived — \(phrase)"
                 )
             }
         }
     }
 
-    func testLocalAnalysisContractReportsARepeatedSentenceOnce() throws {
+    func testLocalAnalysisContractKeepsARepeatedSentenceOnce() throws {
         let contract = try localAnalysisContract()
         for testCase in contract.duplicateSentenceCases {
-            let content = LocalAnalysisEngine.summarize(page: testCase.page)
+            let text = LocalAnalysisEngine.readableText(page: testCase.page)
             let sentence = testCase.repeatedSentence
             // A page may print the same line twice — a headline echoed in a
-            // standfirst. It is one thing the page said, so it is one thing to report.
+            // standfirst. It is one thing the page said, so it is copied once.
             XCTAssertLessThanOrEqual(
-                content.summary.components(separatedBy: sentence).count - 1, 1,
-                "\(testCase.id): the gist repeats a sentence — \(sentence)"
-            )
-            XCTAssertLessThanOrEqual(
-                content.keyPoints.filter { $0 == sentence }.count, 1,
-                "\(testCase.id): a key point is repeated — \(sentence)"
+                text.components(separatedBy: sentence).count - 1, 1,
+                "\(testCase.id): the readable text repeats a sentence — \(sentence)"
             )
         }
     }
 
-    func testLocalAnalysisContractAnalysesAPageOfOnlyBoilerplateToNothing() throws {
+    func testLocalAnalysisContractReducesAPageOfOnlyBoilerplateToNothing() throws {
         let contract = try localAnalysisContract()
         for testCase in contract.emptyAnalysisCases {
-            let content = LocalAnalysisEngine.summarize(page: testCase.page)
             // Empty, not a sentence of explanation: a user-facing string here would
             // be English on a page that is not, and belongs to the interface rather
             // than to the engine.
-            XCTAssertEqual(content.summary, "", "\(testCase.id): engine produced prose of its own")
-            XCTAssertEqual(content.keyPoints, [], "\(testCase.id): unexpected key points")
-            XCTAssertEqual(content.claimsToCheck, [], "\(testCase.id): unexpected claims")
+            XCTAssertEqual(
+                LocalAnalysisEngine.readableText(page: testCase.page), "",
+                "\(testCase.id): engine produced text of its own"
+            )
         }
     }
 
@@ -1271,30 +1008,6 @@ final class ClearframeCoreTests: XCTestCase {
         }
     }
 
-    func testLocalAnalysisContractDoesNotOfferATimestampAsAClaim() throws {
-        let contract = try localAnalysisContract()
-        for testCase in contract.claimCases {
-            let content = LocalAnalysisEngine.summarize(page: testCase.page)
-            XCTAssertFalse(content.claimsToCheck.isEmpty, "\(testCase.id): produced no claims at all")
-            // A timestamp, a price and a date are facts about the page, not
-            // assertions a reader could go and check.
-            for forbidden in testCase.mustNotAppear {
-                XCTAssertFalse(
-                    content.claimsToCheck.contains(forbidden),
-                    "\(testCase.id): offered as a claim — \(forbidden)"
-                )
-            }
-            // Removing noise is only half of it: a sentence somebody is quoted
-            // asserting a number in has to survive.
-            for required in testCase.mustAppear ?? [] {
-                XCTAssertTrue(
-                    content.claimsToCheck.contains(required),
-                    "\(testCase.id): dropped a real claim — \(required)"
-                )
-            }
-        }
-    }
-
     private func localAnalysisContract() throws -> LocalAnalysisContract {
         let url = try XCTUnwrap(
             Bundle.module.url(forResource: "local-analysis-contract", withExtension: "json")
@@ -1304,25 +1017,13 @@ final class ClearframeCoreTests: XCTestCase {
 }
 
 private struct LocalAnalysisContract: Decodable {
-    let tokenCases: [TokenContractCase]
-    let summaryCases: [SummaryContractCase]
     let structureCases: [StructureContractCase]
     let riskCases: [RiskContractCase]
-    let plainEnglishCases: [PlainEnglishContractCase]
     let readingTimeCases: [ReadingTimeContractCase]
-    let evidenceCases: [EvidenceContractCase]
+    let segmentationCases: [SegmentationContractCase]
     let boilerplateCases: [BoilerplateContractCase]
     let duplicateSentenceCases: [DuplicateSentenceContractCase]
     let emptyAnalysisCases: [EmptyAnalysisContractCase]
-    let segmentationCases: [SegmentationContractCase]
-    let claimCases: [ClaimContractCase]
-}
-
-private struct ClaimContractCase: Decodable {
-    let id: String
-    let page: PageSnapshot
-    let mustNotAppear: [String]
-    let mustAppear: [String]?
 }
 
 private struct SegmentationContractCase: Decodable {
@@ -1343,29 +1044,10 @@ private struct EmptyAnalysisContractCase: Decodable {
     let page: PageSnapshot
 }
 
-private struct EvidenceContractCase: Decodable {
-    let id: String
-    let page: PageSnapshot
-}
-
 private struct BoilerplateContractCase: Decodable {
     let id: String
     let page: PageSnapshot
     let mustNotAppear: [String]
-}
-
-private struct TokenContractCase: Decodable {
-    let id: String
-    let language: String
-    let text: String
-    let requiredCounts: [String: Int]
-    let excluded: [String]
-}
-
-private struct SummaryContractCase: Decodable {
-    let id: String
-    let page: PageSnapshot
-    let expected: PageAnalysisContent
 }
 
 private struct StructureContractCase: Decodable {
@@ -1384,11 +1066,6 @@ private struct RiskContractExpectation: Decodable {
     let score: Int
     let level: RiskLevel
     let signalTitles: [String]
-}
-
-private struct PlainEnglishContractCase: Decodable {
-    let input: String
-    let expected: String
 }
 
 private struct ReadingTimeContractCase: Decodable {

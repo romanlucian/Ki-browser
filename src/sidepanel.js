@@ -1,12 +1,12 @@
-import { analyzePage, assessStructure, canSimplifyToPlainEnglish, simplifyEnglish } from "./core/analyzer.js";
+import { analyzePage, assessStructure, readableText } from "./core/analyzer.js";
 import { extractPage } from "./content/extract-page.js";
-import { createAiAnalysis, DEFAULT_AI_SETTINGS, translateText } from "./providers/openai.js";
+import { DEFAULT_AI_SETTINGS } from "./providers/openai.js";
 
 const $ = (selector) => document.querySelector(selector);
 const views = [$("#introView"), $("#loadingView"), $("#resultsView"), $("#noticeView"), $("#errorView")];
 let currentPage = null;
 let currentAnalysis = null;
-let originalSummary = "";
+let currentText = "";
 let structureOverridden = false;
 let settings = { ...DEFAULT_AI_SETTINGS };
 let toastTimer = null;
@@ -45,17 +45,6 @@ function textList(element, items) {
   );
 }
 
-function sourceSnapshot() {
-  return {
-    title: currentPage.title,
-    url: currentPage.url,
-    hostname: currentPage.hostname,
-    summary: currentAnalysis.summary,
-    keyPoints: currentAnalysis.keyPoints,
-    savedAt: new Date().toISOString()
-  };
-}
-
 function renderRisk(risk) {
   const card = $("#riskCard");
   card.classList.remove("low", "caution", "high");
@@ -88,23 +77,25 @@ function renderAnalysis() {
   $("#sourceHost").textContent = currentPage.hostname || "CURRENT PAGE";
   $("#pageTitle").textContent = currentPage.title;
   $("#sourceMeta").textContent = `${currentAnalysis.readMinutes} min read · ${currentPage.language || "language not declared"}`;
-  // The engine returns an empty summary when nothing readable survived extraction,
-  // rather than a sentence of its own — it preserves the page's language and cannot
-  // know the reader's. Saying so is this panel's job.
-  $("#summaryText").textContent =
-    currentAnalysis.summary || "There is not enough readable text on this page to summarize.";
-  $("#modeBadge").textContent = currentAnalysis.mode.toUpperCase();
-  textList($("#keyPoints"), currentAnalysis.keyPoints);
-  $("#pointsSection").classList.toggle("hidden", currentAnalysis.keyPoints.length === 0);
-  textList($("#claimsList"), currentAnalysis.claimsToCheck);
-  $("#claimsSection").classList.toggle("hidden", currentAnalysis.claimsToCheck.length === 0);
+  $("#textSize").textContent = `${currentText.length} CHARACTERS`;
+  $("#copyExplainer").textContent = currentText
+    ? "Clearframe pulled the readable text off this page, without the menus, footers and player controls."
+    : "There is not enough readable text on this page to copy.";
+  $("#copyButton").disabled = currentText.length === 0;
+  $("#copyButtonLabel").textContent = "Copy page for AI";
   renderRisk(currentAnalysis.risk);
-  $("#translationOutput").classList.add("hidden");
-  $("#aiButton").disabled = false;
-  $("#aiButtonLabel").textContent = settings.enabled && settings.apiKey ? "Improve with AI" : "Add AI for a richer summary";
-  $("#translateButton").disabled = false;
-  $("#translateButton").textContent = "Translate";
   showView($("#resultsView"));
+}
+
+async function copyForAi() {
+  const payload = [
+    `Title:  ${currentPage.title}`,
+    `URL:    ${currentPage.url}`,
+    "",
+    currentText
+  ].join("\n");
+  await navigator.clipboard.writeText(payload);
+  $("#copyButtonLabel").textContent = "Copied — paste it into your AI";
 }
 async function loadSettings() {
   const stored = await chrome.storage.local.get(["aiSettings"]);
@@ -145,7 +136,7 @@ async function analyzeActivePage() {
 
 function finishAnalysis() {
   currentAnalysis = analyzePage(currentPage);
-  originalSummary = currentAnalysis.summary;
+  currentText = readableText(currentPage);
   renderAnalysis();
 }
 
@@ -157,79 +148,6 @@ function analyzeDespiteStructure() {
   finishAnalysis();
 }
 
-async function improveWithAi() {
-  if (!settings.enabled || !settings.apiKey) {
-    await chrome.runtime.openOptionsPage();
-    return;
-  }
-  const button = $("#aiButton");
-  const generation = ++operationGeneration;
-  const sourceURL = currentPage?.liveUrl || currentPage?.url;
-  const controller = new AbortController();
-  activeRemoteController?.abort();
-  activeRemoteController = controller;
-  button.disabled = true;
-  $("#aiButtonLabel").textContent = "Reading carefully…";
-  try {
-    const aiResult = await createAiAnalysis(currentPage, settings, controller.signal);
-    if (generation !== operationGeneration || sourceURL !== (currentPage?.liveUrl || currentPage?.url)) return;
-    currentAnalysis = { ...currentAnalysis, ...aiResult, mode: "AI" };
-    originalSummary = currentAnalysis.summary;
-    renderAnalysis();
-    showToast("AI summary ready. The disclosed title, hostname, language, and extracted text were sent for this request.");
-  } catch (error) {
-    if (generation !== operationGeneration) return;
-    showToast(error.message || "AI summary failed.");
-  } finally {
-    if (activeRemoteController === controller) activeRemoteController = null;
-    if (generation === operationGeneration) {
-      button.disabled = false;
-      $("#aiButtonLabel").textContent = "Improve with AI";
-    }
-  }
-}
-
-async function translateSummary() {
-  const target = $("#languageSelect").value;
-  const output = $("#translationOutput");
-  $("#translateButton").disabled = true;
-  $("#translateButton").textContent = "Working…";
-  const generation = ++operationGeneration;
-  const sourceURL = currentPage?.liveUrl || currentPage?.url;
-  const controller = new AbortController();
-  activeRemoteController?.abort();
-  activeRemoteController = controller;
-  try {
-    let translated;
-    if (target === "plain-en" && canSimplifyToPlainEnglish(currentPage.language)) {
-      translated = simplifyEnglish(originalSummary);
-    } else {
-      if (!settings.enabled || !settings.apiKey) {
-        await chrome.runtime.openOptionsPage();
-        throw new Error("This source needs Optional AI for translation. Local Plain English is available only for English pages.");
-      }
-      translated = await translateText(
-        originalSummary,
-        currentPage.language || "the source language",
-        target === "plain-en" ? "Plain English" : target,
-        settings,
-        controller.signal
-      );
-    }
-    if (generation !== operationGeneration || sourceURL !== (currentPage?.liveUrl || currentPage?.url)) return;
-    output.textContent = translated;
-    output.classList.remove("hidden");
-  } catch (error) {
-    if (generation !== operationGeneration) return;
-    showToast(error.message || "Translation failed.");
-  } finally {
-    if (activeRemoteController === controller) activeRemoteController = null;
-    if (generation === operationGeneration) {
-      $("#translateButton").disabled = false;
-      $("#translateButton").textContent = "Translate";
-    }
-  }
-}
 function escapeHtml(value = "") {
   return value.replace(/[&<>'"]/g, (character) => ({
     "&": "&amp;",
@@ -243,8 +161,7 @@ $("#analyzeButton").addEventListener("click", analyzeActivePage);
 $("#refreshButton").addEventListener("click", analyzeActivePage);
 $("#retryButton").addEventListener("click", analyzeActivePage);
 $("#settingsButton").addEventListener("click", () => chrome.runtime.openOptionsPage());
-$("#aiButton").addEventListener("click", improveWithAi);
-$("#translateButton").addEventListener("click", translateSummary);
+$("#copyButton").addEventListener("click", copyForAi);
 $("#analyzeAnywayButton").addEventListener("click", analyzeDespiteStructure);
 $("#riskToggle").addEventListener("click", () => {
   const signals = $("#riskSignals");
@@ -260,12 +177,8 @@ function invalidateCurrentPage(message) {
   operationGeneration += 1;
   currentPage = null;
   currentAnalysis = null;
-  originalSummary = "";
+  currentText = "";
   structureOverridden = false;
-  $("#aiButton").disabled = false;
-  $("#aiButtonLabel").textContent = "Improve with AI";
-  $("#translateButton").disabled = false;
-  $("#translateButton").textContent = "Translate";
   showView($("#introView"));
   if (message) showToast(message);
 }

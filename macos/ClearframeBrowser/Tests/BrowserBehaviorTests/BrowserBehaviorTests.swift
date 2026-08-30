@@ -91,7 +91,8 @@ final class BrowserBehaviorTests: XCTestCase {
         await model.analyzeCurrentPage(session: session)
 
         XCTAssertEqual(model.state, .ready)
-        XCTAssertEqual(model.analysis?.mode, .local)
+        XCTAssertNotNil(model.analysis)
+        XCTAssertFalse(model.readableText.isEmpty, "an analysed page has text ready to copy")
     }
 
     /// The page moving out from under a read is the other way the panel could
@@ -109,22 +110,6 @@ final class BrowserBehaviorTests: XCTestCase {
 
         XCTAssertEqual(model.state, .failed(PageAssistantModel.pageChangedMessage))
         XCTAssertNil(model.analysis)
-    }
-
-    func testOptionalAIErrorKeepsTheValidLocalResultVisible() async {
-        let session = ControlledAssistantSession(page: Self.page, waitsForExtraction: false)
-        let model = PageAssistantModel(remoteProviderFactory: { _ in FailingProvider() })
-        await model.analyzeCurrentPage(session: session)
-        let localResult = try? XCTUnwrap(model.analysis)
-
-        await model.improveWithAI(
-            configuration: OpenAIProviderConfiguration(apiKey: "test", safetyIdentifier: "test")
-        )
-
-        XCTAssertEqual(model.state, .ready)
-        XCTAssertEqual(model.analysis, localResult)
-        XCTAssertEqual(model.analysis?.mode, .local)
-        XCTAssertNotNil(model.operationError)
     }
 
     func testProviderDefaultMigratesOnlyNonCustomizedModelSettings() throws {
@@ -2614,20 +2599,6 @@ private final class ControlledAssistantSession: PageAssistantSession {
         continuation?.resume(returning: page)
         continuation = nil
         isWaitingForExtraction = false
-    }
-
-    func revealEvidence(_ text: String, expectedNavigationVersion: Int?) async -> Bool {
-        expectedNavigationVersion == navigationVersion && !text.isEmpty
-    }
-}
-
-private struct FailingProvider: PageIntelligenceProviding {
-    func analyze(page: PageSnapshot) async throws -> PageAnalysisContent {
-        throw PageIntelligenceError.remoteFailure("Deliberate provider failure")
-    }
-
-    func translate(text: String, sourceLanguage: String, targetLanguage: String) async throws -> String {
-        throw PageIntelligenceError.remoteFailure("Deliberate provider failure")
     }
 }
 

@@ -1,17 +1,3 @@
-const wordSet = (value) => new Set(value.split(" "));
-const STOP_WORDS_BY_LANGUAGE = {
-  en: wordSet("a an and are as at be been but by can could did do does for from had has have he her hers him his how i if in into is it its may might more most must my no not of on one or our ours she should so some than that the their theirs them then there these they this those to too us was we were what when where which who why will with would you your yours about after again against all am any because before being below between both during each few further here itself just many me nor now off once only other out over own same such through under until up very while"),
-  ro: wordSet("acela acea aceea acest aceasta aceste acești ale al ai așa ca care către când cea cei cele cel ce cu cum de din după este fi fost iar în între la mai nici nu o pe pentru prin sau se și sunt un una unei unui vor"),
-  fr: wordSet("alors au aux avec ce ces comme dans de des du elle en est et eux il ils je la le les leur lui ma mais me même mes moi mon ne nos notre nous on ou par pas pour qu que quelle qui sa se ses son sont sur ta te tes toi ton tu un une vos votre vous c d j l à ça était été être"),
-  zh: wordSet("也 个 中 为 了 与 及 和 在 对 将 是 有 的 而 这 那")
-};
-const FALLBACK_STOP_WORDS = new Set(Object.values(STOP_WORDS_BY_LANGUAGE).flatMap((words) => [...words]));
-
-function stopWordsFor(language = "") {
-  const primary = language.trim().toLocaleLowerCase().split(/[-_]/u)[0];
-  return STOP_WORDS_BY_LANGUAGE[primary] || FALLBACK_STOP_WORDS;
-}
-
 const MEDIA_INTERFACE_PHRASES = [
   "subtitles settings, opens subtitles settings dialog",
   "captions settings, opens captions settings dialog",
@@ -135,22 +121,6 @@ const LISTING_PROSE_MASS_PERCENT = 10;
 const LONG_BLOCK_CHARACTERS = 220;
 const LONG_CJK_BLOCK_CHARACTERS = 100;
 
-const PLAIN_REPLACEMENTS = new Map([
-  ["approximately", "about"],
-  ["additional", "more"],
-  ["commence", "start"],
-  ["consequently", "so"],
-  ["demonstrate", "show"],
-  ["facilitate", "help"],
-  ["individuals", "people"],
-  ["in order to", "to"],
-  ["numerous", "many"],
-  ["purchase", "buy"],
-  ["regarding", "about"],
-  ["subsequently", "later"],
-  ["utilize", "use"]
-]);
-
 export function normalizeText(value = "") {
   return value.replace(/\s+/g, " ").trim();
 }
@@ -202,52 +172,6 @@ export function splitSentences(value = "", language = "") {
   return sentences;
 }
 
-export function tokenize(value = "", language = "") {
-  const result = [];
-  let current = "";
-  const stopWords = stopWordsFor(language);
-  const appendCurrent = () => {
-    // Code points, not UTF-16 units. Swift accumulates whole grapheme clusters and
-    // measured them as one apiece, so a Devanagari word written with a vowel sign —
-    // "\u092E\u0947\u0902" is one cluster and three code points — failed the two-character
-    // minimum there and passed it here, and the two runtimes scored Hindi pages
-    // differently. Counting scalars is the measure they can share.
-    // A run holding no letter and no number is not a word in either runtime. An
-    // emoji's variation selector and joiner are both word characters and would
-    // otherwise form a token of their own — Swift never produces one, because the
-    // whole emoji is a single cluster that fails its letter test.
-    if (
-      [...current].length >= 2 &&
-      /[\p{L}\p{N}]/u.test(current) &&
-      !stopWords.has(current)
-    ) {
-      result.push(current);
-    }
-    current = "";
-  };
-
-  for (const character of value.toLocaleLowerCase()) {
-    if (CJK_PATTERN.test(character)) {
-      appendCurrent();
-      if (!stopWords.has(character)) result.push(character);
-      // A joiner extends a word and cannot begin one. Persian writes
-      // "\u0645\u06CC\u200C\u0634\u0648\u062F" as a single word, and a code-point walk sees the joiner as
-      // category Cf and ends the word there, while Swift walks grapheme clusters
-      // and never sees it — so the joiner has to be a word character here. But a
-      // joiner after a space is its own cluster in Swift and fails its letter test,
-      // so gluing it to whatever follows produced a token this runtime alone had.
-    } else if (character === "\u200C" || character === "\u200D") {
-      if (current) current += character;
-    } else if (/[\p{L}\p{M}\p{N}'’-]/u.test(character)) {
-      current += character;
-    } else {
-      appendCurrent();
-    }
-  }
-  appendCurrent();
-  return result;
-}
-
 // The browser extractor separates rendered reading blocks with newlines, and a block
 // boundary is a sentence boundary. Splitting per block keeps unrelated headlines from
 // fusing into one oversized point without inventing terminal punctuation — an invented
@@ -291,16 +215,6 @@ function sentencesFromReadingBlocks(value = "", language = "") {
 //
 // Swift folds case with the locale-independent `lowercased()`; `toLowerCase` is
 // its counterpart here.
-function deduplicated(sentences) {
-  const seen = new Set();
-  return sentences.filter((sentence) => {
-    const key = sentence.toLowerCase();
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-}
-
 function repeatedInterfaceText(sentences) {
   const counts = new Map();
   for (const sentence of sentences) {
@@ -327,118 +241,31 @@ function isMediaInterfaceSentence(sentence = "") {
   return coveredCharacters * 2 > graphemeCount(trimmed);
 }
 
-function sentenceScores(sentences, title = "", language = "") {
-  const frequencies = new Map();
-  const titleWords = new Set(tokenize(title, language));
-
-  for (const word of tokenize(sentences.join(" "), language)) {
-    frequencies.set(word, (frequencies.get(word) || 0) + 1);
-  }
-
-  const maxFrequency = Math.max(1, ...frequencies.values());
-  return sentences.map((sentence, index) => {
-    const words = tokenize(sentence, language);
-    const topicality = words.reduce(
-      (score, word) => score + (frequencies.get(word) || 0) / maxFrequency,
-      0
-    );
-    const titleOverlap = words.filter((word) => titleWords.has(word)).length * 0.7;
-    const leadBonus = index < 3 ? 0.8 - index * 0.2 : 0;
-    const maximumUsefulTokens = CJK_PATTERN.test(sentence) ? 100 : 48;
-    const lengthPenalty = words.length < 7 || words.length > maximumUsefulTokens ? 0.7 : 1;
-
-    return {
-      sentence,
-      index,
-      score: ((topicality + titleOverlap) / Math.sqrt(Math.max(words.length, 1)) + leadBonus) * lengthPenalty
-    };
-  });
-}
-
-function selectSentences(scored, count) {
-  return scored
-    .slice()
-    .sort((a, b) => b.score - a.score)
-    .slice(0, count)
-    .sort((a, b) => a.index - b.index)
-    .map((entry) => entry.sentence);
-}
-
-export function summarizeLocally(page) {
-  const source = page.text || page.description || "";
-  const extracted = sentencesFromReadingBlocks(source, page.language);
+// The page's readable text, with interface noise removed. Blocks stay
+// newline-separated exactly as the extractor emitted them, because a block boundary
+// is a sentence boundary and assessStructure reads the same shape. Neither filter
+// edits a sentence: one drops a sentence when known media-control phrases cover most
+// of it, the other drops any sentence the page repeats three or more times, which
+// needs no vocabulary and so recognises a player in any language.
+export function readableText(page) {
+  const blocks = String(page.text || "").split(/\r?\n/);
+  const language = page.language;
+  const extracted = blocks.flatMap((block) => splitSentences(block, language));
   const repeated = repeatedInterfaceText(extracted);
-  const sentences = deduplicated(extracted).filter(
-    (sentence) =>
-      !isMediaInterfaceSentence(sentence) && !repeated.has(sentence.toLowerCase())
-  );
 
-  // Nothing readable survived. Return nothing, rather than a sentence of English
-  // explanation: this engine preserves the page's own language, and the words a
-  // reader sees when there is no analysis belong to the interface.
-  if (!sentences.length) {
-    return { summary: "", keyPoints: [], claimsToCheck: [] };
+  const seen = new Set();
+  const kept = [];
+  for (const block of blocks) {
+    const sentences = splitSentences(block, language).filter((sentence) => {
+      if (isMediaInterfaceSentence(sentence)) return false;
+      const key = sentence.toLowerCase();
+      if (repeated.has(key) || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+    if (sentences.length) kept.push(sentences.join(" "));
   }
-
-  const scored = sentenceScores(sentences, page.title, page.language);
-  const summarySentences = selectSentences(scored, Math.min(3, sentences.length));
-  const summarySet = new Set(summarySentences);
-  const keyPoints = scored
-    .slice()
-    .sort((a, b) => b.score - a.score)
-    .filter((entry) => !summarySet.has(entry.sentence))
-    .slice(0, 4)
-    .map((entry) => entry.sentence);
-
-  // A digit on its own used to qualify, so the reader was handed a publication
-  // time, a ticket price and the date a photograph was taken as things to go and
-  // check. Eight of nine probe sentences containing a number were selected.
-  //
-  // What makes a sentence checkable is an attribution or an absolute — "according
-  // to", "the study found", "always", "best" — or a quantity named as a quantity.
-  // "ninety percent" qualifies without a numeral and "14 June 2023" does not
-  // qualify with one. `\p{N} *%` is here so "45%" counts — `\p{N}` and not `\d`,
-  // because Swift asks `Character.isNumber`, which is true of every Unicode numeral,
-  // and this repository requires those two tests to agree. With `\d` a Devanagari
-  // percentage counted there and not here. Spaced the same way Swift
-  // scans it, since sentences arrive with their whitespace already collapsed.
-  //
-  // The cost is deliberate: a bare numeral with no unit — "sales rose to 4,300" —
-  // is no longer offered. Fewer claims, each one actually a claim.
-  const claimPattern =
-    /(?<![\p{L}\p{N}])(according|report|study|research|survey|million|billion|percent|guarantee|always|never|only|best|worst|first|potrivit|raport|studiu|cercetare|sondaj|milioane|miliarde|procent|selon|rapport|étude|recherche|sondage|milliard|pour cent)(?![\p{L}\p{N}])|报告|研究|调查|百万|十亿|百分之|保证|最佳|首次|\p{N} *%/iu;
-  // A claim repeated from the gist or a key point gives the reader nothing new to
-  // check, so keep claims to sentences the rest of the result did not already show.
-  // A number nobody asserts is furniture; a number somebody asserts, or one carried
-  // by a comparison, is the thing a reader might go and check. "Ibrahim Abubakar
-  // said he had identified 13 people" and "revoked more than 175,000 visas" are
-  // claims; "published at 19:30" is not. These terms only count alongside a numeral,
-  // which is why they are separate from the list above.
-  // `(?<!\p{L}\p{N})…(?!\p{L}\p{N})` and not `\b`. JavaScript's `\b` is ASCII, so it
-  // finds no boundary after an accented letter: `\bétude\b` and `\b(a déclaré)\b`
-  // never matched here, while ICU's Unicode-aware `\b` matched in Swift. Every
-  // French term ends in one — "a déclaré", "a annoncé", "a confirmé" — so a French
-  // page offered claims in one runtime and none in the other.
-  const attributedNumberPattern = /(?<![\p{L}\p{N}])(said|says|told|announced|confirmed|estimated|reported|recorded|revoked|rose|fell|grew|more than|fewer than|less than|at least|up to|a spus|a declarat|a anunțat|a confirmat|peste|cel puțin|a déclaré|a annoncé|a confirmé|plus de|au moins)(?![\p{L}\p{N}])|表示|宣布|确认|超过|至少/iu;
-  const numeralPattern = /\p{N}/u;
-  const presentedSentences = new Set([...summarySentences, ...keyPoints]);
-  const claimsToCheck = scored
-    .filter(
-      (entry) =>
-        !presentedSentences.has(entry.sentence) &&
-        (claimPattern.test(entry.sentence) ||
-          (numeralPattern.test(entry.sentence) &&
-            attributedNumberPattern.test(entry.sentence)))
-    )
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 3)
-    .map((entry) => entry.sentence);
-
-  return {
-    summary: summarySentences.join(" "),
-    keyPoints,
-    claimsToCheck
-  };
+  return kept.join("\n");
 }
 
 // A section or index page stitches unrelated headlines into a confident-looking
@@ -629,36 +456,10 @@ function containsContextualRemoteAccessRequest(text) {
   return false;
 }
 
-export function simplifyEnglish(value = "") {
-  let result = normalizeText(value);
-  for (const [complex, plain] of PLAIN_REPLACEMENTS) {
-    result = result.replace(new RegExp(`\\b${complex}\\b`, "gi"), plain);
-  }
-
-  const sentences = splitSentences(result, "en");
-  if (!sentences.length) return result;
-
-  return sentences
-    .flatMap((sentence) => {
-      if (sentence.length < 220) return [sentence];
-      const parts = sentence.split(/; |, (?:and|but|while|which) /i).map(normalizeText);
-      return parts.length > 1 ? parts.map((part) => (/[.!?]$/.test(part) ? part : `${part}.`)) : [sentence];
-    })
-    .join(" ");
-}
-
-export function canSimplifyToPlainEnglish(language = "") {
-  const normalized = language.trim().toLowerCase();
-  return normalized === "en" || normalized.startsWith("en-") || normalized.startsWith("en_");
-}
-
 export function analyzePage(page) {
-  const summary = summarizeLocally(page);
   return {
-    ...summary,
     risk: assessRisk(page),
     readMinutes: Math.max(1, Math.ceil((page.wordCount || 0) / 220)),
-    mode: "Local",
     analyzedAt: new Date().toISOString()
   };
 }

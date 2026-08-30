@@ -3,10 +3,7 @@ import assert from "node:assert/strict";
 import {
   analyzePage,
   assessRisk,
-  canSimplifyToPlainEnglish,
-  simplifyEnglish,
-  summarizeLocally,
-  tokenize
+  readableText
 } from "../src/core/analyzer.js";
 
 const article = {
@@ -22,49 +19,8 @@ const article = {
   formActions: []
 };
 
-test("local summary returns grounded sentences and claims", () => {
-  const result = summarizeLocally(article);
-  assert.ok(result.summary.length > 80);
-  assert.ok(result.keyPoints.length >= 1);
-  assert.ok(result.claimsToCheck.some((claim) => claim.includes("report")));
-});
-
-test("claims never repeat the summary or key points", () => {
-  const result = summarizeLocally(article);
-  assert.ok(result.claimsToCheck.length >= 1);
-  for (const claim of result.claimsToCheck) {
-    assert.ok(!result.summary.includes(claim), `claim repeated the gist: ${claim}`);
-    assert.ok(!result.keyPoints.includes(claim), `claim repeated a key point: ${claim}`);
-  }
-});
-
-test("English topic words are not removed by other-language stopwords", () => {
-  const tokens = tokenize(
-    "The new health care law will care for children and their care needs. A son and his father discussed care options.",
-    "en-US"
-  );
-
-  assert.equal(tokens.filter((token) => token === "care").length, 4);
-  assert.ok(tokens.includes("son"));
-  assert.ok(!tokens.includes("the"));
-  assert.ok(!tokenize("son sont avec", "fr").includes("son"));
-});
-
-test("local summary preserves short Simplified Chinese sentences and claims", () => {
-  const result = summarizeLocally({
-    ...article,
-    title: "城市遮阴计划",
-    language: "zh-CN",
-    text: "多个城市正在增加公共遮阴空间。2025年的调查覆盖了四十个城市。成熟树木可以提供更广泛的环境效益。报告建议在项目实施前后测量街道温度。居民还要求在交通站点附近增加饮水设施。养护人员在第一个夏天每周浇水两次。市政预算每年安排更换损坏的遮阳布。志愿者去年秋天记录了市场区的每一张长椅。官员计划在公开数据页面发布温度记录。附录提到2019年的试点只覆盖了三条街道。"
-  });
-
-  assert.match(result.summary, /城市|调查|报告/u);
-  assert.ok(result.keyPoints.length >= 1);
-  assert.ok(result.claimsToCheck.some((claim) => /调查|报告|2025/u.test(claim)));
-});
-
-test("local summary treats rendered blocks as boundaries and removes repeated player UI", () => {
-  const result = summarizeLocally({
+test("readable text treats rendered blocks as boundaries and removes repeated player UI", () => {
+  const text = readableText({
     ...article,
     language: "ro",
     text: [
@@ -82,10 +38,10 @@ test("local summary treats rendered blocks as boundaries and removes repeated pl
     ].join("\n")
   });
 
-  assert.ok(result.summary.length > 80);
-  assert.ok(result.claimsToCheck.some((claim) => /2019|potrivit/i.test(claim)));
-  assert.ok(!result.claimsToCheck.some((claim) => result.summary.includes(claim)));
-  assert.doesNotMatch(`${result.summary} ${result.keyPoints.join(" ")}`, /video player|stream type|playback controls/i);
+  assert.ok(text.length > 80);
+  // The Romanian prose survives; the player's English control strings do not.
+  assert.match(text, /Primăria extinde zonele umbrite/);
+  assert.doesNotMatch(text, /video player|stream type|playback controls/i);
 });
 
 test("risk scan keeps ordinary HTTPS article low", () => {
@@ -136,21 +92,9 @@ test("risk scan validates IPv4 octets and recognizes IPv6", () => {
   assert.equal(ipv6.signals.some((signal) => /raw IP/i.test(signal.title)), true);
 });
 
-test("plain English mode replaces common formal wording", () => {
-  assert.equal(simplifyEnglish("Individuals utilize numerous tools."), "people use many tools.");
-});
-
-test("local Plain English is limited to English source labels", () => {
-  assert.equal(canSimplifyToPlainEnglish("en-US"), true);
-  assert.equal(canSimplifyToPlainEnglish("fr"), false);
-  assert.equal(canSimplifyToPlainEnglish("ro-RO"), false);
-  assert.equal(canSimplifyToPlainEnglish(""), false);
-});
-
 test("full analysis estimates read time", () => {
   const result = analyzePage({ ...article, wordCount: 660 });
   assert.equal(result.readMinutes, 3);
-  assert.equal(result.mode, "Local");
 });
 
 test("read time rounds partial minutes up", () => {

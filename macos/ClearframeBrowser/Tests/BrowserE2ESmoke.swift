@@ -416,10 +416,13 @@ struct BrowserE2ESmoke {
                 hasPasswordField: false,
                 formActions: []
             )
-            let deterministicAnalysis = try await LocalPageIntelligenceProvider().analyze(page: deterministicPage)
-            try require(deterministicAnalysis.summary.count > 80, "local assistant summary was unexpectedly short")
-            try require(!deterministicAnalysis.claimsToCheck.isEmpty, "local assistant did not surface the test claim")
-            print("PASS local assistant core: deterministic page summarized without a provider or credentials")
+            let deterministicText = LocalAnalysisEngine.readableText(page: deterministicPage)
+            try require(deterministicText.count > 80, "readable text was unexpectedly short")
+            try require(
+                deterministicPage.text.contains(deterministicText),
+                "readable text is not a verbatim slice of the page it came from"
+            )
+            print("PASS local assistant core: readable text prepared without a provider or credentials")
 
             let savedRecord = BrowserTabRecord(
                 id: UUID(),
@@ -692,20 +695,26 @@ struct BrowserE2ESmoke {
 
             await assistant.analyzeCurrentPage(session: session)
             try require(assistant.state == .ready, "local assistant did not reach ready state")
-            try require(assistant.analysis?.mode == .local, "assistant unexpectedly used a remote provider")
-            try require((assistant.analysis?.content.summary.count ?? 0) > 80, "local summary was unexpectedly short")
+            try require(assistant.analysis != nil, "the article fixture produced no analysis")
+            try require(assistant.readableText.count > 80, "readable text was unexpectedly short")
             try require(assistant.snapshot?.title == "Clearframe Local Verification", "assistant did not retain source identity")
             try require(assistant.snapshot?.text.contains("Open shadow content") == true, "open Shadow DOM reading text was omitted")
             try require(assistant.snapshot?.text.contains("HIDDEN CONTROL POLLUTION") == false, "hidden text polluted extraction")
             try require(assistant.snapshot?.text.contains("Video Player is loading") == false, "media controls polluted extraction")
-            print("PASS assistant: visible text extracted and summarized locally")
+            print("PASS assistant: visible text extracted and prepared locally")
 
+            // Nothing in the interface reveals evidence any more, but the machinery
+            // that finds an exact sentence in the live page is what a real model's
+            // quotes would be checked against, so it stays exercised end to end.
             let evidencePoint = try requireValue(
-                assistant.analysis?.content.keyPoints.first,
-                "local assistant did not produce evidence-test key points"
+                assistant.readableText.split(separator: "\n").first.map(String.init),
+                "the article fixture produced no readable block to look for"
             )
-            await assistant.revealEvidence(for: evidencePoint, session: session)
-            try require(assistant.evidenceWasFoundOnPage, "Evidence Mode did not find the exact extracted sentence")
+            let evidenceFound = await session.revealEvidence(
+                evidencePoint,
+                expectedNavigationVersion: session.navigationVersion
+            )
+            try require(evidenceFound, "Evidence Mode did not find the exact extracted block")
             let highlightedEvidence = try await evaluateValue(
                 """
                 (() => {
@@ -747,9 +756,9 @@ struct BrowserE2ESmoke {
 
             await assistant.analyzeDespiteStructure(session: session)
             try require(assistant.state == .ready, "Analyze anyway did not reach a ready state from the structure notice")
-            try require(assistant.analysis?.mode == .local, "Analyze anyway unexpectedly used a remote provider")
-            try require((assistant.analysis?.content.summary.count ?? 0) > 80, "Analyze anyway produced an unexpectedly short summary")
-            print("PASS structure override: Analyze anyway summarized the already-extracted listing snapshot without reading the page again")
+            try require(assistant.analysis != nil, "Analyze anyway produced no analysis")
+            try require(assistant.readableText.count > 80, "Analyze anyway produced unexpectedly little readable text")
+            print("PASS structure override: Analyze anyway used the already-extracted listing snapshot without reading the page again")
 
             // A link aggregator keeps every entry in a table row, so nothing on the
             // page is a paragraph and the extractor falls back to the whole
@@ -779,15 +788,15 @@ struct BrowserE2ESmoke {
             // Evidence Mode fails silently on exactly the pages reading rows enabled.
             await assistant.analyzeDespiteStructure(session: session)
             let rowPoint = try requireValue(
-                assistant.analysis?.content.keyPoints.first,
-                "the table listing produced no key point to look for"
+                assistant.readableText.split(separator: "\n").first.map(String.init),
+                "the table listing produced no readable block to look for"
             )
-            await assistant.revealEvidence(for: rowPoint, session: session)
-            try require(
-                assistant.evidenceWasFoundOnPage,
-                "Evidence Mode could not find a key point that came from a table row"
+            let rowFound = await session.revealEvidence(
+                rowPoint,
+                expectedNavigationVersion: session.navigationVersion
             )
-            print("PASS evidence in a table: a key point taken from a row was found on the page")
+            try require(rowFound, "Evidence Mode could not find a block that came from a table row")
+            print("PASS evidence in a table: a block taken from a row was found on the page")
 
             // A specification page carries a few short paragraphs — a disclaimer, a
             // review teaser, two comments — and keeps its substance in a table. A
@@ -814,7 +823,7 @@ struct BrowserE2ESmoke {
             try await loadDeterministicPage(in: session, localURL: fixtureURL)
             await assistant.analyzeCurrentPage(session: session)
             try require(assistant.state == .ready, "the ordinary article fixture no longer analyzes straight to a ready summary")
-            try require((assistant.analysis?.content.summary.count ?? 0) > 80, "the ordinary article fixture produced an unexpectedly short summary")
+            try require(assistant.readableText.count > 80, "the ordinary article fixture produced unexpectedly little readable text")
             print("PASS structure default: the article fixture still analyzes straight to ready without a listing notice")
 
             // Analyze page is enabled and prominent on every new tab, and the

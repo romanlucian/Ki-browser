@@ -1,21 +1,6 @@
 import Foundation
 
 public enum LocalAnalysisEngine {
-    private static let englishStopWords = wordSet(
-        "a an and are as at be been but by can could did do does for from had has have he her hers him his how i if in into is it its may might more most must my no not of on one or our ours she should so some than that the their theirs them then there these they this those to too us was we were what when where which who why will with would you your yours about after again against all am any because before being below between both during each few further here itself just many me nor now off once only other out over own same such through under until up very while"
-    )
-    private static let romanianStopWords = wordSet(
-        "acela acea aceea acest aceasta aceste acești ale al ai așa ca care către când cea cei cele cel ce cu cum de din după este fi fost iar în între la mai nici nu o pe pentru prin sau se și sunt un una unei unui vor"
-    )
-    private static let frenchStopWords = wordSet(
-        "alors au aux avec ce ces comme dans de des du elle en est et eux il ils je la le les leur lui ma mais me même mes moi mon ne nos notre nous on ou par pas pour qu que quelle qui sa se ses son sont sur ta te tes toi ton tu un une vos votre vous c d j l à ça était été être"
-    )
-    private static let chineseStopWords = wordSet("也 个 中 为 了 与 及 和 在 对 将 是 有 的 而 这 那")
-    private static let fallbackStopWords = englishStopWords
-        .union(romanianStopWords)
-        .union(frenchStopWords)
-        .union(chineseStopWords)
-
     private static let mediaInterfacePhrases = [
         "subtitles settings, opens subtitles settings dialog",
         "captions settings, opens captions settings dialog",
@@ -63,70 +48,38 @@ public enum LocalAnalysisEngine {
         ".", "!", "?", "…", "。", "！", "？", ":", ";", "।", "॥", "۔", "؟"
     ]
 
-    private static let plainReplacements: [(String, String)] = [
-        ("approximately", "about"),
-        ("additional", "more"),
-        ("commence", "start"),
-        ("consequently", "so"),
-        ("demonstrate", "show"),
-        ("facilitate", "help"),
-        ("individuals", "people"),
-        ("in order to", "to"),
-        ("numerous", "many"),
-        ("purchase", "buy"),
-        ("regarding", "about"),
-        ("subsequently", "later"),
-        ("utilize", "use")
-    ]
-
-    public static func summarize(page: PageSnapshot) -> PageAnalysisContent {
-        let source = page.text.isEmpty ? "" : page.text
-        let extracted = sentencesFromReadingBlocks(source, language: page.language)
+    /// The page's readable text, with interface noise removed.
+    ///
+    /// Blocks stay newline-separated exactly as the extractor emitted them, because
+    /// a block boundary is a sentence boundary and `assessStructure` reads the same
+    /// shape. Two filters run over it and neither edits a sentence: one drops a
+    /// sentence when known media-control phrases cover most of it, the other drops
+    /// any sentence the page repeats three or more times, which needs no vocabulary
+    /// and so recognises a player in any language. `zf.ro` is the standing
+    /// regression case for both, and an earlier version that deleted those phrases
+    /// from inside ordinary prose emitted text the page did not contain — never
+    /// reintroduce editing in place.
+    public static func readableText(page: PageSnapshot) -> String {
+        let blocks = page.text
+            .replacingOccurrences(of: "\r\n", with: "\n")
+            .components(separatedBy: "\n")
+        let language = page.language
+        let extracted = blocks.flatMap { splitSentences($0, language: language) }
         let repeated = repeatedInterfaceText(in: extracted)
-        let sentences = deduplicated(extracted)
-            .filter { !isMediaInterfaceSentence($0) && !repeated.contains($0.lowercased()) }
 
-        guard !sentences.isEmpty else {
-            return PageAnalysisContent(summary: "", keyPoints: [], claimsToCheck: [])
-        }
-
-        let scored = score(sentences: sentences, title: page.title, language: page.language)
-        let summaryEntries = Array(scored.sorted { $0.score > $1.score }.prefix(min(3, sentences.count)))
-            .sorted { $0.index < $1.index }
-        let summarySentences = summaryEntries.map(\.sentence)
-        let summarySet = Set(summarySentences)
-        let keyPoints = scored
-            .sorted { $0.score > $1.score }
-            .filter { !summarySet.contains($0.sentence) }
-            .prefix(4)
-            .map(\.sentence)
-
-        // A claim repeated from the gist or a key point gives the reader nothing new to
-        // check, so keep claims to sentences the rest of the result did not already show.
-        let presentedSentences = summarySet.union(keyPoints)
-        let claims = scored
-            .filter { entry in
-                guard !presentedSentences.contains(entry.sentence) else { return false }
-                // A digit on its own used to qualify, so the reader was handed a
-                // publication time, a ticket price and the date a photograph was
-                // taken as things to go and check. What makes a sentence checkable
-                // is an attribution or an absolute, or a quantity named as a
-                // quantity: "ninety percent" qualifies without a numeral, and
-                // "14 June 2023" does not qualify with one. A bare numeral carrying
-                // no unit is deliberately no longer offered.
-                return containsPercentage(entry.sentence) ||
-                containsClaimTerm(in: entry.sentence) ||
-                containsAttributedNumber(entry.sentence)
+        var seen: Set<String> = []
+        var kept: [String] = []
+        for block in blocks {
+            let sentences = splitSentences(block, language: language).filter { sentence in
+                guard !isMediaInterfaceSentence(sentence) else { return false }
+                let key = sentence.lowercased()
+                guard !repeated.contains(key) else { return false }
+                return seen.insert(key).inserted
             }
-            .sorted { $0.score > $1.score }
-            .prefix(3)
-            .map(\.sentence)
-
-        return PageAnalysisContent(
-            summary: summarySentences.joined(separator: " "),
-            keyPoints: Array(keyPoints),
-            claimsToCheck: Array(claims)
-        )
+            guard !sentences.isEmpty else { continue }
+            kept.append(sentences.joined(separator: " "))
+        }
+        return kept.joined(separator: "\n")
     }
 
     /// A section or index page stitches unrelated headlines into a confident-looking
@@ -164,23 +117,45 @@ public enum LocalAnalysisEngine {
         return mostlyUnpunctuated && littleProseMass ? .listing : .article
     }
 
-    public static func simplifyEnglish(_ value: String) -> String {
-        var result = normalize(value)
-        for (complex, plain) in plainReplacements {
-            result = result.replacingOccurrences(
-                of: "\\b\(NSRegularExpression.escapedPattern(for: complex))\\b",
-                with: plain,
-                options: [.regularExpression, .caseInsensitive]
-            )
+    /// How many words a piece of extracted text holds.
+    ///
+    /// The same rule the extractor applies to the whole page: CJK and Hangul count
+    /// one word per character, because those scripts write no spaces; everything
+    /// else counts a run of letters, marks and digits as one. Kept here so the
+    /// number shown beside text about to leave the Mac is a count of that text, not
+    /// of the page it came from.
+    public static func wordCount(of value: String) -> Int {
+        var count = 0
+        var inWord = false
+        for scalar in value.unicodeScalars {
+            if isSingleCharacterWord(scalar) {
+                count += 1
+                inWord = false
+            } else if isWordScalar(scalar) {
+                if !inWord { count += 1 }
+                inWord = true
+            } else {
+                inWord = false
+            }
         }
-        return result
+        return count
     }
 
-    public static func canSimplifyToPlainEnglish(sourceLanguage: String) -> Bool {
-        let primaryLanguage = sourceLanguage.lowercased()
-            .split(whereSeparator: { $0 == "-" || $0 == "_" })
-            .first
-        return primaryLanguage == "en"
+    private static func isSingleCharacterWord(_ scalar: Unicode.Scalar) -> Bool {
+        let properties = scalar.properties
+        return properties.isIdeographic || (0x3040...0x30FF).contains(scalar.value)
+            || (0xAC00...0xD7AF).contains(scalar.value) || (0x1100...0x11FF).contains(scalar.value)
+    }
+
+    private static func isWordScalar(_ scalar: Unicode.Scalar) -> Bool {
+        switch scalar.properties.generalCategory {
+        case .uppercaseLetter, .lowercaseLetter, .titlecaseLetter, .modifierLetter, .otherLetter,
+             .nonspacingMark, .spacingMark, .enclosingMark,
+             .decimalNumber, .letterNumber, .otherNumber:
+            return true
+        default:
+            return false
+        }
     }
 
     public static func readingTime(wordCount: Int) -> Int {
@@ -222,50 +197,6 @@ public enum LocalAnalysisEngine {
             sentences.append(remainder)
         }
         return sentences
-    }
-
-    public static func tokens(_ value: String, language: String = "") -> [String] {
-        var result: [String] = []
-        var currentWord = ""
-        let selectedStopWords = stopWords(for: language)
-
-        func appendCurrentWord() {
-            // Unicode scalars, not `Character`s. A `Character` is a whole grapheme
-            // cluster, so a Devanagari word written with a vowel sign — "\u{092E}\u{0947}\u{0902}"
-            // is one cluster and three scalars — counted as a single character here
-            // and was dropped by this minimum, while the other runtime kept it.
-            // Common Hindi words went missing from scoring: 8,404 tokens there
-            // against 6,543 here on the same article.
-            guard currentWord.unicodeScalars.count >= 2,
-                  // A run holding no letter and no number is not a word in either
-                  // runtime, and saying so here keeps the pair honest.
-                  currentWord.contains(where: { $0.isLetter || $0.isNumber }),
-                  !selectedStopWords.contains(currentWord) else {
-                currentWord = ""
-                return
-            }
-            result.append(currentWord)
-            currentWord = ""
-        }
-
-        for character in value.lowercased() {
-            if isCJK(character) {
-                appendCurrentWord()
-                // A joiner rides on the character before it and forms one cluster
-                // here, so the token carried it — "\u{6D4B}\u{200C}" where the other runtime, walking
-                // code points, pushes "\u{6D4B}" and drops the joiner on the floor.
-                let token = String(String.UnicodeScalarView(
-                    character.unicodeScalars.filter { $0 != "\u{200C}" && $0 != "\u{200D}" }
-                ))
-                if !token.isEmpty, !selectedStopWords.contains(token) { result.append(token) }
-            } else if character.isLetter || character.isNumber || character == "'" || character == "’" || character == "-" {
-                currentWord.append(character)
-            } else {
-                appendCurrentWord()
-            }
-        }
-        appendCurrentWord()
-        return result
     }
 
     /// Exactly the characters JavaScript's `\s` matches, and deliberately not
@@ -429,16 +360,6 @@ public enum LocalAnalysisEngine {
         return String(String.UnicodeScalarView(scalars[..<end]))
     }
 
-    private static func deduplicated(_ sentences: [String]) -> [String] {
-        var seen: Set<String> = []
-        return sentences.filter { sentence in
-            let key = sentence.lowercased()
-            guard !seen.contains(key) else { return false }
-            seen.insert(key)
-            return true
-        }
-    }
-
     private static func matchCount(of phrase: String, in value: String) -> Int {
         var count = 0
         var searchRange = value.startIndex..<value.endIndex
@@ -447,88 +368,6 @@ public enum LocalAnalysisEngine {
             searchRange = match.upperBound..<value.endIndex
         }
         return count
-    }
-
-    /// A digit immediately before a per-cent sign, so "45%" reads as a quantity.
-    /// Matches `\d *%` in the other runtime; sentences reach here with their
-    /// whitespace already collapsed to single spaces, so only a space can intervene.
-    private static func containsPercentage(_ sentence: String) -> Bool {
-        let characters = Array(sentence)
-        for (index, character) in characters.enumerated() where character == "%" {
-            var back = index - 1
-            while back >= 0, characters[back] == " " { back -= 1 }
-            // One scalar, because the other runtime asks `\p{N}`, which matches a
-            // single code point. A keycap is a digit, a variation selector and a
-            // combining mark in one cluster: `isNumber` is true of the whole thing,
-            // so "1\u{FE0F}\u{20E3} %" was a quantity here and not there. Absurd input, but the
-            // two have to answer it alike.
-            if back >= 0, characters[back].unicodeScalars.count == 1,
-               characters[back].isNumber { return true }
-        }
-        return false
-    }
-
-    private static let claimTerms = [
-        "according", "report", "study", "research", "survey", "million", "billion",
-        "percent", "guarantee", "always", "never", "only", "best", "worst", "first",
-        "potrivit", "raport", "studiu", "cercetare", "sondaj", "milioane", "miliarde", "procent",
-        "selon", "rapport", "étude", "recherche", "sondage", "million", "milliard", "pour cent",
-        "报告", "研究", "调查", "百万", "十亿", "百分之", "保证", "最佳", "首次"
-    ]
-
-    /// Every alphabetic term as one alternation, compiled once — the same shape as
-    /// the single pattern the other runtime uses.
-    ///
-    /// `range(of:options:.regularExpression)` compiles its pattern on every call, and
-    /// dropping the cheap any-digit test in front of this scan meant nearly every
-    /// sentence reached all thirty-nine terms and paid for thirty-nine compilations.
-    /// A forty-eight thousand character article went from 85 ms to 532 ms, on the path
-    /// the installed application runs whenever a reader clicks Analyze. Caching the
-    /// terms separately brought that to 119 ms; asking once brings it back.
-    private static let claimTermExpression: NSRegularExpression? = {
-        let alternatives = claimTerms
-            .filter { !$0.contains(where: isCJK) }
-            .map { NSRegularExpression.escapedPattern(for: $0) }
-            .joined(separator: "|")
-        return try? NSRegularExpression(
-            pattern: "(?<![\\p{L}\\p{N}])(\(alternatives))(?![\\p{L}\\p{N}])",
-            options: [.caseInsensitive]
-        )
-    }()
-
-    /// The CJK terms cannot use a word boundary — those scripts write no spaces — so
-    /// they stay a plain containment test, exactly as the other runtime lists them
-    /// outside its alternation.
-    private static let cjkClaimTerms = claimTerms.filter { $0.contains(where: isCJK) }
-
-    /// A number nobody asserts is furniture; a number somebody asserts, or one
-    /// carried by a comparison, is what a reader might go and check. "Ibrahim
-    /// Abubakar said he had identified 13 people" and "revoked more than 175,000
-    /// visas" are claims; "published at 19:30" is not. These terms count only
-    /// alongside a numeral, which is why they are kept apart from `claimTerms`.
-    private static let attributedNumberExpression: NSRegularExpression? =
-    /// Written with lookarounds rather than `\b`, because the other runtime's `\b` is
-    /// ASCII and finds no boundary after an accented letter. ICU's is Unicode-aware,
-    /// so every French term here matched in Swift and none of them matched there.
-        try? NSRegularExpression(pattern: "(?<![\\p{L}\\p{N}])(said|says|told|announced|confirmed|estimated|reported|recorded|revoked|rose|fell|grew|more than|fewer than|less than|at least|up to|a spus|a declarat|a anunțat|a confirmat|peste|cel puțin|a déclaré|a annoncé|a confirmé|plus de|au moins)(?![\\p{L}\\p{N}])", options: [.caseInsensitive])
-
-    private static let cjkAttributionTerms = ["表示", "宣布", "确认", "超过", "至少"]
-
-    private static func containsAttributedNumber(_ sentence: String) -> Bool {
-        guard sentence.contains(where: { $0.isNumber }) else { return false }
-        if let expression = attributedNumberExpression {
-            let range = NSRange(sentence.startIndex..., in: sentence)
-            if expression.firstMatch(in: sentence, options: [], range: range) != nil { return true }
-        }
-        return cjkAttributionTerms.contains { sentence.localizedCaseInsensitiveContains($0) }
-    }
-
-    private static func containsClaimTerm(in sentence: String) -> Bool {
-        if let expression = claimTermExpression {
-            let range = NSRange(sentence.startIndex..., in: sentence)
-            if expression.firstMatch(in: sentence, options: [], range: range) != nil { return true }
-        }
-        return cjkClaimTerms.contains { sentence.localizedCaseInsensitiveContains($0) }
     }
 
     private static func isUsefulSentenceLength(_ sentence: String) -> Bool {
@@ -570,49 +409,8 @@ public enum LocalAnalysisEngine {
         }
     }
 
-    private static func score(sentences: [String], title: String, language: String) -> [ScoredSentence] {
-        var frequencies: [String: Int] = [:]
-        for word in tokens(sentences.joined(separator: " "), language: language) {
-            frequencies[word, default: 0] += 1
-        }
-        let maxFrequency = max(frequencies.values.max() ?? 1, 1)
-        let titleWords = Set(tokens(title, language: language))
-
-        return sentences.enumerated().map { index, sentence in
-            let words = tokens(sentence, language: language)
-            let topicality = words.reduce(0.0) { partial, word in
-                partial + Double(frequencies[word] ?? 0) / Double(maxFrequency)
-            }
-            let titleOverlap = Double(words.filter(titleWords.contains).count) * 0.7
-            let leadBonus = index < 3 ? 0.8 - Double(index) * 0.2 : 0
-            let maximumUsefulTokens = sentence.contains(where: isCJK) ? 100 : 48
-            let lengthPenalty = words.count < 7 || words.count > maximumUsefulTokens ? 0.7 : 1.0
-            let score = ((topicality + titleOverlap) / sqrt(Double(max(words.count, 1))) + leadBonus) * lengthPenalty
-            return ScoredSentence(sentence: sentence, index: index, score: score)
-        }
-    }
-
-    private struct ScoredSentence {
-        let sentence: String
-        let index: Int
-        let score: Double
-    }
-
     private static func wordSet(_ value: String) -> Set<String> {
         Set(value.split(separator: " ").map(String.init))
     }
 
-    private static func stopWords(for language: String) -> Set<String> {
-        let primary = language.lowercased()
-            .split(whereSeparator: { $0 == "-" || $0 == "_" })
-            .first
-            .map(String.init)
-        switch primary {
-        case "en": return englishStopWords
-        case "ro": return romanianStopWords
-        case "fr": return frenchStopWords
-        case "zh": return chineseStopWords
-        default: return fallbackStopWords
-        }
-    }
 }

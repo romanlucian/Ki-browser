@@ -11,50 +11,6 @@ final class OpenAIProviderTests: XCTestCase {
         super.tearDown()
     }
 
-    func testAnalyzeUsesStructuredOutputAndOmitsFullPageURL() async throws {
-        let session = makeSession { request in
-            XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer test-key")
-            let body = try self.requestBody(request)
-            let json = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
-            XCTAssertEqual(json["model"] as? String, OpenAIProviderDefaults.model)
-            XCTAssertEqual(json["store"] as? Bool, false)
-            XCTAssertEqual(json["safety_identifier"] as? String, "clearframe_test_user")
-            XCTAssertEqual((json["reasoning"] as? [String: Any])?["effort"] as? String, "none")
-            XCTAssertEqual((json["reasoning"] as? [String: Any])?["context"] as? String, "current_turn")
-
-            let text = try XCTUnwrap(json["text"] as? [String: Any])
-            let format = try XCTUnwrap(text["format"] as? [String: Any])
-            XCTAssertEqual(format["type"] as? String, "json_schema")
-            XCTAssertEqual(format["strict"] as? Bool, true)
-            XCTAssertEqual((format["schema"] as? [String: Any])?["additionalProperties"] as? Bool, false)
-
-            let input = try XCTUnwrap(json["input"] as? String)
-            let page = try XCTUnwrap(
-                JSONSerialization.jsonObject(with: Data(input.utf8)) as? [String: Any]
-            )
-            XCTAssertEqual(page["sourceHost"] as? String, "example.org")
-            XCTAssertEqual(page["sourceTitle"] as? String, "Private search")
-            XCTAssertNil(page["url"])
-            XCTAssertFalse(input.contains("private-token"))
-
-            return Self.response(
-                status: 200,
-                body: #"{"status":"completed","output":[{"type":"message","content":[{"type":"output_text","text":"{\"summary\":\"A grounded summary.\",\"keyPoints\":[\"One point.\"],\"claimsToCheck\":[]}"}]}]}"#
-            )
-        }
-        let provider = OpenAIPageIntelligenceProvider(
-            configuration: OpenAIProviderConfiguration(
-                apiKey: "test-key",
-                safetyIdentifier: "clearframe_test_user"
-            ),
-            session: session
-        )
-        let result = try await provider.analyze(page: page)
-
-        XCTAssertEqual(result.summary, "A grounded summary.")
-        XCTAssertEqual(result.keyPoints, ["One point."])
-    }
-
     func testIncompleteResponseProducesAUsefulError() async throws {
         let provider = OpenAIPageIntelligenceProvider(
             configuration: OpenAIProviderConfiguration(apiKey: "test", safetyIdentifier: "test"),
@@ -67,7 +23,7 @@ final class OpenAIProviderTests: XCTestCase {
         )
 
         do {
-            _ = try await provider.analyze(page: page)
+            _ = try await provider.translate(text: "Text.", sourceLanguage: "en", targetLanguage: "French")
             XCTFail("Expected an incomplete-response error")
         } catch {
             XCTAssertTrue(error.localizedDescription.contains("incomplete"))
@@ -84,7 +40,7 @@ final class OpenAIProviderTests: XCTestCase {
             }
         )
         do {
-            _ = try await failedProvider.analyze(page: page)
+            _ = try await failedProvider.translate(text: "Text.", sourceLanguage: "en", targetLanguage: "French")
             XCTFail("Expected a failed-status error")
         } catch {
             XCTAssertTrue(error.localizedDescription.contains("Provider processing failed"))
@@ -103,7 +59,7 @@ final class OpenAIProviderTests: XCTestCase {
         )
 
         do {
-            _ = try await provider.analyze(page: page)
+            _ = try await provider.translate(text: "Text.", sourceLanguage: "en", targetLanguage: "French")
             XCTFail("Expected a refusal error")
         } catch {
             XCTAssertTrue(error.localizedDescription.contains("declined"))
@@ -122,7 +78,7 @@ final class OpenAIProviderTests: XCTestCase {
         )
 
         do {
-            _ = try await provider.analyze(page: page)
+            _ = try await provider.translate(text: "Text.", sourceLanguage: "en", targetLanguage: "French")
             XCTFail("Expected a model-unavailable error")
         } catch {
             XCTAssertTrue(error.localizedDescription.contains("Open Settings"))
@@ -137,50 +93,6 @@ final class OpenAIProviderTests: XCTestCase {
             JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: String]
         )
         XCTAssertEqual(OpenAIProviderDefaults.model, json["defaultModel"])
-    }
-
-    func testAnalyzeRejectsAnUnvalidatedSourceBeforeMakingARequest() async throws {
-        let provider = OpenAIPageIntelligenceProvider(
-            configuration: OpenAIProviderConfiguration(apiKey: "test", safetyIdentifier: "test"),
-            session: makeSession { _ in
-                XCTFail("An invalid source URL must not reach the provider")
-                return Self.response(status: 500, body: "{}")
-            }
-        )
-        let invalid = PageSnapshot(
-            title: "Private",
-            url: "data:text/plain,private",
-            hostname: "secret.example?q=token",
-            scheme: "data",
-            language: "en",
-            text: "This text must not be uploaded when its source cannot be validated.",
-            wordCount: 12,
-            hasPasswordField: false,
-            formActions: []
-        )
-
-        do {
-            _ = try await provider.analyze(page: invalid)
-            XCTFail("Expected invalid source rejection")
-        } catch {
-            guard case PageIntelligenceError.noReadableText = error else {
-                return XCTFail("Unexpected error: \(error)")
-            }
-        }
-    }
-
-    private var page: PageSnapshot {
-        PageSnapshot(
-            title: "Private search",
-            url: "https://example.org/results?q=private-token#account",
-            hostname: "example.org",
-            scheme: "https",
-            language: "en",
-            text: "This page contains enough visible text for a deterministic provider request test.",
-            wordCount: 13,
-            hasPasswordField: false,
-            formActions: []
-        )
     }
 
     private func makeSession(
