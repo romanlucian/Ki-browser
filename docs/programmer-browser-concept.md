@@ -22,6 +22,8 @@ The promise is comprehension and handoff, not autonomous coding in the browser.
 
 ## First features
 
+**Note, August 30, 2026.** Every lens below assumes a reader that can summarize and extract meaning. Clearframe no longer has one — page judgment was removed, and the browser now prepares text rather than interpreting it. This concept therefore depends on a model arriving first.
+
 1. **Documentation lens:** identify product/version, summarize the current page, extract prerequisites, and flag likely version mismatches.
 2. **GitHub lens:** explain repository purpose and structure from visible pages, summarize releases/issues, and keep links to original evidence.
 3. **Code explanation:** explain selected snippets, inputs/outputs, dependencies, and risks without pretending the snippet is verified or complete.

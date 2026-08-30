@@ -25,22 +25,21 @@ Clearframe is designed as an on-demand reading tool, not a browsing monitor. The
 - The selected search provider stays in local macOS preferences. Clearframe sends search text only when the user submits it, to the selected provider’s normal HTTPS results page; it does not request remote suggestions while the user types. Direct website addresses bypass search.
 - The new-tab AI catalog, task-specific editorial badges, and text filter are defined and evaluated locally. Its catalog version and checked date are bundled constants, not a remote-update claim. Selecting a card or official recommendation source performs ordinary HTTPS navigation. Clearframe does not append the current page, a generated prompt, an affiliate identifier, or tracking parameters.
 - The first-run introduction stores one local completion boolean and reuses the existing local search-provider preference. It has no account, analytics event, identifier, purchase state, or remote onboarding service. Reopening the introduction does not clear browser data.
-- The Settings reset closes all tabs and removes bookmarks, history, the in-app download list, restored-session records, recovery backups, per-site tracker-blocking exceptions, and WebKit cookies/caches/website storage. It deliberately keeps downloaded files, search and onboarding preferences, and the user-owned Optional AI key; active downloads must finish or be cancelled first.
+- The Settings reset closes all tabs and removes bookmarks, history, the in-app download list, restored-session records, recovery backups, per-site tracker-blocking exceptions, and WebKit cookies/caches/website storage. It deliberately keeps downloaded files and search and onboarding preferences; active downloads must finish or be cancelled first.
 
 ### Extension local mode (validation artifact)
 
 - The extension receives temporary access to the current page only after the user clicks its toolbar icon.
 - Visible page text is extracted and analyzed inside the browser.
-- No page text, URL, title, summary, or risk result is sent to a Clearframe server; this prototype has no server.
+- No page text, URL, title, or risk result is sent anywhere by Clearframe. There is no Clearframe server, and no third-party request either.
 - Settings and at most one compact comparison snapshot are stored in the local browser profile.
 
-### Optional AI mode
+### There is no AI mode
 
-- The feature is off by default.
-- The extension requests access only to `https://api.openai.com/*`; the native app connects directly through its optional provider.
-- Page text is transmitted only when the user clicks **Improve with AI** or requests a non-local translation. Analysis sends the page title, hostname, declared source language, and at most 18,000 characters of extracted visible text. It does not send the full URL, query, fragment, cookies, form values, bookmarks, history, or other tabs. Translation sends only the displayed summary, source language, and target language.
-- Requests use the user’s API key, ask the API not to store the response (`store: false`), and contain a random installation-scoped safety identifier rather than a name or email. Analysis uses a strict JSON schema; timeouts, refusals, incomplete output, and malformed output leave the valid local result visible.
-- The extension key remains in local extension storage; the native app key is stored in macOS Keychain. Both approaches are acceptable only for a personal development prototype, not for a public product with a company-funded key.
+- **Clearframe makes no AI request, from either prototype.** It holds no API key, offers nowhere to put one, and contacts no model provider. Removed on August 30, 2026 along with the page-judgment layer it served; see [project-context.md](project-context.md).
+- The only path by which a page's text leaves Clearframe is the person pressing **Copy page for AI** and pasting it somewhere themselves. Clearframe writes to the system clipboard and makes no network request. The card shows the complete payload and its size first.
+- That clipboard is shared with every application on the Mac, and with the person's other Apple devices if Universal Clipboard is on. The card says so, because a privacy claim that ignores the clipboard would be a false one.
+- Page text is still extracted only when the user asks for it.
 - The macOS bundle includes a privacy manifest that conservatively declares optional provider text as user content used for app functionality, with tracking disabled and no tracking domains. It also declares Apple's `CA92.1` required reason for app-only `UserDefaults` preferences. The declaration does not replace a public privacy policy or App Store privacy answers.
 
 ## Not collected or transmitted by Clearframe
@@ -58,7 +57,7 @@ Risk detection uses visible text and simple page facts. It can miss malicious pa
 
 Tracker blocking uses a small, first-party curated domain list enforced by WebKit's content-rule-list engine. It can miss trackers that are not on the list, including CNAME-cloaked or newly created tracking domains, and blocking a request can occasionally break a legitimate site feature that happened to load from a blocked domain—the per-site shield toggle turns blocking off for exactly that case. Clearframe cannot see or count what WebKit blocked, so the UI never reports a number, and a site loading normally with blocking on is not a safety verdict about that site.
 
-AI summaries and translations can omit context, flatten uncertainty, or hallucinate. Page content can also contain indirect prompt injection. The prototype keeps AI read-only and gives it no page actions, account access, file access, email, browsing history, or tools. This limits the harm of a bad output but does not eliminate it.
+Clearframe produces no AI output to be wrong about. Page content is still untrusted input, and it still reaches whatever AI the person pastes it into — an indirect prompt injection carried in a page will reach that AI exactly as it would if they had copied the page by hand. Clearframe adds no instructions of its own to the payload, and shows the person what it contains before they copy it.
 
 The AI catalog is static editorial guidance. Sparse task badges are based on documented product focus and link to an official provider source; they are not universal/live rankings, comparative testing by Clearframe, endorsements, partnerships, paid placement, or guarantees of price or availability. Broad access labels are orientation only. Users leave Clearframe's local guide when they open a listed website; that provider then controls its own accounts, plans, service availability, data practices, and terms.
 
@@ -72,9 +71,7 @@ Before a public launch:
 4. Define retention, deletion, incident response, and subprocessors.
 5. Add security review, dependency scanning, content-security-policy tests, and prompt-injection evaluation.
 6. Give users a clear cloud-processing indicator and per-site disable control.
-7. Separate paid recommendations from summaries, comparisons, and risk results.
-
-The current provider request follows OpenAI's documented model/request and structured-output shapes: [GPT-5.6 Luna](https://developers.openai.com/api/docs/models/gpt-5.6-luna) and [Structured Outputs](https://developers.openai.com/api/docs/guides/structured-outputs). These links describe the API shape, not an endorsement or partnership.
+7. Separate paid recommendations from extraction and risk results.
 
 Relevant implementation guidance: Chrome recommends `activeTab` as a privacy-preserving alternative to broad host access, and OWASP identifies indirect prompt injection and excessive agency as material LLM risks.
 

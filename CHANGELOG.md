@@ -10,6 +10,23 @@ Dates are commit dates. Test counts are the totals at the end of each period, ve
 
 ## Unreleased
 
+### Week of August 30, 2026
+
+**Analyze page stopped claiming to understand a page**
+
+- The gist, the key points and the claims to check are gone, and so is the term-frequency scorer that chose them. It ranked a sentence by how many of the page's most repeated words it contained, divided by its length. That is lexical centrality, not importance, and on a live Britannica article the site's own navigation menu scored second — it contains the words *intelligence*, *artificial* and *technology*, and the scorer has no concept of a menu.
+- The gist was a category error rather than a bug. It was three separately-chosen sentences joined by a space, with nothing checking that the second followed from the first, so it opened with dangling references — "These advances in software and operating systems were matched by…" — and on a news homepage welded a headline onto a paragraph with no punctuation between them. Three independent reviews reached the same conclusion: a summary has to be written, and choosing three existing sentences never produces one.
+- Plain English went too. It swapped thirteen fixed phrases and worked only on English — find-and-replace wearing the name of simplification.
+- **Analyze page now shows the source, the read time, any visible risk signals, and Copy for AI.** Copy shows the character count and the complete payload before it copies anything, and says plainly that the Mac's clipboard is shared with other apps and with Universal Clipboard. Clearframe prepares the text; the person decides where it goes.
+- The two filters that keep video-player controls and thrice-repeated interface text out of the reader's way moved out of the summarizer into that copied text, so a paste into somebody's AI no longer begins "Video Player is loading. Stream Type LIVE. Playback controls." Their three contract suites now test the filter directly instead of through a summarizer, which is stronger coverage than before.
+
+**And the AI it never really had**
+
+- The optional OpenAI provider is removed, with the Keychain key storage, the Optional AI settings, the model contract fixture and the extension's options page — which existed for nothing but that key. The extension no longer requests permission to reach `api.openai.com`, because it no longer reaches it. **No page text leaves the Mac by Clearframe's hand at all now**, which makes the privacy claim simpler than it has ever been.
+- Evidence Mode's exact-match highlighting is removed. It was the one thing no other browser could claim, and it had no reachable entry point once key points were gone. If a model that quotes ever arrives, the shape that keeps the honesty is verifying its quotes against the page by substring test — recorded in `docs/on-device-ai-design.md`.
+
+3,550 lines deleted across two commits. 438 Swift tests, 13 JavaScript tests, validator green. The shared contract keeps 37 of its 61 cases: page structure, risk, reading time, sentence segmentation, and the three interface-noise suites.
+
 ### Week of August 24, 2026
 
 **The page assistant is no longer always there**

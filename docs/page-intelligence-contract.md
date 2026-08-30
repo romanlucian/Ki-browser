@@ -2,6 +2,8 @@
 
 This is the language-neutral boundary that a later Windows implementation can share. It is a design contract, not a deployed public API yet.
 
+**What it no longer covers.** Until August 30, 2026 this contract also specified a summary, key points and candidate claims, produced by ranking sentences on word frequency. That layer was removed — it measured repetition rather than importance, and on a live encyclopedia page it ranked the site's navigation menu second. The evidence and the rule against rebuilding it are in [project-context.md](project-context.md). What remains below is everything that can be computed rather than judged.
+
 ## Input
 
 ```json
@@ -25,28 +27,31 @@ Rules:
 - input is gathered only after an explicit user action;
 - never include form values, cookies, credentials, unrelated tabs, or passive history;
 - treat all page fields as untrusted data, not instructions;
-- truncate and redact before remote processing;
-- preserve the source URL locally so evidence can be traced; a remote-provider adapter should derive only the hostname and omit the full URL/query/fragment unless a separately reviewed feature genuinely requires more.
+- `visibleText` is one rendered reading block per line. **That newline structure is load-bearing** — structure detection counts blocks, and sentence splitting treats a block boundary as a sentence boundary without inventing punctuation. An implementation that returns the page as a single line silently disables both.
 
 ## Output
 
 ```json
 {
-  "summary": "A concise account of what the page says.",
-  "keyPoints": ["Up to four grounded points."],
-  "claimsToCheck": ["Up to three page claims that deserve verification."],
-  "sourceMode": "local",
-  "risk": {
-    "score": 0,
-    "level": "low",
-    "signals": []
-  }
+  "readableText": "The page's own words, interface noise removed.",
+  "readingTimeMinutes": 4,
+  "structure": "article",
+  "risk": { "score": 0, "level": "low", "signals": [] }
 }
 ```
 
-The risk object is deterministic application output, not an LLM verdict. A remote model may improve the summary, key points, or candidate claims; it must not silently decide safety.
+Every field is derived, not interpreted. Nothing here is a model's opinion, and the risk object in particular is deterministic application output rather than a safety verdict.
 
-`claimsToCheck` contains only sentences that the summary and key points did not already show, because a claim repeated from the gist gives the reader nothing new to verify. On short pages, where the gist and key points already cover every extracted sentence, the list is legitimately empty.
+`readableText` is what the person copies. It must consist only of characters the page contains: it is handed to whatever AI they choose, and it should be that page's words rather than an approximation of them.
+
+## Interface-noise filters
+
+Two filters run over the extracted sentences. **Neither edits a sentence** — each drops whole sentences, because deleting a phrase from inside ordinary prose produces text the page never contained. An earlier version did exactly that and turned "Apple introduced picture-in-picture on the iPad" into "Apple introduced on the iPad".
+
+1. **Known control phrases.** A sentence is dropped when listed media-player phrases cover more than half of it.
+2. **Repetition.** Any sentence the page prints three or more times is dropped entirely. This needs no vocabulary, which is why it catches a player whose controls are localized — the case an English phrase list can never reach.
+
+`zf.ro` is the standing regression case: a Romanian news site whose embedded player exposed its accessibility labels as page text. Coverage is `boilerplateCases` in the shared fixture plus a live check on the installed app. Preserve both.
 
 ## Page structure
 
@@ -54,35 +59,31 @@ The risk object is deterministic application output, not an LLM verdict. A remot
 assessStructure(pageSnapshot) -> "article" | "listing"
 ```
 
-Section fronts and index pages expose many short link blocks instead of prose, and summarizing them stitches unrelated headlines into a confident-looking gist. The deterministic classifier reads the extractor's reading blocks — one per nonempty line of `visibleText` — and reports `listing` only when all three conditions hold: at least 12 blocks, fewer than 60 percent of blocks ending in sentence punctuation (`. ! ? … 。 ！ ？ : ;`), and blocks that are both long and punctuated carrying less than 10 percent of the total characters. A block counts as long at 220 characters, or at 100 when it contains CJK text, mirroring the engine's other CJK-aware thresholds.
+Section fronts and index pages expose many short link blocks instead of prose. The deterministic classifier reads the extractor's reading blocks — one per nonempty line of `visibleText` — and currently reports `listing` only when all three conditions hold: at least 12 blocks, fewer than 60 percent of blocks ending in sentence punctuation (`. ! ? … 。 ！ ？ : ;`), and blocks that are both long and punctuated carrying less than 10 percent of the total characters. A block counts as long at 220 characters, or at 100 when it contains CJK text.
 
-Those thresholds were calibrated on live English and Romanian section fronts and articles; Simplified Chinese listings are not measured yet. `article` is the deliberate default for everything else, including the extractor's no-newline whole-body fallback, because a wrong `listing` label hides a real summary while a wrong `article` label only preserves existing behavior.
+**Known defect.** Those conditions are ANDed, and a modern news homepage fails the third. Measured on macrumors.com: 23.8 percent of blocks ended in punctuation (well under 60, so it passed) but long punctuated prose was 33.9 percent of the characters (needs under 10, so it failed) — because each card carries a headline *and* a teaser paragraph. The page is unmistakably a list of thirty stories and was classified `article`. The rule was written for a bare link list. Fixing it must keep all eight existing `structureCases` passing and add the headline-plus-teaser shape as a new case in both runtimes.
 
 ## Language behavior
 
-- Preserve the source language in local output. Local mode is structured extractive analysis, not an implicit translation service.
-- The current macOS deterministic suite covers English, Romanian, French, and Simplified Chinese text and punctuation. Those fixtures demonstrate non-empty source-language gist/key points and boilerplate filtering, not equal semantic quality across languages.
-- Frequency scoring selects the stopword table from the primary BCP-47 language tag (`en`, `ro`, `fr`, or `zh`). Unknown/empty tags retain the conservative combined fallback; language-specific tables prevent cross-language words such as English “care” or “son” from being discarded by Romanian or French stopwords.
-- Plain English local simplification applies only to English source pages. Other translations require an explicitly configured provider.
-- Provider-assisted analysis should answer in the declared or dominant page language unless the user asks for translation.
-- Text-based claim and risk phrase coverage is language-dependent; page-level HTTPS/form signals remain separate from linguistic heuristics.
+- Preserve the source language. Extraction is not an implicit translation service.
+- The deterministic suite covers English, Romanian, French, and Simplified Chinese text and punctuation. Those fixtures demonstrate extraction and filtering in those scripts, not equal quality across languages.
+- Sentence terminators recognised: `. ! ? 。 ！ ？ । ॥ ۔ ؟ ։`. Thai is **not** covered — it marks sentences with spaces and offers no terminator to recognise, so a Thai page reads as one endless sentence.
+- A full stop does not end a sentence before a lowercase letter or a digit, after a lone initial such as `U.S.`, or after an abbreviation listed for the page's declared language. Those abbreviation lists exist per language and must never be merged: Italian `es.` abbreviates *esempio* while Spanish `es` is the verb.
+- Risk phrase coverage is language-dependent; page-level HTTPS and form signals are separate from any linguistic heuristic.
 
-## Provider operations
+## Runtime equivalence
 
-Conceptually, every platform implements two operations:
+Two implementations exist and must behave identically: Swift in `ClearframeCore`, and JavaScript in `src/core/analyzer.js`. They are deliberately separate rather than shared, and the fixture is what keeps them honest.
 
-```text
-analyze(pageSnapshot) -> pageAnalysisContent
-translate(text, sourceLanguage, targetLanguage) -> translatedText
-```
+The traps that have actually bitten, all of them twice:
 
-The macOS package expresses these through `PageIntelligenceProviding`. A future Windows app can implement the same contract in C#, TypeScript, Rust, or another appropriate language.
-
-For the current optional OpenAI prototype, the remote analysis envelope contains only `sourceTitle`, `sourceHost`, `sourceLanguage`, and truncated `webpageText`. It uses a strict JSON schema and `store: false`. Translation contains only the displayed text plus source/target language names. Navigation identity remains local; the UI cancels or discards work whose tab navigation version changed while extraction or a provider request was in flight. Native and extension defaults are each centralized and checked against one shared provider fixture; an untouched stored default follows a later app default, while an explicitly customized model is preserved. A provider model-not-found response keeps local analysis visible and directs the user to Settings instead of exposing only the raw API error.
+- Count **graphemes** on both sides. Swift's `Character` is a grapheme cluster; JavaScript's `.length` is UTF-16 units. The same 219-character paragraph measured 225 units, putting the two runtimes on opposite sides of a threshold.
+- `Character.isNumber` ↔ `\p{N}`. `Character.isLowercase` ↔ `\p{Lowercase}`, the **binary property** — not `\p{Ll}`, which omits the ordinal indicators `º` and `ª` that ordinary Spanish and Portuguese prose uses, so `5.º` split in one runtime and not the other.
+- Bound a term with `(?<![\p{L}\p{N}])…(?![\p{L}\p{N}])`, never `\b`. JavaScript's `\b` is ASCII and finds no boundary after an accented letter, so `\bétude\b` matches in Swift's ICU and never in JavaScript.
 
 ## Versioning and compatibility
 
 - Add a contract version before deploying a backend.
 - Keep additive fields optional.
-- Return explicit capability flags for local, remote, and enterprise providers.
-- Keep `macos/ClearframeBrowser/Tests/ClearframeCoreTests/Fixtures/local-analysis-contract.json` as the platform-neutral behavior gate. The Swift and retained JavaScript suites both execute it for language-aware tokens, exact deterministic summaries, page-structure classification, risk signals, Plain English, and reading time; a later Windows implementation should consume the same cases.
+- Keep `macos/ClearframeBrowser/Tests/ClearframeCoreTests/Fixtures/local-analysis-contract.json` as the platform-neutral behavior gate — 37 cases across seven keys: `structureCases`, `riskCases`, `readingTimeCases`, `segmentationCases`, `boilerplateCases`, `duplicateSentenceCases`, `emptyAnalysisCases`. The Swift and JavaScript suites both execute it, and a later Windows implementation should consume the same cases.
+- Change behaviour in the fixture first, then make both runtimes satisfy it. Never edit one implementation alone.

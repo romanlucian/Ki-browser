@@ -49,7 +49,7 @@ The gap list was worked in waves. They were agreed in conversation and never wri
 
 **Wave 2 — bring a person's bookmarks with them.** Import from Chromium profiles (Chrome, Brave, Edge, named per profile), Netscape HTML import and export, an already-saved address skipped rather than replaced, an in-session undo, and honest handling of Safari's Full Disk Access gate. **Done, August 22, 2026**, and extended the same day with the placement choice in 3.1 after the first real import showed one folder was the wrong shape.
 
-**Wave 3 — the reading and evidence work.** Evidence Mode's exact sheet, "find what answers this", and the structural outline. **Not started.** This is where the product's own promise lives rather than parity with other browsers, so it should not be pushed behind more parity work.
+**Wave 3 — the reading work.** Superseded. It rested on key points and Evidence Mode, both removed on August 30, 2026; the items below marked *(withdrawn)* went with them. **Not started, and not to be started in this shape.** This is where the product's own promise lives rather than parity with other browsers, so it should not be pushed behind more parity work.
 
 **Unwaved but shipped, because using the product surfaced them.** The bookmarks-bar placement research (3.1), the performance work of August 24 (a store that rebuilt its whole bookmark collection on every read, an import that saved once per bookmark, an address bar that rebuilt its suggestions per keystroke), and splitting history onto its own ⌘Y destination. None of these came from the gap list. All of them came from the founder using Clearframe as his own browser with four hundred real bookmarks — which remains the only source of evidence of this kind the project has.
 
@@ -238,14 +238,14 @@ The practical test for any new feature: **does it need explaining?** "Your bookm
 
 ## 7. Ideas that compound on what already exists
 
-Clearframe's engine extracts reading blocks, scores sentences, detects claims, maps a sentence back to the live DOM, and classifies page structure. Nothing else in this document is unavailable to a competitor with money; this is.
+Clearframe's engine extracts reading blocks and classifies page structure. It used to score sentences, detect claims and map one back to the live DOM; all three were removed on August 30, 2026 because the scoring underneath them measured word repetition rather than importance. What is genuinely uncommon is now the extraction itself, and the honesty of showing somebody exactly what is about to leave their machine.
 
 All of the following are local-only, need no server and no new model, and take no action on the user's behalf.
 
-1. **Evidence Sheet** *(low cost)* — a printable view listing each key point and claim beside its exact quoted sentence. Reuses extraction and the existing print support. A citation sheet a person can hand to someone else. Cheapest item here and the most immediately demonstrable.
+1. **Evidence Sheet** *(withdrawn)* — a printable view listing each key point and claim beside its exact quoted sentence. Reuses extraction and the existing print support. A citation sheet a person can hand to someone else. Cheapest item here and the most immediately demonstrable.
 2. **Find what answers this** *(moderate)* — rank reading blocks by relevance to a typed question using the existing sentence scorer, then jump and highlight through the existing DOM mapping. Better than ⌘F on long pages, and it points at the real sentence rather than generating a paragraph about it.
-3. **Structural outline** *(moderate)* — surface the structure classification already computed as a clickable outline that jumps into the page through the same anchors Evidence Mode uses.
-4. **Cross-tab claim comparison** *(high cost, highest ceiling)* — when several open tabs cover one subject, compare their extracted claims locally and surface disagreement calmly: "three open tabs state a different price." No mainstream browser reconciles facts across pages; the AI browsers summarize one page or act on it. Must read as "these disagree", never as a verdict — the same rule that governs risk signals.
+3. **Structural outline** *(moderate)* — surface the structure classification already computed as a clickable outline. The anchors it would have jumped through belonged to Evidence Mode and are gone, so this now needs its own.
+4. **Cross-tab claim comparison** *(withdrawn in this form)* — it presumed local claim detection, which is gone. Comparing what pages assert needs a model that reads. Kept here only as the shape of the idea: when several open tabs cover one subject, surface disagreement calmly: "three open tabs state a different price." No mainstream browser reconciles facts across pages; the AI browsers summarize one page or act on it. Must read as "these disagree", never as a verdict — the same rule that governs risk signals.
 5. **Claim watch** *(high cost)* — bookmark a specific claim rather than a page; on revisit, re-extract and report if that sentence changed or vanished. Nobody does this. A longer-term bet.
 
 ## 8. What was not verified

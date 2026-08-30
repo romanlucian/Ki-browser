@@ -14,7 +14,7 @@ The strongest naming evidence is still missing: no one outside the founder has u
 
 The browser market does not need another general-purpose Chromium wrapper with a chat box. Clearframe should win one repeated job first:
 
-> Help me understand this unfamiliar page quickly, in language I can use, while making it easier to notice claims and obvious pressure tactics.
+> Get this unfamiliar page into a shape I can actually work with — the article without the clutter, ready for the AI I already use — and warn me about obvious pressure tactics on the way.
 
 The first validation artifact was a side-panel extension. The chosen implementation direction is now a standalone macOS app built with SwiftUI and WebKit. It opens its own native window and owns navigation, while retaining the focused page-understanding assistant. This is still not a Chromium fork: maintaining Chromium would add security updates, packaging, sync, profiles, password migration, mobile support, and distribution work before product demand is known.
 
@@ -36,8 +36,8 @@ Scam signals are a supporting trust feature, not the initial positioning. A smal
 
 1. The user opens a page in the standalone Clearframe browser.
 2. Only after the user clicks Analyze Page, Clearframe extracts visible reading content and analyzes it locally.
-3. The panel leads with the source, a short summary, key points, and claims to check.
-4. The user can reveal exact local evidence, simplify an English-source summary locally, or explicitly send the disclosed minimized payload for an AI summary or translation.
+3. The panel leads with the source, the read time, and any visible risk signals.
+4. The user presses Copy page for AI, sees the complete payload and its size, and pastes it into whichever AI they use.
 6. The native browser can keep bookmarks, a capped local history, and recent-tab metadata in the Mac user profile. History and tab restoration can be disabled; browsing history is never uploaded to the AI provider or sold.
 7. A new tab can help an ordinary user choose an AI service by task from a small static catalog, then open the service's official website without transferring the current page or an inferred prompt.
 
@@ -52,18 +52,15 @@ Scam signals are a supporting trust feature, not the initial positioning. A smal
 - Task-first native AI-guide start page with locally defined task categories, local filtering, an explicit All Tools view, broad access hints, and ordinary links to listed services' official websites.
 - User-confirmed downloads plus local bookmark/history organization, recovery backups, and an explicit local browsing-data reset.
 - On-demand visible-page extraction from the app’s current web view.
-- Local summary, candidate claims, read-time estimate, exact-text Evidence Mode, risk signals, and English-source Plain English.
-- Optional OpenAI provider behind a core protocol; user-owned prototype key stored in macOS Keychain.
+- Source-language extraction with interface noise removed, read-time estimate, risk signals, a listing-page notice, and Copy for AI with a full-payload preview.
+- No AI of Clearframe's own: no provider, no key, no request.
 - Clear separation between the Foundation-only analysis/service core and macOS-specific browser UI.
 
 ### Retained extension validation artifact
 
 - On-demand extraction using temporary `activeTab` access.
-- Offline extractive summary, key points, read-time estimate, and candidate claims.
+- Offline extraction and read-time estimate.
 - Obvious visible-page risk signals with explanations and a prominent non-verdict disclaimer.
-- Plain English rewriting using a small local simplifier.
-- Optional AI summary and translation through a modular provider.
-- One-to-one source comparison using summary themes and extracted numbers.
 - English-first interface and settings.
 
 ### Explicit non-goals
@@ -78,11 +75,11 @@ Scam signals are a supporting trust feature, not the initial positioning. A smal
 ## Experience principles
 
 1. **Source before answer.** Keep the page title and host next to every analysis.
-2. **Local before cloud.** Useful summary and risk signals require no key or account.
+2. **Local, full stop.** Extraction and risk signals require no key, no account, and no network request. Clearframe reaches no AI service at all.
 3. **AI is a deliberate action.** Never upload page text merely because the panel opened.
 4. **Explain uncertainty.** “Claim from the page” is different from “verified fact.”
 5. **Read-only first.** Understanding creates value without giving an untrusted page control over an agent.
-6. **One-screen value.** Summary, key points, and risks should be useful without a conversation.
+6. **One-screen value.** What the page is, what is worth noticing about it, and its text ready to hand over — all without a conversation.
 7. **Editorial choices stay legible.** The start-page catalog is a small local guide, not a claim that one provider is universally best.
 8. **Teach the differentiated action quickly.** First-run guidance should end at the AI home and show how to open a page and deliberately choose Analyze page.
 
@@ -90,7 +87,7 @@ Scam signals are a supporting trust feature, not the initial positioning. A smal
 
 The native package has two targets:
 
-- `ClearframeCore`: models, local analysis, risk heuristics, source comparison, and the remote-provider contract;
+- `ClearframeCore`: models, text preparation, structure detection, and risk heuristics;
 - `ClearframeBrowser`: SwiftUI, WebKit navigation/extraction, Keychain settings, and the assistant interface.
 
 The extension artifact uses Manifest V3 with four narrow capabilities:
@@ -105,7 +102,7 @@ Access to `api.openai.com` is an optional permission requested only when AI is e
 The extension code is separated into:
 
 - `src/content/extract-page.js` — visible page extraction;
-- `src/core/analyzer.js` — local summary, simplification, and risk heuristics;
+- `src/core/analyzer.js` — text preparation, structure detection, and risk heuristics;
 - `src/providers/openai.js` — optional AI adapter;
 - `src/sidepanel.js` — product state and rendering.
 
@@ -115,7 +112,7 @@ The provider boundary should later support a production Clearframe service, ente
 
 Webpage text is untrusted. The optional AI prompt labels page content as data, tells the model not to obey embedded instructions, constrains analysis to a strict response schema, limits output, and keeps the feature read-only. Analysis sends the source title, hostname, declared language, and truncated extracted text while omitting the full URL, query, fragment, cookies, form values, and history. This reduces impact but does not solve prompt injection or remove sensitive text that may appear in the page body. Do not add tools, browser actions, credentials, private history, email, or file access to the same model context without a separate threat model, least-privilege design, and approval layer.
 
-The prototype accepts a user-owned API key only to make local testing practical. Before any public paid plan:
+Clearframe holds no credential and calls no model. If that ever changes, then before any public paid plan:
 
 - route calls through an authenticated backend;
 - meter per-user usage and enforce hard budgets;
@@ -128,13 +125,13 @@ The prototype accepts a user-owned API key only to make local testing practical.
 
 The intended sequence is:
 
-1. **Free basic product:** local summary, limited cloud assistance, comparison, and trust cues.
+1. **Free basic product:** extraction, risk signals, and trust cues. Note that the paid tiers below assumed Clearframe would provide the AI, which it no longer does — see the business note in [project-context.md](project-context.md).
 2. **AI Pro:** higher limits, stronger models, saved research sets, and export for heavy users.
 3. **Business plans:** admin controls, policy, auditability, approved model routing, and team research—not employee surveillance.
 4. **Search revenue share:** only after meaningful default-search volume exists and with user choice preserved.
 5. **Intent-based partner recommendations:** clearly labeled, relevant, independently ranked, and never mixed invisibly into analysis.
 
-Clearframe must not sell browsing histories, add hidden advertising, or bias risk/summary output because a merchant pays.
+Clearframe must not sell browsing histories, add hidden advertising, or bias extraction or risk output because a merchant pays.
 
 ## Validation plan and gates
 
@@ -145,7 +142,7 @@ Consider a production backend or Chromium architecture only after retained users
 ## Next engineering priorities
 
 1. Test extraction against a corpus of news, documentation, shopping, forums, and international pages.
-2. Extend the delivered local key-point highlighting into citation-grade evidence for gist, claims, translations, and provider-assisted output.
+2. Replace the extractor's tag-and-blocklist approach with scored content extraction that abstains when it cannot find the article.
 3. Add redaction for emails, phone numbers, account numbers, and form values before AI upload.
 4. Replace raw-key mode with a metered backend and abuse controls.
 5. Add a user-feedback affordance and privacy-preserving quality evaluation set.

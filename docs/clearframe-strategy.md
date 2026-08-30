@@ -30,7 +30,7 @@ The first minute is a product acceptance criterion, not a marketing slogan:
 2. Clearframe presents a small, useful set of AI paths with plain-language reasons for choosing each one.
 3. After the user opens a webpage, Analyze Page makes it easier to understand and shows why its output is grounded in that page.
 
-The current build partially delivers this: onboarding hands off to a genuinely task-first AI home that keeps the full catalog behind an explicit All Tools action, and Analyze Page produces an extractive local gist, key points, claims, and risk explanations. Local key points have an initial Evidence Mode: users can reveal the exact extracted sentence and Clearframe attempts to select and visibly highlight its live page block, including open Shadow DOM content. This is grounding, not a guarantee of page truth or a citation-grade system; provider-written summaries are not presented as automatic evidence.
+The current build partially delivers this: onboarding hands off to a genuinely task-first AI home that keeps the full catalog behind an explicit All Tools action, and Analyze Page pulls the readable article out of a page, explains any visible risk signals, and hands the text to whichever AI the person already uses. It shows the complete payload and its size before copying anything. It does not summarize the page or decide what matters in it — that layer was removed on August 30, 2026, and the reasoning is recorded in [project-context.md](project-context.md).
 
 ## Current product state
 
@@ -43,7 +43,7 @@ The installed local version currently includes:
 - a visible native bookmarks bar with local top-level links, nested emoji-folder menus, safe current-page/saved-bookmark drag filing, the full local folder organizer, capped history, and user-confirmed downloads with a clear toolbar status/destination panel;
 - a native first-run introduction and a Settings action to revisit it;
 - a task-first curated AI home organized around Ask & Learn, Write, Research, Create Images, Create Videos, Translate, and Code;
-- user-triggered Analyze Page with a local extractive gist, key points, candidate claims, reading time, initial Evidence Mode, explained risk signals, and English-source Plain English simplification;
+- user-triggered Analyze Page with source-language extraction, reading time, explained risk signals, a listing-page notice, and Copy for AI with a full-payload preview;
 - explicit on-device voice dictation into the visible address field for review;
 - an optional provider contract and user-owned prototype key stored in macOS Keychain;
 - local-data recovery from last-known-good records, a user-confirmed browsing-data reset, WebKit process-failure handling, and visible page dialog/media-permission prompts;
@@ -58,13 +58,13 @@ The installed app is a hardened-runtime, ad hoc local build with an icon and pri
 
 ## Multilingual Analyze Page requirement
 
-Analyze Page must work on pages across languages, not only English or Romanian. Local mode privately extracts rendered reading content, keeps it in the page's declared or dominant language, and structures representative sentences into a gist and key points. Deterministic coverage currently includes English, Romanian, French, and Simplified Chinese, including media-control pollution checks.
+Analyze Page must work on pages across languages, not only English or Romanian. Clearframe privately extracts rendered reading content and keeps it in the page's declared or dominant language. Deterministic coverage currently includes English, Romanian, French, and Simplified Chinese, including media-control pollution checks.
 
-That coverage proves the pipeline can preserve and structure those scripts; it does not prove equal linguistic or semantic quality for every language. Local mode is extractive rather than a deep semantic model. Candidate-claim terms, text-based risk phrases, Plain English rewriting, tokenization, and reading-time estimates have language-specific limits. A configured optional provider may provide richer multilingual summarization or translation, but only after an explicit user action that sends the disclosed page text. Provider quality and language coverage depend on the selected model.
+That coverage proves the pipeline can preserve those scripts; it does not prove equal quality for every language. Text-based risk phrases, sentence segmentation, and reading-time estimates all have language-specific limits. Understanding a page in any language is now the job of whichever AI the person pastes it into, not of Clearframe.
 
 ## Recent quality gate
 
-The high-priority August 2026 extraction issue on complex news pages such as `zf.ro` allowed embedded video-player accessibility/control strings into the local gist, key points, and claims. The current build prioritizes rendered reading blocks, excludes hidden/media/control/navigation/consent UI, removes repeated boilerplate, and preserves legitimate article language. The fix passed deterministic Romanian fixtures and a live installed-app check on `https://www.zf.ro/`; keep that coverage as a permanent regression gate.
+The high-priority August 2026 extraction issue on complex news pages such as `zf.ro` allowed embedded video-player accessibility/control strings into the analysed text — and would now put them on somebody's clipboard. The current build prioritizes rendered reading blocks, excludes hidden/media/control/navigation/consent UI, removes repeated boilerplate, and preserves legitimate article language. The fix passed deterministic Romanian fixtures and a live installed-app check on `https://www.zf.ro/`; keep that coverage as a permanent regression gate.
 
 More broadly, “fast and calm” requires measured QA across real sites and realistic tab counts. Video playback can be resource intensive in every major browser. Diagnose Clearframe-specific waste with evidence; do not promise impossible zero-cost video playback or make speculative engine changes.
 
@@ -72,15 +72,15 @@ More broadly, “fast and calm” requires measured QA across real sites and rea
 
 After extraction quality, the next differentiated product work is:
 
-1. **Citation-grade Evidence Mode:** extend the delivered local key-point reveal into durable sentence-to-source links for gist points, candidate claims, translations, and provider-assisted output, with page-change handling and source-grounding evaluation.
-2. **Translate & Explain:** preserve source links while translating or explaining unfamiliar language, terms, and context in plain language.
+1. **A reader that can be checked.** Whatever eventually understands a page — Apple's on-device model, an API the person configures, or something else — should return quotes it says are from the page, which Clearframe then verifies by substring test before showing. Grounding checked rather than asserted. That is the one thing the big AI browsers cannot claim, and it survives the removal of everything built on top of it.
+2. **Extraction quality.** Everything above reads what extraction produces, so its ceiling is the product's ceiling. Currently the extractor takes the first `<article>` or `<main>` with 400+ characters and otherwise the whole page body, and discards every block under 45 characters — which silently deletes prices, ingredients, specifications and forum replies.
 
-The initial local evidence reveal is delivered; the broader citation-grade experience and Translate & Explain are not. Both require usability testing, source-grounding tests, and clear local/cloud disclosure before release.
+Neither is delivered. Both require usability testing before release, and neither should start before an outside tester can install the app at all.
 
 ## Privacy and security boundaries
 
 - Analyze Page runs only after an explicit click and is local by default.
-- Key points and claims are verbatim page text and never carry a character the page lacks, so Evidence Mode can highlight them. The shared contract's `evidenceCases` enforce this in both runtimes. Deterministic coverage is English, Romanian, French, and Simplified Chinese, plus Devanagari, Urdu, Arabic and Armenian sentence terminators; Thai is not covered, having no terminator character. Abbreviation lists that keep `Dr. Alison` or `Dl. Popescu` in one piece exist for English, Romanian, French, Spanish, German and Italian; they prevent a wrong split and are not a claim of analysis quality in those languages.
+- Extracted text is the page's own words and never carries a character the page lacks — it goes on somebody's clipboard and into somebody's AI. The shared contract's `segmentationCases` keep both runtimes splitting sentences identically, which matters because the interface-noise filters count whole sentences. Deterministic coverage is English, Romanian, French, and Simplified Chinese, plus Devanagari, Urdu, Arabic and Armenian sentence terminators; Thai is not covered, having no terminator character. Abbreviation lists that keep `Dr. Alison` or `Dl. Popescu` in one piece exist for English, Romanian, French, Spanish, German and Italian; they prevent a wrong split and are not a claim of analysis quality in those languages.
 - Opening a page never silently uploads it to an AI provider.
 - Optional online AI is separately enabled, visibly triggered, and uses a user-owned prototype key. Analysis sends only the source title, hostname, declared language, and truncated extracted text—not the full URL, query, fragment, cookies, form values, or history. Do not ship a shared client key.
 - Never sell browsing history. History, bookmarks, and recent-tab metadata remain local with user controls.
@@ -102,7 +102,7 @@ Monetization follows demonstrated user value and trust:
 3. Add team plans only when administration, approved model routing, and organizational controls are credible.
 4. Explore default-search economics or transparent intent-based referrals only at meaningful scale and with clear labeling.
 
-Never sell browsing history. Never let payment, referral, or search relationships silently change summaries, evidence, risk signals, or AI-home ordering. There is no guarantee that any of these models will produce revenue.
+Never sell browsing history. Never let payment, referral, or search relationships silently change extraction, risk signals, or AI-home ordering. There is no guarantee that any of these models will produce revenue.
 
 ## Lean, zero-budget launch approach
 
@@ -141,8 +141,8 @@ Do not buy paid ads before retention is understood. Do not spam communities, fab
 
 ### 2. Trustworthy differentiation
 
-- Evaluate and extend the initial local Evidence Mode into citation-grade grounding for every relevant output type.
-- Prototype Translate & Explain with explicit provider/local boundaries and source preservation.
+- Replace the extractor's tag-and-blocklist approach with scored content extraction that can abstain when it cannot find the article.
+- When a reader arrives, make it quote rather than assert, and verify every quote against the page before showing it.
 - Improve accessibility, keyboard behavior, page-permission clarity, and granular per-site browsing-data controls beyond the delivered all-data reset.
 
 ### 3. Release engineering

@@ -27,10 +27,8 @@ The native app provides:
 - a visible, locally persisted search-engine chooser for DuckDuckGo, Google, Bing, Brave Search, and Startpage;
 - a native new-tab AI guide with a small, locally defined catalog organized by everyday tasks;
 - a concise three-step first-run introduction covering Clearframe's promise, search choice, privacy boundary, AI home, and Analyze page workflow;
-- a source-language extractive page summary that works without an account or API key;
-- key points and page claims worth checking, with best-effort highlighting of the exact extracted evidence on the live page;
+- **Copy for AI** — Clearframe pulls the readable article out of a page, shows you the exact text and its size, and copies it for you to paste into whichever AI you already use. No account, no API key, nothing sent anywhere by Clearframe;
 - visible risk signals such as unencrypted password forms, encoded domains, urgent payment language, wallet-secret requests, and contextual remote-access requests;
-- a Plain English mode plus optional AI translation;
 
 ## Open the standalone macOS browser
 
@@ -48,6 +46,8 @@ To rebuild that app first:
 cd macos/ClearframeBrowser
 ./scripts/build-macos-app.sh
 ```
+
+> **Missing, as of August 30, 2026.** `scripts/build-macos-app.sh` and `scripts/run-browser-smoke.sh` are referenced throughout this repository and by `.github/workflows/ci.yml`, but neither file exists in any commit. The macOS CI job therefore cannot pass, and `Tests/BrowserE2ESmoke.swift` — which is not a member of any target in `Package.swift` — has no runner. `swift test`, `npm test` and `npm run validate` all work.
 
 The output is `dist/Clearframe.app` at the repository root. The script embeds the app icon and privacy manifest, enables the hardened runtime, and applies an ad hoc signature for local development. This is still not a Developer ID signature or notarization. The bundle opens as an ordinary macOS application rather than using Terminal as its keyboard target.
 
@@ -75,11 +75,11 @@ Then:
 3. Enter a URL or search in the address bar. Click the lock/globe chip at the left of the address pill for site information: the host, how the connection stands, this site's tracker-blocking switch, and **Remove this site's data**. The same chip still drags this page's link out to the bookmarks bar.
 4. Browse with independent tabs; use `⌘T` for a new tab, `⌘⇧N` for a private tab, and `⌘W` to close the current tab. Private tabs use an ephemeral WebKit data store and are not written to history or session restoration.
 5. Open **Assistant** with the sparkles button at the right of the toolbar, then click **Analyze page**. The panel is closed when a tab opens unless **Settings → Page assistant** says otherwise; the toolbar button opens and closes it for the tab you are on either way.
-6. Use local summary, claims, Plain English, visible risk signals, source comparison, and **View evidence** to reveal the extracted source sentence in the page when its DOM still matches.
+6. Read the visible risk signals, then press **Copy page for AI** — the card shows the character count and the complete text before it copies anything.
 7. The bookmarks bar shows Unfiled links and emoji-labeled folders. Drag the address bar’s lock/globe page-link chip—or an existing bookmark—onto bar space or a visible folder to file it; dropping the same URL moves its single record instead of duplicating it. Secondary-click and the **More** and **Page** menus expose the same create, file, organize, and show/hide actions, with an accessible Move menu for keyboard use. **⌘⌥B** and the bar’s All Bookmarks chip open the full-page bookmarks home; the toolbar’s Library button keeps a separate quick popover for fast lookups. Legacy bookmarks remain in **Unfiled**.
 8. Use the Downloads toolbar button to see a clear empty state or the current session’s download status, destination, and Reveal action; **Open Downloads Folder** remains available even when the list is empty. Attachment downloads keep the existing page visible instead of presenting WebKit's internal policy-handoff message as a page error.
 9. Click the provider name inside the address bar, or open **ClearframeBrowser → Settings…** (`⌘,`), to choose the search engine. After a toolbar choice, the address field is ready for typing.
-10. Optional AI, page-assistant, tab-restoration, bookmark-bar, and local-history settings are available in the same Settings window. **Site data** lists every site that has stored data on this Mac, described in kinds rather than amounts, with a remove button each. **Clear local browsing data** removes regular/private tabs, history, bookmarks, the in-app download list, cookies, caches, website storage, session records, and recovery backups; it does not delete downloaded files, general preferences, or the Optional AI key.
+10. Page-assistant, tab-restoration, bookmark-bar, and local-history settings are available in the same Settings window. **Site data** lists every site that has stored data on this Mac, described in kinds rather than amounts, with a remove button each. **Clear local browsing data** removes regular/private tabs, history, bookmarks, the in-app download list, cookies, caches, website storage, session records, and recovery backups; it does not delete downloaded files or general preferences.
 
 DuckDuckGo is the initial search default, not Clearframe’s browser engine. Searches can instead use Google, Bing, Brave Search, or Startpage. The choice stays in local macOS preferences, direct website addresses bypass search, and Clearframe claims no partnership or revenue agreement with any listed provider.
 
@@ -90,7 +90,7 @@ The AI guide is editorial information stored inside the app, not a live recommen
 ```bash
 cd macos/ClearframeBrowser
 swift test
-./scripts/run-browser-smoke.sh
+./scripts/run-browser-smoke.sh   # see the note above: this file is missing
 ```
 
 Tests that need isolated storage each make their own `UserDefaults` suite.
@@ -108,7 +108,7 @@ each profile's bookmarks and history actually live.
 
 The smoke test uses a kernel-selected local fixture port and exercises a native SwiftUI window, launch/content focus, WebKit navigation, same-document SPA URL/title changes, popups, tabs, local search resolution, bookmark persistence and safe drag filing, download-panel state, history, session restore, visible-content filtering, open Shadow DOM extraction, local analysis, exact evidence highlighting, the file-upload panel wiring, find in page, page zoom, and print availability. It requires a logged-in desktop session; restricted/headless environments can block WebKit services.
 
-The Swift package separates the Foundation-only analysis/service contract (`ClearframeCore`) from the macOS-specific SwiftUI/WebKit interface (`ClearframeBrowser`). A shared JSON contract fixture is executed by both the Swift and JavaScript suites so language scoring, summaries, risk signals, Plain English, and reading-time behavior cannot drift silently. A future Windows app can reuse the language-neutral service contract and tests, but not the native SwiftUI/WebKit UI.
+The Swift package separates the Foundation-only analysis/service contract (`ClearframeCore`) from the macOS-specific SwiftUI/WebKit interface (`ClearframeBrowser`). A shared JSON contract fixture is executed by both the Swift and JavaScript suites so page-structure detection, risk signals, sentence segmentation, interface-noise filtering, and reading-time behavior cannot drift silently. A future Windows app can reuse the language-neutral service contract and tests, but not the native SwiftUI/WebKit UI.
 
 ## Earlier extension validation artifact
 
@@ -123,11 +123,13 @@ The project root is also a local-first Manifest V3 side-panel extension. To run 
 
 The extension uses the temporary `activeTab` permission. When you navigate to a different site, click its toolbar icon again before analyzing the new page.
 
-## Optional AI in either prototype
+## What Analyze page actually does
 
-The local summary is the default. It privately selects and structures source-language sentences; deterministic coverage currently includes English, Romanian, French, and Simplified Chinese. Scoring selects stopwords from the page’s primary language tag so French or Romanian words do not suppress English topic terms. This is useful extraction, not proof of equal semantic quality in every language. A configured optional provider may produce deeper multilingual summarization or translation after an explicit AI action. For analysis, the request contains the page title, hostname, declared language, and up to 18,000 characters of extracted visible text; it omits the full URL, query, fragment, cookies, form values, and browsing history. Translation sends only the displayed summary and source/target language names. The native app stores a user-owned prototype key in macOS Keychain; the extension stores it in local extension storage. Both use structured Responses API output for analysis, request `store: false`, retain the local result if a provider request fails, and direct unavailable-model errors to Settings.
+It extracts the page's rendered reading text, keeps it in the page's own language, and removes interface noise — a video player's control labels, and anything the page repeats three or more times. Then it shows a reading-time estimate, any visible risk signals, and a button that copies the text.
 
-A production version must put paid API access behind an authenticated backend proxy and must never ship a shared key in an app or extension.
+**Clearframe makes no AI request and holds no credential for one.** There is no key to configure and nothing to enable. The only way a page reaches an AI is you copying it and pasting it somewhere yourself — which means you can see exactly what you are handing over, and to whom.
+
+Until August 30, 2026 Clearframe also produced a summary, key points and claims to check, by ranking sentences on word frequency. That was removed: counting words cannot know what matters, and on a real encyclopedia page it ranked the site's own navigation menu second. The reasoning is recorded in [docs/project-context.md](docs/project-context.md).
 
 Extension checks still run from the project root:
 
@@ -142,10 +144,10 @@ Clearframe presents Safari's user agent because it renders with WebKit, Safari's
 
 ## Important limits
 
-- A local summary selects representative sentences; it is not a fact check.
-- Local multilingual analysis preserves the page language but is extractive. Plain English rewriting is local only for English sources, and text-based risk phrases do not have equal language coverage.
-- Analyze page detects section and listing pages with many unrelated headlines and offers Analyze anyway instead of silently summarizing them as one article; this structure check is calibrated for the tested languages (see [docs/page-intelligence-contract.md](docs/page-intelligence-contract.md)).
-- AI output can omit context or be wrong.
+- Clearframe does not summarise a page or judge what matters in it. It extracts text and prepares it; anything more is done by an AI you choose.
+- Extraction preserves the page language, but text-based risk phrases do not have equal language coverage.
+- Analyze page tries to detect section and listing pages and offer Analyze anyway. That check currently misses news homepages whose cards carry teaser paragraphs — see the known defect in [docs/page-intelligence-contract.md](docs/page-intelligence-contract.md).
+- Extraction misses things. A page whose article is not marked up as one, or that renders after first paint, can yield the wrong text or none at all.
 - Risk signals are heuristic and do not prove that a page is safe or malicious.
 - Tracker blocking uses a small, first-party curated list of common advertising and tracking domains—not a complete ad blocker. It does not stop first-party analytics, cookie-based tracking, browser fingerprinting, or CNAME-cloaked trackers, and WebKit never reports back which requests it blocked, so no per-page or running count exists anywhere in the UI. See [docs/content-blocking.md](docs/content-blocking.md).
 - Site data controls name the kinds of data a site stored and never how much. `WKWebsiteDataRecord` carries a display name and a set of data types with no byte size and no cookie count, so no amount appears anywhere—the same reason the tracker shield shows no numbers. WebKit files a site's data under its registrable domain, so removing data for `www.example.com` removes what its other subdomains stored too, and private-tab storage is never listed because it lives in an ephemeral store discarded with the tab.

@@ -2,6 +2,8 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+> **Superseded, August 30, 2026.** This plan was completed, and the feature it hardened was then removed — key points, claims and Evidence Mode are gone. Kept as a record of work done and of the segmentation lessons it produced, which remain live in `CLAUDE.md` and the page-intelligence contract. Do not follow it.
+
 **Goal:** Make every key point and claim that Analyze Page shows a verbatim substring of the page text, so Evidence Mode can actually highlight it.
 
 **Architecture:** Replace the current "append a synthetic period, join, then split" pipeline with block-aware sentence splitting: the reading-block boundary *is* a sentence boundary, so no punctuation is ever invented. Add the missing terminator characters, guard decimals, and assess page structure by sentence density when block structure is unavailable. Contract first, then both runtimes.

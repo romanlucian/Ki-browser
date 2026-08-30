@@ -31,7 +31,7 @@ Demonstrate the promise with real workflows, not adjectives:
 2. Show the Clearframe task category and the deliberately small set of paths.
 3. Open the official provider destination; do not imply a partnership or automatic prompt transfer.
 4. Open a relevant article or documentation page and use Analyze Page to make it easier to understand.
-5. State the current limits: recommendations are manually reviewed editorial guidance, local analysis is extractive, provider terms vary, and deeper AI remains optional.
+5. State the current limits: recommendations are manually reviewed editorial guidance, Clearframe extracts a page rather than understanding it, and any AI is one the person brings themselves.
 
 Do not claim that Clearframe is the fastest, lightest, safest, or universally best browser without evidence. The proof should be whether a real person reaches a useful result with less confusion.
 
@@ -111,7 +111,7 @@ This cadence should fit available founder time. If content production prevents p
 
 Do not run paid ads until activation, seven-day retention, and organic referral evidence are credible in a minimally coached cohort. Paid acquisition before that point buys traffic to an unproven experience and makes diagnosis harder.
 
-Keep the useful browser and local-first page understanding free. Consider optional Pro only when heavy AI/research use creates measured recurring value and cost. Team plans come later, after administration and approved model routing are credible. Search revenue sharing or transparent referrals may be explored only at meaningful scale and must never silently change AI-home ordering, summaries, evidence, or risk signals.
+Keep the useful browser free. Optional Pro was to be sold on heavy AI usage that Clearframe provided — it no longer provides any, so that thesis needs rebuilding around something Clearframe owns, or abandoning consciously. See the note in [project-context.md](project-context.md). Team plans come later, after administration and approved model routing are credible. Search revenue sharing or transparent referrals may be explored only at meaningful scale and must never silently change AI-home ordering, extraction, or risk signals.
 
 Never sell browsing history, add covert recommendation payments, invent traction, or imply guaranteed growth or revenue.
 

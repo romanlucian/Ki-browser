@@ -99,9 +99,9 @@ Avoid starting with vulnerable scam victims, children, regulated medical/legal d
 
 ### MVP promise
 
-> Open any page. In one click, see its gist, key claims, translation, comparison context, and obvious risk signals—with local analysis first and no passive history collection.
+> Open any page. In one click, get its readable text out of the clutter and into whichever AI you already use — with the exact payload shown first, and nothing sent anywhere by the browser.
 
-The native foundation correctly limits scope to a WebKit browsing surface, on-demand extraction, local summaries and candidate claims, English-source Plain English mode, optional AI translation, a two-source comparison, and explained risk signals. (The two-source comparison was removed on August 25, 2026; see the note in [project-context.md](project-context.md).) An initial local Evidence Mode now reveals and highlights exact extracted key-point text. The next high-value step is citation-grade evidence across gist, claims, translation, and provider-assisted output—not autonomous browsing.
+The native foundation correctly limits scope to a WebKit browsing surface, on-demand extraction, explained risk signals, and handing the extracted text to an AI the person chose. Two rounds of subtraction got it there: the two-source comparison on August 25, 2026, and the whole page-judgment layer on August 30 — both recorded in [project-context.md](project-context.md). What remains is deliberately smaller and entirely true. The next high-value step is extraction quality, because everything downstream reads what it produces.
 
 ## 6. Material risks
 
@@ -148,7 +148,7 @@ Mitigation: hard separation between analysis and commercial modules, conspicuous
 - Recruit 20–30 opt-in photographers, designers, video creators, and creative freelancers through the founder's personal network and relevant creative communities.
 - Watch them analyze real pages; do not rely only on surveys.
 - Test concrete creator workflows while retaining a quality corpus spanning news, documentation, product/vendor pages, research reports, and foreign-language references.
-- Success gate: 40% analyze at least three pages in week one; at least 60% of completed sessions rate the summary useful; collect every consequential omission.
+- Success gate: 40% analyze at least three pages in week one; at least 60% of completed sessions say the extracted text was what they wanted to hand over; collect every consequential omission.
 
 ### Phase 1 — focused macOS beta (months 2–3)
 

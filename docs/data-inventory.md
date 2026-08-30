@@ -20,8 +20,7 @@
 | `clearframe.searchEngine` | Chosen search provider |
 | `clearframe.contentBlocking.enabled` · `.disabledHosts` | Tracker blocking state and per-site exceptions |
 | `clearframe.onboarding.completed.v1` | First-run completion flag |
-| `clearframe.remoteAIEnabled` · `clearframe.openAIModel` · `clearframe.openAIModelCustomized` | Optional AI settings — **never the key itself** |
-| `clearframe.safetyIdentifier` | A random per-installation identifier, generated locally, sent to OpenAI **only** if the user enables Optional AI. Not a name, email, or device identifier |
+| `clearframe.showAssistantPanel` | Whether a tab opens with the assistant panel showing |
 | `<key>.lastKnownGood` · `<key>.unreadable` | Corruption-recovery copies of the four record keys above |
 
 ### Files on disk
@@ -31,7 +30,7 @@
 
 ### Keychain
 
-One item: the user's own OpenAI API key. Service `com.clearframe.browser.prototype`, account `openai-api-key`, accessible after first unlock, this device only. **Clearframe ships no key of its own and never has.**
+**Nothing.** Clearframe stores no credential of any kind. It once held a user-supplied OpenAI key; that feature was removed on August 30, 2026 and the Keychain item with it.
 
 ### WebKit-managed
 
@@ -47,9 +46,9 @@ Exactly four things. Nothing else.
 
 **3. Up to four site-icon requests per visited page, usually one.** Fetched only during an actual visit, over an ephemeral session with no cookies, capped at 512 KB with a 5-second timeout. The hosts asked are the page's own origin and any host that page already loaded a resource from during the same visit — its own CDN, in practice. A host the page never used is never contacted, which is what makes a favicon service impossible rather than merely forbidden. **No third-party icon service is ever contacted** — a Google favicon endpoint would disclose the user's bookmark list to Google. Sites never visited are never contacted, and no icon is fetched speculatively for an imported bookmark. A redirect the visit already followed is recorded so the starting address can find the icon, which adds no request of any kind.
 
-**4. Optional AI, only after an explicit action.** Off by default. Requires the user to supply their own OpenAI key. When they click Improve with AI or request a translation, the request contains the page title, hostname, declared language, and at most 18,000 characters of extracted visible text — plus the random installation identifier from section 1.
+**That is the complete list.** There is no fourth entry. Clearframe contacts no AI provider, no analytics vendor, and no service of its own.
 
-That request **omits** the full URL, query string, fragment, cookies, form values, passwords, other tabs, and browsing history. It sets `store: false`. If it fails, the local result stays on screen.
+**Copy for AI is not a transfer.** Pressing it writes the page's extracted text to the Mac's clipboard — no request is made, and nothing leaves the machine by Clearframe's hand. Where it goes next is the person's own paste, into an application of their choosing, under that application's terms. Worth stating plainly, because it is a real exposure and it is theirs to control: the system clipboard is readable by every app on the Mac, and by their other Apple devices if Universal Clipboard is on.
 
 ## 3. What is never collected
 
@@ -62,12 +61,11 @@ That request **omits** the full URL, query string, fragment, cookies, form value
 
 ## 4. User control
 
-- **Clear local browsing data** (Settings) removes tabs, groups, history, bookmarks and folders, the download list, the favicon cache, per-site blocking exceptions, all WebKit site data, and the recovery copies. It deliberately keeps files already downloaded, the search choice, onboarding state, and the user's API key.
+- **Clear local browsing data** (Settings) removes tabs, groups, history, bookmarks and folders, the download list, the favicon cache, per-site blocking exceptions, all WebKit site data, and the recovery copies. It deliberately keeps files already downloaded, the search choice, and onboarding state.
 - **Per-site data removal** — Settings lists every site holding data, each with its own remove button; the same control appears in the address-bar site popover.
 - **History can be disabled** so new visits are never recorded, and cleared independently.
 - **Session restore can be disabled**, which also deletes the saved workspace.
 - **Private tabs** keep site data in memory only and are excluded from history, session restore, and the disk favicon cache.
-- **Optional AI can be turned off and the key deleted** from Settings.
 
 Private browsing limits, stated plainly: it isolates storage for that tab. It does not provide network anonymity, hide activity from websites or a network operator, or remove files the user chose to download.
 
@@ -77,7 +75,6 @@ Private browsing limits, stated plainly: it isolates storage for that tab. It do
 |---|---|---|
 | The chosen search provider | On submitting a search | The query, under that provider's own terms |
 | Websites visited | On visiting | Ordinary web request data, plus up to four cookie-free icon requests to the page's own origin or a host it already loaded from |
-| OpenAI | Only if Optional AI is enabled **and** the user acts | Page title, host, language, ≤18,000 characters of text, random installation identifier |
 
 No other processor. No analytics vendor, no error-reporting service, no advertising network, no content delivery network of Clearframe's own.
 
@@ -89,7 +86,7 @@ Not legal advice, and no compliance assessment has been performed.
 
 The structural position is unusually simple: for almost all of the data above, Clearframe never receives it. Bookmarks, history, tabs, and site icons exist only in the user's own macOS profile. There is no server, so there is no store to breach, no retention schedule to operate, and no export or deletion request that Clearframe could fulfil — because Clearframe holds nothing to export or delete. Deletion is fully in the user's hands through the controls in section 4.
 
-The one genuine transfer to a third party is Optional AI, which is off by default, requires the user's own credential, and sends a disclosed payload only on an explicit click.
+As of August 30, 2026 there is no genuine transfer to a third party at all, beyond the sites the person visits and the search provider they chose. The AI path that used to exist was removed; what replaced it is a clipboard copy the person performs, sees in full beforehand, and directs themselves.
 
 **Before public distribution**, `docs/privacy-and-safety.md` records the outstanding requirements: a plain-language privacy policy, redaction of sensitive identifiers before any remote processing, and an independent security review. None has been completed.
 
