@@ -703,34 +703,6 @@ struct BrowserE2ESmoke {
             try require(assistant.snapshot?.text.contains("Video Player is loading") == false, "media controls polluted extraction")
             print("PASS assistant: visible text extracted and prepared locally")
 
-            // Nothing in the interface reveals evidence any more, but the machinery
-            // that finds an exact sentence in the live page is what a real model's
-            // quotes would be checked against, so it stays exercised end to end.
-            let evidencePoint = try requireValue(
-                assistant.readableText.split(separator: "\n").first.map(String.init),
-                "the article fixture produced no readable block to look for"
-            )
-            let evidenceFound = await session.revealEvidence(
-                evidencePoint,
-                expectedNavigationVersion: session.navigationVersion
-            )
-            try require(evidenceFound, "Evidence Mode did not find the exact extracted block")
-            let highlightedEvidence = try await evaluateValue(
-                """
-                (() => {
-                  const roots = [document];
-                  document.querySelectorAll('*').forEach(element => { if (element.shadowRoot) roots.push(element.shadowRoot); });
-                  const element = roots.map(root => root.querySelector('[data-clearframe-evidence]')).find(Boolean);
-                  return (element?.innerText || element?.textContent || '').replace(/\\s+/g, ' ').trim();
-                })()
-                """,
-                in: session
-            ) as? String
-            try require(
-                highlightedEvidence?.contains(evidencePoint) == true,
-                "Evidence Mode highlighted a different or empty DOM node"
-            )
-            print("PASS evidence: exact extracted text was selected and visibly highlighted")
 
             try await evaluate("history.pushState({}, '', '/changed-after-analysis')", in: session)
             let staleAnalysisCleared = await waitUntil {
@@ -783,20 +755,7 @@ struct BrowserE2ESmoke {
             )
             print("PASS extractor fallback: a table listing kept its line structure and stopped at a notice")
 
-            // A key point taken from a table row spans several cells, so no single
-            // `td` holds it and the row itself has to be a candidate. Without that,
-            // Evidence Mode fails silently on exactly the pages reading rows enabled.
             await assistant.analyzeDespiteStructure(session: session)
-            let rowPoint = try requireValue(
-                assistant.readableText.split(separator: "\n").first.map(String.init),
-                "the table listing produced no readable block to look for"
-            )
-            let rowFound = await session.revealEvidence(
-                rowPoint,
-                expectedNavigationVersion: session.navigationVersion
-            )
-            try require(rowFound, "Evidence Mode could not find a block that came from a table row")
-            print("PASS evidence in a table: a block taken from a row was found on the page")
 
             // A specification page carries a few short paragraphs — a disclaimer, a
             // review teaser, two comments — and keeps its substance in a table. A

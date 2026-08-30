@@ -89,20 +89,11 @@ public struct PageAnalysis: Codable, Equatable, Sendable {
 }
 public enum PageIntelligenceError: LocalizedError, Sendable {
     case noReadableText
-    case localTranslationUnavailable
-    case invalidResponse
-    case remoteFailure(String)
 
     public var errorDescription: String? {
         switch self {
         case .noReadableText:
             return "This page does not expose enough readable text."
-        case .localTranslationUnavailable:
-            return "Translation needs Optional AI."
-        case .invalidResponse:
-            return "The AI returned an unexpected response."
-        case .remoteFailure(let message):
-            return message
         }
     }
 }

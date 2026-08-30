@@ -1,6 +1,5 @@
 import { analyzePage, assessStructure, readableText } from "./core/analyzer.js";
 import { extractPage } from "./content/extract-page.js";
-import { DEFAULT_AI_SETTINGS } from "./providers/openai.js";
 
 const $ = (selector) => document.querySelector(selector);
 const views = [$("#introView"), $("#loadingView"), $("#resultsView"), $("#noticeView"), $("#errorView")];
@@ -8,7 +7,6 @@ let currentPage = null;
 let currentAnalysis = null;
 let currentText = "";
 let structureOverridden = false;
-let settings = { ...DEFAULT_AI_SETTINGS };
 let toastTimer = null;
 let currentTabId = null;
 let operationGeneration = 0;
@@ -97,11 +95,6 @@ async function copyForAi() {
   await navigator.clipboard.writeText(payload);
   $("#copyButtonLabel").textContent = "Copied — paste it into your AI";
 }
-async function loadSettings() {
-  const stored = await chrome.storage.local.get(["aiSettings"]);
-  settings = { ...DEFAULT_AI_SETTINGS, ...(stored.aiSettings || {}) };
-}
-
 async function analyzeActivePage() {
   activeRemoteController?.abort();
   activeRemoteController = null;
@@ -160,7 +153,6 @@ function escapeHtml(value = "") {
 $("#analyzeButton").addEventListener("click", analyzeActivePage);
 $("#refreshButton").addEventListener("click", analyzeActivePage);
 $("#retryButton").addEventListener("click", analyzeActivePage);
-$("#settingsButton").addEventListener("click", () => chrome.runtime.openOptionsPage());
 $("#copyButton").addEventListener("click", copyForAi);
 $("#analyzeAnywayButton").addEventListener("click", analyzeDespiteStructure);
 $("#riskToggle").addEventListener("click", () => {
@@ -169,7 +161,6 @@ $("#riskToggle").addEventListener("click", () => {
   $("#riskToggle").textContent = signals.classList.contains("hidden") ? "Show signals" : "Hide signals";
 });
 
-await loadSettings();
 
 function invalidateCurrentPage(message) {
   activeRemoteController?.abort();

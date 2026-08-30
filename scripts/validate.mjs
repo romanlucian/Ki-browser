@@ -6,10 +6,8 @@ const manifest = JSON.parse(await readFile(path.join(root, "manifest.json"), "ut
 const required = [
   manifest.background.service_worker,
   manifest.side_panel.default_path,
-  manifest.options_page,
   "src/sidepanel.js",
-  "src/core/analyzer.js",
-  "src/providers/openai.js"
+  "src/core/analyzer.js"
 ];
 
 for (const file of required) {

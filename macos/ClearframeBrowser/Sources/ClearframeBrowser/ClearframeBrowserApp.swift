@@ -4,7 +4,6 @@ import SwiftUI
 @main
 struct ClearframeBrowserApp: App {
     @NSApplicationDelegateAdaptor(ClearframeApplicationDelegate.self) private var applicationDelegate
-    @StateObject private var aiConfiguration = AIConfigurationStore()
     @StateObject private var onboarding = OnboardingController()
     /// The workspace of the window in front. Every menu command acts on this
     /// one: with more than one window open, "Close Current Tab" has to mean
@@ -19,7 +18,7 @@ struct ClearframeBrowserApp: App {
 
     var body: some Scene {
         WindowGroup("Clearframe", id: Self.browserWindowID) {
-            BrowserWindow(aiConfiguration: aiConfiguration, onboarding: onboarding)
+            BrowserWindow(onboarding: onboarding)
         }
         .defaultSize(width: 1280, height: 820)
         // Traffic lights move inline into the tab strip (see WindowDragArea
@@ -256,7 +255,6 @@ struct ClearframeBrowserApp: App {
 
         Settings {
             AISettingsView()
-                .environmentObject(aiConfiguration)
                 .environmentObject(onboarding)
                 .frame(width: 560)
                 .frame(minHeight: 690)
@@ -347,12 +345,10 @@ struct ClearframeBrowserApp: App {
 /// One browser window: its own tabs, its own selection, its own address bar,
 /// sharing bookmarks, history, downloads and site icons with every other.
 private struct BrowserWindow: View {
-    @ObservedObject var aiConfiguration: AIConfigurationStore
     @ObservedObject var onboarding: OnboardingController
     @StateObject private var workspace: BrowserWorkspace
 
-    init(aiConfiguration: AIConfigurationStore, onboarding: OnboardingController) {
-        self.aiConfiguration = aiConfiguration
+    init(onboarding: OnboardingController) {
         self.onboarding = onboarding
         // Deliberately inside the autoclosure: this runs once, when the window
         // is created. Taking the handed-over tab from `init` itself would
@@ -407,7 +403,6 @@ private struct BrowserWindow: View {
                 .zIndex(2)
             }
         }
-        .environmentObject(aiConfiguration)
         .environmentObject(workspace)
         .environmentObject(onboarding)
         .frame(minWidth: 920, minHeight: 620)

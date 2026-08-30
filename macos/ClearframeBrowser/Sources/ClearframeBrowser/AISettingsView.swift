@@ -3,7 +3,6 @@ import ClearframeCore
 import SwiftUI
 
 struct AISettingsView: View {
-    @EnvironmentObject private var configuration: AIConfigurationStore
     @EnvironmentObject private var onboarding: OnboardingController
     // Settings edits the application, not one window: these are the stores
     // every window shares, and the two actions below reach all of them.
@@ -48,13 +47,6 @@ struct AISettingsView: View {
                     )
                 )
                 Text("Off by default. The panel is where Analyze page lives, and nothing is analysed until you click it, so leaving this off costs only the width. The sparkles button at the right of the toolbar opens and closes the panel for the tab you are on, whichever way this is set.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            Section {
-                Toggle("Enable Optional AI", isOn: $configuration.isEnabled)
-                Text("Local summaries and visible risk signals work without an account or API key.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -120,7 +112,7 @@ struct AISettingsView: View {
                 .disabled(isResettingBrowserData || downloads.activeCount > 0)
                 Text(downloads.activeCount > 0
                      ? "Cancel or finish active downloads before clearing browser data. Saved files are never deleted."
-                     : "Clears tabs, history, bookmarks, the in-app download list, cookies, caches, local website storage, per-site tracker-blocking exceptions, and recovery backups. Saved files, search choice, onboarding state, and the Optional AI key are kept.")
+                     : "Clears tabs, history, bookmarks, the in-app download list, cookies, caches, local website storage, per-site tracker-blocking exceptions, and recovery backups. Saved files, search choice, and onboarding state are kept.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 if isResettingBrowserData {
@@ -148,30 +140,6 @@ struct AISettingsView: View {
                 Text("Shows top-level folders and unfiled bookmarks in a compact local bar. Folder menus include nested subfolders. This preference and all bookmark data stay on this Mac.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-            }
-
-            Section("OpenAI prototype connection") {
-                SecureField("API key", text: $configuration.apiKey)
-                    .disabled(!configuration.isEnabled)
-                TextField("Model", text: $configuration.model)
-                    .disabled(!configuration.isEnabled)
-                Text("The key is stored in macOS Keychain. Improve with AI sends the page title, hostname, declared language, and up to 18,000 characters of extracted text only after you click. The full URL, query, fragment, cookies, form values, and history are not sent. Translation sends only the displayed summary and language names. Requests use `store: false`.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            Section {
-                HStack {
-                    Button("Save settings") { configuration.save() }
-                        .buttonStyle(.borderedProminent)
-                    Button("Remove API key", role: .destructive) { configuration.removeKey() }
-                    Spacer()
-                }
-                if !configuration.statusMessage.isEmpty {
-                    Text(configuration.statusMessage)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
             }
 
             Section("About") {
@@ -222,7 +190,7 @@ struct AISettingsView: View {
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("This cannot be undone. Your Optional AI key and general preferences will remain.")
+            Text("This cannot be undone. Your general preferences will remain.")
         }
     }
 }

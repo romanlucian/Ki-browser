@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "Clearframe — Understand Any Page",
+  "name": "Clearframe \u2014 Understand Any Page",
   "short_name": "Clearframe",
   "version": "0.1.0",
   "description": "Summarize pages, compare sources, translate key ideas, and notice obvious risk signals.",
@@ -11,9 +11,6 @@
     "sidePanel",
     "storage"
   ],
-  "optional_host_permissions": [
-    "https://api.openai.com/*"
-  ],
   "background": {
     "service_worker": "src/background.js",
     "type": "module"
@@ -23,6 +20,5 @@
   },
   "action": {
     "default_title": "Open Clearframe"
-  },
-  "options_page": "options.html"
+  }
 }
