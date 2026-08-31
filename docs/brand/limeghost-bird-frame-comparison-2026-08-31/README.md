@@ -1,9 +1,15 @@
 # Clearframe bird + frame comparison
 
+> These sheets were made on August 31, 2026, while the product was still
+> called **Clearframe**. It was renamed **Limeghost** the same day —
+> [why](../naming-decision-2026-08-31.md). The wordmarks below are therefore
+> the old name; the symbols are what mattered here.
+
+
 **Date:** August 31, 2026  
 **Status:** Concept exploration; not production vector artwork or trademark clearance
 
-![Five Clearframe bird and frame lockups](clearframe-bird-frame-board.png)
+![Five Clearframe bird and frame lockups](limeghost-bird-frame-board.png)
 
 This board compares five bird species and poses using one structural rule: the
 bird flows directly into a substantial rounded-square frame. Every concept is

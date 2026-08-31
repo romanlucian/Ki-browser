@@ -1,13 +1,13 @@
-# Clearframe mark — August 31, 2026
+# Limeghost mark — August 31, 2026
 
 Three files, one system. They are not alternatives: each has a place, and using
 the wrong one is what makes a brand look careless.
 
 | File | Size | Where it belongs |
 |---|---|---|
-| `clearframe-mark-full.png` | 1254 × 1254 | App icon, Dock, website header, App Store. Anywhere at 32 px or larger. |
-| `clearframe-mark-small.png` | 1254 × 1254 | The 16 px favicon, the tab, the menu bar. The owl's face alone — no ring, no wing. |
-| `clearframe-mark-mono.png` | 1271 × 1238 | One-colour contexts: print, watermarks, a stamp. Black on transparent; recolour as needed. |
+| `limeghost-mark-full.png` | 1254 × 1254 | App icon, Dock, website header, App Store. Anywhere at 32 px or larger. |
+| `limeghost-mark-small.png` | 1254 × 1254 | The 16 px favicon, the tab, the menu bar. The owl's face alone — no ring, no wing. |
+| `limeghost-mark-mono.png` | 1271 × 1238 | One-colour contexts: print, watermarks, a stamp. Black on transparent; recolour as needed. |
 
 ## What was verified, and how
 
@@ -38,6 +38,16 @@ Firefox's mark is the reference: fifteen years and four redesigns spent
 *removing detail* while keeping the gradient, and its palette never touches
 white or black.
 
+## Settled since
+
+`macos/LimeghostBrowser/scripts/generate-app-icon.swift` reads the full and
+small marks and switches between them by size, so this **is** the app icon. It
+replaced a procedural cut-corner frame that shared its geometry with the 104
+folder icons; ending that family relationship, and giving up the script's
+automatic small-size weight compensation, was a deliberate trade. A missing
+artwork file warns and falls back to the old geometric mark rather than
+breaking the build.
+
 ## Open
 
 - **Not vector.** These are PNG. Fine for the app icon, which never needs more
@@ -46,11 +56,7 @@ white or black.
 - **The ring is not a true circle.** It is slightly irregular — thicker at the
   lower left, flatter at the upper right. Invisible at icon sizes, visible at
   1024 px. Fix it when the mark is redrawn as vector.
-- **The name's casing is unsettled.** The codebase says `Clearframe` (1,151
-  occurrences, zero of `ClearFrame`); early logo sheets said `ClearFrame`.
-  Whatever is chosen governs the wordmark, the domain and the App Store listing.
-- **Not yet the app icon.** `macos/ClearframeBrowser/scripts/generate-app-icon.swift`
-  still draws the icon procedurally — a cut-corner frame sharing its geometry
-  with the 104 folder icons. Adopting the owl replaces that and ends the family
-  relationship, and gives up the automatic small-size weight compensation the
-  script performs. That is a real trade, and it has not been made.
+- **The wordmark still has to be redrawn.** These sheets were made while the
+  product was called Clearframe. The name is **Limeghost** as of the same day —
+  see [../naming-decision-2026-08-31.md](../naming-decision-2026-08-31.md) — so
+  every lockup that pairs the symbol with a wordmark needs setting again.

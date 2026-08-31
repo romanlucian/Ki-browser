@@ -1,9 +1,15 @@
 # Clearframe wolf + frame lockups
 
+> These sheets were made on August 31, 2026, while the product was still
+> called **Clearframe**. It was renamed **Limeghost** the same day —
+> [why](../naming-decision-2026-08-31.md). The wordmarks below are therefore
+> the old name; the symbols are what mattered here.
+
+
 **Date:** August 31, 2026  
 **Status:** Concept exploration; not production vector artwork or trademark clearance
 
-![Ten Clearframe wolf and frame lockups](clearframe-wolf-lockup-board.png)
+![Ten Clearframe wolf and frame lockups](limeghost-wolf-lockup-board.png)
 
 This board combines ten distinct wolf-and-frame symbols with one exact,
 consistently typeset `Clearframe` wordmark. The symbols were generated as

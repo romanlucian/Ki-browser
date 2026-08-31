@@ -18,7 +18,7 @@ let concepts = [
 let boardWidth = 2_000
 let boardHeight = 760
 let directory = URL(fileURLWithPath: CommandLine.arguments.count > 1 ? CommandLine.arguments[1] : FileManager.default.currentDirectoryPath)
-let outputURL = directory.appendingPathComponent("clearframe-bird-frame-board.png")
+let outputURL = directory.appendingPathComponent("limeghost-bird-frame-board.png")
 
 func color(_ red: CGFloat, _ green: CGFloat, _ blue: CGFloat, _ alpha: CGFloat = 1) -> NSColor {
     NSColor(calibratedRed: red / 255, green: green / 255, blue: blue / 255, alpha: alpha)
