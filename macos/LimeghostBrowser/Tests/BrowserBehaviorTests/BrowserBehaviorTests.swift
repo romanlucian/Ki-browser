@@ -989,6 +989,211 @@ final class BrowserBehaviorTests: XCTestCase {
         XCTAssertFalse(companion.isVisible, "closing the only column left the panel open")
     }
 
+    /// The other half of the reported bug: not whether teardown runs, but
+    /// whether it actually silences a page that is genuinely playing. Loads a
+    /// looping audio element, waits until it is audibly progressing, closes the
+    /// real window, and then requires the audio element to be gone — the blank
+    /// document teardown loads is what guarantees the sound source no longer
+    /// exists, rather than merely being paused where a script could resume it.
+    func testClosingAWindowSilencesAPageThatIsActuallyPlaying() async throws {
+        let workspace = try makeSurfaceTestWorkspace()
+        let session = try XCTUnwrap(workspace.selectedTab?.session)
+
+        // On screen first: WebKit gates autoplay on the view being in a window,
+        // which is also what production looks like.
+        let window = NSWindow(
+            contentRect: NSRect(x: 80, y: 80, width: 640, height: 480),
+            styleMask: [.titled, .closable],
+            backing: .buffered,
+            defer: false
+        )
+        window.isReleasedWhenClosed = false
+        session.webView.frame = NSRect(x: 0, y: 0, width: 640, height: 480)
+        window.contentView = session.webView
+        window.orderFront(nil)
+        BrowserServices.shared.registerWindow(window, for: workspace)
+
+        let html = """
+        <audio id=a loop autoplay src=\"data:audio/wav;base64,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\"></audio>
+        """
+        session.webView.loadHTMLString(html, baseURL: nil)
+
+        // Genuinely playing, not merely present: currentTime must advance.
+        var playing = false
+        for _ in 0..<80 {
+            try await Task.sleep(nanoseconds: 100_000_000)
+            let t = try? await session.webView.evaluateJavaScript(
+                "(() => { const a = document.getElementById('a'); return a && !a.paused ? a.currentTime : -1 })()"
+            )
+            if let t = t as? Double, t > 0.05 { playing = true; break }
+        }
+        try XCTSkipUnless(playing, "audio never started in the test environment; nothing to prove")
+
+        window.close()
+
+        // The sound source must be *gone*, not paused.
+        var silenced = false
+        for _ in 0..<50 {
+            try await Task.sleep(nanoseconds: 100_000_000)
+            let alive = try? await session.webView.evaluateJavaScript(
+                "document.getElementById('a') !== null"
+            )
+            if let alive = alive as? Bool, alive == false { silenced = true; break }
+        }
+        BrowserServices.shared.forgetWindow(of: workspace)
+        XCTAssertTrue(silenced, "the closed window's page kept its playing audio element")
+    }
+
+    /// What SwiftUI actually does to the last window of a WindowGroup when the
+    /// red button is clicked — measured in the unified log, because a passing
+    /// close()-based test hid this for a full round: it posts no willClose and
+    /// unmounts nothing. It just orders the window out and keeps the scene.
+    /// So being ordered out IS the close, and it must tear the workspace down,
+    /// leave it clean for revival, and not let the fresh tab overwrite the
+    /// session that was saved on the way out.
+    func testOrderingTheWindowOutTearsDownSilencesAndLeavesACleanRevival() async throws {
+        let workspace = try makeSurfaceTestWorkspace()
+        workspace.addTab(url: URL(string: "https://example.com/ordered-out")!)
+        let oldSessions = workspace.tabs.map(\.session)
+        let companion = workspace.aiCompanion
+        companion.show()
+        let assistantSession = try XCTUnwrap(companion.session)
+
+        let window = NSWindow(
+            contentRect: NSRect(x: 80, y: 80, width: 640, height: 480),
+            styleMask: [.titled, .closable],
+            backing: .buffered,
+            defer: false
+        )
+        window.isReleasedWhenClosed = false
+        window.orderFront(nil)
+        BrowserServices.shared.registerWindow(window, for: workspace)
+
+        // Being hidden only counts once the window has actually been on
+        // screen; give the runner a moment to composite it.
+        var becameVisible = false
+        for _ in 0..<30 {
+            try await Task.sleep(nanoseconds: 100_000_000)
+            if window.isVisible { becameVisible = true; break }
+        }
+        try XCTSkipUnless(becameVisible, "the runner never showed the window; nothing to prove")
+
+        // The SwiftUI "close": hide, don't close.
+        window.orderOut(nil)
+
+        // Occlusion notifications arrive on a later turn of the run loop.
+        var torndown = false
+        for _ in 0..<40 {
+            try await Task.sleep(nanoseconds: 100_000_000)
+            if oldSessions.allSatisfy({ $0.webView.navigationDelegate == nil }) { torndown = true; break }
+        }
+        XCTAssertTrue(torndown, "hiding the last window left its web views alive — the reported bug")
+        XCTAssertNil(assistantSession.webView.navigationDelegate, "the assistant outlived the hidden window")
+
+        // Clean for revival: one fresh tab, ready to be shown again.
+        XCTAssertEqual(workspace.tabs.count, 1)
+        XCTAssertFalse(oldSessions.contains { $0 === workspace.tabs[0].session }, "revival kept a dead session")
+
+        // The session saved on the way out must still be the real one; the
+        // fresh tab must not have persisted over it.
+        try await Task.sleep(nanoseconds: 400_000_000)
+        let saved = workspace.dataStore.loadWorkspace()
+        XCTAssertTrue(
+            saved?.tabs.contains { $0.url?.contains("ordered-out") == true } ?? false,
+            "the saved session lost the real tabs to the post-teardown fresh tab"
+        )
+
+        // Revival: the window comes back, and the workspace is a normal window
+        // again — including being closable again later.
+        window.orderFront(nil)
+        for _ in 0..<40 {
+            try await Task.sleep(nanoseconds: 100_000_000)
+            if window.occlusionState.contains(.visible) { break }
+        }
+        BrowserServices.shared.forgetWindow(of: workspace)
+        window.orderOut(nil)
+    }
+
+    /// The exact sequence the unified log showed when one window of several is
+    /// closed — and the sequence the first two fixes both missed:
+    /// `forgetWindow` runs while the window is STILL VISIBLE, the strip then
+    /// re-registers with a nil window, and only after that does the window
+    /// actually hide. Nothing may be forgotten at step one, or the hide at
+    /// step three happens unobserved and the audio plays on.
+    func testTheMeasuredCloseSequenceForgetWhileVisibleThenHideStillTearsDown() async throws {
+        let workspace = try makeSurfaceTestWorkspace()
+        workspace.addTab(url: URL(string: "https://example.com/measured-close")!)
+        let sessions = workspace.tabs.map(\.session)
+
+        let window = NSWindow(
+            contentRect: NSRect(x: 80, y: 80, width: 640, height: 480),
+            styleMask: [.titled, .closable],
+            backing: .buffered,
+            defer: false
+        )
+        window.isReleasedWhenClosed = false
+        window.orderFront(nil)
+        BrowserServices.shared.registerWindow(window, for: workspace)
+        var becameVisible = false
+        for _ in 0..<30 {
+            try await Task.sleep(nanoseconds: 100_000_000)
+            if window.isVisible { becameVisible = true; break }
+        }
+        try XCTSkipUnless(becameVisible, "the runner never showed the window; nothing to prove")
+
+        // The measured order: unmount first, window still on screen.
+        BrowserServices.shared.forgetWindow(of: workspace)
+        BrowserServices.shared.registerWindow(nil, for: workspace)
+        XCTAssertTrue(
+            sessions.allSatisfy { $0.webView.navigationDelegate != nil },
+            "forgetting a still-visible window must not tear anything down yet"
+        )
+
+        // ...and only now the hide.
+        window.orderOut(nil)
+
+        var torndown = false
+        for _ in 0..<40 {
+            try await Task.sleep(nanoseconds: 100_000_000)
+            if sessions.allSatisfy({ $0.webView.navigationDelegate == nil }) { torndown = true; break }
+        }
+        XCTAssertTrue(torndown, "the measured close sequence left the web views alive — the reported bug")
+        BrowserServices.shared.forgetWindow(of: workspace)
+    }
+
+    /// The half the direct-call test cannot prove: that closing a real
+    /// NSWindow actually *triggers* the teardown. The reported bug was audio
+    /// continuing after the window closed, and calling teardownForWindowClose()
+    /// by hand in a test verifies the teardown while assuming the trigger.
+    func testClosingARealWindowTriggersTheTeardown() throws {
+        let workspace = try makeSurfaceTestWorkspace()
+        workspace.addTab(url: URL(string: "https://example.com/leak")!)
+        let sessions = workspace.tabs.map(\.session)
+        XCTAssertTrue(sessions.allSatisfy { $0.webView.navigationDelegate != nil })
+
+        let window = NSWindow(
+            contentRect: NSRect(x: 80, y: 80, width: 640, height: 480),
+            styleMask: [.titled, .closable],
+            backing: .buffered,
+            defer: false
+        )
+        // ARC owns the window in a test; AppKit's close() must not release it
+        // a second time. SwiftUI's own windows already behave this way.
+        window.isReleasedWhenClosed = false
+        // What WindowCaptureView.viewDidMoveToWindow does in production.
+        BrowserServices.shared.registerWindow(window, for: workspace)
+
+        window.close()
+
+        for session in sessions {
+            XCTAssertNil(
+                session.webView.navigationDelegate,
+                "closing the NSWindow did not reach the workspace teardown"
+            )
+        }
+        BrowserServices.shared.forgetWindow(of: workspace)
+    }
+
     /// A window that closes must not leave live web views behind.
     ///
     /// Closing a *tab* has always torn its session down. Closing the *window*

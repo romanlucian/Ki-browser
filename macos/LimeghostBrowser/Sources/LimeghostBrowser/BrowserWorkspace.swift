@@ -1,3 +1,4 @@
+import os
 import LimeghostCore
 import Combine
 import Foundation
@@ -411,13 +412,41 @@ final class BrowserWorkspace: ObservableObject {
     /// every web view in it survived — and a page that was playing kept playing,
     /// audible, with no window left to stop it. The assistant panel is torn down
     /// too, because its web views are just as capable of holding audio.
+    /// True from the moment this window's close teardown runs until the window
+    /// is visibly on screen again. It makes the teardown idempotent, and it
+    /// keeps anything that happens *after* the teardown — the fresh tab created
+    /// below fires the ordinary persistence machinery — from overwriting the
+    /// session that was saved on the way out.
+    private var closedForWindow = false
+
     func teardownForWindowClose() {
+        guard !closedForWindow else { return }
+        Logger(subsystem: "com.clearframe.browser", category: "window-close")
+            .info("teardownForWindowClose tabs=\(self.tabs.count, privacy: .public)")
         persistNow()
+        closedForWindow = true
         persistenceTask?.cancel()
         persistenceTask = nil
         tabs.forEach { $0.teardown() }
         tabSubscriptions.removeAll()
+        tabs = []
         aiCompanion.teardown()
+        // SwiftUI does not always discard a closed window: the last window of a
+        // WindowGroup is merely hidden, and clicking the Dock icon brings the
+        // same scene back. What comes back must be a clean window, not a shell
+        // of torn-down web views — so the workspace resets to one fresh tab,
+        // exactly the state a genuinely new window starts in.
+        let fresh = makeTab(url: nil, isPrivate: isPrivate)
+        tabs = [fresh]
+        configure(fresh)
+        selectedTabID = fresh.id
+    }
+
+    /// The window is on screen again — a hidden scene SwiftUI revived. From
+    /// here on it is an ordinary window: it persists its session and can be
+    /// torn down again when it next disappears.
+    func windowIsVisibleAgain() {
+        closedForWindow = false
     }
 
     /// Follows the selection, then that tab's load state. Only the print
@@ -1312,7 +1341,7 @@ final class BrowserWorkspace: ObservableObject {
     }
 
     func persistNow() {
-        guard persistsSession else { return }
+        guard persistsSession, !closedForWindow else { return }
         let persistentTabs = tabs.filter { !$0.isPrivate }
         let persistentSelection = persistentTabs.contains(where: { $0.id == selectedTabID })
             ? selectedTabID
@@ -1385,6 +1414,7 @@ final class BrowserWorkspace: ObservableObject {
     }
 
     private func schedulePersistence() {
+        guard !closedForWindow else { return }
         persistenceTask?.cancel()
         persistenceTask = Task { [weak self] in
             try? await Task.sleep(nanoseconds: 250_000_000)

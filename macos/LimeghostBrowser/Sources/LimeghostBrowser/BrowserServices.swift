@@ -1,4 +1,5 @@
 import AppKit
+import os
 import LimeghostCore
 import Foundation
 import WebKit
@@ -156,6 +157,11 @@ final class BrowserServices {
 
     private struct WeakWindow {
         weak var window: NSWindow?
+        weak var workspace: BrowserWorkspace?
+        /// A window is only "closed" by *losing* visibility. Without this, a
+        /// window registered before it is first shown reads as hidden and
+        /// would be torn down at birth.
+        var wasVisible = false
     }
 
     /// One per window, so a closing window can tear its own tabs down.
@@ -164,10 +170,36 @@ final class BrowserServices {
     /// did, and it only dropped the pairing above.
     private var windowCloseObservers: [ObjectIdentifier: NSObjectProtocol] = [:]
 
+    /// The observer that actually catches a SwiftUI window "closing".
+    ///
+    /// Measured in the unified log on August 31, 2026: clicking the red button
+    /// on the last window of a `WindowGroup` posts **no** `willClose` at all —
+    /// SwiftUI merely orders the window out and keeps the scene to revive
+    /// later. And when a window genuinely unmounts, `onDisappear` runs first,
+    /// so a willClose observer removed there dies unheard. Visibility is the
+    /// truth: ordered out is exactly `isVisible == false`, while a window that
+    /// is miniaturized, hidden with the app (⌘H), covered by another window,
+    /// or on another Space stays "visible" by this definition — all states
+    /// where audio should keep playing and nothing may be torn down.
+    private var windowVisibilityObservers: [ObjectIdentifier: NSObjectProtocol] = [:]
+
+    private static let closeLog = Logger(subsystem: "com.clearframe.browser", category: "window-close")
+
     func registerWindow(_ window: NSWindow?, for workspace: BrowserWorkspace) {
         let key = ObjectIdentifier(workspace)
-        windowsByWorkspace[key] = WeakWindow(window: window)
+        Self.closeLog.info("registerWindow window=\(window.map { "\(ObjectIdentifier($0))" } ?? "nil", privacy: .public) workspace=\("\(key)", privacy: .public)")
+        startVisibilityWatchIfNeeded()
+        // A nil registration means the strip view detached — it says nothing
+        // about the window. During a close it arrives *after* forgetWindow and
+        // *before* the window actually hides, so erasing the pairing here is
+        // exactly what would blind the watcher at the decisive moment.
         guard let window else { return }
+        let previouslyVisible = windowsByWorkspace[key]?.wasVisible ?? false
+        windowsByWorkspace[key] = WeakWindow(
+            window: window,
+            workspace: workspace,
+            wasVisible: previouslyVisible || window.isVisible
+        )
         if let existing = windowCloseObservers[key] {
             NotificationCenter.default.removeObserver(existing)
         }
@@ -180,15 +212,91 @@ final class BrowserServices {
             queue: .main
         ) { [weak workspace] _ in
             MainActor.assumeIsolated {
+                Self.closeLog.info("willClose fired; workspace alive=\(workspace != nil, privacy: .public)")
                 workspace?.teardownForWindowClose()
+            }
+        }
+
+        if let existing = windowVisibilityObservers[key] {
+            NotificationCenter.default.removeObserver(existing)
+        }
+        windowVisibilityObservers[key] = NotificationCenter.default.addObserver(
+            forName: NSWindow.didChangeOcclusionStateNotification,
+            object: window,
+            queue: .main
+        ) { _ in
+            MainActor.assumeIsolated {
+                BrowserServices.shared.reviewWindowVisibility()
+            }
+        }
+    }
+
+    /// The one place visibility is interpreted, shared by the occlusion
+    /// observer (prompt) and a half-second poll (guaranteed — measured on
+    /// August 31, 2026, notifications alone missed cases). A transition to
+    /// hidden while neither miniaturized nor app-hidden is SwiftUI's "close";
+    /// the teardown it triggers is idempotent, so overlap costs nothing.
+    private var visibilityWatch: Task<Void, Never>?
+
+    private func startVisibilityWatchIfNeeded() {
+        guard visibilityWatch == nil else { return }
+        visibilityWatch = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 500_000_000)
+                self?.reviewWindowVisibility()
+            }
+        }
+    }
+
+    private func reviewWindowVisibility() {
+        for (key, pairing) in windowsByWorkspace {
+            guard let workspace = pairing.workspace else {
+                // The workspace is gone; nothing left to tear down. Release the
+                // pairing and its notification tokens.
+                windowsByWorkspace.removeValue(forKey: key)
+                if let observer = windowCloseObservers.removeValue(forKey: key) {
+                    NotificationCenter.default.removeObserver(observer)
+                }
+                if let observer = windowVisibilityObservers.removeValue(forKey: key) {
+                    NotificationCenter.default.removeObserver(observer)
+                }
+                continue
+            }
+            guard let window = pairing.window else {
+                // The window object itself is gone; if the workspace had ever
+                // been on screen, this is as closed as closed gets.
+                if pairing.wasVisible { workspace.teardownForWindowClose() }
+                continue
+            }
+            if window.isVisible {
+                if !pairing.wasVisible { windowsByWorkspace[key]?.wasVisible = true }
+                workspace.windowIsVisibleAgain()
+            } else if pairing.wasVisible, !window.isMiniaturized, !NSApp.isHidden {
+                Self.closeLog.info("window went from visible to hidden; tearing its workspace down")
+                windowsByWorkspace[key]?.wasVisible = false
+                workspace.teardownForWindowClose()
             }
         }
     }
 
     func forgetWindow(of workspace: BrowserWorkspace) {
         let key = ObjectIdentifier(workspace)
+        Self.closeLog.info("forgetWindow workspace=\("\(key)", privacy: .public) hadObserver=\(self.windowCloseObservers[key] != nil, privacy: .public)")
+        // Measured order when one window of several closes: this runs while the
+        // window is **still on screen**, and the hide follows a moment later.
+        // So a still-visible window proves nothing yet — leave the pairing and
+        // its observers in place and let the visibility watcher catch the hide;
+        // it also sweeps up pairings whose workspace has genuinely died.
+        let window = windowsByWorkspace[key]?.window
+        if window?.isVisible == true { return }
+        if !NSApp.isHidden, window?.isMiniaturized != true {
+            workspace.teardownForWindowClose()
+        }
         windowsByWorkspace.removeValue(forKey: key)
         if let observer = windowCloseObservers.removeValue(forKey: key) {
+            NotificationCenter.default.removeObserver(observer)
+        }
+        if let observer = windowVisibilityObservers.removeValue(forKey: key) {
             NotificationCenter.default.removeObserver(observer)
         }
     }
