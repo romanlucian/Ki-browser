@@ -2,7 +2,9 @@
 
 A browser by [Zincoo](https://zincoo.com/).
 
-Limeghost is now a **standalone macOS browser foundation** built with SwiftUI and WebKit. It opens its own native window, navigates the web, and can hand any page's readable text to the AI you already use. The earlier Chromium extension remains in the repository as a useful validation artifact; it is not the final browser.
+Named for the barn owl. *Tyto alba* is called the **ghost owl** — the pale heart-shaped face, the silent flight, the way it appears white out of the dark — and lime is the accent the interface is drawn in. The project was called Clearframe until August 31, 2026; [why it changed](docs/brand/naming-decision-2026-08-31.md) is on the record, along with what was checked.
+
+Limeghost is a **standalone macOS browser foundation** built with SwiftUI and WebKit. It opens its own native window, navigates the web, and can hand any page's readable text to the AI you already use. The earlier Chromium extension remains in the repository as a useful validation artifact; it is not the final browser.
 
 The installed and `dist` builds still use WebKit. A future Chromium migration now has an isolated [CEF migration plan](docs/chromium-migration.md) and validation scaffold under `chromium/cef-spike`; that scaffold is not linked into the current app and must not be described as a working Chromium build.
 
@@ -47,8 +49,6 @@ To rebuild that app first:
 cd macos/LimeghostBrowser
 ./scripts/build-macos-app.sh
 ```
-
-> Both scripts live at `macos/LimeghostBrowser/scripts/` — run them from that directory, as above. An August 30, 2026 note here claimed they existed in no commit; that was a search of the repository root's `scripts/`, which holds only `validate.mjs`.
 
 The output is `dist/Limeghost.app` at the repository root. The script embeds the app icon and privacy manifest, enables the hardened runtime, and applies an ad hoc signature for local development. This is still not a Developer ID signature or notarization. The bundle opens as an ordinary macOS application rather than using Terminal as its keyboard target.
 
@@ -171,10 +171,23 @@ Limeghost presents Safari's user agent because it renders with WebKit, Safari's 
   Redistributing this repository carries these attribution requirements with it.
 - Icon sets under the GPL are deliberately not shipped. One was added and withdrawn: GPL copyleft covers the whole program rather than only adaptations of the artwork, so a GPL set would have to be removed or separately licensed before Limeghost could be offered under closed commercial terms. Iconify summarises such licences as "commercial use is allowed", which is true and easy to misread — GPL software may be sold, but it must still be conveyed under the GPL. Prefer CC BY for anything new.
 
+## Brand
+
+The mark is in [`docs/brand/limeghost-mark-2026-08-31/`](docs/brand/limeghost-mark-2026-08-31/) in three forms, and they are not interchangeable:
+
+| File | Where it belongs |
+|---|---|
+| `limeghost-mark-full.png` | App icon, Dock, website, App Store — anywhere 32 px or larger |
+| `limeghost-mark-small.png` | The 16 px favicon and the menu bar. The owl's face alone |
+| `limeghost-mark-mono.png` | One-colour contexts: print, watermarks, a stamp |
+
+`scripts/generate-app-icon.swift` reads the first two and switches between them by size: above 32 px the whole mark, at 16 and 32 the face alone, because the ring turns to mud at that size and takes the face with it. The accent is `#66DB7D`, and the gradient never approaches black or white — an earlier version faded to near-black and lost the owl's body against the app's own dark chrome.
+
 ## Documentation index
 
 - [Limeghost strategy, vision, non-goals, and roadmap](docs/limeghost-strategy.md)
 - [Durable project context](docs/project-context.md)
+- [Why the browser is called Limeghost](docs/brand/naming-decision-2026-08-31.md) — the evidence, and the names that were rejected
 - [AI catalog editorial and update policy](docs/ai-catalog-editorial.md)
 - [Focused zero-budget go-to-market plan](docs/go-to-market.md)
 - [Product and technical foundation](docs/product-foundation.md)
