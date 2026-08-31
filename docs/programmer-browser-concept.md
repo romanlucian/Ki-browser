@@ -1,4 +1,4 @@
-# Side concept: Clearframe for programmers
+# Side concept: Limeghost for programmers
 
 **Status:** future product direction only. This does not change the current general-audience macOS browser build and is not a second browser project now.
 
@@ -22,7 +22,7 @@ The promise is comprehension and handoff, not autonomous coding in the browser.
 
 ## First features
 
-**Note, August 30, 2026.** Every lens below assumes a reader that can summarize and extract meaning. Clearframe no longer has one — page judgment was removed, and the browser now prepares text rather than interpreting it. This concept therefore depends on a model arriving first.
+**Note, August 30, 2026.** Every lens below assumes a reader that can summarize and extract meaning. Limeghost no longer has one — page judgment was removed, and the browser now prepares text rather than interpreting it. This concept therefore depends on a model arriving first.
 
 1. **Documentation lens:** identify product/version, summarize the current page, extract prerequisites, and flag likely version mismatches.
 2. **GitHub lens:** explain repository purpose and structure from visible pages, summarize releases/issues, and keep links to original evidence.

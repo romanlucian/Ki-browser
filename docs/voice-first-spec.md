@@ -7,9 +7,9 @@
 The intended loop is:
 
 1. The user explicitly presses the microphone button or a keyboard shortcut.
-2. Clearframe visibly listens and produces a live transcript in the normal address/search field.
+2. Limeghost visibly listens and produces a live transcript in the normal address/search field.
 3. The user reviews or edits the transcript and submits it.
-4. Clearframe performs ordinary search/retrieval, then presents a concise answer beside visible source links and page context.
+4. Limeghost performs ordinary search/retrieval, then presents a concise answer beside visible source links and page context.
 5. If requested, the answer can be spoken while the same text, citations, and controls remain on screen.
 6. Any consequential action—purchase, message, form submission, account change, download execution, or sharing private data—requires a separate, specific confirmation showing exactly what will happen.
 
@@ -34,7 +34,7 @@ The app bundle includes narrowly worded microphone and speech permission descrip
 - No wake word and no always-listening process.
 - The mic starts only from a clear user action and has an equally clear Stop control.
 - The UI must expose whether it is requesting permission, listening, ready for review, or unavailable.
-- Audio is ephemeral and not written to disk by Clearframe.
+- Audio is ephemeral and not written to disk by Limeghost.
 - The transcript stays local until the user submits it as a normal search/address request.
 - A future cloud speech provider must be opt-in per use, show the provider and retention implications before capture, minimize transmitted audio/text, and offer an on-device-only setting.
 - Voice transcripts must never be mixed into analytics, advertising profiles, or browsing-history sales.
@@ -51,7 +51,7 @@ A later retrieval phase should keep voice and visual output synchronized:
 
 - show the interpreted query before retrieval;
 - provide a short answer with numbered, clickable sources;
-- distinguish page statements from Clearframe inference;
+- distinguish page statements from Limeghost inference;
 - let the user pause, replay, slow, or disable speech;
 - never read sensitive page content aloud without an explicit action;
 - decline to summarize when source support is inadequate rather than inventing an answer.

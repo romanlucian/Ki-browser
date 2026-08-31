@@ -77,7 +77,7 @@ function renderAnalysis() {
   $("#sourceMeta").textContent = `${currentAnalysis.readMinutes} min read · ${currentPage.language || "language not declared"}`;
   $("#textSize").textContent = `${currentText.length} CHARACTERS`;
   $("#copyExplainer").textContent = currentText
-    ? "Clearframe pulled the readable text off this page, without the menus, footers and player controls."
+    ? "Limeghost pulled the readable text off this page, without the menus, footers and player controls."
     : "There is not enough readable text on this page to copy.";
   $("#copyButton").disabled = currentText.length === 0;
   $("#copyButtonLabel").textContent = "Copy page for AI";
@@ -103,7 +103,7 @@ async function analyzeActivePage() {
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (!tab?.id || !/^https?:/i.test(tab.url || "")) {
-      throw new Error("Open a normal web page, then click the Clearframe toolbar icon again.");
+      throw new Error("Open a normal web page, then click the Limeghost toolbar icon again.");
     }
     currentTabId = tab.id;
     const [result] = await chrome.scripting.executeScript({
@@ -182,5 +182,5 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
 chrome.tabs.onActivated.addListener(({ tabId }) => {
   if (currentTabId === null || tabId === currentTabId) return;
   currentTabId = tabId;
-  invalidateCurrentPage("Active tab changed. Click Clearframe again before analyzing this page.");
+  invalidateCurrentPage("Active tab changed. Click Limeghost again before analyzing this page.");
 });

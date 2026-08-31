@@ -4,7 +4,7 @@ set -u
 
 status=0
 
-echo "Clearframe CEF host readiness"
+echo "Limeghost CEF host readiness"
 echo "Architecture: $(uname -m)"
 sw_vers
 

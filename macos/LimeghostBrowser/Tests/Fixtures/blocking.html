@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Limeghost Blocking Fixture</title></head>
+<body>
+  <main>
+    <h1>Limeghost Blocking Fixture</h1>
+    <p>This deterministic fixture loads a same-origin "tracker" script so the E2E smoke suite can verify content blocking without reaching the network.</p>
+  </main>
+  <script>
+    window.__limeghostInlineMarker = true;
+  </script>
+  <script src="tracker-fixture.js"></script>
+</body>
+</html>

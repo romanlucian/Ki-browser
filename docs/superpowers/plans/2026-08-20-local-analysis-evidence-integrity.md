@@ -8,21 +8,21 @@
 
 **Architecture:** Replace the current "append a synthetic period, join, then split" pipeline with block-aware sentence splitting: the reading-block boundary *is* a sentence boundary, so no punctuation is ever invented. Add the missing terminator characters, guard decimals, and assess page structure by sentence density when block structure is unavailable. Contract first, then both runtimes.
 
-**Tech Stack:** Swift 6 (`ClearframeCore`, XCTest), JavaScript (ES modules, `node --test`), shared JSON contract fixture.
+**Tech Stack:** Swift 6 (`LimeghostCore`, XCTest), JavaScript (ES modules, `node --test`), shared JSON contract fixture.
 
 **Spec:** [docs/local-analysis-evidence-defects.md](../../local-analysis-evidence-defects.md)
 
 ## Global Constraints
 
-- **Contract first.** `macos/ClearframeBrowser/Tests/ClearframeCoreTests/Fixtures/local-analysis-contract.json` is the single source of truth. Change it first, then make both runtimes satisfy it. Never edit one implementation alone. (CLAUDE.md)
-- **Two runtimes, one behaviour.** `macos/ClearframeBrowser/Sources/ClearframeCore/LocalAnalysisEngine.swift` and `src/core/analyzer.js` must stay behaviourally equivalent.
+- **Contract first.** `macos/LimeghostBrowser/Tests/LimeghostCoreTests/Fixtures/local-analysis-contract.json` is the single source of truth. Change it first, then make both runtimes satisfy it. Never edit one implementation alone. (CLAUDE.md)
+- **Two runtimes, one behaviour.** `macos/LimeghostBrowser/Sources/LimeghostCore/LocalAnalysisEngine.swift` and `src/core/analyzer.js` must stay behaviourally equivalent.
 - **The invariant:** every entry in `keyPoints` and `claimsToCheck` MUST be a verbatim substring of `page.text`.
-- **Adding a contract array requires three edits:** the JSON, the `LocalAnalysisContract` Decodable struct at `macos/ClearframeBrowser/Tests/ClearframeCoreTests/ClearframeCoreTests.swift:1162`, and a test in `test/analysis-contract.test.js`.
+- **Adding a contract array requires three edits:** the JSON, the `LocalAnalysisContract` Decodable struct at `macos/LimeghostBrowser/Tests/LimeghostCoreTests/LimeghostCoreTests.swift:1162`, and a test in `test/analysis-contract.test.js`.
 - **Do not reintroduce a merged multilingual stopword set.** Stopwords stay selected by declared language.
 - **Risk heuristics stay context-aware.** Do not touch `RiskAnalyzer`.
 - **Existing contract cases must keep passing.** The `zf.ro` extraction-pollution gate is permanent. If a change makes an existing case fail, stop and report — do not edit the expectation to match new behaviour without saying so explicitly.
 - **No new dependencies.** No new Swift packages, no new npm packages.
-- **Test commands:** `cd macos/ClearframeBrowser && swift test` and `npm test` from the repository root.
+- **Test commands:** `cd macos/LimeghostBrowser && swift test` and `npm test` from the repository root.
 - **Do not touch** any documentation claim about signing, notarization, App Store readiness, or security review.
 
 ---
@@ -30,8 +30,8 @@
 ### Task 1: Add the evidence-integrity invariant to the contract and watch it fail
 
 **Files:**
-- Modify: `macos/ClearframeBrowser/Tests/ClearframeCoreTests/Fixtures/local-analysis-contract.json`
-- Modify: `macos/ClearframeBrowser/Tests/ClearframeCoreTests/ClearframeCoreTests.swift` (struct at :1162, plus a new test method)
+- Modify: `macos/LimeghostBrowser/Tests/LimeghostCoreTests/Fixtures/local-analysis-contract.json`
+- Modify: `macos/LimeghostBrowser/Tests/LimeghostCoreTests/LimeghostCoreTests.swift` (struct at :1162, plus a new test method)
 - Modify: `test/analysis-contract.test.js`
 
 **Interfaces:**
@@ -105,7 +105,7 @@ Add this top-level key alongside the existing `summaryCases`. Reuse the exact `p
 
 - [ ] **Step 2: Extend the Swift `LocalAnalysisContract` struct**
 
-At `macos/ClearframeBrowser/Tests/ClearframeCoreTests/ClearframeCoreTests.swift:1162`, add the field and the case type:
+At `macos/LimeghostBrowser/Tests/LimeghostCoreTests/LimeghostCoreTests.swift:1162`, add the field and the case type:
 
 ```swift
 private struct LocalAnalysisContract: Decodable {
@@ -190,7 +190,7 @@ test("shared contract: key points and claims are verbatim page text", () => {
 - [ ] **Step 5: Run both suites and verify they FAIL**
 
 ```bash
-cd macos/ClearframeBrowser && swift test 2>&1 | tail -40
+cd macos/LimeghostBrowser && swift test 2>&1 | tail -40
 cd - && npm test 2>&1 | tail -40
 ```
 
@@ -203,8 +203,8 @@ All pre-existing tests must still pass at this step. If any pre-existing test fa
 - [ ] **Step 6: Commit**
 
 ```bash
-git add macos/ClearframeBrowser/Tests/ClearframeCoreTests/Fixtures/local-analysis-contract.json \
-        macos/ClearframeBrowser/Tests/ClearframeCoreTests/ClearframeCoreTests.swift \
+git add macos/LimeghostBrowser/Tests/LimeghostCoreTests/Fixtures/local-analysis-contract.json \
+        macos/LimeghostBrowser/Tests/LimeghostCoreTests/LimeghostCoreTests.swift \
         test/analysis-contract.test.js
 git commit -m "test: assert key points and claims are verbatim page text
 
@@ -217,7 +217,7 @@ runtimes. Documents the invariant Evidence Mode already depends on."
 ### Task 2: Block-aware sentence splitting in both runtimes
 
 **Files:**
-- Modify: `macos/ClearframeBrowser/Sources/ClearframeCore/LocalAnalysisEngine.swift`
+- Modify: `macos/LimeghostBrowser/Sources/LimeghostCore/LocalAnalysisEngine.swift`
 - Modify: `src/core/analyzer.js`
 - Test: existing suites — `swift test`, `npm test`
 
@@ -321,7 +321,7 @@ Read `src/core/analyzer.js` around `normalizeReadingBlocks` (line ~90) and `spli
 - [ ] **Step 4: Run both suites and verify they PASS**
 
 ```bash
-cd macos/ClearframeBrowser && swift test 2>&1 | tail -40
+cd macos/LimeghostBrowser && swift test 2>&1 | tail -40
 cd - && npm test 2>&1 | tail -40
 ```
 
@@ -332,7 +332,7 @@ If a pre-existing `summaryCases` expectation now fails, that is a real behaviour
 - [ ] **Step 5: Commit**
 
 ```bash
-git add macos/ClearframeBrowser/Sources/ClearframeCore/LocalAnalysisEngine.swift src/core/analyzer.js
+git add macos/LimeghostBrowser/Sources/LimeghostCore/LocalAnalysisEngine.swift src/core/analyzer.js
 git commit -m "fix: split sentences per reading block instead of inventing periods
 
 Block boundaries are sentence boundaries, so no synthetic terminator reaches
@@ -345,8 +345,8 @@ Adds Devanagari, Urdu and Arabic terminators and a decimal guard."
 ### Task 3: Assess structure by sentence density when block structure is absent
 
 **Files:**
-- Modify: `macos/ClearframeBrowser/Tests/ClearframeCoreTests/Fixtures/local-analysis-contract.json` (add to `structureCases`)
-- Modify: `macos/ClearframeBrowser/Sources/ClearframeCore/LocalAnalysisEngine.swift` (`assessStructure`, :111)
+- Modify: `macos/LimeghostBrowser/Tests/LimeghostCoreTests/Fixtures/local-analysis-contract.json` (add to `structureCases`)
+- Modify: `macos/LimeghostBrowser/Sources/LimeghostCore/LocalAnalysisEngine.swift` (`assessStructure`, :111)
 - Modify: `src/core/analyzer.js` (`assessStructure`)
 
 **Interfaces:**
@@ -380,7 +380,7 @@ Append to `structureCases` in the contract JSON. Match the field spelling of the
 - [ ] **Step 2: Run both suites and verify the new structure case FAILS**
 
 ```bash
-cd macos/ClearframeBrowser && swift test 2>&1 | tail -30
+cd macos/LimeghostBrowser && swift test 2>&1 | tail -30
 cd - && npm test 2>&1 | tail -30
 ```
 
@@ -420,7 +420,7 @@ Apply the identical change and the identical `1200` constant to the JavaScript `
 - [ ] **Step 5: Run both suites and verify they PASS**
 
 ```bash
-cd macos/ClearframeBrowser && swift test 2>&1 | tail -30
+cd macos/LimeghostBrowser && swift test 2>&1 | tail -30
 cd - && npm test 2>&1 | tail -30
 ```
 
@@ -429,8 +429,8 @@ Expected: all cases pass in both runtimes, including every pre-existing `structu
 - [ ] **Step 6: Commit**
 
 ```bash
-git add macos/ClearframeBrowser/Tests/ClearframeCoreTests/Fixtures/local-analysis-contract.json \
-        macos/ClearframeBrowser/Sources/ClearframeCore/LocalAnalysisEngine.swift src/core/analyzer.js
+git add macos/LimeghostBrowser/Tests/LimeghostCoreTests/Fixtures/local-analysis-contract.json \
+        macos/LimeghostBrowser/Sources/LimeghostCore/LocalAnalysisEngine.swift src/core/analyzer.js
 git commit -m "fix: assess structure by sentence density on body-text fallback
 
 A page whose extraction collapsed to one unsegmented run was assumed to be an
@@ -442,9 +442,9 @@ article without counting punctuation, so listing pages showed no section notice.
 ### Task 4: Make Evidence Mode matching resilient, and stop the panel claiming things that are false
 
 **Files:**
-- Modify: `macos/ClearframeBrowser/Sources/ClearframeBrowser/BrowserSession.swift` (`revealEvidence`, :423)
-- Modify: `macos/ClearframeBrowser/Sources/ClearframeBrowser/AssistantPanel.swift` (:255-265)
-- Test: `macos/ClearframeBrowser/Tests/BrowserBehaviorTests/`
+- Modify: `macos/LimeghostBrowser/Sources/LimeghostBrowser/BrowserSession.swift` (`revealEvidence`, :423)
+- Modify: `macos/LimeghostBrowser/Sources/LimeghostBrowser/AssistantPanel.swift` (:255-265)
+- Test: `macos/LimeghostBrowser/Tests/BrowserBehaviorTests/`
 
 **Interfaces:**
 - Consumes: nothing from Tasks 1-3. This is the app layer; there is no contract case for it.
@@ -466,7 +466,7 @@ In `AssistantPanel.swift`, the miss branch currently reads *"The live page chang
 ```swift
 Text(model.evidenceWasFoundOnPage
      ? "Highlighted in the page. This is extracted page text, not an AI citation."
-     : "Shown here from the extracted page text. Clearframe could not locate it in the live page.")
+     : "Shown here from the extracted page text. Limeghost could not locate it in the live page.")
 ```
 
 - [ ] **Step 3: Add a behaviour test**
@@ -476,7 +476,7 @@ Add to `BrowserBehaviorTests` a test that a key point ending in a terminator sti
 - [ ] **Step 4: Run the suites**
 
 ```bash
-cd macos/ClearframeBrowser && swift test 2>&1 | tail -30
+cd macos/LimeghostBrowser && swift test 2>&1 | tail -30
 ```
 
 Expected: all pass.
@@ -484,9 +484,9 @@ Expected: all pass.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add macos/ClearframeBrowser/Sources/ClearframeBrowser/BrowserSession.swift \
-        macos/ClearframeBrowser/Sources/ClearframeBrowser/AssistantPanel.swift \
-        macos/ClearframeBrowser/Tests/BrowserBehaviorTests
+git add macos/LimeghostBrowser/Sources/LimeghostBrowser/BrowserSession.swift \
+        macos/LimeghostBrowser/Sources/LimeghostBrowser/AssistantPanel.swift \
+        macos/LimeghostBrowser/Tests/BrowserBehaviorTests
 git commit -m "fix: widen evidence matching and stop blaming the page on a miss"
 ```
 
@@ -495,7 +495,7 @@ git commit -m "fix: widen evidence matching and stop blaming the page on a miss"
 ### Task 5: Update the documents the behaviour change invalidates
 
 **Files:**
-- Modify: `docs/clearframe-strategy.md`
+- Modify: `docs/limeghost-strategy.md`
 - Modify: `docs/project-context.md`
 - Modify: `CLAUDE.md`
 
@@ -505,7 +505,7 @@ git commit -m "fix: widen evidence matching and stop blaming the page on a miss"
 
 - [ ] **Step 1: Record the invariant and the language position**
 
-In `docs/project-context.md` and `docs/clearframe-strategy.md`, add one line each stating that key points and claims are verbatim page text, enforced by `evidenceCases` in the shared contract.
+In `docs/project-context.md` and `docs/limeghost-strategy.md`, add one line each stating that key points and claims are verbatim page text, enforced by `evidenceCases` in the shared contract.
 
 In `CLAUDE.md`, extend the existing local-analysis bullet to name the invariant, and state which sentence terminators are recognised, so a future agent does not silently drop a script.
 
@@ -514,7 +514,7 @@ Do not claim any language is "supported" beyond what the contract actually cover
 - [ ] **Step 2: Commit**
 
 ```bash
-git add docs/clearframe-strategy.md docs/project-context.md CLAUDE.md
+git add docs/limeghost-strategy.md docs/project-context.md CLAUDE.md
 git commit -m "docs: record the verbatim-evidence invariant and terminator coverage"
 ```
 

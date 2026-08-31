@@ -1,9 +1,9 @@
 cmake_minimum_required(VERSION 3.21)
 
-project(ClearframeCEFSpike LANGUAGES C CXX OBJC OBJCXX)
+project(LimeghostCEFSpike LANGUAGES C CXX OBJC OBJCXX)
 
 if(NOT APPLE)
-  message(FATAL_ERROR "This Clearframe CEF spike currently targets macOS only.")
+  message(FATAL_ERROR "This Limeghost CEF spike currently targets macOS only.")
 endif()
 
 set(CMAKE_CONFIGURATION_TYPES Debug Release CACHE STRING "" FORCE)
@@ -25,27 +25,27 @@ endif()
 
 include(cmake/CEFVersion.cmake)
 option(
-  CLEARFRAME_CEF_VALIDATE_ONLY
+  LIMEGHOST_CEF_VALIDATE_ONLY
   "Validate the isolated project boundary without requiring a CEF download"
   ON
 )
 
-add_library(ClearframeChromiumBridgeContract INTERFACE)
+add_library(LimeghostChromiumBridgeContract INTERFACE)
 target_include_directories(
-  ClearframeChromiumBridgeContract
+  LimeghostChromiumBridgeContract
   INTERFACE
   "${CMAKE_CURRENT_SOURCE_DIR}/include"
 )
 target_sources(
-  ClearframeChromiumBridgeContract
+  LimeghostChromiumBridgeContract
   INTERFACE
-  "${CMAKE_CURRENT_SOURCE_DIR}/include/ClearframeChromiumBridge.h"
+  "${CMAKE_CURRENT_SOURCE_DIR}/include/LimeghostChromiumBridge.h"
 )
 
-message(STATUS "Clearframe CEF spike architecture: ${PROJECT_ARCH}")
-message(STATUS "Pinned CEF version: ${CLEARFRAME_CEF_VERSION}")
+message(STATUS "Limeghost CEF spike architecture: ${PROJECT_ARCH}")
+message(STATUS "Pinned CEF version: ${LIMEGHOST_CEF_VERSION}")
 
-if(CLEARFRAME_CEF_VALIDATE_ONLY)
+if(LIMEGHOST_CEF_VALIDATE_ONLY)
   message(STATUS "Validation-only mode: CEF is not downloaded, loaded, linked, or packaged.")
   return()
 endif()
@@ -72,7 +72,7 @@ list(APPEND CMAKE_MODULE_PATH "${CEF_ROOT}/cmake")
 find_package(CEF REQUIRED)
 
 # Building the official wrapper is the first native dependency proof. A real
-# Clearframe target will be added only after the official cefsimple app works
+# Limeghost target will be added only after the official cefsimple app works
 # on this host and its helper-process bundle layout has been retained.
 add_subdirectory("${CEF_LIBCEF_DLL_WRAPPER_PATH}" libcef_dll_wrapper)
 

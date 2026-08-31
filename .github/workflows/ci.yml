@@ -25,7 +25,7 @@ jobs:
     runs-on: macos-15
     defaults:
       run:
-        working-directory: macos/ClearframeBrowser
+        working-directory: macos/LimeghostBrowser
     steps:
       - uses: actions/checkout@v4
       # Pinned so the toolchain cannot drift with the runner image. If this
@@ -37,8 +37,8 @@ jobs:
       # No separate release build: build-macos-app.sh runs its own.
       - run: swift test
       - run: ./scripts/build-macos-app.sh
-      - run: codesign --verify --deep --strict ../../dist/Clearframe.app
-      - run: plutil -lint ../../dist/Clearframe.app/Contents/Resources/PrivacyInfo.xcprivacy
+      - run: codesign --verify --deep --strict ../../dist/Limeghost.app
+      - run: plutil -lint ../../dist/Limeghost.app/Contents/Resources/PrivacyInfo.xcprivacy
 
   cef-contract:
     runs-on: macos-15
@@ -47,14 +47,14 @@ jobs:
       - name: Configure the isolated CEF contract only
         run: >-
           cmake -S chromium/cef-spike
-          -B "$RUNNER_TEMP/clearframe-cef-contract"
+          -B "$RUNNER_TEMP/limeghost-cef-contract"
           -G Xcode
-          -DCLEARFRAME_CEF_VALIDATE_ONLY=ON
+          -DLIMEGHOST_CEF_VALIDATE_ONLY=ON
           -DPROJECT_ARCH="$(uname -m)"
       - name: Compile-check the Objective-C bridge boundary
         run: >-
           xcrun clang -fsyntax-only -x objective-c -fobjc-arc
           -isysroot "$(xcrun --sdk macosx --show-sdk-path)"
-          chromium/cef-spike/include/ClearframeChromiumBridge.h
+          chromium/cef-spike/include/LimeghostChromiumBridge.h
       - name: Explain configure-only result
         run: echo "CEF remains isolated; CI validates its boundary without downloading or integrating a runtime."

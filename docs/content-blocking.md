@@ -2,7 +2,7 @@
 
 **Current list:** `2026.08.14.1`, manually checked August 14, 2026.
 
-Clearframe can block network requests to a small, first-party curated list of common advertising and tracking domains. It ships as Swift-embedded data in `ClearframeCore` (`macos/ClearframeBrowser/Sources/ClearframeCore/TrackerBlockerCatalog.swift` and `TrackerBlockerCatalogData.swift`), compiles into the app, and changes only through a reviewed app update. There is no remote fetch, analytics feed, or automatic list update in this phase.
+Limeghost can block network requests to a small, first-party curated list of common advertising and tracking domains. It ships as Swift-embedded data in `LimeghostCore` (`macos/LimeghostBrowser/Sources/LimeghostCore/TrackerBlockerCatalog.swift` and `TrackerBlockerCatalogData.swift`), compiles into the app, and changes only through a reviewed app update. There is no remote fetch, analytics feed, or automatic list update in this phase.
 
 ## What it blocks
 
@@ -14,10 +14,10 @@ Clearframe can block network requests to a small, first-party curated list of co
 ## What it does NOT block
 
 - First-party analytics a site runs from its own domain or a domain it visibly owns.
-- Cookie-based tracking. Clearframe does not manage, partition, or strip cookies as part of this feature.
+- Cookie-based tracking. Limeghost does not manage, partition, or strip cookies as part of this feature.
 - Browser fingerprinting (canvas, font, or timing-based identification techniques).
 - CNAME-cloaked trackers, where a site proxies a tracker through a subdomain of its own domain. The bundled list matches literal tracker domains, not disguised first-party-looking hostnames.
-- A per-page or running count of blocked requests. WebKit applies the compiled rules inside the page process and never reports back which rules fired, so Clearframe genuinely cannot see or count what was blocked. The UI never shows a number — see "Honest UI rule" below.
+- A per-page or running count of blocked requests. WebKit applies the compiled rules inside the page process and never reports back which rules fired, so Limeghost genuinely cannot see or count what was blocked. The UI never shows a number — see "Honest UI rule" below.
 
 ## Inclusion and exclusion criteria
 
@@ -55,16 +55,16 @@ A person can turn blocking off for the current site from the shield button in th
 - An exception for `example.com` also covers `www.example.com`, because both normalize to the same stored host. It does **not** cover other subdomains such as `shop.example.com` or `mail.example.com`; each one needs its own exception if it should be excluded too.
 - Exceptions apply in private tabs too, since tracker blocking is a web-view setting rather than a history or cookie feature.
 - "Clear local browsing data" in Settings clears every stored exception along with the rest of local browsing data.
-- Turning tracker blocking off entirely (the global Settings switch) deletes Clearframe's compiled rule-list artifacts from disk, because a compiled list encodes exactly which sites it was excluded from and none of that should linger once blocking is off. Turning blocking back on pays for one fresh compile — a deliberate privacy/cleanliness trade-off, not a bug.
+- Turning tracker blocking off entirely (the global Settings switch) deletes Limeghost's compiled rule-list artifacts from disk, because a compiled list encodes exactly which sites it was excluded from and none of that should linger once blocking is off. Turning blocking back on pays for one fresh compile — a deliberate privacy/cleanliness trade-off, not a bug.
 
 ## Compile caching and the launch-window caveat
 
-Compiling the rule list is not free, so Clearframe reuses a previously compiled list whenever the configuration has not changed. The compiled list's identifier folds in the shipped list version and a hash of the current sorted exception set, so `lookUpContentRuleList` can find an existing match before paying for a recompile; stale `clearframe-tracker-block.*` identifiers from an earlier version or exception set are cleaned up once a new one is confirmed.
+Compiling the rule list is not free, so Limeghost reuses a previously compiled list whenever the configuration has not changed. The compiled list's identifier folds in the shipped list version and a hash of the current sorted exception set, so `lookUpContentRuleList` can find an existing match before paying for a recompile; stale `limeghost-tracker-block.*` identifiers from an earlier version or exception set are cleaned up once a new one is confirmed.
 
 One honest caveat: a tab that is already loading a page when the very first compile completes is not retroactively protected. The rules attach to that web view, but requests the page already issued are not replayed against them. The next navigation or reload in that tab is covered normally. This only matters in the brief window around app launch, before the shipped list finishes its first compile.
 
 ## Honest UI rule
 
-Every surface that mentions tracker blocking — the address-bar shield and Settings — states only what is currently true (on for this site, not blocking yet, off for this site, off in Settings, or the filter could not be loaded) and never renders a count of blocked requests. WebKit does not report that number back to the app, so Clearframe cannot know it, and the UI does not imply otherwise.
+Every surface that mentions tracker blocking — the address-bar shield and Settings — states only what is currently true (on for this site, not blocking yet, off for this site, off in Settings, or the filter could not be loaded) and never renders a count of blocked requests. WebKit does not report that number back to the app, so Limeghost cannot know it, and the UI does not imply otherwise.
 
 “Not blocking yet” is the launch-window caveat above, said out loud. While the first compile is in flight no rule list is attached to any web view, so the shield must not read “On for this site”: it is neutral, it says nothing is being blocked yet, and its popover explains that the filter applies to pages opened once it is ready and that reloading covers the current page too.

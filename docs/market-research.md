@@ -55,7 +55,7 @@ Practical lessons:
 3. **Owned search increases strategic leverage.** At 1.6B queries per month, Brave can invest in search and ads on a volume unavailable to a new extension.
 4. **Trust is cumulative and fragile.** Privacy messaging must match permissions, telemetry, AI data flows, and monetization. One hidden commercial bias can undermine the whole wedge.
 
-Clearframe’s equivalent daily benefit should be “I understand unfamiliar pages faster and can see what deserves checking,” not “we also have an AI chat.”
+Limeghost’s equivalent daily benefit should be “I understand unfamiliar pages faster and can see what deserves checking,” not “we also have an AI chat.”
 
 ### Comet: integration is compelling; agency creates a security burden
 

@@ -90,7 +90,7 @@ Section fronts and index pages expose many short link blocks instead of prose. T
 
 ## Runtime equivalence
 
-Two implementations exist and must behave identically: Swift in `ClearframeCore`, and JavaScript in `src/core/analyzer.js`. They are deliberately separate rather than shared, and the fixture is what keeps them honest.
+Two implementations exist and must behave identically: Swift in `LimeghostCore`, and JavaScript in `src/core/analyzer.js`. They are deliberately separate rather than shared, and the fixture is what keeps them honest.
 
 The traps that have actually bitten, all of them twice:
 
@@ -102,5 +102,5 @@ The traps that have actually bitten, all of them twice:
 
 - Add a contract version before deploying a backend.
 - Keep additive fields optional.
-- Keep `macos/ClearframeBrowser/Tests/ClearframeCoreTests/Fixtures/local-analysis-contract.json` as the platform-neutral behavior gate — 37 cases across seven keys: `structureCases`, `riskCases`, `readingTimeCases`, `segmentationCases`, `boilerplateCases`, `duplicateSentenceCases`, `emptyAnalysisCases`. The Swift and JavaScript suites both execute it, and a later Windows implementation should consume the same cases.
+- Keep `macos/LimeghostBrowser/Tests/LimeghostCoreTests/Fixtures/local-analysis-contract.json` as the platform-neutral behavior gate — 37 cases across seven keys: `structureCases`, `riskCases`, `readingTimeCases`, `segmentationCases`, `boilerplateCases`, `duplicateSentenceCases`, `emptyAnalysisCases`. The Swift and JavaScript suites both execute it, and a later Windows implementation should consume the same cases.
 - Change behaviour in the fixture first, then make both runtimes satisfy it. Never edit one implementation alone.

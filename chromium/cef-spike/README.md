@@ -1,13 +1,13 @@
-# Clearframe CEF spike
+# Limeghost CEF spike
 
-This directory is an **isolated Chromium migration scaffold**. It is not linked into `macos/ClearframeBrowser`, does not alter `dist/Clearframe.app`, and does not contain a working browser implementation.
+This directory is an **isolated Chromium migration scaffold**. It is not linked into `macos/LimeghostBrowser`, does not alter `dist/Limeghost.app`, and does not contain a working browser implementation.
 
 The selected engine path is the Chromium Embedded Framework (CEF) with:
 
 - official architecture-specific binary distributions;
 - CMake/Xcode for the CEF native wrapper and macOS app/helper bundle;
-- a thin Clearframe-owned Objective-C++ implementation behind the Objective-C contract in `include/ClearframeChromiumBridge.h`;
-- the existing SwiftUI product UI and `ClearframeCore` above that bridge.
+- a thin Limeghost-owned Objective-C++ implementation behind the Objective-C contract in `include/LimeghostChromiumBridge.h`;
+- the existing SwiftUI product UI and `LimeghostCore` above that bridge.
 
 Read [the migration plan](../../docs/chromium-migration.md) before extending this spike.
 
@@ -25,7 +25,7 @@ CEF's official CMake workflow requires CMake 3.21 or newer. With no CEF archive 
 
 ```bash
 cmake -S . -B build -G Xcode \
-  -DCLEARFRAME_CEF_VALIDATE_ONLY=ON \
+  -DLIMEGHOST_CEF_VALIDATE_ONLY=ON \
   -DPROJECT_ARCH=arm64
 ```
 
@@ -33,11 +33,11 @@ After separately downloading and verifying the pinned official distribution, ext
 
 ```bash
 cmake -S . -B build -G Xcode \
-  -DCLEARFRAME_CEF_VALIDATE_ONLY=OFF \
+  -DLIMEGHOST_CEF_VALIDATE_ONLY=OFF \
   -DPROJECT_ARCH=arm64 \
   -DCEF_ROOT=/absolute/path/to/cef_binary_distribution
 ```
 
-The non-validation configuration loads CEF's official `FindCEF.cmake` and includes `libcef_dll_wrapper`. It deliberately does not create or package a Clearframe runtime target yet. The next implementation should begin from official `cefsimple` and preserve its macOS helper-process structure.
+The non-validation configuration loads CEF's official `FindCEF.cmake` and includes `libcef_dll_wrapper`. It deliberately does not create or package a Limeghost runtime target yet. The next implementation should begin from official `cefsimple` and preserve its macOS helper-process structure.
 
 Do not commit a downloaded CEF distribution, build products, or a copied Chromium framework to this repository.

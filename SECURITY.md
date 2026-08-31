@@ -1,6 +1,6 @@
-# Clearframe security policy
+# Limeghost security policy
 
-Clearframe is an early macOS/WebKit browser foundation, not a production-security-reviewed consumer release. The current `main` branch is the only version receiving fixes; no tagged public release is supported yet.
+Limeghost is an early macOS/WebKit browser foundation, not a production-security-reviewed consumer release. The current `main` branch is the only version receiving fixes; no tagged public release is supported yet.
 
 ## Reporting a vulnerability
 

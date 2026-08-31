@@ -52,7 +52,7 @@ const CJK_PATTERN = /[\u1100-\u11FF\u2E80-\u2EFF\u2F00-\u2FDF\u3005\u3007\u3040-
 // Structure thresholds calibrated on live English and Romanian section fronts and
 // articles. Simplified Chinese has no listing measurement yet; only the shorter CJK
 // block length follows the analyzer's existing CJK-aware precedent.
-// Sentence terminators Clearframe recognises. Latin and CJK stops, plus the Devanagari
+// Sentence terminators Limeghost recognises. Latin and CJK stops, plus the Devanagari
 // danda and double danda, the Urdu full stop, and the Arabic question mark. A script
 // whose terminator is missing here reads as one endless sentence, which also makes its
 // pages look unpunctuated to assessStructure.

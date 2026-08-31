@@ -1,12 +1,12 @@
-# Clearframe focused go-to-market plan
+# Limeghost focused go-to-market plan
 
 **Status:** zero-budget validation plan for the current macOS product. Review monthly and change it when observed behavior contradicts the assumptions.
 
 ## Strategic choice
 
-Clearframe can be positioned globally and remain English-first, but it should not initially market to “everyone who uses AI.” The first wedge is independent creators who are already overwhelmed by AI choices: photographers, designers, video creators, and creative freelancers.
+Limeghost can be positioned globally and remain English-first, but it should not initially market to “everyone who uses AI.” The first wedge is independent creators who are already overwhelmed by AI choices: photographers, designers, video creators, and creative freelancers.
 
-The message is **“Clearframe makes the AI world simple.”** For this audience, that means helping someone begin from a creative task, choose a small useful AI path, open the official tool, and make unfamiliar web information understandable with Analyze Page.
+The message is **“Limeghost makes the AI world simple.”** For this audience, that means helping someone begin from a creative task, choose a small useful AI path, open the official tool, and make unfamiliar web information understandable with Analyze Page.
 
 This wedge is a distribution focus, not a permanent product restriction. The browser remains for ordinary users. Developers, enterprise buyers, price-sensitive mass search users, and people seeking autonomous transactions are not the first acquisition audience.
 
@@ -17,23 +17,23 @@ This wedge is a distribution focus, not a permanent product restriction. The bro
 - A before/after creative workflow is easier to understand than an abstract browser feature tour.
 - Creative freelancers can provide direct feedback about time, confusion, client work, and willingness to return.
 
-The tradeoff is reach. A focused creator story may grow more slowly at first than broad “best AI tools” content, but it gives Clearframe a sharper problem to validate. If creators watch demonstrations but do not use or return to the browser, the wedge is not working and must be revised.
+The tradeoff is reach. A focused creator story may grow more slowly at first than broad “best AI tools” content, but it gives Limeghost a sharper problem to validate. If creators watch demonstrations but do not use or return to the browser, the wedge is not working and must be revised.
 
 ## Positioning and proof
 
 Use one clear narrative:
 
-> Too many AI tools make simple creative work confusing. Clearframe helps you choose a useful path and understand what you find, without selling your browsing history.
+> Too many AI tools make simple creative work confusing. Limeghost helps you choose a useful path and understand what you find, without selling your browsing history.
 
 Demonstrate the promise with real workflows, not adjectives:
 
 1. Start from a concrete goal such as preparing a mood board, researching a location, translating a client reference, or choosing an image/video tool.
-2. Show the Clearframe task category and the deliberately small set of paths.
+2. Show the Limeghost task category and the deliberately small set of paths.
 3. Open the official provider destination; do not imply a partnership or automatic prompt transfer.
 4. Open a relevant article or documentation page and use Analyze Page to make it easier to understand.
-5. State the current limits: recommendations are manually reviewed editorial guidance, Clearframe extracts a page rather than understanding it, and any AI is one the person brings themselves.
+5. State the current limits: recommendations are manually reviewed editorial guidance, Limeghost extracts a page rather than understanding it, and any AI is one the person brings themselves.
 
-Do not claim that Clearframe is the fastest, lightest, safest, or universally best browser without evidence. The proof should be whether a real person reaches a useful result with less confusion.
+Do not claim that Limeghost is the fastest, lightest, safest, or universally best browser without evidence. The proof should be whether a real person reaches a useful result with less confusion.
 
 ## Content and channels
 
@@ -51,11 +51,11 @@ The founder’s visual credibility should improve the clarity and craft of demon
 
 | Hypothesis | Zero-budget test | Evidence to record | Decision |
 |---|---|---|---|
-| Creators understand the promise quickly. | Show the first minute without coaching. | Can the tester explain Clearframe in their own words and choose a task within two minutes? | Rewrite onboarding/message if fewer than half can. |
+| Creators understand the promise quickly. | Show the first minute without coaching. | Can the tester explain Limeghost in their own words and choose a task within two minutes? | Rewrite onboarding/message if fewer than half can. |
 | The AI home reduces choice overload. | Give a real creative goal and observe the first selection. | Time to choose, hesitation, wrong-path reasons, and whether the official destination is expected. | Reduce or rename paths before adding tools. |
 | Analyze Page is a repeatable reason to use the browser. | Ask testers to use it on one unfamiliar page, then follow up after seven days. | Useful result, confusion, repeat use, and unsupported expectations. | Prioritize extraction/evidence quality if value is present; do not hide quality failures with more catalog cards. |
 | Workflow content attracts the right people. | Publish narrow demos with a single tester invitation. | Qualified conversations, installs, completed sessions, and returns—not views alone. | Stop formats that generate attention without product use. |
-| Users will refer Clearframe when the first minute works. | Ask only after observed value; provide a normal link, no incentive. | Voluntary introductions or shares that lead to a qualified tester. | Do not buy reach until referrals occur organically. |
+| Users will refer Limeghost when the first minute works. | Ask only after observed value; provide a normal link, no incentive. | Voluntary introductions or shares that lead to a qualified tester. | Do not buy reach until referrals occur organically. |
 
 ## Metrics without surveillance
 
@@ -63,8 +63,8 @@ Early metrics come from consented test sessions, direct follow-ups, and a small 
 
 - **Activation:** a new tester independently chooses a relevant AI path or successfully analyzes a real page during the first session.
 - **Time to first value:** minutes from launch to that useful action, with hesitation notes from observed sessions.
-- **Seven-day retention:** the tester reports or demonstrates another meaningful Clearframe use within seven days.
-- **Referral evidence:** a tester voluntarily shares Clearframe or introduces another qualified creator who completes a session.
+- **Seven-day retention:** the tester reports or demonstrates another meaningful Limeghost use within seven days.
+- **Referral evidence:** a tester voluntarily shares Limeghost or introduces another qualified creator who completes a session.
 - **Quality signal:** proportion of observed Analyze Page results judged useful versus empty, polluted, or misleading.
 - **Content conversion:** qualified tester sessions per workflow post; views and follower counts are secondary diagnostics.
 
@@ -111,7 +111,7 @@ This cadence should fit available founder time. If content production prevents p
 
 Do not run paid ads until activation, seven-day retention, and organic referral evidence are credible in a minimally coached cohort. Paid acquisition before that point buys traffic to an unproven experience and makes diagnosis harder.
 
-Keep the useful browser free. Optional Pro was to be sold on heavy AI usage that Clearframe provided — it no longer provides any, so that thesis needs rebuilding around something Clearframe owns, or abandoning consciously. See the note in [project-context.md](project-context.md). Team plans come later, after administration and approved model routing are credible. Search revenue sharing or transparent referrals may be explored only at meaningful scale and must never silently change AI-home ordering, extraction, or risk signals.
+Keep the useful browser free. Optional Pro was to be sold on heavy AI usage that Limeghost provided — it no longer provides any, so that thesis needs rebuilding around something Limeghost owns, or abandoning consciously. See the note in [project-context.md](project-context.md). Team plans come later, after administration and approved model routing are credible. Search revenue sharing or transparent referrals may be explored only at meaningful scale and must never silently change AI-home ordering, extraction, or risk signals.
 
 Never sell browsing history, add covert recommendation payments, invent traction, or imply guaranteed growth or revenue.
 
@@ -120,7 +120,7 @@ Never sell browsing history, add covert recommendation payments, invent traction
 - **Global brand, narrow wedge:** publish in English and keep global availability language cautious, while recruiting creators first. Do not confuse initial focus with exclusion from the product.
 - **Craft, not production theater:** strong visual work builds trust, but excessive polish can delay learning. Ship clear demonstrations on a sustainable cadence.
 - **Audience is not retention:** views, likes, and subscribers do not validate a browser. Product activation and return use decide what to build.
-- **Catalog breadth is not value:** add a tool only when it clarifies a task. More cards can recreate the overload Clearframe promises to reduce.
+- **Catalog breadth is not value:** add a tool only when it clarifies a task. More cards can recreate the overload Limeghost promises to reduce.
 - **Editorial badges create trust risk:** remove a badge when the official rationale is weak or stale. Never fill every category for visual symmetry.
 - **Community access is earned:** stop posting in any community where the work is not clearly useful or welcomed.
 - **Privacy limits measurement:** accept slower, consent-based learning rather than collecting sensitive browsing behavior.

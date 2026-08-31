@@ -20,7 +20,7 @@ Measured on the founder's Mac, not inferred:
   nb  nl  pt(BR/PT)  sv  tr  vi  zh-Hans  zh-Hant(HK/TW)
   ```
 
-  **Romanian is not among them** — the founder's own daily reading. English, French and both Chinese scripts are, so three of Clearframe's four tested languages are covered and twenty-two more are gained that the deterministic pipeline never served.
+  **Romanian is not among them** — the founder's own daily reading. English, French and both Chinese scripts are, so three of Limeghost's four tested languages are covered and twenty-two more are gained that the deterministic pipeline never served.
 
 - **The context window is about 4,096 tokens**, covering instructions, schema, input *and* output together. Roughly 12,000 characters of article once the rest is allowed for. Extraction caps at 48,000. Both pages the founder tested during the removal work — a Britannica section at 32,801 characters and the MacRumors homepage at 25,527 — are several times over budget. This is the constraint that shapes everything else, and it was missed entirely by the first design.
 
@@ -32,7 +32,7 @@ Measured on the founder's Mac, not inferred:
 
 ## The design
 
-Not index selection. **The model reads, and Clearframe checks what it says.**
+Not index selection. **The model reads, and Limeghost checks what it says.**
 
 ```text
 readableText(page)          →  clean article, interface noise already removed
@@ -62,7 +62,7 @@ The honest limit is that a model can paraphrase when asked to quote, and a parap
 
 ## Sequencing
 
-This is not the next thing to do, for a reason that has not changed: `spctl --assess` reports the built app as **rejected**. It is ad-hoc signed and not notarized, so no outside tester can open Clearframe at all, and no amount of analysis quality matters to somebody who cannot launch it.
+This is not the next thing to do, for a reason that has not changed: `spctl --assess` reports the built app as **rejected**. It is ad-hoc signed and not notarized, so no outside tester can open Limeghost at all, and no amount of analysis quality matters to somebody who cannot launch it.
 
 1. Developer ID signing and notarization
 2. Observed sessions with real testers

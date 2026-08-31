@@ -9,7 +9,7 @@ import {
 } from "../src/core/analyzer.js";
 
 const contractURL = new URL(
-  "../macos/ClearframeBrowser/Tests/ClearframeCoreTests/Fixtures/local-analysis-contract.json",
+  "../macos/LimeghostBrowser/Tests/LimeghostCoreTests/Fixtures/local-analysis-contract.json",
   import.meta.url
 );
 const contract = JSON.parse(await readFile(contractURL, "utf8"));

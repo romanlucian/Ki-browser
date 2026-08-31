@@ -1,20 +1,20 @@
 # Browser feature research and gap analysis
 
-**Status:** August 19, 2026; sections 1 and 2 re-audited August 21, 2026; sections 2 and 3 updated August 22, 2026 when bookmark import shipped and its placement was researched (3.1). A snapshot, not a roadmap. It records what Clearframe has, what mainstream browsers have that it does not, and which gaps are worth closing. Read it with [clearframe-strategy.md](clearframe-strategy.md), which decides what Clearframe is *for*; this file only supplies evidence.
+**Status:** August 19, 2026; sections 1 and 2 re-audited August 21, 2026; sections 2 and 3 updated August 22, 2026 when bookmark import shipped and its placement was researched (3.1). A snapshot, not a roadmap. It records what Limeghost has, what mainstream browsers have that it does not, and which gaps are worth closing. Read it with [limeghost-strategy.md](limeghost-strategy.md), which decides what Limeghost is *for*; this file only supplies evidence.
 
 ## Why this file exists
 
-Features were going in reactively. This is the systematic pass that replaces that: one audit of Clearframe's own source, and three competitor studies. Without it the same research gets re-run every few weeks.
+Features were going in reactively. This is the systematic pass that replaces that: one audit of Limeghost's own source, and three competitor studies. Without it the same research gets re-run every few weeks.
 
-This repository is edited by more than one session, often within the same week, so sections 1 and 2 — the parts that describe what Clearframe currently has — go stale fast and need periodic re-checking against source. Sections 3 through 8 describe Chromium internals, WebKit behavior, and competitor products, none of which change when this codebase does, so they are not re-audited here.
+This repository is edited by more than one session, often within the same week, so sections 1 and 2 — the parts that describe what Limeghost currently has — go stale fast and need periodic re-checking against source. Sections 3 through 8 describe Chromium internals, WebKit behavior, and competitor products, none of which change when this codebase does, so they are not re-audited here.
 
 **How it was produced.** Four subagents on August 19, 2026: one read this repository's source directly, three researched Safari, Chrome, and the challenger browsers. The Chrome study lost its web-search budget and pivoted to reading Chromium's own source on `googlesource.com`, which produced better ground truth than search would have.
 
-**Re-audit, August 21, 2026.** One session re-checked every capability sections 1 and 2 named, directly against `macos/ClearframeBrowser/Sources/`, by reading the relevant code rather than trusting a menu entry. Several capabilities section 2 recorded as absent on August 19 had shipped in the two days since; the two defects it recorded were confirmed fixed and removed. Sections 3–8 were not touched and were not re-verified this pass.
+**Re-audit, August 21, 2026.** One session re-checked every capability sections 1 and 2 named, directly against `macos/LimeghostBrowser/Sources/`, by reading the relevant code rather than trusting a menu entry. Several capabilities section 2 recorded as absent on August 19 had shipped in the two days since; the two defects it recorded were confirmed fixed and removed. Sections 3–8 were not touched and were not re-verified this pass.
 
-**Confidence conventions used throughout.** *Verified* means read live from primary source this session. *Recalled* means established knowledge that was not re-confirmed and should be checked before anyone depends on it. Anything unmarked in the Clearframe sections was read from this repository's source and is verified by construction.
+**Confidence conventions used throughout.** *Verified* means read live from primary source this session. *Recalled* means established knowledge that was not re-confirmed and should be checked before anyone depends on it. Anything unmarked in the Limeghost sections was read from this repository's source and is verified by construction.
 
-## 1. Clearframe today — corrections to common assumptions
+## 1. Limeghost today — corrections to common assumptions
 
 Several capabilities are frequently assumed missing and are in fact shipped. Verified in source:
 
@@ -51,7 +51,7 @@ The gap list was worked in waves. They were agreed in conversation and never wri
 
 **Wave 3 — the reading work.** Superseded. It rested on key points and Evidence Mode, both removed on August 30, 2026; the items below marked *(withdrawn)* went with them. **Not started, and not to be started in this shape.** This is where the product's own promise lives rather than parity with other browsers, so it should not be pushed behind more parity work.
 
-**Unwaved but shipped, because using the product surfaced them.** The bookmarks-bar placement research (3.1), the performance work of August 24 (a store that rebuilt its whole bookmark collection on every read, an import that saved once per bookmark, an address bar that rebuilt its suggestions per keystroke), and splitting history onto its own ⌘Y destination. None of these came from the gap list. All of them came from the founder using Clearframe as his own browser with four hundred real bookmarks — which remains the only source of evidence of this kind the project has.
+**Unwaved but shipped, because using the product surfaced them.** The bookmarks-bar placement research (3.1), the performance work of August 24 (a store that rebuilt its whole bookmark collection on every read, an import that saved once per bookmark, an address bar that rebuilt its suggestions per keystroke), and splitting history onto its own ⌘Y destination. None of these came from the gap list. All of them came from the founder using Limeghost as his own browser with four hundred real bookmarks — which remains the only source of evidence of this kind the project has.
 
 The page-intelligence repair of August 25, 2026 belongs here too, and came from a review rather than from use. Twenty-six commits: the media filter no longer rewrites sentences it was meant to skip; a full stop inside an abbreviation, an initialism or a citation no longer ends a sentence; a page whose entries live in table rows is read and recognised as a listing; Evidence Mode works on a key point drawn from a row; a claim needs more than a digit; and roughly a dozen places where the Swift and JavaScript engines measured the same page differently were settled — whitespace, graphemes, CJK ranges, Persian and Hindi tokenizing, and word boundaries after an accented letter. Analysis came out about three times faster than it went in. None of it is Wave 3, which remains not started.
 
@@ -69,7 +69,7 @@ Confirmed absent by source search, grouped by why they are absent. Re-checked ag
 
 **Deliberately excluded, and should stay excluded.** Extensions (WebKit has no host for Manifest V3; the CEF scaffold exists as a future gate, not a plan) · passwords and autofill (blocked behind a security review that has not happened) · search suggestions (they would send every keystroke to a search engine; the local-only completion is the better product) · crypto wallets, ad networks, and agentic page actions (rejected in strategy).
 
-The August 19 audit's "two defects found" section is gone: both were confirmed fixed on re-audit. ⌘W's double binding is gone — `ClearframeBrowserApp.swift` now explicitly clears AppKit's default window-list command group (`CommandGroup(replacing: .singleWindowList) {}`) with a comment explaining why, so ⌘W closes only a tab and ⇧⌘W closes a window. And the `BrowserWorkspace.swift` comment describing a tab picked "from ⌘1-⌘9" is no longer a stale claim — that shortcut is now wired up in `ClearframeBrowserApp.swift` (see the ⌘1–9 row in section 1).
+The August 19 audit's "two defects found" section is gone: both were confirmed fixed on re-audit. ⌘W's double binding is gone — `LimeghostBrowserApp.swift` now explicitly clears AppKit's default window-list command group (`CommandGroup(replacing: .singleWindowList) {}`) with a comment explaining why, so ⌘W closes only a tab and ⇧⌘W closes a window. And the `BrowserWorkspace.swift` comment describing a tab picked "from ⌘1-⌘9" is no longer a stale claim — that shortcut is now wired up in `LimeghostBrowserApp.swift` (see the ⌘1–9 row in section 1).
 
 ## 3. Bookmark import — complete specification
 
@@ -140,7 +140,7 @@ Three details that will otherwise cost a debugging session:
 
 `PERSONAL_TOOLBAR_FOLDER="true"` appears on exactly one folder — the bookmarks bar. `ICON` is an optional inline data URI and is safe to ignore.
 
-**This attribute was specified here and then not read for a month.** Both importers knew which root was the bar and discarded the fact: the Chromium reader used the `bookmark_bar` key to find the node and kept only the display name, and the HTML reader had the attribute parsed into a dictionary it never consulted. Clearframe's *exporter* wrote the marker the whole time, so Clearframe could not read back a file Clearframe wrote — export, re-import, and the bar came back as an ordinary folder. Fixed August 22, 2026 (`ImportedFolderRole`). The lesson worth keeping: a documented format detail is not implemented until a test asserts a parser produces it, and the export-side test that existed here asserted only that the marker was *written*.
+**This attribute was specified here and then not read for a month.** Both importers knew which root was the bar and discarded the fact: the Chromium reader used the `bookmark_bar` key to find the node and kept only the display name, and the HTML reader had the attribute parsed into a dictionary it never consulted. Limeghost's *exporter* wrote the marker the whole time, so Limeghost could not read back a file Limeghost wrote — export, re-import, and the bar came back as an ordinary folder. Fixed August 22, 2026 (`ImportedFolderRole`). The lesson worth keeping: a documented format detail is not implemented until a test asserts a parser produces it, and the export-side test that existed here asserted only that the marker was *written*.
 
 ### 3.1 Where imported bookmarks should land — researched August 22, 2026
 
@@ -158,7 +158,7 @@ Import shipped putting everything inside one dated folder. Against a real Chrome
 
 Chromium's `profile_writer.cc` states the reason in a comment: importing everything into one folder "makes for unnecessary nesting." Firefox went further and removed its "From Google Chrome" wrapper entirely — the migrator now inserts into `PlacesUtils.bookmarks.toolbarGuid` directly. The two most import-experienced vendors both moved toward merging.
 
-**What nobody does**, and where Clearframe is therefore deliberately ahead rather than merely different: no major browser de-duplicates on re-import (Chrome mints "Imported (1)", Firefox appends duplicates, Safari stacks dated folders), none offers an undo, and none shows the placement before committing to it.
+**What nobody does**, and where Limeghost is therefore deliberately ahead rather than merely different: no major browser de-duplicates on re-import (Chrome mints "Imported (1)", Firefox appends duplicates, Safari stacks dated folders), none offers an undo, and none shows the placement before committing to it.
 
 **Shipped August 22, 2026.** A placement choice in the preview, defaulted by whether the bar is empty; the source's own root level collapsed away in both shapes; non-bar roots collected into one dated chip. Two rules held deliberately: a folder name that collides is reported before the import runs and then left alone — never merged into, never renamed to "AI (2)", because renaming would misname the *person's* folder — and the bar is identified by the format marker, never by folder title, since the same folder is called "toolbar", "Bookmarks Toolbar", "Favorites", and whatever a localized export calls it.
 
@@ -171,16 +171,16 @@ Chromium's `profile_writer.cc` states the reason in a comment: importing everyth
 ### Permission obstacles
 
 - **Safari's `~/Library/Safari/` is TCC-protected.** Even unsandboxed, reading it fails until the user grants Full Disk Access in System Settings. Safari import needs an explicit explanation and a fallback to "export from Safari, then import the HTML file." Chrome, Brave, and Edge live in ordinary Application Support and read without a prompt (*the Chromium half is moderate confidence; smoke-test it*).
-- **If Clearframe is ever sandboxed** for App Store distribution, direct path access ends. The user must choose the file through `NSOpenPanel`, and a security-scoped bookmark — not a path string — is what grants durable access.
+- **If Limeghost is ever sandboxed** for App Store distribution, direct path access ends. The user must choose the file through `NSOpenPanel`, and a security-scoped bookmark — not a path string — is what grants durable access.
 - **Read safety.** Chrome writes `Bookmarks` by atomic rename, so reading it while Chrome runs is safe. SQLite files may be WAL-locked by a running browser; open read-only or copy the `.sqlite`/`-wal`/`-shm` set first.
 
 ### Recommended shape
 
-Implement both readers. Native Chromium JSON gives higher fidelity and maps almost directly onto `Codable`. Netscape HTML is universal and doubles as Clearframe's own export format. Import must show a preview and never silently overwrite existing bookmarks.
+Implement both readers. Native Chromium JSON gives higher fidelity and maps almost directly onto `Codable`. Netscape HTML is universal and doubles as Limeghost's own export format. Import must show a preview and never silently overwrite existing bookmarks.
 
 ## 4. Cheap wins from WebKit
 
-Capabilities WebKit already provides that Clearframe does not yet expose. Property names verified against Apple's documentation JSON; **version floors are unreliable from that path and must be confirmed in Xcode.**
+Capabilities WebKit already provides that Limeghost does not yet expose. Property names verified against Apple's documentation JSON; **version floors are unreliable from that path and must be confirmed in Xcode.**
 
 Three are a single property each:
 
@@ -194,27 +194,27 @@ configuration.allowsPictureInPictureMediaPlayback = true  // native video PiP
 
 Small deltas from what already exists:
 
-- **Per-site zoom memory.** `WKWebView.pageZoom` exists and Clearframe already uses it per session. Safari's persistence is nothing more than an origin-keyed dictionary reapplied on navigation finish.
+- **Per-site zoom memory.** `WKWebView.pageZoom` exists and Limeghost already uses it per session. Safari's persistence is nothing more than an origin-keyed dictionary reapplied on navigation finish.
 - **Per-site media-capture memory.** `cameraCaptureState` / `microphoneCaptureState` report and revoke access. WebKit does not remember the user's grant across launches — that bookkeeping is the app's, structurally identical to zoom.
 - **Download resume.** `WKDownload.cancel(_:)` hands back resumable `Data` (macOS 11.3+, verified).
 - **`takeSnapshot`** for tab-hover previews.
 - **`WKWebsiteDataStore(forIdentifier:)`** creates fully isolated, independently deletable data stores. This is almost certainly the mechanism behind Safari's Profiles, and it is the honest path to profiles here (*the causal link is inference*).
 
-**Reader mode is not a WebKit API.** Confirmed by absence across `WKWebView`, `WKPreferences`, and `WKWebViewConfiguration`. Safari's Websites pane only toggles something only Safari can do. This matters strategically: Clearframe's extraction engine is not a workaround for missing plumbing — it is the only path any third-party WebKit browser has, and it is already built.
+**Reader mode is not a WebKit API.** Confirmed by absence across `WKWebView`, `WKPreferences`, and `WKWebViewConfiguration`. Safari's Websites pane only toggles something only Safari can do. This matters strategically: Limeghost's extraction engine is not a workaround for missing plumbing — it is the only path any third-party WebKit browser has, and it is already built.
 
 ## 5. Settings architecture reference
 
-Clearframe's Settings is one grouped form. Both mainstream browsers use a pane model worth borrowing.
+Limeghost's Settings is one grouped form. Both mainstream browsers use a pane model worth borrowing.
 
 **Safari** has ten panes: General, Tabs, AutoFill, Search, Security, Privacy, Websites, Profiles, Extensions, Advanced (*verified*). Passwords is **not** a pane — it moved to the system Passwords app.
 
 The pane worth copying is **Websites**, a per-site permission matrix covering Reader, Content Blockers, Auto-Play, Page Zoom, Camera, Microphone, Screen Sharing, Location, Downloads, Notifications, Pop-up Windows, and Lockdown Mode. Each category splits sites into "Currently Open" and "Configured", and each ends with a "When visiting other websites" default.
 
-Clearframe is already partway there — per-site tracker-blocking exceptions and per-site data removal are the same shape, without the frame around them.
+Limeghost is already partway there — per-site tracker-blocking exceptions and per-site data removal are the same shape, without the frame around them.
 
-**Chrome** organizes as People · Autofill and passwords · Privacy and security · Performance · **AI** · Appearance · Search engine · Default browser · On startup · Languages · Downloads · Accessibility · System · Reset settings (*verified from `settings_menu.html`*). Its per-site permission enum runs to roughly fifty entries — most are device APIs (USB, HID, Serial, MIDI, Bluetooth) that WebKit does not expose and Clearframe will never need.
+**Chrome** organizes as People · Autofill and passwords · Privacy and security · Performance · **AI** · Appearance · Search engine · Default browser · On startup · Languages · Downloads · Accessibility · System · Reset settings (*verified from `settings_menu.html`*). Its per-site permission enum runs to roughly fifty entries — most are device APIs (USB, HID, Serial, MIDI, Bluetooth) that WebKit does not expose and Limeghost will never need.
 
-Note the **AI** section: Google now ships a first-party AI settings surface in Chrome. They are building toward the same sentence Clearframe uses — making AI simple. Differentiation cannot be *having* AI.
+Note the **AI** section: Google now ships a first-party AI settings surface in Chrome. They are building toward the same sentence Limeghost uses — making AI simple. Differentiation cannot be *having* AI.
 
 ## 6. Competitive read
 
@@ -226,7 +226,7 @@ Note the **AI** section: Google now ships a first-party AI settings surface in C
 
 **Arc, and the lesson.** The Browser Company built the most admired reimagined browser of the era — vertical tabs, Spaces, split view, auto-archiving — reached roughly a million users, and **stopped feature development in May 2025**, keeping only security fixes. The stated reason was that Arc had become too complex for mainstream users; they called it a novelty tax. They pivoted to Dia, an AI browser, and **Atlassian acquired the company for $610M in September 2025** (*acquisition verified; the complexity reasoning is widely reported rather than confirmed here*).
 
-Two conclusions, and they pull in opposite directions. People **will** switch browsers for something better — a million did. And the team that executed the reimagined browser best of all abandoned it because it asked users to learn too much. `clearframe-strategy.md` already says clarity outranks feature count; Arc is the case study.
+Two conclusions, and they pull in opposite directions. People **will** switch browsers for something better — a million did. And the team that executed the reimagined browser best of all abandoned it because it asked users to learn too much. `limeghost-strategy.md` already says clarity outranks feature count; Arc is the case study.
 
 The practical test for any new feature: **does it need explaining?** "Your bookmarks come with you" needs none. A new organizational concept sitting beside the tab groups that already exist needs a paragraph, and that is the warning sign.
 
@@ -234,11 +234,11 @@ The practical test for any new feature: **does it need explaining?** "Your bookm
 
 **Worth adopting, ranked by value over cost:** split view (every challenger reinvented it independently, which is real evidence of demand) · a tab and command palette (Spotlight is a pattern users already know) · a visible tab-sleep affordance (WebKit already suspends background tabs; the work is mostly telling the user) · vertical tabs, opt-in only.
 
-**Not worth adopting:** gesture and keyboard-remapping systems · built-in messengers, mail, or feeds · a bundled VPN (it would make Clearframe the intermediary for user traffic, against everything else it promises) · crypto anything · agentic page actions · named session save/restore, which overlaps what tab groups and restore already do.
+**Not worth adopting:** gesture and keyboard-remapping systems · built-in messengers, mail, or feeds · a bundled VPN (it would make Limeghost the intermediary for user traffic, against everything else it promises) · crypto anything · agentic page actions · named session save/restore, which overlaps what tab groups and restore already do.
 
 ## 7. Ideas that compound on what already exists
 
-Clearframe's engine extracts reading blocks and classifies page structure. It used to score sentences, detect claims and map one back to the live DOM; all three were removed on August 30, 2026 because the scoring underneath them measured word repetition rather than importance. What is genuinely uncommon is now the extraction itself, and the honesty of showing somebody exactly what is about to leave their machine.
+Limeghost's engine extracts reading blocks and classifies page structure. It used to score sentences, detect claims and map one back to the live DOM; all three were removed on August 30, 2026 because the scoring underneath them measured word repetition rather than importance. What is genuinely uncommon is now the extraction itself, and the honesty of showing somebody exactly what is about to leave their machine.
 
 All of the following are local-only, need no server and no new model, and take no action on the user's behalf.
 
@@ -261,4 +261,4 @@ Named so nobody treats this file as more certain than it is.
 
 ## Related
 
-[clearframe-strategy.md](clearframe-strategy.md) · [project-context.md](project-context.md) · [market-research.md](market-research.md) · [macos-browser-foundation.md](macos-browser-foundation.md) · [content-blocking.md](content-blocking.md) · [go-to-market.md](go-to-market.md)
+[limeghost-strategy.md](limeghost-strategy.md) · [project-context.md](project-context.md) · [market-research.md](market-research.md) · [macos-browser-foundation.md](macos-browser-foundation.md) · [content-blocking.md](content-blocking.md) · [go-to-market.md](go-to-market.md)

@@ -1,18 +1,18 @@
-# Clearframe: product and technical foundation
+# Limeghost: product and technical foundation
 
 **Status:** standalone macOS version-1 MVP release stage plus an earlier extension validation artifact, August 2026
-**Name:** Clearframe, kept after a deliberate review on August 19, 2026. It carries a true double meaning for a browser, it reads calm rather than boastful, which is the product's whole posture, and it generated the app mark: an empty frame with the icon set's turned corner. Alternatives were considered and rejected — a studio name on a consumer browser reads as a side project, and grander names contradict a product whose differentiation is refusing to overclaim.
+**Name:** Limeghost, kept after a deliberate review on August 19, 2026. It carries a true double meaning for a browser, it reads calm rather than boastful, which is the product's whole posture, and it generated the app mark: an empty frame with the icon set's turned corner. Alternatives were considered and rejected — a studio name on a consumer browser reads as a side project, and grander names contradict a product whose differentiation is refusing to overclaim.
 
 Two costs are accepted knowingly and are not settled by this decision:
 
 - The "Clear" prefix is crowded in software, which makes for a weak trademark. A proper trademark search is still required before any public launch, and it may yet force a change.
-- `clearframe.com`, `.app`, and `getclearframe.com` are all registered. The plan is to ship from `zincoo.com/clearframe`, the pattern Firefox and Orion use, which also puts the download on an established studio domain rather than a new one — a trust advantage when the file being downloaded is a browser.
+- `limeghost.com` and every other extension checked (.net, .io, .ai, .co) were free on August 31, 2026 and should be registered together. The plan is still to ship from `zincoo.com/limeghost`, the pattern Firefox and Orion use, which puts the download on an established studio domain rather than a new one — a trust advantage when the file being downloaded is a browser.
 
 The strongest naming evidence is still missing: no one outside the founder has used the product. Watch what observed testers call it before treating the name as final.
 
 ## Product thesis
 
-The browser market does not need another general-purpose Chromium wrapper with a chat box. Clearframe should win one repeated job first:
+The browser market does not need another general-purpose Chromium wrapper with a chat box. Limeghost should win one repeated job first:
 
 > Get this unfamiliar page into a shape I can actually work with — the article without the clutter, ready for the AI I already use — and warn me about obvious pressure tactics on the way.
 
@@ -34,8 +34,8 @@ Scam signals are a supporting trust feature, not the initial positioning. A smal
 
 ## Core user loop
 
-1. The user opens a page in the standalone Clearframe browser.
-2. Only after the user clicks Analyze Page, Clearframe extracts visible reading content and analyzes it locally.
+1. The user opens a page in the standalone Limeghost browser.
+2. Only after the user clicks Analyze Page, Limeghost extracts visible reading content and analyzes it locally.
 3. The panel leads with the source, the read time, and any visible risk signals.
 4. The user presses Copy page for AI, sees the complete payload and its size, and pastes it into whichever AI they use.
 6. The native browser can keep bookmarks, a capped local history, and recent-tab metadata in the Mac user profile. History and tab restoration can be disabled; browsing history is never uploaded to the AI provider or sold.
@@ -54,7 +54,7 @@ Scam signals are a supporting trust feature, not the initial positioning. A smal
 - On-demand visible-page extraction from the app’s current web view.
 - Source-language extraction with interface noise removed, read-time estimate, risk signals, a listing-page notice, and Copy for AI with a full-payload preview.
 - An assistant beside the page: the person's own ChatGPT, Claude, Gemini, Le Chat or Grok in a web view, one per window, signed in with their own account. It survives switching tabs, hiding, and switching assistant. Compare answers puts two of them side by side in the window.
-- No AI of Clearframe's own: no provider, no key, no request.
+- No AI of Limeghost's own: no provider, no key, no request.
 - Clear separation between the Foundation-only analysis/service core and macOS-specific browser UI.
 
 ### Retained extension validation artifact
@@ -76,7 +76,7 @@ Scam signals are a supporting trust feature, not the initial positioning. A smal
 ## Experience principles
 
 1. **Source before answer.** Keep the page title and host next to every analysis.
-2. **Local, full stop.** Extraction and risk signals require no key, no account, and no network request. Clearframe reaches no AI service at all.
+2. **Local, full stop.** Extraction and risk signals require no key, no account, and no network request. Limeghost reaches no AI service at all.
 3. **AI is a deliberate action.** Never upload page text merely because the panel opened.
 4. **Explain uncertainty.** “Claim from the page” is different from “verified fact.”
 5. **Read-only first.** Understanding creates value without giving an untrusted page control over an agent.
@@ -88,8 +88,8 @@ Scam signals are a supporting trust feature, not the initial positioning. A smal
 
 The native package has two targets:
 
-- `ClearframeCore`: models, text preparation, structure detection, and risk heuristics;
-- `ClearframeBrowser`: SwiftUI, WebKit navigation/extraction, Keychain settings, and the assistant interface.
+- `LimeghostCore`: models, text preparation, structure detection, and risk heuristics;
+- `LimeghostBrowser`: SwiftUI, WebKit navigation/extraction, Keychain settings, and the assistant interface.
 
 The extension artifact uses Manifest V3 with four narrow capabilities:
 
@@ -107,17 +107,17 @@ The extension code is separated into:
 - `src/providers/openai.js` — optional AI adapter;
 - `src/sidepanel.js` — product state and rendering.
 
-The provider boundary should later support a production Clearframe service, enterprise model routing, and on-device models without rewriting either platform interface. A later Windows app should implement the same language-neutral page-intelligence request/response contract, while using a Windows-native UI and browser engine.
+The provider boundary should later support a production Limeghost service, enterprise model routing, and on-device models without rewriting either platform interface. A later Windows app should implement the same language-neutral page-intelligence request/response contract, while using a Windows-native UI and browser engine.
 
 ## AI and security boundary
 
 Webpage text is untrusted, and every local rule that reads it treats it as data rather than instructions.
 
-**Clearframe holds no credential and calls no model.** The assistant beside the page is a web view showing that provider's ordinary website, signed in with the person's own account, under that provider's own terms. Clearframe sends it nothing. Text reaches it the way text reaches any site — the person copies and pastes it, and presses send themselves.
+**Limeghost holds no credential and calls no model.** The assistant beside the page is a web view showing that provider's ordinary website, signed in with the person's own account, under that provider's own terms. Limeghost sends it nothing. Text reaches it the way text reaches any site — the person copies and pastes it, and presses send themselves.
 
-That boundary is not a preference and must not be optimized away. Filling a provider's input box from Clearframe, or pressing its send button, would be automated access to a service Clearframe has no agreement with; Anthropic's consumer terms prohibit it explicitly, and the others read the same way. Compare answers is deliberately two manual pastes for this reason: one box driving two providers would cross exactly this line. A link clicked inside the assistant opens in a tab rather than navigating the panel, because navigating the panel away is how a conversation gets lost.
+That boundary is not a preference and must not be optimized away. Filling a provider's input box from Limeghost, or pressing its send button, would be automated access to a service Limeghost has no agreement with; Anthropic's consumer terms prohibit it explicitly, and the others read the same way. Compare answers is deliberately two manual pastes for this reason: one box driving two providers would cross exactly this line. A link clicked inside the assistant opens in a tab rather than navigating the panel, because navigating the panel away is how a conversation gets lost.
 
-If Clearframe ever does hold a credential and call a model, then before any public paid plan:
+If Limeghost ever does hold a credential and call a model, then before any public paid plan:
 
 - route calls through an authenticated backend;
 - meter per-user usage and enforce hard budgets;
@@ -130,13 +130,13 @@ If Clearframe ever does hold a credential and call a model, then before any publ
 
 The intended sequence is:
 
-1. **Free basic product:** extraction, risk signals, and trust cues. Note that the paid tiers below assumed Clearframe would provide the AI, which it no longer does — see the business note in [project-context.md](project-context.md).
+1. **Free basic product:** extraction, risk signals, and trust cues. Note that the paid tiers below assumed Limeghost would provide the AI, which it no longer does — see the business note in [project-context.md](project-context.md).
 2. **AI Pro:** higher limits, stronger models, saved research sets, and export for heavy users.
 3. **Business plans:** admin controls, policy, auditability, approved model routing, and team research—not employee surveillance.
 4. **Search revenue share:** only after meaningful default-search volume exists and with user choice preserved.
 5. **Intent-based partner recommendations:** clearly labeled, relevant, independently ranked, and never mixed invisibly into analysis.
 
-Clearframe must not sell browsing histories, add hidden advertising, or bias extraction or risk output because a merchant pays.
+Limeghost must not sell browsing histories, add hidden advertising, or bias extraction or risk output because a merchant pays.
 
 ## Validation plan and gates
 
