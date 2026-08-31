@@ -477,6 +477,14 @@ final class BrowserSession: NSObject, ObservableObject {
     }
 
     func teardown() {
+        // `stopLoading` ends the network fetch and nothing else. A <video> that
+        // has already buffered goes on playing, so a closed tab or a closed
+        // window kept making noise with nothing left on screen to stop it.
+        // Pausing is not enough on its own either — a paused element can be
+        // resumed by the page's own script — so the document is replaced below,
+        // once nothing is listening for the navigation.
+        webView.pauseAllMediaPlayback()
+        webView.closeAllMediaPresentations { }
         webView.stopLoading()
         faviconTask?.cancel()
         faviconTask = nil
@@ -491,6 +499,10 @@ final class BrowserSession: NSObject, ObservableObject {
         contentBlocking?.unregister(webView)
         webViewSubscriptions.removeAll()
         appearanceObservation = nil
+        // Last, and only once the subscriptions above are gone so this blank
+        // load cannot overwrite the address this tab is remembered by: replacing
+        // the document is what actually releases the media element.
+        webView.loadHTMLString("", baseURL: nil)
     }
 
     func extractPage() async throws -> PageSnapshot {

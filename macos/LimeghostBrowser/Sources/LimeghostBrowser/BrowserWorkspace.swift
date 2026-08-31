@@ -404,6 +404,22 @@ final class BrowserWorkspace: ObservableObject {
         persistenceTask?.cancel()
     }
 
+    /// Called when this window is closing.
+    ///
+    /// Nothing else tore a window's tabs down: closing a *tab* calls
+    /// `teardown`, but closing the *window* only dropped a dictionary entry, so
+    /// every web view in it survived — and a page that was playing kept playing,
+    /// audible, with no window left to stop it. The assistant panel is torn down
+    /// too, because its web views are just as capable of holding audio.
+    func teardownForWindowClose() {
+        persistNow()
+        persistenceTask?.cancel()
+        persistenceTask = nil
+        tabs.forEach { $0.teardown() }
+        tabSubscriptions.removeAll()
+        aiCompanion.teardown()
+    }
+
     /// Follows the selection, then that tab's load state. Only the print
     /// question is republished here; forwarding every session change would
     /// redraw the whole window on each progress tick.

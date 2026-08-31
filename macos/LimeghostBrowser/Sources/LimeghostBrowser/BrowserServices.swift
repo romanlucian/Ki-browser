@@ -158,12 +158,39 @@ final class BrowserServices {
         weak var window: NSWindow?
     }
 
+    /// One per window, so a closing window can tear its own tabs down.
+    /// `forgetWindow` alone is not enough: it runs from a SwiftUI
+    /// `onDisappear`, which says the view went away rather than that the window
+    /// did, and it only dropped the pairing above.
+    private var windowCloseObservers: [ObjectIdentifier: NSObjectProtocol] = [:]
+
     func registerWindow(_ window: NSWindow?, for workspace: BrowserWorkspace) {
-        windowsByWorkspace[ObjectIdentifier(workspace)] = WeakWindow(window: window)
+        let key = ObjectIdentifier(workspace)
+        windowsByWorkspace[key] = WeakWindow(window: window)
+        guard let window else { return }
+        if let existing = windowCloseObservers[key] {
+            NotificationCenter.default.removeObserver(existing)
+        }
+        // Delivered on the main queue, which is where this class lives, so the
+        // teardown can run inline rather than being deferred into a Task the
+        // closing window might not outlive.
+        windowCloseObservers[key] = NotificationCenter.default.addObserver(
+            forName: NSWindow.willCloseNotification,
+            object: window,
+            queue: .main
+        ) { [weak workspace] _ in
+            MainActor.assumeIsolated {
+                workspace?.teardownForWindowClose()
+            }
+        }
     }
 
     func forgetWindow(of workspace: BrowserWorkspace) {
-        windowsByWorkspace.removeValue(forKey: ObjectIdentifier(workspace))
+        let key = ObjectIdentifier(workspace)
+        windowsByWorkspace.removeValue(forKey: key)
+        if let observer = windowCloseObservers.removeValue(forKey: key) {
+            NotificationCenter.default.removeObserver(observer)
+        }
     }
 
     func window(for workspace: BrowserWorkspace) -> NSWindow? {

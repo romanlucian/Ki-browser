@@ -989,6 +989,45 @@ final class BrowserBehaviorTests: XCTestCase {
         XCTAssertFalse(companion.isVisible, "closing the only column left the panel open")
     }
 
+    /// A window that closes must not leave live web views behind.
+    ///
+    /// Closing a *tab* has always torn its session down. Closing the *window*
+    /// tore down nothing — it only dropped a dictionary entry — so every web
+    /// view in it survived, and a page that was playing went on playing:
+    /// audible, with no window left on screen to stop it.
+    func testClosingAWindowTearsDownItsTabsAndItsAssistant() throws {
+        let workspace = try makeSurfaceTestWorkspace()
+        workspace.addTab(url: URL(string: "https://example.com/one")!)
+        workspace.addTab(url: URL(string: "https://example.com/two")!)
+        let companion = workspace.aiCompanion
+        companion.show()
+
+        let sessions = workspace.tabs.map(\.session)
+        XCTAssertGreaterThanOrEqual(sessions.count, 2, "no tabs to tear down")
+        XCTAssertTrue(
+            sessions.allSatisfy { $0.webView.navigationDelegate != nil },
+            "the tabs were not live to begin with, so this proves nothing"
+        )
+        XCTAssertTrue(companion.isVisible)
+        let assistantSession = try XCTUnwrap(companion.session)
+        XCTAssertNotNil(assistantSession.webView.navigationDelegate)
+
+        workspace.teardownForWindowClose()
+
+        for session in sessions {
+            XCTAssertNil(
+                session.webView.navigationDelegate,
+                "a closed window left a live web view behind"
+            )
+        }
+        // The assistant's web views hold audio just as readily as a tab's.
+        XCTAssertFalse(companion.isVisible, "the assistant survived its own window")
+        XCTAssertNil(
+            assistantSession.webView.navigationDelegate,
+            "the assistant's web view outlived the window it belonged to"
+        )
+    }
+
     func testEveryAssistantOfferedIsAnOfficialHTTPSDestinationFromTheCatalog() {
         XCTAssertFalse(AICompanion.choices.isEmpty, "no assistant to put beside a page")
         for choice in AICompanion.choices {
