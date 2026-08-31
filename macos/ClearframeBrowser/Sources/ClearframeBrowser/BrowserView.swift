@@ -47,11 +47,16 @@ struct BrowserView: View {
 }
 
 private struct BrowserTabContent: View {
+    /// Wide enough for an assistant's own page without forcing its phone layout.
+    static let companionWidth: CGFloat = 500
+    /// Below this a page is too narrow to read beside anything.
+    static let minimumReadableWidth: CGFloat = 600
+
     @ObservedObject var tab: BrowserTab
     @ObservedObject private var session: BrowserSession
-    @ObservedObject private var assistant: PageAssistantModel
     @ObservedObject private var find: PageFindController
     @ObservedObject var workspace: BrowserWorkspace
+    @ObservedObject private var companion: AICompanion
     @State private var addressText: String
     @State private var showsLibrary = false
     @State private var addressFocused = false
@@ -59,9 +64,9 @@ private struct BrowserTabContent: View {
     init(tab: BrowserTab, workspace: BrowserWorkspace) {
         self.tab = tab
         _session = ObservedObject(wrappedValue: tab.session)
-        _assistant = ObservedObject(wrappedValue: tab.assistant)
         _find = ObservedObject(wrappedValue: tab.find)
         self.workspace = workspace
+        _companion = ObservedObject(wrappedValue: workspace.aiCompanion)
         _addressText = State(initialValue: tab.session.currentURLString)
     }
 
@@ -71,13 +76,16 @@ private struct BrowserTabContent: View {
                 session: session,
                 workspace: workspace,
                 dataStore: workspace.dataStore,
+                companion: companion,
                 downloads: workspace.downloads,
                 searchSettings: workspace.searchSettings,
                 addressText: $addressText,
                 addressFocused: $addressFocused,
-                showsAssistant: $tab.showsAssistantPanel,
                 showsLibrary: $showsLibrary,
-                goHome: { tab.goHome() }
+                goHome: {
+                    workspace.makeRoomForPage()
+                    tab.goHome()
+                }
             )
             // The suggestion list hangs below the toolbar's own height; without
             // this it would be painted under the web view.
@@ -104,6 +112,9 @@ private struct BrowserTabContent: View {
             if let notice = session.linkNotice {
                 LinkNoticeBar(message: notice) { session.dismissLinkNotice() }
             }
+            if let notice = session.pageNotice {
+                LinkNoticeBar(message: notice, symbol: "doc.on.doc") { session.dismissPageNotice() }
+            }
             if session.isLoading {
                 ProgressView(value: session.estimatedProgress)
                     .progressViewStyle(.linear)
@@ -111,21 +122,55 @@ private struct BrowserTabContent: View {
                     .frame(height: 2)
             }
             Divider()
-            HStack(spacing: 0) {
-                ZStack {
-                    WebView(session: session)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    stateOverlay
+            // Two columns need room for both. Below the threshold the assistant
+            // covers the page instead of squeezing it — the same answer a phone
+            // would need, arrived at on a small laptop first.
+            GeometryReader { geometry in
+                let fitsBesidePage = geometry.size.width >= Self.companionWidth + Self.minimumReadableWidth
+                // Two assistants need two readable columns and nothing else.
+                let fitsTwoAssistants = geometry.size.width >= Self.companionWidth * 2
+                // Expanded by choice, or with no room to share.
+                let fillsWindow = companion.isExpanded || !fitsBesidePage
+                // **One panel, always in the same place in this tree.** Sharing
+                // the window and filling it used to be two separate
+                // `AICompanionPanel`s in two branches, and expanding moved the
+                // panel from one to the other — which is a destroy and rebuild,
+                // not a resize. `WebView` hands SwiftUI a web view the session
+                // owns rather than one it builds, so that rebuild reattached the
+                // assistant that already existed and left the one created in the
+                // same update with no place in the view hierarchy: pressing
+                // Compare showed the second assistant's header above a blank
+                // rectangle. Widening one panel keeps every web view where it is.
+                ZStack(alignment: .trailing) {
+                    HStack(spacing: 0) {
+                        ZStack {
+                            WebView(session: session)
+                                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            stateOverlay
+                        }
+                        if companion.isVisible && !fillsWindow {
+                            Divider()
+                            // Holds the docked panel's width so the page lays out
+                            // beside it instead of underneath it.
+                            Color.clear.frame(width: Self.companionWidth)
+                        }
+                    }
+                    if companion.isVisible {
+                        AICompanionPanel(companion: companion, allowsComparison: fitsTwoAssistants)
+                            .frame(width: fillsWindow ? geometry.size.width : Self.companionWidth)
+                            .frame(maxHeight: .infinity)
+                            .transition(.move(edge: .trailing).combined(with: .opacity))
+                    }
                 }
-                if tab.showsAssistantPanel {
-                    Divider()
-                    AssistantPanel(model: assistant, session: session)
-                        .frame(width: 380)
-                        .transition(.move(edge: .trailing).combined(with: .opacity))
+                // Only the view knows how wide this window is. The companion
+                // needs it to decide whether stepping out of a page's way means
+                // shrinking or leaving — and to come back when there is room.
+                .onChange(of: fitsBesidePage, initial: true) { _, canShare in
+                    companion.setCanShareWindow(canShare)
                 }
             }
         }
-        .animation(.easeInOut(duration: 0.18), value: tab.showsAssistantPanel)
+        .animation(.easeInOut(duration: 0.18), value: companion.isVisible)
         // A restored tab starts loading before this view exists, so the change
         // that would have filled the address field has already happened by the
         // time anything is watching for it. Reopening the browser then showed a
@@ -140,7 +185,6 @@ private struct BrowserTabContent: View {
             if !addressFocused { addressText = newValue }
         }
         .onChange(of: session.navigationVersion) { _, _ in
-            assistant.clearForNavigation()
             // A "No results" from the page that was just replaced would be a
             // statement about a page nobody is looking at any more.
             find.resetForNavigation()
@@ -174,14 +218,21 @@ private struct BrowserTabContent: View {
             switch tab.startSurface {
             case .aiHome:
                 AIToolStartPage(
+                    store: workspace.dataStore,
                     openTool: { tool in
                         addressFocused = false
                         addressText = tool.officialURL.absoluteString
+                        // Opening a tool is what puts it on the reader's row. It is
+                        // recorded here rather than inside the page so the row also
+                        // learns from a tool opened out of the search results.
+                        workspace.dataStore.recordAIToolOpen(tool.id)
+                        workspace.makeRoomForPage()
                         session.openAITool(tool)
                     },
                     openSource: { tool, sourceURL in
                         addressFocused = false
                         addressText = sourceURL.absoluteString
+                        workspace.makeRoomForPage()
                         session.load(sourceURL, displayName: "\(tool.name) source")
                     }
                 )
@@ -208,7 +259,10 @@ private struct BrowserTabContent: View {
             BrowserErrorView(
                 failure: failure,
                 retry: { session.retry() },
-                goHome: { tab.goHome() }
+                goHome: {
+                    workspace.makeRoomForPage()
+                    tab.goHome()
+                }
             )
             // The suggestion list hangs below the toolbar's own height; without
             // this it would be painted under the web view.
@@ -240,17 +294,19 @@ private struct BrowserToolbar: View {
     @ObservedObject var session: BrowserSession
     @ObservedObject var workspace: BrowserWorkspace
     @ObservedObject var dataStore: BrowserDataStore
+    @ObservedObject var companion: AICompanion
     @ObservedObject var downloads: DownloadCenter
     @ObservedObject var searchSettings: SearchSettingsStore
     @Binding var addressText: String
     @Binding var addressFocused: Bool
-    @Binding var showsAssistant: Bool
     @Binding var showsLibrary: Bool
     /// Home always returns this tab to the AI guide surface, never to whatever
     /// start surface it last showed (B6/D6).
     let goHome: () -> Void
     @StateObject private var voiceInput = VoiceInputController()
     @State private var folderEditorRequest: BookmarkFolderEditorRequest?
+    /// Briefly true after a copy, so the toolbar icon can confirm without a sentence.
+    @State private var didCopyPage = false
     @State private var showsBookmarkImport = false
     /// Which suggestion row is highlighted. Row zero is the best answer, so
     /// Return without touching the arrows does what the field already shows.
@@ -336,12 +392,21 @@ private struct BrowserToolbar: View {
                         DownloadsPopover(center: downloads)
                     }
 
-                    Button { showsAssistant.toggle() } label: {
-                        Image(systemName: "sparkles.rectangle.stack")
+                    Button { companion.toggle() } label: {
+                        Image(systemName: "bubble.left.and.text.bubble.right")
                     }
-                    .buttonStyle(GhostButtonStyle(isActive: showsAssistant))
-                    .help("Show or hide the page assistant")
+                    .buttonStyle(GhostButtonStyle(isActive: companion.isVisible))
+                    .keyboardShortcut("a", modifiers: [.command, .shift])
+                    .help("Show or hide your AI beside the page (⇧⌘A)")
                     .accessibilityLabel("Assistant")
+
+                    Button { Task { await copyPageForAI() } } label: {
+                        Image(systemName: didCopyPage ? "checkmark" : "doc.on.doc")
+                    }
+                    .buttonStyle(GhostButtonStyle(tint: didCopyPage ? ClearframeTheme.accent : ClearframeTheme.textPrimary))
+                    .keyboardShortcut("c", modifiers: [.command, .shift])
+                    .help("Copy this page's readable text for an AI (⇧⌘C)")
+                    .accessibilityLabel("Copy page for AI")
                 }
             }
             .padding(.horizontal, 10)
@@ -433,6 +498,59 @@ private struct BrowserToolbar: View {
 
     /// Shield + search-engine + drag handle | URL text (host emphasized when
     /// unfocused) | clear/Go/⌘L hint — one rounded pill, per the Halo design.
+    /// Puts the page's readable text on the clipboard, headed by where it came
+    /// from. Nothing is sent anywhere: this is the person's own clipboard, and
+    /// what happens next is their own paste.
+    ///
+    /// Deliberately silent when it works. A confirmation on every copy is a
+    /// sentence nobody reads by the third time, and the text is about to appear
+    /// in front of them anyway when they paste it. The notice bar is used only
+    /// for the two things a paste would not reveal: that the extractor was
+    /// unsure it found the article, and that the page is a list rather than one
+    /// piece of writing.
+    private func copyPageForAI() async {
+        guard WebURLPolicy.validatedURL(session.currentURLString) != nil else {
+            session.showPageNotice("There is no web page in this tab to copy.")
+            return
+        }
+        // The page can move while it is being read. Copying what the reader has
+        // already navigated away from is worse than not copying at all, because
+        // nothing about the pasted text would say so.
+        let expectedNavigationVersion = session.navigationVersion
+        guard let page = try? await session.extractPage() else {
+            session.showPageNotice("Clearframe could not read enough text on this page to copy.")
+            return
+        }
+        guard session.navigationVersion == expectedNavigationVersion else {
+            session.showPageNotice("The page changed while Clearframe was reading it. Nothing was copied.")
+            return
+        }
+        guard let payload = LocalAnalysisEngine.clipboardPayload(page: page) else {
+            session.showPageNotice("Clearframe found no readable text on this page.")
+            return
+        }
+        let words = LocalAnalysisEngine.wordCount(of: LocalAnalysisEngine.readableText(page: page))
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(payload, forType: .string)
+
+        didCopyPage = true
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 1_600_000_000)
+            didCopyPage = false
+        }
+
+        if let confidence = page.extractionConfidence, confidence < 0.5 {
+            session.showPageNotice(
+                confidence == 0
+                    ? "Copied \(words) words — but Clearframe could not find an article here, so this is the whole page, menus included."
+                    : "Copied \(words) words — but Clearframe is not confident it found the article on this page."
+            )
+        } else if LocalAnalysisEngine.assessStructure(page: page) == .listing {
+            session.showPageNotice("Copied \(words) words — note this page lists many articles rather than being one.")
+        }
+    }
+
     private var addressPill: some View {
         HStack(spacing: 8) {
             ContentBlockingShieldButton(provider: workspace.contentBlocking, session: session)
@@ -676,6 +794,7 @@ private struct BrowserToolbar: View {
         voiceInput.stop()
         voiceInput.dismissStatus()
         addressFocused = false
+        workspace.makeRoomForPage()
         session.navigate(destination)
         DispatchQueue.main.async {
             session.webView.window?.makeFirstResponder(session.webView)
@@ -693,11 +812,12 @@ private struct BrowserToolbar: View {
 /// stays on screen and keeps working.
 private struct LinkNoticeBar: View {
     let message: String
+    var symbol: String = "link.badge.plus"
     let dismiss: () -> Void
 
     var body: some View {
         HStack(spacing: 9) {
-            Image(systemName: "link.badge.plus")
+            Image(systemName: symbol)
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(ClearframeTheme.textTertiary)
             Text(message)

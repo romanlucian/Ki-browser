@@ -2,7 +2,7 @@
 
 A browser by [Zincoo](https://zincoo.com/).
 
-Clearframe is now a **standalone macOS browser foundation** built with SwiftUI and WebKit. It opens its own native window, navigates the web, and includes a source-aware page assistant. The earlier Chromium extension remains in the repository as a useful validation artifact; it is not the final browser.
+Clearframe is now a **standalone macOS browser foundation** built with SwiftUI and WebKit. It opens its own native window, navigates the web, and can hand any page's readable text to the AI you already use. The earlier Chromium extension remains in the repository as a useful validation artifact; it is not the final browser.
 
 The installed and `dist` builds still use WebKit. A future Chromium migration now has an isolated [CEF migration plan](docs/chromium-migration.md) and validation scaffold under `chromium/cef-spike`; that scaffold is not linked into the current app and must not be described as a working Chromium build.
 
@@ -26,8 +26,9 @@ The native app provides:
 - address-bar completion and a suggestion list, both from this Mac's own history and bookmarks: typing a few letters finishes the address you have already been to, with the added part selected so the next keystroke replaces it, and a list underneath offers matching pages by name as well as by address, with one row that searches for what you typed. Unlike Chrome's omnibox, no keystroke is sent anywhere to build that list — it offers only places already in this profile, never a guessed host, a popular-sites list, or anything fetched. Arrow keys move through it, Return opens the highlighted row, and the whole thing stays silent in private tabs;
 - a visible, locally persisted search-engine chooser for DuckDuckGo, Google, Bing, Brave Search, and Startpage;
 - a native new-tab AI guide with a small, locally defined catalog organized by everyday tasks;
-- a concise three-step first-run introduction covering Clearframe's promise, search choice, privacy boundary, AI home, and Analyze page workflow;
+- a concise three-step first-run introduction covering Clearframe's promise, search choice, privacy boundary, AI home, and the copy-for-AI workflow;
 - **Copy for AI** — Clearframe pulls the readable article out of a page, shows you the exact text and its size, and copies it for you to paste into whichever AI you already use. No account, no API key, nothing sent anywhere by Clearframe;
+- **your AI beside the page** (`⇧⌘A`) — ChatGPT, Claude, Gemini, Le Chat or Grok in a panel on the right, signed in with your own account. It belongs to the window rather than the tab, so the conversation stays put while you read around it, and switching between two assistants returns you to where each of them was. Clearframe does not type into it or read it: you paste and ask, as you would in a tab. **Compare answers** puts two of them side by side for asking the same question twice;
 - visible risk signals such as unencrypted password forms, encoded domains, urgent payment language, wallet-secret requests, and contextual remote-access requests;
 
 ## Open the standalone macOS browser
@@ -74,12 +75,13 @@ Then:
 2. A new tab opens Clearframe’s local AI guide. Choose a human task, search the catalog, or explicitly reveal all tools; then select a card to open that service’s official website.
 3. Enter a URL or search in the address bar. Click the lock/globe chip at the left of the address pill for site information: the host, how the connection stands, this site's tracker-blocking switch, and **Remove this site's data**. The same chip still drags this page's link out to the bookmarks bar.
 4. Browse with independent tabs; use `⌘T` for a new tab, `⌘⇧N` for a private tab, and `⌘W` to close the current tab. Private tabs use an ephemeral WebKit data store and are not written to history or session restoration.
-5. Open **Assistant** with the sparkles button at the right of the toolbar, then click **Analyze page**. The panel is closed when a tab opens unless **Settings → Page assistant** says otherwise; the toolbar button opens and closes it for the tab you are on either way.
-6. Read the visible risk signals, then press **Copy page for AI** — the card shows the character count and the complete text before it copies anything.
-7. The bookmarks bar shows Unfiled links and emoji-labeled folders. Drag the address bar’s lock/globe page-link chip—or an existing bookmark—onto bar space or a visible folder to file it; dropping the same URL moves its single record instead of duplicating it. Secondary-click and the **More** and **Page** menus expose the same create, file, organize, and show/hide actions, with an accessible Move menu for keyboard use. **⌘⌥B** and the bar’s All Bookmarks chip open the full-page bookmarks home; the toolbar’s Library button keeps a separate quick popover for fast lookups. Legacy bookmarks remain in **Unfiled**.
-8. Use the Downloads toolbar button to see a clear empty state or the current session’s download status, destination, and Reveal action; **Open Downloads Folder** remains available even when the list is empty. Attachment downloads keep the existing page visible instead of presenting WebKit's internal policy-handoff message as a page error.
-9. Click the provider name inside the address bar, or open **ClearframeBrowser → Settings…** (`⌘,`), to choose the search engine. After a toolbar choice, the address field is ready for typing.
-10. Page-assistant, tab-restoration, bookmark-bar, and local-history settings are available in the same Settings window. **Site data** lists every site that has stored data on this Mac, described in kinds rather than amounts, with a remove button each. **Clear local browsing data** removes regular/private tabs, history, bookmarks, the in-app download list, cookies, caches, website storage, session records, and recovery backups; it does not delete downloaded files or general preferences.
+5. Press **⇧⌘C**, or the copy button at the right of the toolbar, to put the page's readable text on your clipboard for whichever AI you use. Clearframe stays quiet when it works; it speaks only when it could not find the article, or when the page is a list rather than one piece of writing.
+6. Press **⇧⌘A**, or the speech-bubble button in the toolbar, to open your own AI beside the page. Pick which one from the panel header; the button beside it with two panes opens **Compare answers**, a second assistant next to the first. Both are ordinary websites on your own account — paste and send them yourself.
+7. Click the lock/globe chip at the left of the address bar and choose **Check this page** to look for visible risk signals — an unencrypted password form, an encoded address, urgent payment or wallet-secret language.
+8. The bookmarks bar shows Unfiled links and emoji-labeled folders. Drag the address bar’s lock/globe page-link chip—or an existing bookmark—onto bar space or a visible folder to file it; dropping the same URL moves its single record instead of duplicating it. Secondary-click and the **More** and **Page** menus expose the same create, file, organize, and show/hide actions, with an accessible Move menu for keyboard use. **⌘⌥B** and the bar’s All Bookmarks chip open the full-page bookmarks home; the toolbar’s Library button keeps a separate quick popover for fast lookups. Legacy bookmarks remain in **Unfiled**.
+9. Use the Downloads toolbar button to see a clear empty state or the current session’s download status, destination, and Reveal action; **Open Downloads Folder** remains available even when the list is empty. Attachment downloads keep the existing page visible instead of presenting WebKit's internal policy-handoff message as a page error.
+10. Click the provider name inside the address bar, or open **ClearframeBrowser → Settings…** (`⌘,`), to choose the search engine. After a toolbar choice, the address field is ready for typing.
+11. Tab-restoration, bookmark-bar, and local-history settings are available in the same Settings window. **Site data** lists every site that has stored data on this Mac, described in kinds rather than amounts, with a remove button each. **Clear local browsing data** removes regular/private tabs, history, bookmarks, the in-app download list, cookies, caches, website storage, session records, and recovery backups; it does not delete downloaded files or general preferences.
 
 DuckDuckGo is the initial search default, not Clearframe’s browser engine. Searches can instead use Google, Bing, Brave Search, or Startpage. The choice stays in local macOS preferences, direct website addresses bypass search, and Clearframe claims no partnership or revenue agreement with any listed provider.
 
@@ -123,9 +125,9 @@ The project root is also a local-first Manifest V3 side-panel extension. To run 
 
 The extension uses the temporary `activeTab` permission. When you navigate to a different site, click its toolbar icon again before analyzing the new page.
 
-## What Analyze page actually does
+## What the copy button actually does
 
-It extracts the page's rendered reading text, keeps it in the page's own language, and removes interface noise — a video player's control labels, and anything the page repeats three or more times. Then it shows a reading-time estimate, any visible risk signals, and a button that copies the text.
+One keystroke — **⇧⌘C** — extracts the page's rendered reading text, keeps it in the page's own language, removes interface noise like a video player's control labels and anything the page repeats three or more times, and puts the result on your clipboard. There is no panel and nothing to read: the text appears in front of you when you paste it. Clearframe interrupts only for the two things a paste would not reveal — that it was unsure it found the article, or that the page lists many articles rather than being one.
 
 **Clearframe makes no AI request and holds no credential for one.** There is no key to configure and nothing to enable. The only way a page reaches an AI is you copying it and pasting it somewhere yourself — which means you can see exactly what you are handing over, and to whom.
 
@@ -146,7 +148,7 @@ Clearframe presents Safari's user agent because it renders with WebKit, Safari's
 
 - Clearframe does not summarise a page or judge what matters in it. It extracts text and prepares it; anything more is done by an AI you choose.
 - Extraction preserves the page language, but text-based risk phrases do not have equal language coverage.
-- Analyze page tries to detect section and listing pages and offer Analyze anyway. That check currently misses news homepages whose cards carry teaser paragraphs — see the known defect in [docs/page-intelligence-contract.md](docs/page-intelligence-contract.md).
+- Copying tries to notice when a page is a list of many articles rather than one piece of writing, and says so. That check currently misses news homepages whose cards carry teaser paragraphs — see the known defect in [docs/page-intelligence-contract.md](docs/page-intelligence-contract.md).
 - Extraction misses things. A page whose article is not marked up as one, or that renders after first paint, can yield the wrong text or none at all.
 - Risk signals are heuristic and do not prove that a page is safe or malicious.
 - Tracker blocking uses a small, first-party curated list of common advertising and tracking domains—not a complete ad blocker. It does not stop first-party analytics, cookie-based tracking, browser fingerprinting, or CNAME-cloaked trackers, and WebKit never reports back which requests it blocked, so no per-page or running count exists anywhere in the UI. See [docs/content-blocking.md](docs/content-blocking.md).

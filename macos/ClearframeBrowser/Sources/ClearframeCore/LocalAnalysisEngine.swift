@@ -117,6 +117,24 @@ public enum LocalAnalysisEngine {
         return mostlyUnpunctuated && littleProseMass ? .listing : .article
     }
 
+    /// What Copy for AI puts on the clipboard: the page's readable text, headed by
+    /// where it came from so the person pasting it — and whatever reads it next —
+    /// can see the source.
+    ///
+    /// `nil` when nothing readable survived, so the caller says so rather than
+    /// clearing the clipboard and replacing it with a header and no article.
+    public static func clipboardPayload(page: PageSnapshot) -> String? {
+        let text = readableText(page: page)
+        guard !text.isEmpty else { return nil }
+        return """
+        Title:  \(page.title)
+        URL:    \(page.url)
+        \(wordCount(of: text)) words extracted from the visible page
+
+        \(text)
+        """
+    }
+
     /// How many words a piece of extracted text holds.
     ///
     /// The same rule the extractor applies to the whole page: CJK and Hangul count

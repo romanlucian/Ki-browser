@@ -53,6 +53,7 @@ Scam signals are a supporting trust feature, not the initial positioning. A smal
 - User-confirmed downloads plus local bookmark/history organization, recovery backups, and an explicit local browsing-data reset.
 - On-demand visible-page extraction from the app’s current web view.
 - Source-language extraction with interface noise removed, read-time estimate, risk signals, a listing-page notice, and Copy for AI with a full-payload preview.
+- An assistant beside the page: the person's own ChatGPT, Claude, Gemini, Le Chat or Grok in a web view, one per window, signed in with their own account. It survives switching tabs, hiding, and switching assistant. Compare answers puts two of them side by side in the window.
 - No AI of Clearframe's own: no provider, no key, no request.
 - Clear separation between the Foundation-only analysis/service core and macOS-specific browser UI.
 
@@ -110,9 +111,13 @@ The provider boundary should later support a production Clearframe service, ente
 
 ## AI and security boundary
 
-Webpage text is untrusted. The optional AI prompt labels page content as data, tells the model not to obey embedded instructions, constrains analysis to a strict response schema, limits output, and keeps the feature read-only. Analysis sends the source title, hostname, declared language, and truncated extracted text while omitting the full URL, query, fragment, cookies, form values, and history. This reduces impact but does not solve prompt injection or remove sensitive text that may appear in the page body. Do not add tools, browser actions, credentials, private history, email, or file access to the same model context without a separate threat model, least-privilege design, and approval layer.
+Webpage text is untrusted, and every local rule that reads it treats it as data rather than instructions.
 
-Clearframe holds no credential and calls no model. If that ever changes, then before any public paid plan:
+**Clearframe holds no credential and calls no model.** The assistant beside the page is a web view showing that provider's ordinary website, signed in with the person's own account, under that provider's own terms. Clearframe sends it nothing. Text reaches it the way text reaches any site — the person copies and pastes it, and presses send themselves.
+
+That boundary is not a preference and must not be optimized away. Filling a provider's input box from Clearframe, or pressing its send button, would be automated access to a service Clearframe has no agreement with; Anthropic's consumer terms prohibit it explicitly, and the others read the same way. Compare answers is deliberately two manual pastes for this reason: one box driving two providers would cross exactly this line. A link clicked inside the assistant opens in a tab rather than navigating the panel, because navigating the panel away is how a conversation gets lost.
+
+If Clearframe ever does hold a credential and call a model, then before any public paid plan:
 
 - route calls through an authenticated backend;
 - meter per-user usage and enforce hard budgets;

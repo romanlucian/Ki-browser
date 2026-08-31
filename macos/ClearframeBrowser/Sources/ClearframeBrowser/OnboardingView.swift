@@ -101,7 +101,7 @@ struct OnboardingView: View {
                     .tracking(-1.3)
                     .foregroundStyle(.white)
                     .multilineTextAlignment(.center)
-                Text("Clearframe helps you understand unfamiliar pages, compare sources, and notice obvious pressure or risk signals—without turning every page into a chat session.")
+                Text("Clearframe helps you meet an unfamiliar page with the AI you already use: it finds the article, leaves the menus behind, and points out obvious pressure or risk signals—without turning every page into a chat session.")
                     .font(.system(size: 16))
                     .foregroundStyle(Color.white.opacity(0.68))
                     .multilineTextAlignment(.center)
@@ -110,8 +110,8 @@ struct OnboardingView: View {
             }
 
             HStack(spacing: 14) {
-                PromiseCard(symbol: "doc.text.magnifyingglass", title: "Understand", detail: "Local summaries and claims worth checking")
-                PromiseCard(symbol: "rectangle.2.swap", title: "Compare", detail: "Put two sources side by side without fake certainty")
+                PromiseCard(symbol: "square.grid.2x2", title: "Choose", detail: "A small set of useful AI paths, not a list of model names")
+                PromiseCard(symbol: "doc.on.doc", title: "Prepare", detail: "Pull the article out of a page, ready for your AI")
                 PromiseCard(symbol: "exclamationmark.shield", title: "Notice", detail: "Explain visible risk signals, never issue verdicts")
             }
             .frame(maxWidth: 820)
@@ -145,7 +145,7 @@ struct OnboardingView: View {
 
             VStack(spacing: 10) {
                 PrivacyLine(symbol: "square.grid.2x2", title: "The AI guide is local", detail: "Its curated cards and filters are bundled in Clearframe; opening one is ordinary website navigation.")
-                PrivacyLine(symbol: "lock.shield", title: "Analyze is local by default", detail: "Visible page text is extracted only after you click Analyze page. It is not sold or passively uploaded.")
+                PrivacyLine(symbol: "lock.shield", title: "Reading a page is local", detail: "Visible page text is read only when you press copy. It is not sold, and Clearframe uploads nothing.")
                 PrivacyLine(symbol: "cloud", title: "Online AI is optional", detail: "After you configure it and deliberately request an online action, the provider receives the page title, hostname, language, and extracted text—not the full URL, cookies, forms, or history.")
             }
             .frame(maxWidth: 820)
@@ -160,15 +160,15 @@ struct OnboardingView: View {
                     .font(.system(size: 40, weight: .bold, design: .serif))
                     .foregroundStyle(.white)
                     .fixedSize(horizontal: false, vertical: true)
-                Text("Open an article, guide, product page, or unfamiliar site. Then open Assistant and choose Analyze page.")
+                Text("Open an article, guide, product page, or unfamiliar site. Clearframe finds the article, leaves the menus behind, and hands it to whichever AI you use.")
                     .font(.system(size: 15))
                     .foregroundStyle(Color.white.opacity(0.66))
                     .lineSpacing(3)
 
                 VStack(alignment: .leading, spacing: 13) {
-                    OnboardingInstruction(number: "1", text: "Open a page you want to understand")
-                    OnboardingInstruction(number: "2", text: "Click Assistant, then Analyze page")
-                    OnboardingInstruction(number: "3", text: "Review the summary, claims, and explained signals")
+                    OnboardingInstruction(number: "1", text: "Open a page you want help with")
+                    OnboardingInstruction(number: "2", text: "Press ⇧⌘C, or the copy button in the toolbar")
+                    OnboardingInstruction(number: "3", text: "Paste it into ChatGPT, Claude, or whatever you use")
                 }
 
                 HStack(alignment: .top, spacing: 10) {
@@ -372,7 +372,7 @@ private struct AnalyzePreview: View {
                 Circle().fill(Color.yellow.opacity(0.75)).frame(width: 8, height: 8)
                 Circle().fill(Color.green.opacity(0.75)).frame(width: 8, height: 8)
                 Spacer()
-                Text("Assistant")
+                Label("⇧⌘C", systemImage: "doc.on.doc")
                     .font(.system(size: 10, weight: .semibold))
                     .padding(.horizontal, 9)
                     .frame(height: 25)
@@ -387,20 +387,20 @@ private struct AnalyzePreview: View {
                     .foregroundStyle(accent)
                     .frame(width: 56, height: 56)
                     .background(ClearframeTheme.accentDimStrong, in: RoundedRectangle(cornerRadius: 17))
-                Text("Understand this page")
+                Text("Copied 871 words")
                     .font(.system(size: 23, weight: .bold, design: .serif))
                     .foregroundStyle(.white)
-                Text("Create a local summary, surface claims worth checking, and notice obvious visible risk signals.")
+                Text("The article, without the menus, footers and player controls — on your clipboard, ready to paste.")
                     .font(.caption)
                     .foregroundStyle(Color.white.opacity(0.58))
                     .multilineTextAlignment(.center)
-                Label("Analyze page", systemImage: "sparkles")
+                Label("Paste into your AI", systemImage: "arrow.right")
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(ClearframeTheme.onAccent)
                     .frame(maxWidth: .infinity)
                     .frame(height: 42)
                     .background(ClearframeTheme.accent, in: RoundedRectangle(cornerRadius: 9))
-                Text("Local by default · runs only when you click")
+                Text("Nothing is sent anywhere by Clearframe")
                     .font(.system(size: 10))
                     .foregroundStyle(Color.white.opacity(0.4))
             }

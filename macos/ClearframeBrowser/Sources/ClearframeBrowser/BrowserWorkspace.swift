@@ -16,7 +16,6 @@ enum StartSurface {
 final class BrowserTab: ObservableObject, Identifiable {
     let id: UUID
     let session: BrowserSession
-    let assistant: PageAssistantModel
     /// Find in page belongs to the tab, like its page does: two tabs searching
     /// for different words do not share a bar or a result.
     let find: PageFindController
@@ -24,17 +23,6 @@ final class BrowserTab: ObservableObject, Identifiable {
     @Published private(set) var displayTitle: String
     @Published private(set) var lastActivatedAt: Date
     @Published var startSurface: StartSurface = .aiHome
-    /// Whether this tab is showing the page assistant panel.
-    ///
-    /// Per tab, and only for as long as the tab lives: the toolbar button is a
-    /// decision about the page in front of you, not a setting. It starts at
-    /// whatever `BrowserDataStore.showsAssistantPanel` says, so a window full
-    /// of tabs opens the same way, and then each tab goes its own way.
-    ///
-    /// This lives on the tab rather than in the view because the view is
-    /// rebuilt from scratch every time the selection changes — held there, the
-    /// panel you opened closed itself the moment you looked at another tab.
-    @Published var showsAssistantPanel: Bool
     /// The tab group this tab belongs to. `BrowserWorkspace` owns every write
     /// so grouped tabs stay contiguous in the strip.
     @Published fileprivate(set) var groupID: UUID?
@@ -57,7 +45,6 @@ final class BrowserTab: ObservableObject, Identifiable {
         isPrivate: Bool = false,
         groupID: UUID? = nil,
         isPinned: Bool = false,
-        showsAssistantPanel: Bool = false,
         contentBlocking: ContentRuleListProvider? = nil,
         favicons: FaviconStore? = nil,
         webFeatures: WebFeatureSettingsStore? = nil,
@@ -70,8 +57,6 @@ final class BrowserTab: ObservableObject, Identifiable {
         self.isPrivate = isPrivate
         self.groupID = groupID
         self.isPinned = isPinned
-        self.showsAssistantPanel = showsAssistantPanel
-        assistant = PageAssistantModel()
         // Built as a local first: the find controller needs the session's web
         // view, and `self` cannot be read until every stored property is set.
         let resolvedSession: BrowserSession
@@ -193,7 +178,6 @@ final class BrowserTab: ObservableObject, Identifiable {
 
     func teardown() {
         cancellables.removeAll()
-        assistant.teardown()
         find.teardown()
         session.teardown()
     }
@@ -271,8 +255,10 @@ final class BrowserWorkspace: ObservableObject {
     private var downloadSubscription: AnyCancellable?
     private var dataStoreSubscription: AnyCancellable?
     private var contentBlockingSubscription: AnyCancellable?
-    private var assistantPanelSubscription: AnyCancellable?
     private var persistenceTask: Task<Void, Never>?
+    /// The assistant beside the page. One per window; see `AICompanion`.
+    let aiCompanion: AICompanion
+    private var aiCompanionSubscription: AnyCancellable?
 
     init(
         dataStore: BrowserDataStore? = nil,
@@ -311,6 +297,28 @@ final class BrowserWorkspace: ObservableObject {
         self.searchSettings = resolvedSearchSettings
         self.contentBlocking = resolvedContentBlocking
         self.favicons = resolvedFavicons
+        let chosenTool = AICompanion.choices.first { $0.id == resolvedDataStore.aiCompanionToolID }
+            ?? AICompanion.choices.first
+            ?? AIToolCatalog.tools[0]
+        aiCompanion = AICompanion(
+            tool: chosenTool,
+            makeSession: { [downloads = resolvedDownloads, search = resolvedSearchSettings,
+                            blocking = resolvedContentBlocking, icons = resolvedFavicons,
+                            features = resolvedWebFeatures, store = websiteDataStore, isPrivate] _, url in
+                BrowserSession(
+                    downloadCenter: downloads,
+                    searchSettings: search,
+                    initialURL: url,
+                    isPrivate: isPrivate,
+                    contentBlocking: blocking,
+                    favicons: icons,
+                    webFeatures: features,
+                    websiteDataStore: store
+                )
+            },
+            rememberChoice: { [weak resolvedDataStore] id in resolvedDataStore?.aiCompanionToolID = id }
+        )
+
         downloadSubscription = resolvedDownloads.objectWillChange.sink { [weak self] _ in
             self?.objectWillChange.send()
         }
@@ -320,17 +328,22 @@ final class BrowserWorkspace: ObservableObject {
         contentBlockingSubscription = resolvedContentBlocking.objectWillChange.sink { [weak self] _ in
             self?.objectWillChange.send()
         }
-        // Settings is its own window, so a change made there has to reach the
-        // browser windows that are already open — otherwise turning the panel
-        // on looks like it did nothing until you happen to open a new tab.
-        // `dropFirst` skips the value the publisher replays on subscription,
-        // which would otherwise overwrite the tabs this window is still
-        // building with the same value they were built from.
-        assistantPanelSubscription = resolvedDataStore.$showsAssistantPanel
-            .dropFirst()
-            .sink { [weak self] shows in
-                self?.tabs.forEach { $0.showsAssistantPanel = shows }
+
+        // A link clicked inside the assistant belongs in a tab, not in the panel:
+        // navigating the panel away from ChatGPT is how a conversation is lost.
+        // Popups still adopt WebKit's own configuration, because that is what lets
+        // a provider's sign-in report back to the page that opened it.
+        aiCompanionSubscription = aiCompanion.$live.sink { [weak self] sessions in
+            guard let self else { return }
+            for session in sessions.values {
+                session.onRequestNewTab = { [weak self] url in
+                    self?.addTab(url: url, isPrivate: self?.isPrivate ?? false)
+                }
+                session.onRequestPopupWebView = { [weak self] configuration in
+                    self?.adoptPopupTab(configuration: configuration, isPrivate: self?.isPrivate ?? false)
+                }
             }
+        }
 
         // A private window opens blank: it adopts nothing and restores
         // nothing, because neither would be private.
@@ -356,7 +369,6 @@ final class BrowserWorkspace: ObservableObject {
                     searchSettings: resolvedSearchSettings,
                     groupID: record.groupID,
                     isPinned: record.isPinned,
-                    showsAssistantPanel: resolvedDataStore.showsAssistantPanel,
                     contentBlocking: resolvedContentBlocking,
                     favicons: resolvedFavicons,
                     webFeatures: resolvedWebFeatures,
@@ -373,7 +385,6 @@ final class BrowserWorkspace: ObservableObject {
                 downloadCenter: resolvedDownloads,
                 searchSettings: resolvedSearchSettings,
                 isPrivate: isPrivate,
-                showsAssistantPanel: resolvedDataStore.showsAssistantPanel,
                 contentBlocking: resolvedContentBlocking,
                 favicons: resolvedFavicons,
                 webFeatures: resolvedWebFeatures,
@@ -444,11 +455,32 @@ final class BrowserWorkspace: ObservableObject {
     /// - Parameter isPrivate: left unset, a tab is as private as its window.
     ///   A private window has no way to open a normal tab, which is the point
     ///   of it being a window rather than a tab.
+    /// The person has asked to see a page.
+    ///
+    /// One method called from every door that opens one, because there is no
+    /// honest single choke point: telling "somebody asked for this" apart from
+    /// "the page redirected itself" needs an explicit signal either way. What
+    /// stops an eleventh door forgetting the rule is a test per door, not
+    /// cleverness here.
+    ///
+    /// Deliberately not called by: selecting a tab that already exists, a
+    /// provider's sign-in popup, or reloading — none of those is a request for
+    /// a *different* page, and moving the assistant for them would be the
+    /// interface acting on its own.
+    func makeRoomForPage() {
+        aiCompanion.makeRoomForPage()
+    }
+
     func addTab(url: URL? = nil, select: Bool = true, isPrivate: Bool? = nil) {
         let tab = makeTab(url: url, isPrivate: isPrivate ?? self.isPrivate)
         tabs.append(tab)
         configure(tab)
-        if select { selectTab(tab.id) }
+        if select {
+            selectTab(tab.id)
+            // Only for a tab somebody is being sent to. Switching between tabs
+            // that already exist leaves the assistant exactly as it was.
+            makeRoomForPage()
+        }
         schedulePersistence()
     }
 
@@ -470,6 +502,7 @@ final class BrowserWorkspace: ObservableObject {
         enforcePinnedTabsPrecedeUnpinnedTabs()
         configure(tab)
         selectTab(tab.id)
+        makeRoomForPage()
         schedulePersistence()
     }
 
@@ -603,6 +636,7 @@ final class BrowserWorkspace: ObservableObject {
     func reopenClosedTab() {
         guard !closedTabs.isEmpty else { return }
         let closed = closedTabs.removeFirst()
+        makeRoomForPage()
         let tab = makeTab(url: WebURLPolicy.validatedURL(closed.url), isPrivate: false)
         if let groupID = closed.groupID, group(groupID) != nil {
             tab.groupID = groupID
@@ -1007,7 +1041,6 @@ final class BrowserWorkspace: ObservableObject {
             downloadCenter: downloads,
             searchSettings: searchSettings,
             isPrivate: isPrivate,
-            showsAssistantPanel: dataStore.showsAssistantPanel,
             contentBlocking: contentBlocking,
             favicons: favicons,
             adoptingPopupConfiguration: configuration
@@ -1024,7 +1057,6 @@ final class BrowserWorkspace: ObservableObject {
             downloadCenter: downloads,
             searchSettings: searchSettings,
             isPrivate: isPrivate,
-            showsAssistantPanel: dataStore.showsAssistantPanel,
             contentBlocking: contentBlocking,
             favicons: favicons,
             webFeatures: webFeatures,
@@ -1034,6 +1066,7 @@ final class BrowserWorkspace: ObservableObject {
 
     func open(_ urlString: String, inNewTab: Bool = false) {
         guard let url = WebURLPolicy.validatedURL(urlString) else { return }
+        makeRoomForPage()
         if inNewTab || selectedTab == nil {
             addTab(url: url, isPrivate: selectedTab?.isPrivate ?? false)
         } else {
@@ -1045,6 +1078,7 @@ final class BrowserWorkspace: ObservableObject {
     /// were on is not replaced by it.
     func openLocalFile(_ url: URL) {
         guard url.isFileURL else { return }
+        makeRoomForPage()
         let tab = makeTab(url: nil, isPrivate: false)
         tabs.append(tab)
         configure(tab)
@@ -1091,6 +1125,7 @@ final class BrowserWorkspace: ObservableObject {
     /// Opens the full-page bookmarks home on the selected tab, creating a tab
     /// first if the workspace momentarily has none (during a data reset).
     func openBookmarksHome() {
+        makeRoomForPage()
         guard let tab = selectedTab else {
             addTab()
             selectedTab?.showBookmarksHome()
@@ -1106,6 +1141,7 @@ final class BrowserWorkspace: ObservableObject {
     /// listens for one, and a second unused counter is a second thing to keep
     /// alive.
     func openHistoryHome() {
+        makeRoomForPage()
         guard let tab = selectedTab else {
             addTab()
             selectedTab?.showHistoryHome()
@@ -1240,10 +1276,12 @@ final class BrowserWorkspace: ObservableObject {
     }
 
     func goBackInSelectedTab() {
+        makeRoomForPage()
         selectedTab?.session.goBack()
     }
 
     func goForwardInSelectedTab() {
+        makeRoomForPage()
         selectedTab?.session.goForward()
     }
 

@@ -2,6 +2,7 @@ import ClearframeCore
 import SwiftUI
 
 struct AIToolStartPage: View {
+    @ObservedObject var store: BrowserDataStore
     let openTool: (AIToolListing) -> Void
     let openSource: (AIToolListing, URL) -> Void
 
@@ -32,6 +33,7 @@ struct AIToolStartPage: View {
                     catalogStatus
                     toolSearchField
                     categoryFilters
+                    toolShelf
                     catalogGrid
                     catalogBoundary
                 }
@@ -153,6 +155,61 @@ struct AIToolStartPage: View {
         }
     }
 
+    /// The tools this reader has opened, in the order their row holds them.
+    private var shelfTools: [AIToolListing] {
+        store.aiToolShelf.toolIDs.compactMap { id in
+            AIToolCatalog.tools.first { $0.id == id }
+        }
+    }
+
+    /// What a reader sees before they have opened anything. The catalog already
+    /// marks a few tools per task as a sensible place to begin, and those are
+    /// better company on a first run than six empty squares.
+    private var startingPoints: [AIToolListing] {
+        AIToolCatalog.tools
+            .filter { !$0.recommendations.isEmpty }
+            .prefix(AIToolShelf.defaultCapacity)
+            .map { $0 }
+    }
+
+    /// The row only belongs on the page's own front, not over search results or
+    /// inside a chosen task, where it would compete with the answer the reader asked for.
+    @ViewBuilder
+    private var toolShelf: some View {
+        if selectedCategory == nil && !showsAllTools && toolSearch.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            let tools = shelfTools.isEmpty ? startingPoints : shelfTools
+            let isOwnRow = !shelfTools.isEmpty
+            if !tools.isEmpty {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text(isOwnRow ? "YOUR TOOLS" : "GOOD PLACES TO START")
+                        .font(.system(size: 10, weight: .bold))
+                        .tracking(1.8)
+                        .foregroundStyle(ClearframeTheme.textSecondary)
+                    LazyVGrid(
+                        columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 6),
+                        spacing: 12
+                    ) {
+                        ForEach(tools) { tool in
+                            ShelfToolButton(
+                                tool: tool,
+                                isPinned: store.aiToolShelf.isPinned(tool.id),
+                                canManage: isOwnRow,
+                                open: { openTool(tool) },
+                                togglePin: {
+                                    store.setAIToolPinned(tool.id, pinned: !store.aiToolShelf.isPinned(tool.id))
+                                },
+                                remove: { store.removeAITool(tool.id) }
+                            )
+                        }
+                    }
+                }
+                .padding(20)
+                .background(ClearframeTheme.bg2, in: RoundedRectangle(cornerRadius: 16))
+                .overlay(RoundedRectangle(cornerRadius: 16).stroke(ClearframeTheme.hairline2))
+            }
+        }
+    }
+
     @ViewBuilder
     private var catalogGrid: some View {
         if selectedCategory == nil && !showsAllTools && toolSearch.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -261,21 +318,7 @@ private struct AIToolCard: View {
     let open: () -> Void
     let openSource: (URL) -> Void
 
-    // Retuned for the Halo palette (B7): the default bucket now matches
-    // ClearframeTheme.accent — the old lime literal it used to hardcode —
-    // and the ChatGPT/DeepSeek/Runway teal shifted further toward cyan so it
-    // stays visually distinct from that mint default instead of echoing it.
-    private var accent: Color {
-        switch tool.id {
-        case "chatgpt", "deepseek", "runway": return Color(red: 0.24, green: 0.75, blue: 0.78)
-        case "claude", "mistral", "firefly": return Color(red: 0.95, green: 0.58, blue: 0.38)
-        case "gemini", "qwen", "google-translate", "veo": return Color(red: 0.42, green: 0.64, blue: 0.98)
-        case "grok", "midjourney": return Color(red: 0.76, green: 0.78, blue: 0.82)
-        case "kimi", "perplexity": return Color(red: 0.60, green: 0.82, blue: 0.95)
-        case "canva", "deepl", "seedance": return Color(red: 0.73, green: 0.55, blue: 0.98)
-        default: return ClearframeTheme.accent
-        }
-    }
+    private var accent: Color { tool.markAccent }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -390,6 +433,30 @@ private struct AIToolCard: View {
 /// keeps this page under the same rule as the rest of the browser: an icon
 /// comes from a visit, never from a file shipped alongside somebody else's
 /// trademark and never from a service asked about it.
+extension AIToolListing {
+    /// The colour this tool's mark is drawn in, wherever it appears.
+    ///
+    /// Retuned for the Halo palette (B7): the default bucket matches
+    /// `ClearframeTheme.accent` — the old lime literal it used to hardcode — and
+    /// the ChatGPT/DeepSeek/Runway teal shifted further toward cyan so it stays
+    /// visually distinct from that mint default instead of echoing it.
+    ///
+    /// It lives here rather than inside the card because the row on the page's
+    /// front draws the same marks. Two copies of this table would drift, and a
+    /// tool would be one colour in the row and another in its own card.
+    var markAccent: Color {
+        switch id {
+        case "chatgpt", "deepseek", "runway": return Color(red: 0.24, green: 0.75, blue: 0.78)
+        case "claude", "mistral", "firefly": return Color(red: 0.95, green: 0.58, blue: 0.38)
+        case "gemini", "qwen", "google-translate", "veo": return Color(red: 0.42, green: 0.64, blue: 0.98)
+        case "grok", "midjourney": return Color(red: 0.76, green: 0.78, blue: 0.82)
+        case "kimi", "perplexity": return Color(red: 0.60, green: 0.82, blue: 0.95)
+        case "canva", "deepl", "seedance": return Color(red: 0.73, green: 0.55, blue: 0.98)
+        default: return ClearframeTheme.accent
+        }
+    }
+}
+
 struct AIToolMark: View {
     let tool: AIToolListing
     let accent: Color
@@ -443,5 +510,49 @@ private struct AIToolMonogram: View {
             .foregroundStyle(Color.black.opacity(0.72))
             .frame(width: size, height: size)
             .background(accent, in: RoundedRectangle(cornerRadius: 12))
+    }
+}
+
+/// One tile on the reader's row. Secondary-click carries the two things a reader
+/// might want of it — keep this one where it is, or take it off — so the tile
+/// stays a single target and nothing hovers into view over it.
+private struct ShelfToolButton: View {
+    let tool: AIToolListing
+    let isPinned: Bool
+    let canManage: Bool
+    let open: () -> Void
+    let togglePin: () -> Void
+    let remove: () -> Void
+
+    var body: some View {
+        Button(action: open) {
+            VStack(spacing: 6) {
+                ZStack(alignment: .topTrailing) {
+                    // The same mark the tool's own card draws, so a tool looks
+                    // like itself in both places — and becomes its real logo
+                    // here too, once a visit has captured one.
+                    AIToolMark(tool: tool, accent: tool.markAccent, size: 44)
+                    if isPinned {
+                        Image(systemName: "pin.fill")
+                            .font(.system(size: 8))
+                            .foregroundStyle(ClearframeTheme.accent)
+                            .offset(x: 4, y: -4)
+                    }
+                }
+                Text(tool.name)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(ClearframeTheme.textPrimary)
+                    .lineLimit(1)
+            }
+            .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.plain)
+        .help(tool.bestFor)
+        .contextMenu {
+            if canManage {
+                Button(isPinned ? "Unpin" : "Pin to this row", action: togglePin)
+                Button("Remove from this row", role: .destructive, action: remove)
+            }
+        }
     }
 }

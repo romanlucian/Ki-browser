@@ -92,6 +92,51 @@ final class ClearframeCoreTests: XCTestCase {
         XCTAssertFalse(RiskAnalyzer.assess(page: defaultPort).signals.contains { $0.title.contains("another site") })
     }
 
+    func testClipboardPayloadNamesItsSourceAndCarriesOnlyThePageOwnWords() {
+        let page = PageSnapshot(
+            title: "Shaded streets",
+            url: "https://example.org/shade",
+            hostname: "example.org",
+            scheme: "https",
+            language: "en",
+            text: "Cities are adding shaded public spaces as summer temperatures rise.\nVideo Player is loading. Stream Type LIVE. Playback controls.\nPlanners say shade structures are faster to install than mature trees.",
+            wordCount: 30,
+            hasPasswordField: false,
+            formActions: []
+        )
+        let payload = try? XCTUnwrap(LocalAnalysisEngine.clipboardPayload(page: page))
+        let text = try! XCTUnwrap(payload)
+
+        // Where it came from, so whoever reads the paste can see the source.
+        XCTAssertTrue(text.hasPrefix("Title:  Shaded streets\nURL:    https://example.org/shade\n"))
+        XCTAssertTrue(text.contains("words extracted from the visible page"))
+        // The article, and not the video player's control labels.
+        XCTAssertTrue(text.contains("Cities are adding shaded public spaces"))
+        XCTAssertTrue(text.contains("Planners say shade structures"))
+        XCTAssertFalse(text.contains("Stream Type LIVE"))
+        XCTAssertFalse(text.contains("Playback controls"))
+        // Every line of the article is the page's own words.
+        for line in LocalAnalysisEngine.readableText(page: page).split(separator: "\n") {
+            XCTAssertTrue(page.text.contains(line), "not verbatim: \(line)")
+        }
+    }
+
+    func testClipboardPayloadRefusesAPageWithNothingReadable() {
+        let page = PageSnapshot(
+            title: "Player only",
+            url: "https://example.org/player",
+            hostname: "example.org",
+            scheme: "https",
+            language: "en",
+            text: Array(repeating: "Video Player is loading. Stream Type LIVE. Playback controls.", count: 4).joined(separator: "\n"),
+            wordCount: 36,
+            hasPasswordField: false,
+            formActions: []
+        )
+        // Nothing rather than a header with no article under it.
+        XCTAssertNil(LocalAnalysisEngine.clipboardPayload(page: page))
+    }
+
     func testReadingTimeRoundsPartialMinutesUp() {
         XCTAssertEqual(LocalAnalysisEngine.readingTime(wordCount: 1), 1)
         XCTAssertEqual(LocalAnalysisEngine.readingTime(wordCount: 220), 1)

@@ -30,88 +30,6 @@ enum TestSuiteCleanup {
 
 @MainActor
 final class BrowserBehaviorTests: XCTestCase {
-    func testNavigationCancelsAnInFlightAnalysisWithoutRestoringStaleResults() async {
-        let session = ControlledAssistantSession(page: Self.page)
-        let model = PageAssistantModel()
-
-        let analysisTask = Task { await model.analyzeCurrentPage(session: session) }
-        while !session.isWaitingForExtraction { await Task.yield() }
-
-        session.navigationVersion += 1
-        session.currentURLString = "https://second.example/new-page"
-        model.clearForNavigation()
-        session.completeExtraction()
-        await analysisTask.value
-
-        XCTAssertEqual(model.state, .idle)
-        XCTAssertNil(model.snapshot)
-        XCTAssertNil(model.analysis)
-    }
-
-    func testAssistantTeardownCancelsWorkAndErasesTabScopedPageData() async {
-        let session = ControlledAssistantSession(page: Self.page)
-        let model = PageAssistantModel()
-        let analysisTask = Task { await model.analyzeCurrentPage(session: session) }
-        while !session.isWaitingForExtraction { await Task.yield() }
-
-        model.teardown()
-        session.completeExtraction()
-        await analysisTask.value
-
-        XCTAssertEqual(model.state, .idle)
-        XCTAssertNil(model.snapshot)
-        XCTAssertNil(model.analysis)
-        XCTAssertNil(model.operationMessage)
-    }
-
-    /// Analyze page is enabled and prominent on a brand-new tab. Extraction of
-    /// the start surface succeeds, so the identity check downstream used to
-    /// fail and abandon the work while the panel still said "Reading the
-    /// visible page…", with no timeout and no way back.
-    func testAnalyzingATabWithNoWebPageRefusesInsteadOfLoadingForever() async {
-        let session = ControlledAssistantSession(page: Self.page, waitsForExtraction: false)
-        session.currentURLString = ""
-        let model = PageAssistantModel()
-
-        await model.analyzeCurrentPage(session: session)
-
-        XCTAssertEqual(model.state, .needsPage)
-        XCTAssertNil(model.analysis)
-        XCTAssertNil(model.snapshot)
-    }
-
-    func testAnalyzingRecoversOnceTheTabHoldsARealPage() async {
-        let session = ControlledAssistantSession(page: Self.page, waitsForExtraction: false)
-        session.currentURLString = ""
-        let model = PageAssistantModel()
-        await model.analyzeCurrentPage(session: session)
-        XCTAssertEqual(model.state, .needsPage)
-
-        session.currentURLString = Self.page.url
-        await model.analyzeCurrentPage(session: session)
-
-        XCTAssertEqual(model.state, .ready)
-        XCTAssertNotNil(model.analysis)
-        XCTAssertFalse(model.readableText.isEmpty, "an analysed page has text ready to copy")
-    }
-
-    /// The page moving out from under a read is the other way the panel could
-    /// be abandoned mid-load. It has to settle on something the reader can act
-    /// on, never on a spinner.
-    func testAPageThatMovesDuringAnalysisSettlesOnAStateTheReaderCanActOn() async {
-        let session = ControlledAssistantSession(page: Self.page)
-        let model = PageAssistantModel()
-
-        let analysisTask = Task { await model.analyzeCurrentPage(session: session) }
-        while !session.isWaitingForExtraction { await Task.yield() }
-        session.currentURLString = "https://second.example/other-article"
-        session.completeExtraction()
-        await analysisTask.value
-
-        XCTAssertEqual(model.state, .failed(PageAssistantModel.pageChangedMessage))
-        XCTAssertNil(model.analysis)
-    }
-
     func testDataStoreRestoresLastKnownGoodBookmarksAndPreservesCorruptBytes() throws {
         let suiteName = "clearframe.persistence.recovery.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
@@ -728,13 +646,48 @@ final class BrowserBehaviorTests: XCTestCase {
         XCTAssertTrue(workspace.tabs.allSatisfy { $0.startSurface == .aiHome })
     }
 
-    func testTabsOpenWithoutTheAssistantPanelUnlessTheSettingAsksForIt() throws {
-        let suiteName = "clearframe.assistantPanel.default.\(UUID().uuidString)"
+    func testTheAssistantIsOneWindowNotOneTabAndLoadsNothingUntilAsked() throws {
+        let workspace = try makeSurfaceTestWorkspace()
+        let companion = workspace.aiCompanion
+
+        // A window that never asks for an assistant never loads one.
+        XCTAssertFalse(companion.isVisible)
+        XCTAssertNil(companion.session, "the assistant loaded before anybody asked for it")
+
+        companion.show()
+        XCTAssertTrue(companion.isVisible)
+        let session = try XCTUnwrap(companion.session, "showing the assistant did not create it")
+
+        // Switching tabs must not disturb it: a conversation is something a
+        // person keeps while they read around it.
+        workspace.addTab()
+        let second = try XCTUnwrap(workspace.selectedTab)
+        workspace.selectTab(second.id)
+        XCTAssertTrue(companion.isVisible)
+        XCTAssertTrue(companion.session === session, "the assistant restarted when the tab changed")
+
+        companion.hide()
+        XCTAssertFalse(companion.isVisible)
+        XCTAssertTrue(companion.session === session, "hiding threw the conversation away")
+
+        // Showing again reuses the same conversation rather than starting over.
+        companion.show()
+        XCTAssertTrue(companion.isVisible)
+        XCTAssertTrue(companion.session === session, "reopening restarted the assistant")
+
+        // Filling the window is a view decision and must not disturb the session.
+        companion.toggleExpanded()
+        XCTAssertTrue(companion.isExpanded)
+        XCTAssertTrue(companion.session === session)
+        companion.toggleExpanded()
+        XCTAssertFalse(companion.isExpanded)
+    }
+
+    func testSwitchingAssistantsKeepsTheConversationAndStopsAtTwoLiveOnes() throws {
+        let suiteName = "clearframe.companion.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
         defer { TestSuiteCleanup.destroy(suiteName, defaults: defaults) }
         let store = BrowserDataStore(defaults: defaults)
-        XCTAssertFalse(store.showsAssistantPanel, "a profile that has never chosen opens tabs without the panel")
-
         let blocking = try Self.makeTestContentBlocking(defaults: defaults)
         defer { blocking.removeStore() }
         let workspace = BrowserWorkspace(
@@ -743,77 +696,266 @@ final class BrowserBehaviorTests: XCTestCase {
             searchSettings: SearchSettingsStore(defaults: defaults),
             contentBlocking: blocking.provider
         )
-        XCTAssertEqual(workspace.tabs.first?.showsAssistantPanel, false, "the window's first tab opens without it")
-        workspace.addTab()
-        XCTAssertEqual(workspace.selectedTab?.showsAssistantPanel, false, "so does a new tab")
+        let companion = workspace.aiCompanion
+        XCTAssertEqual(companion.tool.id, "chatgpt", "the default assistant is not the documented one")
 
-        // Asked for in Settings, every tab opened afterwards starts showing it.
-        store.showsAssistantPanel = true
-        workspace.addTab()
-        XCTAssertEqual(workspace.selectedTab?.showsAssistantPanel, true)
-        XCTAssertTrue(defaults.bool(forKey: "clearframe.showAssistantPanel"), "the choice is remembered")
+        let others = AICompanion.choices.filter { $0.id != "chatgpt" }
+        try XCTSkipUnless(others.count >= 2, "this policy needs three assistants to exercise")
+        let first = companion.tool
+        let second = others[0]
+        let third = others[1]
 
-        // And a window opened later reads the same answer, including the tabs
-        // it restores rather than creates.
-        let record = BrowserTabRecord(
-            id: UUID(),
-            url: "https://example.com/restored",
-            title: "Restored",
-            lastActivatedAt: Date()
+        companion.show()
+        let firstSession = try XCTUnwrap(companion.session)
+
+        // Switching used to destroy the conversation you were in the middle of.
+        companion.select(second)
+        XCTAssertEqual(companion.tool.id, second.id)
+        XCTAssertEqual(store.aiCompanionToolID, second.id, "the choice was not remembered")
+        let secondSession = try XCTUnwrap(companion.session, "switching while open left no assistant")
+        XCTAssertFalse(firstSession === secondSession, "both assistants shared one session")
+        XCTAssertTrue(
+            companion.session(for: first) === firstSession,
+            "switching away threw the first conversation out"
         )
-        store.saveWorkspace(BrowserWorkspaceSnapshot(tabs: [record], selectedTabID: record.id))
-        let reopened = BrowserWorkspace(
+
+        // Going back is the whole point: the same session, still where it was.
+        companion.select(first)
+        XCTAssertTrue(
+            companion.session === firstSession,
+            "coming back restarted the assistant instead of returning to it"
+        )
+
+        // A third does not accumulate. The one nobody is looking at and nobody
+        // used most recently is the one that goes.
+        companion.select(third)
+        XCTAssertEqual(companion.live.count, AICompanion.maximumLiveSessions)
+        XCTAssertNotNil(companion.session(for: third))
+        XCTAssertNotNil(companion.session(for: first), "the assistant in use was dropped")
+        XCTAssertNil(companion.session(for: second), "a third assistant was left running")
+
+        // And returning to the dropped one is a fresh view reopening the
+        // conversation's own address, not the old object coming back.
+        companion.select(second)
+        let reopened = try XCTUnwrap(companion.session)
+        XCTAssertFalse(reopened === secondSession)
+
+        // A window opened later still starts on the remembered choice.
+        let reopenedWindow = BrowserWorkspace(
             dataStore: BrowserDataStore(defaults: defaults),
             downloads: DownloadCenter(),
             searchSettings: SearchSettingsStore(defaults: defaults),
             contentBlocking: blocking.provider
         )
-        XCTAssertEqual(reopened.tabs.first?.showsAssistantPanel, true, "a restored tab honours the setting too")
+        XCTAssertEqual(reopenedWindow.aiCompanion.tool.id, second.id)
     }
 
-    func testTheAssistantPanelButtonStaysLocalToItsTabAndSurvivesSwitchingAway() throws {
+    func testComparingShowsTwoDifferentAssistantsAndClosingReturnsTheLayout() throws {
         let workspace = try makeSurfaceTestWorkspace()
-        let first = try XCTUnwrap(workspace.selectedTab)
-        workspace.addTab()
-        let second = try XCTUnwrap(workspace.selectedTab)
-        XCTAssertNotEqual(first.id, second.id)
+        let companion = workspace.aiCompanion
+        try XCTSkipUnless(AICompanion.choices.count >= 2, "comparing needs two assistants")
 
-        // What the toolbar button does.
-        first.showsAssistantPanel = true
+        companion.show()
+        XCTAssertFalse(companion.isComparing)
+        XCTAssertFalse(companion.isExpanded)
 
-        XCTAssertFalse(second.showsAssistantPanel, "opening it in one tab does not open it in another")
-        workspace.selectTab(second.id)
-        workspace.selectTab(first.id)
-        // Held as view state this could not have been true: SwiftUI rebuilds
-        // the tab's view on every selection change, so the panel closed itself
-        // the moment you looked at another tab. The model is where it belongs.
-        XCTAssertTrue(first.showsAssistantPanel, "the panel is still open on the tab it was opened on")
+        companion.startComparing()
+        let left = try XCTUnwrap(companion.tool as AIToolListing?)
+        let right = try XCTUnwrap(companion.comparisonTool, "comparing opened only one assistant")
+        XCTAssertNotEqual(left.id, right.id, "compared an assistant against itself")
+        XCTAssertNotNil(companion.session(for: left))
+        XCTAssertNotNil(companion.session(for: right))
+        // Two columns need the window; a page beside them would fit in neither.
+        XCTAssertTrue(companion.isExpanded)
+
+        // Changing the right column leaves the left one alone.
+        let leftSession = try XCTUnwrap(companion.session(for: left))
+        if let replacement = AICompanion.choices.first(where: { $0.id != left.id && $0.id != right.id }) {
+            companion.selectComparison(replacement)
+            XCTAssertEqual(companion.comparisonTool?.id, replacement.id)
+            XCTAssertTrue(companion.session(for: left) === leftSession, "the left column restarted")
+            XCTAssertEqual(companion.live.count, AICompanion.maximumLiveSessions)
+        }
+
+        // Closing the second column gives back the layout the person had.
+        companion.stopComparing()
+        XCTAssertFalse(companion.isComparing)
+        XCTAssertNil(companion.comparisonTool)
+        XCTAssertFalse(companion.isExpanded, "leaving compare left the window filled")
+        XCTAssertTrue(companion.session(for: left) === leftSession, "leaving compare restarted the assistant")
+        XCTAssertLessThanOrEqual(companion.live.count, AICompanion.maximumLiveSessions)
     }
 
-    func testChangingTheAssistantPanelSettingReachesWindowsThatAreAlreadyOpen() throws {
-        let suiteName = "clearframe.assistantPanel.live.\(UUID().uuidString)"
-        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
-        defer { TestSuiteCleanup.destroy(suiteName, defaults: defaults) }
-        let store = BrowserDataStore(defaults: defaults)
-        let blocking = try Self.makeTestContentBlocking(defaults: defaults)
-        defer { blocking.removeStore() }
-        let workspace = BrowserWorkspace(
-            dataStore: store,
-            downloads: DownloadCenter(),
-            searchSettings: SearchSettingsStore(defaults: defaults),
-            contentBlocking: blocking.provider
-        )
+    func testOpeningATabStepsTheAssistantOutOfTheWayWithoutLosingIt() throws {
+        let workspace = try makeSurfaceTestWorkspace()
+        let companion = workspace.aiCompanion
+        try XCTSkipUnless(AICompanion.choices.count >= 2, "comparing needs two assistants")
+
+        companion.show()
+        companion.startComparing()
+        let left = companion.tool
+        let right = try XCTUnwrap(companion.comparisonTool)
+        let leftSession = try XCTUnwrap(companion.session(for: left))
+        XCTAssertTrue(companion.isExpanded)
+
+        // A new tab is somebody asking to look at a page. A full-window
+        // assistant answers that with a page nobody can see.
         workspace.addTab()
-        XCTAssertEqual(workspace.tabs.count, 2)
-        XCTAssertTrue(workspace.tabs.allSatisfy { !$0.showsAssistantPanel })
+        XCTAssertFalse(companion.isExpanded, "the new tab opened behind the assistant")
+        XCTAssertFalse(companion.isComparing)
+        // Stepping aside is a layout change and nothing more.
+        XCTAssertTrue(companion.isVisible, "the assistant closed instead of stepping aside")
+        XCTAssertTrue(companion.session(for: left) === leftSession, "the conversation restarted")
+        XCTAssertNotNil(companion.session(for: right), "the second conversation was thrown away")
 
-        // Settings is a separate window: without this the switch would appear
-        // to do nothing until the next new tab.
-        store.showsAssistantPanel = true
-        XCTAssertTrue(workspace.tabs.allSatisfy(\.showsAssistantPanel))
+        // Switching between tabs that already exist changes nothing.
+        companion.toggleExpanded()
+        let first = try XCTUnwrap(workspace.tabs.first)
+        workspace.selectTab(first.id)
+        XCTAssertTrue(companion.isExpanded, "changing tabs disturbed the assistant")
+    }
 
-        store.showsAssistantPanel = false
-        XCTAssertTrue(workspace.tabs.allSatisfy { !$0.showsAssistantPanel })
+    /// Every way of asking for a page must uncover the page.
+    ///
+    /// A table rather than one test each, because the point is coverage: when
+    /// somebody adds an eleventh door and forgets the rule, this is what says
+    /// so. Ten of these were broken at once — the panel stepped aside for ⌘T
+    /// and for nothing else, so the same request behaved two ways depending on
+    /// which button you happened to press.
+    func testEveryWayOfAskingForAPageUncoversIt() throws {
+        let doors: [(String, (BrowserWorkspace) -> Void)] = [
+            ("new tab", { $0.addTab() }),
+            ("new tab beside this one", { workspace in
+                if let id = workspace.selectedTab?.id { workspace.addTab(after: id) }
+            }),
+            ("a link opened in a tab", { $0.addTab(url: URL(string: "https://example.com/link")!) }),
+            ("a link handed over by another app", { $0.openExternalURL(URL(string: "https://example.com/x")!) }),
+            ("an address or a bookmark", { $0.open("https://example.com/typed") }),
+            ("a bookmark in a new tab", { $0.open("https://example.com/typed", inNewTab: true) }),
+            ("reopening a closed tab", { $0.reopenClosedTab() }),
+            ("the bookmarks home", { $0.openBookmarksHome() }),
+            ("the history home", { $0.openHistoryHome() }),
+            ("back", { $0.goBackInSelectedTab() }),
+            ("forward", { $0.goForwardInSelectedTab() }),
+        ]
+
+        for (name, openADoor) in doors {
+            let workspace = try makeSurfaceTestWorkspace()
+            let companion = workspace.aiCompanion
+            companion.show()
+
+            // Set the room up *first*: opening and closing a tab is itself one
+            // of these doors, so doing it after expanding would collapse the
+            // panel and every assertion below would pass without proving
+            // anything. It did exactly that until a deliberately broken
+            // `makeRoomForPage` failed to turn this test red.
+            workspace.addTab(url: URL(string: "https://example.com/closed")!)
+            if let extra = workspace.tabs.last, workspace.tabs.count > 1 {
+                workspace.closeTab(extra.id)
+            }
+
+            companion.toggleExpanded()
+            XCTAssertTrue(companion.isExpanded, "\(name): could not cover the page to begin with")
+
+            openADoor(workspace)
+
+            XCTAssertFalse(
+                companion.isExpanded,
+                "\(name) left the page behind the assistant"
+            )
+            XCTAssertTrue(companion.isVisible, "\(name) closed the assistant instead of moving it")
+        }
+    }
+
+    /// The other half of the rule, and the half that keeps it from becoming an
+    /// interface with a mind of its own.
+    func testNothingMovesWhenNobodyAskedForAPage() throws {
+        let workspace = try makeSurfaceTestWorkspace()
+        let companion = workspace.aiCompanion
+        companion.show()
+        workspace.addTab()
+        companion.toggleExpanded()
+        XCTAssertTrue(companion.isExpanded)
+
+        // Switching between tabs that already exist is not a request for a page.
+        for tab in workspace.tabs {
+            workspace.selectTab(tab.id)
+            XCTAssertTrue(companion.isExpanded, "changing tabs moved the assistant")
+        }
+        // Neither is reloading the page already in front of you.
+        workspace.reloadSelectedTab()
+        XCTAssertTrue(companion.isExpanded, "reloading moved the assistant")
+    }
+
+    /// On a window with no room for both, shrinking reveals nothing — so the
+    /// assistant leaves instead, and comes back when the room does.
+    func testWithNoRoomForBothTheAssistantLeavesAndReturnsWhenTheRoomDoes() throws {
+        let workspace = try makeSurfaceTestWorkspace()
+        let companion = workspace.aiCompanion
+        companion.show()
+        let session = try XCTUnwrap(companion.session)
+
+        companion.setCanShareWindow(false)
+        workspace.addTab()
+        XCTAssertFalse(companion.isVisible, "the page stayed behind the assistant")
+        // Left the screen, not the memory.
+        XCTAssertTrue(companion.session === session, "the conversation was thrown away")
+
+        // Widening the window is enough; the person should not have to know a
+        // keyboard shortcut to undo something they did not ask for.
+        companion.setCanShareWindow(true)
+        XCTAssertTrue(companion.isVisible, "the assistant did not come back when the room did")
+        XCTAssertFalse(companion.isExpanded)
+        XCTAssertTrue(companion.session === session, "coming back restarted the assistant")
+    }
+
+    /// Closing it is deliberate, and a wider window must not undo a decision.
+    func testAnAssistantClosedByHandStaysClosedWhenTheWindowWidens() throws {
+        let workspace = try makeSurfaceTestWorkspace()
+        let companion = workspace.aiCompanion
+        companion.show()
+
+        companion.setCanShareWindow(false)
+        companion.hide()
+        companion.setCanShareWindow(true)
+        XCTAssertFalse(companion.isVisible, "widening the window reopened an assistant somebody closed")
+    }
+
+    /// After comparing, the assistant still on screen outranks the one that
+    /// left it — screen position, never anything about what was read.
+    func testLeavingCompareKeepsTheAssistantStillOnScreen() throws {
+        let workspace = try makeSurfaceTestWorkspace()
+        let companion = workspace.aiCompanion
+        let others = AICompanion.choices.filter { $0.id != companion.tool.id }
+        try XCTSkipUnless(others.count >= 2, "this needs three assistants")
+        let onScreen = companion.tool
+        let third = others[1]
+
+        companion.show()
+        companion.startComparing()
+        let partner = try XCTUnwrap(companion.comparisonTool)
+        let onScreenSession = try XCTUnwrap(companion.session(for: onScreen))
+        companion.stopComparing()
+
+        // Switching to a third drops one. It must be the partner that left the
+        // screen, not the assistant the person still had in front of them.
+        companion.select(third)
+        XCTAssertNil(companion.session(for: partner), "the compare partner outranked the visible assistant")
+        XCTAssertTrue(
+            companion.session(for: onScreen) === onScreenSession,
+            "the assistant that stayed on screen was discarded"
+        )
+    }
+
+    func testEveryAssistantOfferedIsAnOfficialHTTPSDestinationFromTheCatalog() {
+        XCTAssertFalse(AICompanion.choices.isEmpty, "no assistant to put beside a page")
+        for choice in AICompanion.choices {
+            XCTAssertEqual(choice.officialURL.scheme, "https", "\(choice.id) is not HTTPS")
+            XCTAssertNotNil(
+                AIToolCatalog.tools.first { $0.id == choice.id },
+                "\(choice.id) is not in the catalog the AI home shows"
+            )
+        }
     }
 
     func testOpenBookmarksHomeShowsTheBookmarksSurfaceOnTheSelectedTab() throws {
@@ -2463,34 +2605,6 @@ private final class RecordingFaviconFetcher {
     func fetch(_ url: URL) async -> Data? {
         requestedURLs.append(url)
         return response
-    }
-}
-
-@MainActor
-private final class ControlledAssistantSession: PageAssistantSession {
-    var navigationVersion = 1
-    var currentURLString: String
-    private let page: PageSnapshot
-    private let waitsForExtraction: Bool
-    private var continuation: CheckedContinuation<PageSnapshot, Error>?
-    private(set) var isWaitingForExtraction = false
-
-    init(page: PageSnapshot, waitsForExtraction: Bool = true) {
-        self.page = page
-        self.waitsForExtraction = waitsForExtraction
-        currentURLString = page.url
-    }
-
-    func extractPage() async throws -> PageSnapshot {
-        guard waitsForExtraction else { return page }
-        isWaitingForExtraction = true
-        return try await withCheckedThrowingContinuation { continuation = $0 }
-    }
-
-    func completeExtraction() {
-        continuation?.resume(returning: page)
-        continuation = nil
-        isWaitingForExtraction = false
     }
 }
 

@@ -38,19 +38,6 @@ struct AISettingsView: View {
                     .foregroundStyle(.secondary)
             }
 
-            Section("Page assistant") {
-                Toggle(
-                    "Show the page assistant when a tab opens",
-                    isOn: Binding(
-                        get: { dataStore.showsAssistantPanel },
-                        set: { dataStore.showsAssistantPanel = $0 }
-                    )
-                )
-                Text("Off by default. The panel is where Analyze page lives, and nothing is analysed until you click it, so leaving this off costs only the width. The sparkles button at the right of the toolbar opens and closes the panel for the tab you are on, whichever way this is set.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
             Section("Connection") {
                 Toggle(
                     "Use HTTPS when a site is known to support it",

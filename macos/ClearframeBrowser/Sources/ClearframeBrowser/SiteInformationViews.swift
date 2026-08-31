@@ -150,6 +150,8 @@ private struct SiteInformationPopover: View {
 
     @StateObject private var siteData = SiteDataInventory()
     @State private var storedKinds: [SiteDataKind]?
+    @State private var risk: RiskAssessment?
+    @State private var isCheckingRisk = false
     @State private var isConfirmingRemoval = false
     @State private var isRemoving = false
 
@@ -183,6 +185,10 @@ private struct SiteInformationPopover: View {
 
                 Divider()
 
+                riskSection
+
+                Divider()
+
                 siteDataSection
             }
             .padding(16)
@@ -210,6 +216,44 @@ private struct SiteInformationPopover: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
+    }
+
+    /// Risk signals live here rather than in a panel of their own: this popover is
+    /// already where somebody looks when they are wondering about a page, beside
+    /// the connection and what the site has stored.
+    ///
+    /// Behind a button, not automatic. Reading the page's text is something the
+    /// person asks for; opening a popover is not asking.
+    @ViewBuilder
+    private var riskSection: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            Label("Risk signals", systemImage: "exclamationmark.shield")
+                .font(.headline)
+
+            if let risk {
+                RiskCard(assessment: risk)
+            } else if isCheckingRisk {
+                Text("Reading the visible page…")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else {
+                Text("Clearframe can look for obvious signals in this page's visible text — an unencrypted password form, an encoded address, urgent payment or wallet-secret language. It explains what it found and never issues a verdict.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Button("Check this page") {
+                    Task { await checkRisk() }
+                }
+            }
+        }
+    }
+
+    private func checkRisk() async {
+        isCheckingRisk = true
+        defer { isCheckingRisk = false }
+        guard WebURLPolicy.validatedURL(session.currentURLString) != nil,
+              let page = try? await session.extractPage() else { return }
+        risk = RiskAnalyzer.assess(page: page)
     }
 
     @ViewBuilder
@@ -296,5 +340,44 @@ private struct SiteInformationPopover: View {
         storedKinds = []
         session.reload()
         dismiss()
+    }
+}
+
+struct RiskCard: View {
+    let assessment: RiskAssessment
+
+    private var tint: Color {
+        switch assessment.level {
+        case .low: return .green
+        case .caution: return .orange
+        case .high: return .red
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Circle().fill(tint).frame(width: 8, height: 8)
+                Text("\(assessment.level.rawValue) risk signals").font(.callout.bold())
+                Spacer()
+                Text("\(assessment.score) / 100").font(.caption2).foregroundStyle(.secondary)
+            }
+            Text(
+                assessment.signals.isEmpty
+                    ? "No obvious high-risk signals were found in the visible page. That does not prove it is safe."
+                    : "\(assessment.signals.count) visible signal\(assessment.signals.count == 1 ? "" : "s") worth checking. This is not a verdict."
+            )
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            ForEach(assessment.signals) { signal in
+                DisclosureGroup(signal.title) {
+                    Text(signal.detail).font(.caption).foregroundStyle(.secondary).padding(.top, 4)
+                }
+                .font(.caption.bold())
+            }
+        }
+        .padding(14)
+        .background(tint.opacity(0.09), in: RoundedRectangle(cornerRadius: 13))
+        .overlay(RoundedRectangle(cornerRadius: 13).stroke(tint.opacity(0.24)))
     }
 }

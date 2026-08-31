@@ -28,6 +28,16 @@ enum BrowserLoadState: Equatable {
 
 @MainActor
 final class BrowserSession: NSObject, ObservableObject {
+    /// Stable identity for SwiftUI, which needs to know when the session behind
+    /// a view has been replaced.
+    ///
+    /// Not `ObjectIdentifier`: that is the object's address, and an address is
+    /// reused once the object at it is freed. Tearing a session down and
+    /// building another for the same assistant is exactly the case where malloc
+    /// is likely to hand back the block it just took — SwiftUI would read the
+    /// same identity, keep the view it already had, and show a torn-down web
+    /// view forever.
+    let instanceID = UUID()
     let webView: WKWebView
     let downloadCenter: DownloadCenter
     let searchSettings: SearchSettingsStore
@@ -55,6 +65,11 @@ final class BrowserSession: NSObject, ObservableObject {
     /// the page. Refusing a link must never take away the page the reader is
     /// on, so this never touches `loadState`.
     @Published private(set) var linkNotice: String?
+    /// A short sentence about the page itself, shown in the same bar and dismissed
+    /// the same way. Used when copying a page has a caveat worth one line — the
+    /// extractor was unsure, or the page is a list rather than an article. Silence
+    /// is the normal case: a notice that appears every time is one nobody reads.
+    @Published private(set) var pageNotice: String?
     /// How the connection to the current page actually stands, from the scheme
     /// *and* from WebKit's own report of whether everything on the page arrived
     /// encrypted. Published so the address chip and the site information
@@ -94,6 +109,7 @@ final class BrowserSession: NSObject, ObservableObject {
     private let favicons: FaviconStore?
     private var faviconTask: Task<Void, Never>?
     private var linkNoticeTask: Task<Void, Never>?
+    private var pageNoticeTask: Task<Void, Never>?
 
     init(
         downloadCenter: DownloadCenter,
@@ -411,6 +427,21 @@ final class BrowserSession: NSObject, ObservableObject {
         onRequestNewTab?(url.flatMap(WebURLPolicy.validatedURL))
     }
 
+    func showPageNotice(_ message: String) {
+        pageNoticeTask?.cancel()
+        pageNotice = message
+        pageNoticeTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 8_000_000_000)
+            guard !Task.isCancelled else { return }
+            self?.pageNotice = nil
+        }
+    }
+
+    func dismissPageNotice() {
+        pageNoticeTask?.cancel()
+        pageNotice = nil
+    }
+
     private func showLinkNotice(_ message: String) {
         linkNoticeTask?.cancel()
         linkNotice = message
@@ -708,9 +739,9 @@ final class BrowserSession: NSObject, ObservableObject {
         <main>
           <div class="mark">C</div>
           <div class="eyebrow">CLEARFRAME BROWSER</div>
-          <h1>Browse first.<br>Understand as you go.</h1>
-          <p>Enter a web address or search in the bar above. Open the assistant when you want a local summary, source context, or visible risk signals.</p>
-          <div class="hint">Local analysis runs only when you click <strong>Analyze page</strong>.</div>
+          <h1>Browse first.<br>Hand it over when you want to.</h1>
+          <p>Enter a web address or search in the bar above. When a page is worth asking about, copy its readable text for the AI you already use.</p>
+          <div class="hint">Press <strong>⇧⌘C</strong> to copy a page. Nothing is sent anywhere by Clearframe.</div>
         </main>
       </body>
     </html>

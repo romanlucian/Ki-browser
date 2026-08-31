@@ -16,15 +16,37 @@ final class BrowserDataStore: ObservableObject {
     @Published var showsBookmarksBar: Bool {
         didSet { defaults.set(showsBookmarksBar, forKey: showsBookmarksBarKey) }
     }
-    /// Whether a tab opens with the page assistant panel already showing.
-    ///
-    /// Off unless asked for. Analysis has always been something you click, but
-    /// the panel arrived open anyway, so every new tab spent 380 points of a
-    /// window offering a button nobody had asked for yet. This decides the
-    /// state a tab *starts* in; the toolbar button still opens and closes the
-    /// panel for the tab in front of you, and that stays a local decision.
-    @Published var showsAssistantPanel: Bool {
-        didSet { defaults.set(showsAssistantPanel, forKey: showsAssistantPanelKey) }
+    /// Which assistant the AI companion opens. A preference like the search
+    /// engine: chosen once, remembered, and changed from the panel itself.
+    @Published var aiCompanionToolID: String {
+        didSet { defaults.set(aiCompanionToolID, forKey: aiCompanionToolIDKey) }
+    }
+    /// Which AI tools the reader has opened from the AI home, and where they sit
+    /// on its row. A count of catalogued tools opened here, in this Mac's own
+    /// preferences; it records nothing about anywhere else the reader goes.
+    @Published private(set) var aiToolShelf: AIToolShelf {
+        didSet {
+            guard let data = try? encoder.encode(aiToolShelf) else { return }
+            defaults.set(data, forKey: aiToolShelfKey)
+        }
+    }
+
+    func recordAIToolOpen(_ toolID: String) {
+        var shelf = aiToolShelf
+        shelf.recordOpen(toolID)
+        if shelf != aiToolShelf { aiToolShelf = shelf }
+    }
+
+    func setAIToolPinned(_ toolID: String, pinned: Bool) {
+        var shelf = aiToolShelf
+        if pinned { shelf.pin(toolID) } else { shelf.unpin(toolID) }
+        if shelf != aiToolShelf { aiToolShelf = shelf }
+    }
+
+    func removeAITool(_ toolID: String) {
+        var shelf = aiToolShelf
+        shelf.remove(toolID)
+        if shelf != aiToolShelf { aiToolShelf = shelf }
     }
 
     private let defaults: UserDefaults
@@ -38,11 +60,15 @@ final class BrowserDataStore: ObservableObject {
     private let reloadRestoredTabsKey = "clearframe.reloadRestoredTabs"
     private let saveHistoryKey = "clearframe.saveHistory"
     private let showsBookmarksBarKey = "clearframe.showBookmarksBar"
-    private let showsAssistantPanelKey = "clearframe.showAssistantPanel"
+    private let aiCompanionToolIDKey = "clearframe.aiCompanionTool"
+    private let aiToolShelfKey = "clearframe.aiToolShelf.v1"
     private let maximumHistoryItems = 500
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
+        aiToolShelf = (defaults.data(forKey: "clearframe.aiToolShelf.v1"))
+            .flatMap { try? JSONDecoder().decode(AIToolShelf.self, from: $0) }
+            ?? AIToolShelf()
         if defaults.object(forKey: reloadRestoredTabsKey) == nil {
             defaults.set(false, forKey: reloadRestoredTabsKey)
         }
@@ -66,9 +92,7 @@ final class BrowserDataStore: ObservableObject {
         bookmarkFolders = bookmarkCollection.folders
         history = historyLoad.value ?? []
         showsBookmarksBar = defaults.bool(forKey: showsBookmarksBarKey)
-        // No seeding: an absent key already reads false, which is the
-        // default this one wants.
-        showsAssistantPanel = defaults.bool(forKey: showsAssistantPanelKey)
+        aiCompanionToolID = defaults.string(forKey: aiCompanionToolIDKey) ?? "chatgpt"
         let recoveredNames = [
             bookmarkLoad.wasRecovered ? "bookmarks" : nil,
             folderLoad.wasRecovered ? "bookmark folders" : nil,
