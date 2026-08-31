@@ -25,6 +25,14 @@ Dates are commit dates. Test counts are the totals at the end of each period, ve
 - The optional OpenAI provider is removed, with the Keychain key storage, the Optional AI settings, the model contract fixture and the extension's options page — which existed for nothing but that key. The extension no longer requests permission to reach `api.openai.com`, because it no longer reaches it. **No page text leaves the Mac by Clearframe's hand at all now**, which makes the privacy claim simpler than it has ever been.
 - Evidence Mode's exact-match highlighting is removed. It was the one thing no other browser could claim, and it had no reachable entry point once key points were gone. If a model that quotes ever arrives, the shape that keeps the honesty is verifying its quotes against the page by substring test — recorded in `docs/on-device-ai-design.md`.
 
+**Clearframe has a face**
+
+- The app icon is a barn owl — a heart-shaped facial disc inside a green ring — replacing the geometric cut-corner frame the icon script drew before. Three forms ship: the full mark, the face alone for small sizes, and a one-colour version for print and watermarks.
+- The icon changes drawing by size rather than scaling one image down. Above 32 px it uses the full mark; at 16 and 32 it uses the face alone, because the ring turns to mud at that size and takes the face down with it. Rendered at both before deciding.
+- The gradient stops well short of black. An earlier version faded to near-black, which looked striking on a dark presentation and lost the owl's entire body against Clearframe's own near-black chrome — the face floated above a wing with nothing joining them. Firefox's mark was the reference: four redesigns spent removing detail while keeping the gradient, and a palette that never touches white or black.
+- The artwork's transparency and edges were verified rather than trusted — composited onto white and onto magenta, because a cut-out's fringe is invisible against both white and black.
+- Adopting the owl ends the app icon's shared geometry with the 104 folder icons, which was a deliberate trade rather than an oversight. A missing artwork file falls back to the old geometric mark instead of breaking the build.
+
 **The assistant's buttons stay where you left them**
 
 - Compare, Fill the window and the close button used to live in the primary column's header — which slides a thousand points inward the moment a second column opens, taking them with it. They now sit immediately left of the close button and nowhere else, and close is anchored to the window's right edge in every layout, so they cannot move.

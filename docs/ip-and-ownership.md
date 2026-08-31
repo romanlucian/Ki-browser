@@ -95,6 +95,7 @@ If the project were sold or assigned, the following comprise the asset:
 
 - Source code in this repository, all authored for this project.
 - The Clearframe icon set (104 original marks) and the app icon.
+- The Clearframe brand mark — the barn-owl face in a ring — in its three forms in `docs/brand/clearframe-mark-2026-08-31/`: full, small and one-colour. Commissioned by the founder and generated to his direction; no third-party artwork is incorporated, so it transfers as owned property rather than under a licence.
 - Documentation in `docs/`, including the strategy, market, and research records.
 - The product name, subject to section 5.
 - The GitHub repository and its history.

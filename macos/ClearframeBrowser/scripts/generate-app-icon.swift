@@ -6,6 +6,26 @@ guard CommandLine.arguments.count == 3 else {
     exit(2)
 }
 
+/// The brand marks live in `docs/brand/`, four levels above this script.
+/// Loaded once: `NSImage` decoding is not free and this renders ten variants.
+private func loadMark(_ name: String) -> NSImage? {
+    let repoRoot = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent()   // scripts
+        .deletingLastPathComponent()   // ClearframeBrowser
+        .deletingLastPathComponent()   // macos
+        .deletingLastPathComponent()   // repo root
+    let url = repoRoot
+        .appendingPathComponent("docs/brand/clearframe-mark-2026-08-31")
+        .appendingPathComponent(name)
+    return NSImage(contentsOf: url)
+}
+
+let fullMarkImage = loadMark("clearframe-mark-full.png")
+let smallMarkImage = loadMark("clearframe-mark-small.png")
+if fullMarkImage == nil || smallMarkImage == nil {
+    fputs("warning: brand artwork not found; drawing the geometric fallback mark\n", stderr)
+}
+
 let outputDirectory = URL(fileURLWithPath: CommandLine.arguments[1], isDirectory: true)
 let icnsURL = URL(fileURLWithPath: CommandLine.arguments[2])
 try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
@@ -77,8 +97,39 @@ func renderIcon(pixels: Int) throws -> Data {
     tile.lineWidth = max(1, size * 0.004)
     tile.stroke()
 
-    // Small sizes need a heavier, slightly larger mark to survive; the shape
-    // is identical, only its weight changes.
+    // The brand mark, drawn from artwork rather than geometry.
+    //
+    // Two files, chosen by size, because one drawing cannot serve both ends:
+    // at 16 and 32 pixels the ring turns to mud and takes the owl's face with
+    // it, so those sizes get the face alone. Above that there is room for the
+    // whole mark. Measured, not assumed — the full mark was rendered at both
+    // and only the face survived the small one.
+    let markArtwork = pixels <= 32 ? smallMarkImage : fullMarkImage
+    if let artwork = markArtwork {
+        // The artwork's own visible content fills about 92 percent of its
+        // canvas, so the drawn rect is enlarged to land the *owl* at the
+        // intended share of the tile rather than the transparent box round it.
+        let visibleShare: CGFloat = 0.92
+        let intended: CGFloat = pixels <= 32 ? 0.60 : 0.66
+        let drawSide = size * intended / visibleShare
+        let origin = (size - drawSide) / 2
+        NSGraphicsContext.current?.imageInterpolation = .high
+        artwork.draw(
+            in: NSRect(x: origin, y: origin, width: drawSide, height: drawSide),
+            from: .zero,
+            operation: .sourceOver,
+            fraction: 1
+        )
+        guard let png = bitmap.representation(using: .png, properties: [:]) else {
+            throw NSError(domain: "ClearframeIcon", code: 2)
+        }
+        return png
+    }
+
+    // Fallback: the geometric mark this script drew before the owl existed —
+    // a closed form with its top-right corner cut at 45 degrees, sharing the
+    // folder icons' geometry. Kept so a missing asset degrades to a correct
+    // icon instead of failing the build.
     let isSmall = pixels <= 32
     let markSide = size * (isSmall ? 0.52 : 0.46)
     let strokeWidth = markSide * (isSmall ? 0.135 : 0.094)
