@@ -57,6 +57,12 @@ Counting words does not merely fail to notice disagreement; it scores disagreeme
 If it returns, it belongs to whatever model reads the page, and that model should quote the conflicting sentences rather than write prose about them. Note that Apple's on-device model does not support Romanian, so that route would not cover the founder's own daily reading.
 
 
+Comparing **more than two** assistants was considered and rejected on August 31, 2026 — first as a 2×2 grid of four, then as three columns. Two answers side by side is a comparison; three or more is a vote, and a vote is the wrong shape here. These models share training data and share failure modes, so two agreeing says very little about whether either is right. Three columns invite "two out of three say X" — a confidence signal that looks earned and is not. That is the same error the term-frequency scorer made below, arrived at from the other direction, except this time the reader does the faulty reasoning rather than the code, which makes it harder to catch.
+
+The practical costs point the same way. Every column is a manual paste, because Clearframe must never type into a provider's page; two is tolerable for something deliberate, three is a chore that grows while the benefit does not. Three live web views is a 50 percent rise in a memory cost `AICompanion.maximumLiveSessions` caps deliberately and which has still not been measured. And three columns need roughly 1,500 points of width, so it would work at a desk and be unavailable on a 13-inch laptop — people learn quickly that such a button is unreliable.
+
+The genuine "break the tie" case is already served without any of that: compare A and B, then switch one column to C. The other column keeps its conversation, because both stay loaded.
+
 Local page judgment — the gist, the key points, the candidate claims and the term-frequency scorer behind them — was removed on August 30, 2026 and must not be rebuilt on word counting. The scorer ranked a sentence by how many of the page's most repeated words it contained, divided by its length, plus a bonus for matching the title or appearing early. That is lexical centrality. It is not importance, and the difference is visible on real pages:
 
     Britannica, "Artificial intelligence"
