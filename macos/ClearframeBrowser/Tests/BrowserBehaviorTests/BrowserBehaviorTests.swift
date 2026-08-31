@@ -947,6 +947,48 @@ final class BrowserBehaviorTests: XCTestCase {
         )
     }
 
+    /// Every close button closes its own column, and the last one closes the
+    /// panel. There is no button that closes more than what it sits on.
+    func testEachCloseButtonClosesOnlyItsOwnColumn() throws {
+        let workspace = try makeSurfaceTestWorkspace()
+        let companion = workspace.aiCompanion
+        try XCTSkipUnless(AICompanion.choices.count >= 2, "comparing needs two assistants")
+
+        // Closing the second column leaves the first, still loaded.
+        companion.show()
+        companion.startComparing()
+        let left = companion.tool
+        let right = try XCTUnwrap(companion.comparisonTool)
+        let leftSession = try XCTUnwrap(companion.session(for: left))
+        companion.closeColumn(right)
+        XCTAssertFalse(companion.isComparing)
+        XCTAssertEqual(companion.tool.id, left.id, "closing the right column changed which assistant remained")
+        XCTAssertTrue(companion.isVisible, "closing one of two closed the whole panel")
+        XCTAssertTrue(companion.session(for: left) === leftSession, "the surviving conversation restarted")
+
+        // Closing the *first* column leaves the second — the one that stays is
+        // the one whose column was not closed, whichever side it was on.
+        companion.startComparing()
+        let second = try XCTUnwrap(companion.comparisonTool)
+        let secondSession = try XCTUnwrap(companion.session(for: second))
+        companion.closeColumn(companion.tool)
+        XCTAssertFalse(companion.isComparing)
+        XCTAssertEqual(companion.tool.id, second.id, "closing the left column did not promote the right one")
+        XCTAssertTrue(companion.isVisible)
+        XCTAssertTrue(
+            companion.session(for: second) === secondSession,
+            "the promoted assistant reloaded instead of carrying its conversation over"
+        )
+        XCTAssertEqual(
+            workspace.dataStore.aiCompanionToolID, second.id,
+            "the surviving assistant did not become the remembered one"
+        )
+
+        // The last column closes the panel.
+        companion.closeColumn(companion.tool)
+        XCTAssertFalse(companion.isVisible, "closing the only column left the panel open")
+    }
+
     func testEveryAssistantOfferedIsAnOfficialHTTPSDestinationFromTheCatalog() {
         XCTAssertFalse(AICompanion.choices.isEmpty, "no assistant to put beside a page")
         for choice in AICompanion.choices {

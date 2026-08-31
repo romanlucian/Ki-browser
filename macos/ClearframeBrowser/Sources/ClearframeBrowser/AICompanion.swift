@@ -148,6 +148,29 @@ final class AICompanion: ObservableObject {
         load(second)
     }
 
+    /// Closes one column.
+    ///
+    /// Every close button means the same thing — this column — and the last one
+    /// closes the panel. There is deliberately no separate "close everything"
+    /// button here: that control is about the window, not about a column, and
+    /// it already lives in the toolbar (⇧⌘A). Two identical glyphs a thousand
+    /// points apart doing different amounts of damage is how somebody loses a
+    /// conversation they meant to keep.
+    func closeColumn(_ closing: AIToolListing) {
+        guard let second = comparisonTool else {
+            hide()
+            return
+        }
+        if closing.id != second.id {
+            // Closing the left column leaves the right one, which becomes the
+            // assistant. Its session is already loaded, so nothing reloads and
+            // the conversation carries straight over.
+            tool = second
+            rememberChoice(second.id)
+        }
+        stopComparing()
+    }
+
     func stopComparing() {
         guard comparisonTool != nil else { return }
         comparisonTool = nil

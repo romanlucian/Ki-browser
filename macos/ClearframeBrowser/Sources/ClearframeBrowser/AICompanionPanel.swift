@@ -104,38 +104,41 @@ struct AICompanionPanel: View {
                 .font(.system(size: 10))
                 .foregroundStyle(ClearframeTheme.textTertiary)
 
-            if isComparison {
-                Button { companion.stopComparing() } label: {
-                    Image(systemName: "xmark").font(.system(size: 11, weight: .semibold))
-                }
-                .buttonStyle(GhostButtonStyle())
-                .help("Close this second assistant")
-                .accessibilityLabel("Close the second assistant")
-            } else {
+            // Panel controls sit immediately left of the close button and
+            // nowhere else, so they cannot move: the close button is anchored to
+            // the window's own right edge in every layout. These used to live in
+            // the *primary* column's header, which slides a thousand points
+            // inward the moment a second column opens — so they travelled with
+            // it and looked like they had wandered off.
+            //
+            // Both fold away while comparing, because neither has a job there:
+            // the window is already filled, and the way back to one assistant is
+            // closing a column. That leaves two identical headers, which reads as
+            // a rule rather than as one button gone missing from a lopsided bar.
+            if !companion.isComparing {
                 compareButton
-                // No expand control while comparing. Two columns need the whole
-                // window, so the button could only ever be shown lit and doing
-                // nothing — which reads as broken rather than as unavailable.
-                // The compare button beside it is the way back.
-                if !companion.isComparing {
-                    Button { companion.toggleExpanded() } label: {
-                        Image(systemName: companion.isExpanded
-                              ? "arrow.down.right.and.arrow.up.left"
-                              : "arrow.up.left.and.arrow.down.right")
-                            .font(.system(size: 11, weight: .semibold))
-                    }
-                    .buttonStyle(GhostButtonStyle(isActive: companion.isExpanded))
-                    .help(companion.isExpanded ? "Share the window with the page" : "Fill the window")
-                    .accessibilityLabel(companion.isExpanded ? "Shrink the assistant" : "Expand the assistant")
+                Button { companion.toggleExpanded() } label: {
+                    Image(systemName: companion.isExpanded
+                          ? "arrow.down.right.and.arrow.up.left"
+                          : "arrow.up.left.and.arrow.down.right")
+                        .font(.system(size: 11, weight: .semibold))
                 }
+                .buttonStyle(GhostButtonStyle(isActive: companion.isExpanded))
+                .help(companion.isExpanded ? "Share the window with the page" : "Fill the window")
+                .accessibilityLabel(companion.isExpanded ? "Shrink the assistant" : "Expand the assistant")
 
-                Button { companion.hide() } label: {
-                    Image(systemName: "xmark").font(.system(size: 11, weight: .semibold))
-                }
-                .buttonStyle(GhostButtonStyle())
-                .help("Close the assistant")
-                .accessibilityLabel("Close the assistant")
+                Rectangle()
+                    .fill(ClearframeTheme.hairline2)
+                    .frame(width: 1, height: 16)
+                    .padding(.horizontal, 1)
             }
+
+            Button { companion.closeColumn(tool) } label: {
+                Image(systemName: "xmark").font(.system(size: 11, weight: .semibold))
+            }
+            .buttonStyle(GhostButtonStyle())
+            .help(companion.isComparing ? "Close this assistant" : "Close the assistant")
+            .accessibilityLabel(companion.isComparing ? "Close this assistant" : "Close the assistant")
         }
         .padding(.horizontal, 10)
         .frame(height: 38)
