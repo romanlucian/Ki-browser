@@ -48,7 +48,7 @@ cd macos/ClearframeBrowser
 ./scripts/build-macos-app.sh
 ```
 
-> **Missing, as of August 30, 2026.** `scripts/build-macos-app.sh` and `scripts/run-browser-smoke.sh` are referenced throughout this repository and by `.github/workflows/ci.yml`, but neither file exists in any commit. The macOS CI job therefore cannot pass, and `Tests/BrowserE2ESmoke.swift` — which is not a member of any target in `Package.swift` — has no runner. `swift test`, `npm test` and `npm run validate` all work.
+> Both scripts live at `macos/ClearframeBrowser/scripts/` — run them from that directory, as above. An August 30, 2026 note here claimed they existed in no commit; that was a search of the repository root's `scripts/`, which holds only `validate.mjs`.
 
 The output is `dist/Clearframe.app` at the repository root. The script embeds the app icon and privacy manifest, enables the hardened runtime, and applies an ad hoc signature for local development. This is still not a Developer ID signature or notarization. The bundle opens as an ordinary macOS application rather than using Terminal as its keyboard target.
 
@@ -92,7 +92,7 @@ The AI guide is editorial information stored inside the app, not a live recommen
 ```bash
 cd macos/ClearframeBrowser
 swift test
-./scripts/run-browser-smoke.sh   # see the note above: this file is missing
+./scripts/run-browser-smoke.sh   # the live end-to-end pass; needs a logged-in desktop session
 ```
 
 Tests that need isolated storage each make their own `UserDefaults` suite.

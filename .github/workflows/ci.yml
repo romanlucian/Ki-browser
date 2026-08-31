@@ -28,8 +28,14 @@ jobs:
         working-directory: macos/ClearframeBrowser
     steps:
       - uses: actions/checkout@v4
+      # Pinned so the toolchain cannot drift with the runner image. If this
+      # Xcode leaves the macos-15 image, the step fails loudly and the pin
+      # gets updated by hand — loud beats silent drift. Deliberately older
+      # than local toolchains, so CI stays the stricter gate.
+      - run: sudo xcode-select -s /Applications/Xcode_16.4.app/Contents/Developer
+      - run: swift --version
+      # No separate release build: build-macos-app.sh runs its own.
       - run: swift test
-      - run: swift build -c release
       - run: ./scripts/build-macos-app.sh
       - run: codesign --verify --deep --strict ../../dist/Clearframe.app
       - run: plutil -lint ../../dist/Clearframe.app/Contents/Resources/PrivacyInfo.xcprivacy

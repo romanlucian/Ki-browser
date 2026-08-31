@@ -2,7 +2,9 @@ import AppKit
 import ClearframeCore
 import Foundation
 import SwiftUI
+import XCTest
 @preconcurrency import WebKit
+@testable import ClearframeBrowser
 
 private enum SmokeFailure: LocalizedError {
     case check(String)
@@ -100,16 +102,37 @@ private func searchQuery(in url: URL?, named queryName: String = "q") -> String?
         .value
 }
 
-@main
-@MainActor
-struct BrowserE2ESmoke {
-    static func main() async {
+/// The end-to-end smoke pass: one real window, one real `WKWebView`, real
+/// pages served over HTTP by `scripts/fixture-server.py`. This is the only
+/// place extraction, content blocking, focus, popups and navigation races run
+/// against live WebKit rather than constructed state.
+///
+/// It lives inside the ordinary test target so that **every `swift test`
+/// compiles it**. Its predecessor was compiled only by a hand-listed `swiftc`
+/// invocation in `run-browser-smoke.sh`, and that list rotted silently twice in
+/// nine days — commits could edit this very file and ship it uncompilable,
+/// because nothing built it but the script nobody ran.
+///
+/// The live checks still need what CI does not have: a logged-in desktop
+/// session for window focus, and the fixture server for pages. So everything
+/// past the first guard runs only when `CLEARFRAME_SMOKE_BASE_URL` is set,
+/// which `scripts/run-browser-smoke.sh` does after starting the server. On CI
+/// and in a bare `swift test`, this compiles, skips, and stays honest.
+final class BrowserE2ESmokeTests: XCTestCase {
+    @MainActor
+    func testBrowserEndToEndAgainstTheLocalFixtureServer() async throws {
+        guard ProcessInfo.processInfo.environment["CLEARFRAME_SMOKE_BASE_URL"] != nil else {
+            throw XCTSkip(
+                "Live smoke checks need a desktop session and the fixture server; "
+                    + "run scripts/run-browser-smoke.sh, which provides both."
+            )
+        }
         let suiteName = "clearframe.browser.e2e.\(UUID().uuidString)"
         guard let defaults = UserDefaults(suiteName: suiteName) else {
-            fputs("FAIL: could not create isolated defaults\n", stderr)
-            exit(1)
+            XCTFail("could not create isolated defaults")
+            return
         }
-        defer { UserDefaults.standard.removePersistentDomain(forName: suiteName) }
+        defer { TestSuiteCleanup.destroy(suiteName, defaults: defaults) }
 
         do {
             let application = NSApplication.shared
@@ -159,10 +182,8 @@ struct BrowserE2ESmoke {
             workspace.downloads.togglePanel()
             try require(!workspace.downloads.isPanelPresented, "downloads control did not dismiss the panel")
             print("PASS downloads: toolbar state, clear empty presentation, Downloads-folder destination, and policy-transition handling succeeded")
-            let aiConfiguration = AIConfigurationStore(defaults: defaults)
             let rootView = BrowserView()
                 .environmentObject(workspace)
-                .environmentObject(aiConfiguration)
                 .environmentObject(onboarding)
             let window = NSWindow(
                 contentRect: NSRect(x: 100, y: 100, width: 1_180, height: 760),
@@ -184,8 +205,7 @@ struct BrowserE2ESmoke {
             try require(addressFocusedAtLaunch, "address field did not receive keyboard focus at launch")
             print("PASS window/focus: native SwiftUI window is visible and the address field owns keyboard focus")
 
-            guard let session = workspace.selectedTab?.session,
-                  let assistant = workspace.selectedTab?.assistant else {
+            guard let session = workspace.selectedTab?.session else {
                 throw SmokeFailure.check("initial browser tab was not created")
             }
 
@@ -693,26 +713,49 @@ struct BrowserE2ESmoke {
             try require(fixtureStateRestored, "same-document fixture state did not restore")
             print("PASS SPA state: history API URL and document-title changes stayed synchronized")
 
-            await assistant.analyzeCurrentPage(session: session)
-            try require(assistant.state == .ready, "local assistant did not reach ready state")
-            try require(assistant.analysis != nil, "the article fixture produced no analysis")
-            try require(assistant.readableText.count > 80, "readable text was unexpectedly short")
-            try require(assistant.snapshot?.title == "Clearframe Local Verification", "assistant did not retain source identity")
-            try require(assistant.snapshot?.text.contains("Open shadow content") == true, "open Shadow DOM reading text was omitted")
-            try require(assistant.snapshot?.text.contains("HIDDEN CONTROL POLLUTION") == false, "hidden text polluted extraction")
-            try require(assistant.snapshot?.text.contains("Video Player is loading") == false, "media controls polluted extraction")
-            print("PASS assistant: visible text extracted and prepared locally")
+            let livePage = try await session.extractPage()
+            try require(livePage.title == "Clearframe Local Verification", "extraction did not retain source identity")
+            try require(livePage.text.contains("Open shadow content"), "open Shadow DOM reading text was omitted")
+            try require(!livePage.text.contains("HIDDEN CONTROL POLLUTION"), "hidden text polluted extraction")
+            // Player controls are kept out at two layers. The extractor skips
+            // containers that name themselves — this fixture's `.video-player`
+            // class — which is what a live page can prove here. The second
+            // layer, `readableText`'s phrase filter, exists for players that
+            // expose bare label text with no telltale class (zf.ro, the
+            // standing case) and is proven by `boilerplateCases` in the shared
+            // contract; asserting it against this fixture would test nothing,
+            // because the phrase never survives extraction to reach it.
+            try require(
+                !livePage.text.contains("Video Player is loading"),
+                "the extractor read a container that names itself a video player"
+            )
+            let liveReadable = LocalAnalysisEngine.readableText(page: livePage)
+            try require(liveReadable.count > 80, "readable text was unexpectedly short")
+            try require(
+                LocalAnalysisEngine.clipboardPayload(page: livePage) != nil,
+                "a real article gave Copy for AI nothing to copy"
+            )
+            print("PASS extraction: live page read locally — shadow DOM in, hidden text out, player container skipped")
 
 
+            // Copy for AI captures `navigationVersion` before reading and refuses
+            // to paste if it moved. A History-API move runs none of the ordinary
+            // navigation callbacks, so this is the case that quietly breaks: the
+            // page changes identity and nothing else notices.
+            let versionBeforeSameDocumentMove = session.navigationVersion
             try await evaluate("history.pushState({}, '', '/changed-after-analysis')", in: session)
-            let staleAnalysisCleared = await waitUntil {
-                session.currentURLString.hasSuffix("/changed-after-analysis") && assistant.state == .idle
+            let sameDocumentMoveVersioned = await waitUntil {
+                session.currentURLString.hasSuffix("/changed-after-analysis")
+                    && session.navigationVersion > versionBeforeSameDocumentMove
             }
-            try require(staleAnalysisCleared, "same-document navigation left stale assistant results attached")
+            try require(
+                sameDocumentMoveVersioned,
+                "a same-document move did not advance the navigation version, so Copy for AI could paste a page the reader already left"
+            )
             try await evaluate("history.replaceState({}, '', '/')", in: session)
-            let evidenceFixtureRestored = await waitUntil { session.currentURLString == localURL }
-            try require(evidenceFixtureRestored, "fixture URL did not restore after stale-analysis check")
-            print("PASS assistant lifecycle: same-document navigation cleared stale analysis")
+            let fixtureIdentityRestored = await waitUntil { session.currentURLString == localURL }
+            try require(fixtureIdentityRestored, "fixture URL did not restore after the same-document check")
+            print("PASS navigation identity: a History-API move advances the version Copy for AI checks first")
 
             let listingFixtureURL = fixtureURL.appendingPathComponent("listing.html")
             try await loadDeterministicPage(
@@ -720,17 +763,13 @@ struct BrowserE2ESmoke {
                 localURL: listingFixtureURL,
                 expectedTitle: "Clearframe Local News Digest"
             )
-            await assistant.analyzeCurrentPage(session: session)
-            try require(assistant.state == .structureNotice, "a section-page fixture with many unrelated headlines did not produce a structure notice")
-            try require(assistant.analysis == nil, "a structure notice unexpectedly produced an analysis before the reader chose to proceed")
-            try require(assistant.snapshot?.title == "Clearframe Local News Digest", "the structure notice did not retain the listing snapshot")
-            print("PASS structure notice: a section-page fixture with many unrelated headlines stopped at a notice instead of summarizing it")
-
-            await assistant.analyzeDespiteStructure(session: session)
-            try require(assistant.state == .ready, "Analyze anyway did not reach a ready state from the structure notice")
-            try require(assistant.analysis != nil, "Analyze anyway produced no analysis")
-            try require(assistant.readableText.count > 80, "Analyze anyway produced unexpectedly little readable text")
-            print("PASS structure override: Analyze anyway used the already-extracted listing snapshot without reading the page again")
+            let listingPage = try await session.extractPage()
+            try require(listingPage.title == "Clearframe Local News Digest", "the listing fixture lost its identity in extraction")
+            try require(
+                LocalAnalysisEngine.assessStructure(page: listingPage) == .listing,
+                "a section-page fixture with many unrelated headlines was not recognised as a listing, so the copy notice would stay silent"
+            )
+            print("PASS structure: a live section page reads as a list of articles, which is what the copy notice tells the reader")
 
             // A link aggregator keeps every entry in a table row, so nothing on the
             // page is a paragraph and the extractor falls back to the whole
@@ -743,19 +782,17 @@ struct BrowserE2ESmoke {
                 localURL: tableListingURL,
                 expectedTitle: "Clearframe Table Digest"
             )
-            await assistant.analyzeCurrentPage(session: session)
-            let fallbackBlocks = (assistant.snapshot?.text ?? "").split(separator: "\n").count
+            let tablePage = try await session.extractPage()
+            let fallbackBlocks = tablePage.text.split(separator: "\n").count
             try require(
                 fallbackBlocks >= 12,
-                "the whole-document fallback flattened a table listing into \(fallbackBlocks) block(s), so structure detection could never see it"
+                "the extractor flattened a table listing into \(fallbackBlocks) block(s), so structure detection could never see it"
             )
             try require(
-                assistant.state == .structureNotice,
-                "a link-aggregator fixture built from table rows did not stop at a structure notice"
+                LocalAnalysisEngine.assessStructure(page: tablePage) == .listing,
+                "a link-aggregator fixture built from table rows did not read as a listing"
             )
-            print("PASS extractor fallback: a table listing kept its line structure and stopped at a notice")
-
-            await assistant.analyzeDespiteStructure(session: session)
+            print("PASS extractor fallback: a table listing kept its line structure and reads as a listing")
 
             // A specification page carries a few short paragraphs — a disclaimer, a
             // review teaser, two comments — and keeps its substance in a table. A
@@ -767,8 +804,8 @@ struct BrowserE2ESmoke {
                 localURL: specSheetURL,
                 expectedTitle: "Clearframe Spec Sheet"
             )
-            await assistant.analyzeCurrentPage(session: session)
-            let specText = assistant.snapshot?.text ?? ""
+            let specPage = try await session.extractPage()
+            let specText = specPage.text
             try require(
                 specText.contains("Super Retina XDR OLED"),
                 "the specification table was refused because four short paragraphs counted as prose"
@@ -780,30 +817,41 @@ struct BrowserE2ESmoke {
             print("PASS specification page: a table kept its content beside four short paragraphs")
 
             try await loadDeterministicPage(in: session, localURL: fixtureURL)
-            await assistant.analyzeCurrentPage(session: session)
-            try require(assistant.state == .ready, "the ordinary article fixture no longer analyzes straight to a ready summary")
-            try require(assistant.readableText.count > 80, "the ordinary article fixture produced unexpectedly little readable text")
-            print("PASS structure default: the article fixture still analyzes straight to ready without a listing notice")
+            let articleAgain = try await session.extractPage()
+            try require(
+                LocalAnalysisEngine.assessStructure(page: articleAgain) == .article,
+                "the ordinary article fixture was mistaken for a listing"
+            )
+            try require(
+                LocalAnalysisEngine.readableText(page: articleAgain).count > 80,
+                "the ordinary article fixture produced unexpectedly little readable text"
+            )
+            print("PASS structure default: the article fixture reads as one article, so no copy notice interrupts it")
 
-            // Analyze page is enabled and prominent on every new tab, and the
-            // start surface is not a web page. Reading it used to succeed and
-            // then be abandoned by the identity check, leaving the panel on
-            // "Reading the visible page…" with no timeout and no way back.
+            // Copy for AI sits in the toolbar of every tab, and the start
+            // surface is not a web page. Its guard is the address: no valid web
+            // URL, no copy. If the start surface ever exposed one, the button
+            // would read Clearframe's own start page onto the clipboard.
             session.showStartPage()
-            let assistantOnStartSurface = await waitUntil {
+            let settledOnStartSurface = await waitUntil {
                 session.loadState == .startPage && session.currentURLString.isEmpty
             }
-            try require(assistantOnStartSurface, "the tab did not return to its start surface")
-            await assistant.analyzeCurrentPage(session: session)
+            try require(settledOnStartSurface, "the tab did not return to its start surface")
             try require(
-                assistant.state == .needsPage,
-                "Analyze page on a start surface did not refuse; it left the panel loading with no way back"
+                WebURLPolicy.validatedURL(session.currentURLString) == nil,
+                "the start surface claimed a copyable web address, so Copy for AI would read the start page instead of refusing"
             )
-            try require(assistant.analysis == nil, "a refused analysis produced results anyway")
             try await loadDeterministicPage(in: session, localURL: fixtureURL)
-            await assistant.analyzeCurrentPage(session: session)
-            try require(assistant.state == .ready, "the assistant did not recover once a real page was open")
-            print("PASS assistant refusal: Analyze page on a start surface refused honestly and recovered on a real page")
+            try require(
+                WebURLPolicy.validatedURL(session.currentURLString) != nil,
+                "a real page did not give Copy for AI a valid address to work with"
+            )
+            let recoveredPage = try await session.extractPage()
+            try require(
+                LocalAnalysisEngine.clipboardPayload(page: recoveredPage) != nil,
+                "extraction did not recover once a real page was open"
+            )
+            print("PASS copy refusal: the start surface offers nothing to copy and a real page does")
 
             // File upload: WebKit only shows a file picker for a page if the UI
             // delegate answers this request. Without it every <input type=file>
@@ -1024,9 +1072,6 @@ struct BrowserE2ESmoke {
             try require(!window.isVisible, "native test window did not close")
             print("PASS lifecycle: native window closed cleanly")
             print("RESULT: all deterministic browser E2E checks passed")
-        } catch {
-            fputs("FAIL: \(error.localizedDescription)\n", stderr)
-            exit(1)
         }
     }
 }

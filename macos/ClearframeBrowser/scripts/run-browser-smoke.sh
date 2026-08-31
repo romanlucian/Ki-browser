@@ -1,9 +1,17 @@
 #!/bin/zsh
+# The live end-to-end pass: serve the fixtures, point the suite at them, run it.
+#
+# The suite itself lives in the ordinary test target
+# (Tests/BrowserBehaviorTests/BrowserE2ESmokeTests.swift), so every
+# `swift test` compiles it and nothing here lists source files. This script
+# exists only to provide the two things a bare `swift test` cannot: a fixture
+# server, and the CLEARFRAME_SMOKE_BASE_URL that unlocks the live checks.
+# It needs a logged-in desktop session — the suite opens a real window and
+# asserts keyboard focus, which a headless machine will fail, not skip.
 set -euo pipefail
 
 SCRIPT_DIR=${0:A:h}
 PACKAGE_DIR=${SCRIPT_DIR:h}
-MODULE_CACHE="$PACKAGE_DIR/.build/module-cache"
 TEMP_DIR=$(mktemp -d /private/tmp/clearframe-browser-smoke.XXXXXX)
 SERVER_LOG="$TEMP_DIR/server.log"
 PORT_FILE="$TEMP_DIR/server.port"
@@ -20,11 +28,6 @@ cleanup() {
 }
 trap cleanup EXIT
 
-mkdir -p "$MODULE_CACHE"
-export CLANG_MODULE_CACHE_PATH="$MODULE_CACHE"
-export SWIFTPM_MODULECACHE_OVERRIDE="$MODULE_CACHE"
-swift build --disable-sandbox --package-path "$PACKAGE_DIR"
-BUILD_DIR=$(swift build --show-bin-path --package-path "$PACKAGE_DIR")
 python3 "$SCRIPT_DIR/fixture-server.py" \
     --directory "$PACKAGE_DIR/Tests/Fixtures" \
     --port-file "$PORT_FILE" \
@@ -53,69 +56,4 @@ fi
 export CLEARFRAME_SMOKE_BASE_URL="http://127.0.0.1:$SMOKE_PORT/"
 curl -fsS --retry 20 --retry-delay 0 --retry-connrefused "$CLEARFRAME_SMOKE_BASE_URL" >/dev/null
 
-swiftc \
-    -parse-as-library \
-    -module-name ClearframeE2ESmoke \
-    -I "$BUILD_DIR/Modules" \
-    "$PACKAGE_DIR/Sources/ClearframeBrowser/AIConfigurationStore.swift" \
-    "$PACKAGE_DIR/Sources/ClearframeBrowser/AddressField.swift" \
-    "$PACKAGE_DIR/Sources/ClearframeBrowser/DefaultBrowserStatus.swift" \
-    "$PACKAGE_DIR/Sources/ClearframeBrowser/AddressSuggestionsView.swift" \
-    "$PACKAGE_DIR/Sources/ClearframeBrowser/AIToolStartPage.swift" \
-    "$PACKAGE_DIR/Sources/ClearframeBrowser/BrowserApplicationLifecycle.swift" \
-    "$PACKAGE_DIR/Sources/ClearframeBrowser/BrowserDataStore.swift" \
-    "$PACKAGE_DIR/Sources/ClearframeBrowser/ClearframeTheme.swift" \
-    "$PACKAGE_DIR/Sources/ClearframeBrowser/IdentityColor.swift" \
-    "$PACKAGE_DIR/Sources/ClearframeBrowser/FaviconStore.swift" \
-    "$PACKAGE_DIR/Sources/ClearframeBrowser/ClearframeIconView.swift" \
-    "$PACKAGE_DIR/Sources/ClearframeBrowser/BrowserUserAgent.swift" \
-    "$PACKAGE_DIR/Sources/ClearframeBrowser/WindowChromeSupport.swift" \
-    "$PACKAGE_DIR/Sources/ClearframeBrowser/DownloadCenter.swift" \
-    "$PACKAGE_DIR/Sources/ClearframeBrowser/OnboardingController.swift" \
-    "$PACKAGE_DIR/Sources/ClearframeBrowser/BrowserSession.swift" \
-    "$PACKAGE_DIR/Sources/ClearframeBrowser/PageAssistantModel.swift" \
-    "$PACKAGE_DIR/Sources/ClearframeBrowser/PageFindController.swift" \
-    "$PACKAGE_DIR/Sources/ClearframeBrowser/SearchSettingsStore.swift" \
-    "$PACKAGE_DIR/Sources/ClearframeBrowser/ContentBlockingSettingsStore.swift" \
-    "$PACKAGE_DIR/Sources/ClearframeBrowser/WebFeatureSettingsStore.swift" \
-    "$PACKAGE_DIR/Sources/ClearframeBrowser/ContentRuleListProvider.swift" \
-    "$PACKAGE_DIR/Sources/ClearframeBrowser/VoiceInputController.swift" \
-    "$PACKAGE_DIR/Sources/ClearframeBrowser/BrowserWorkspace.swift" \
-    "$PACKAGE_DIR/Sources/ClearframeBrowser/WebView.swift" \
-    "$PACKAGE_DIR/Sources/ClearframeBrowser/AssistantPanel.swift" \
-    "$PACKAGE_DIR/Sources/ClearframeBrowser/BookmarkActions.swift" \
-    "$PACKAGE_DIR/Sources/ClearframeBrowser/BookmarkBarViews.swift" \
-    "$PACKAGE_DIR/Sources/ClearframeBrowser/BookmarkLibraryViews.swift" \
-    "$PACKAGE_DIR/Sources/ClearframeBrowser/BookmarkExport.swift" \
-    "$PACKAGE_DIR/Sources/ClearframeBrowser/BookmarkImportSources.swift" \
-    "$PACKAGE_DIR/Sources/ClearframeBrowser/BookmarkImportViews.swift" \
-    "$PACKAGE_DIR/Sources/ClearframeBrowser/BookmarksHomePage.swift" \
-    "$PACKAGE_DIR/Sources/ClearframeBrowser/HistoryHomePage.swift" \
-    "$PACKAGE_DIR/Sources/ClearframeBrowser/StartSurfaceChrome.swift" \
-    "$PACKAGE_DIR/Sources/ClearframeBrowser/DownloadViews.swift" \
-    "$PACKAGE_DIR/Sources/ClearframeBrowser/ContentBlockingViews.swift" \
-    "$PACKAGE_DIR/Sources/ClearframeBrowser/SiteDataInventory.swift" \
-    "$PACKAGE_DIR/Sources/ClearframeBrowser/SiteInformationViews.swift" \
-    "$PACKAGE_DIR/Sources/ClearframeBrowser/TabGroupPalette.swift" \
-    "$PACKAGE_DIR/Sources/ClearframeBrowser/TabStripLayout.swift" \
-    "$PACKAGE_DIR/Sources/ClearframeBrowser/TabStripViews.swift" \
-    "$PACKAGE_DIR/Sources/ClearframeBrowser/BrowserView.swift" \
-    "$PACKAGE_DIR/Sources/ClearframeBrowser/BookmarkDragPayload.swift" \
-    "$PACKAGE_DIR/Sources/ClearframeBrowser/BookmarkMenuCommands.swift" \
-    "$PACKAGE_DIR/Sources/ClearframeBrowser/PageMenuRow.swift" \
-    "$PACKAGE_DIR/Sources/ClearframeBrowser/BookmarkWindowOpener.swift" \
-    "$PACKAGE_DIR/Sources/ClearframeBrowser/BrowserServices.swift" \
-    "$PACKAGE_DIR/Sources/ClearframeBrowser/PageFileCommands.swift" \
-    "$PACKAGE_DIR/Sources/ClearframeBrowser/ProfilePrompts.swift" \
-    "$PACKAGE_DIR/Sources/ClearframeBrowser/ProfileStore.swift" \
-    "$PACKAGE_DIR/Sources/ClearframeBrowser/TornWindowDrag.swift" \
-    "$PACKAGE_DIR/Tests/BrowserE2ESmoke.swift" \
-    "$BUILD_DIR"/ClearframeCore.build/*.swift.o \
-    -framework AppKit \
-    -framework WebKit \
-    -framework Security \
-    -framework AVFoundation \
-    -framework Speech \
-    -o "$TEMP_DIR/clearframe-browser-e2e"
-
-"$TEMP_DIR/clearframe-browser-e2e"
+swift test --package-path "$PACKAGE_DIR" --filter BrowserE2ESmokeTests

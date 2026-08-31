@@ -64,12 +64,12 @@ Swift loads them through `Bundle.module`; Node loads the same files by relative 
 From `macos/ClearframeBrowser`:
 
 ```bash
-swift test
-./scripts/build-macos-app.sh     # missing from the repository
-./scripts/run-browser-smoke.sh   # missing from the repository
+swift test                       # includes compiling the E2E smoke suite; its live checks skip without the fixture server
+./scripts/build-macos-app.sh     # builds dist/Clearframe.app (ad hoc signature, hardened runtime)
+./scripts/run-browser-smoke.sh   # serves the fixtures and runs the live smoke checks
 ```
 
-**Only `swift test` currently runs**, plus `npm test` and `npm run validate` from the root. Neither shell script exists in any commit, although this file, the README, `docs/macos-browser-foundation.md` and `.github/workflows/ci.yml` all call them — so the macOS CI job cannot pass, and `Tests/BrowserE2ESmoke.swift`, which belongs to no target in `Package.swift`, has no runner at all. Writing the two scripts is unclaimed work.
+Plus `npm test` and `npm run validate` from the root. The smoke suite is `Tests/BrowserBehaviorTests/BrowserE2ESmokeTests.swift`, an ordinary member of the test target: **every `swift test` compiles it**, and its live checks run only when `CLEARFRAME_SMOKE_BASE_URL` is set, which the script does. It used to be a standalone file compiled by a hand-maintained list of source files inside the script; that list rotted silently twice in nine days — commits edited the smoke file itself and shipped it uncompilable — so never reintroduce a hand-listed parallel build. A note that stood here claiming both scripts were missing from every commit was wrong: they live under `macos/ClearframeBrowser/scripts/`, not the repository root's `scripts/`.
 
 The smoke test requires a real logged-in macOS desktop session with WebKit/AppKit services available. A headless or restricted agent sandbox may compile the test and expose the SwiftUI window while blocking WebKit’s content process.
 
