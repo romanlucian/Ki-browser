@@ -222,9 +222,28 @@ final class BrowserTab: ObservableObject, Identifiable {
 
     /// The Home button and the error view's Start Page action. Home always
     /// means the AI guide, whatever surface this tab happened to show last.
+    /// The Home button. Where it lands is a preference; a *new tab* is not,
+    /// and always opens the AI guide, which is what this browser is for.
     func goHome() {
-        startSurface = .aiHome
-        session.showStartPage()
+        let preferences = BrowserPreferences.shared
+        switch preferences.homeTarget {
+        case .aiGuide:
+            startSurface = .aiHome
+            session.showStartPage()
+        case .bookmarks:
+            startSurface = .bookmarksHome
+            session.showStartPage()
+        case .specificPage:
+            // An address that no longer parses must not strand Home on a blank
+            // tab: the guide is the honest fallback, and Settings still shows
+            // what was typed so it can be corrected.
+            if let url = preferences.homeURL {
+                session.load(url)
+            } else {
+                startSurface = .aiHome
+                session.showStartPage()
+            }
+        }
     }
 
     /// Shows the full-page bookmarks home on this tab's start surface.
@@ -444,7 +463,12 @@ final class BrowserWorkspace: ObservableObject {
                 setCollapsed(false, forGroup: group)
             }
         } else {
+            // Settings → General can open a chosen page at launch. Never in a
+            // private window, which adopts and restores nothing by design, and
+            // only once per launch — see `takeStartupURL`.
+            let launchURL = isPrivate ? nil : BrowserPreferences.shared.takeStartupURL()
             let tab = BrowserTab(
+                initialURL: launchURL,
                 downloadCenter: resolvedDownloads,
                 searchSettings: resolvedSearchSettings,
                 isPrivate: isPrivate,

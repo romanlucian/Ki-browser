@@ -626,6 +626,128 @@ final class BrowserBehaviorTests: XCTestCase {
         )
     }
 
+    private func emptyDefaults(_ name: String) -> UserDefaults {
+        let suite = "limeghost.tests.\(name).\(UUID().uuidString)"
+        UserDefaults.standard.removePersistentDomain(forName: suite)
+        return UserDefaults(suiteName: suite)!
+    }
+
+    /// Somebody who has used Limeghost since before Settings had a start-up
+    /// picker already answered this question, as a checkbox. Reading their
+    /// `restoreTabs` answer is the difference between the picker showing what
+    /// they chose and silently telling them their tabs will not come back.
+    /// Nothing on screen would look wrong either way.
+    func testTheStartupPickerInheritsTheAnswerSomebodyAlreadyGave() {
+        let restoring = emptyDefaults("restoring")
+        restoring.set(true, forKey: "clearframe.restoreTabs")
+        XCTAssertEqual(BrowserPreferences(defaults: restoring).startup, .restore)
+
+        let notRestoring = emptyDefaults("notRestoring")
+        notRestoring.set(false, forKey: "clearframe.restoreTabs")
+        XCTAssertEqual(BrowserPreferences(defaults: notRestoring).startup, .newTab)
+
+        // And the picker keeps that key authoritative, because it is what
+        // BrowserDataStore reads to decide whether to write a session at all.
+        let writing = emptyDefaults("writing")
+        let preferences = BrowserPreferences(defaults: writing)
+        preferences.startup = .restore
+        XCTAssertTrue(writing.bool(forKey: "clearframe.restoreTabs"))
+        preferences.startup = .specificPage
+        XCTAssertFalse(writing.bool(forKey: "clearframe.restoreTabs"))
+    }
+
+    /// "When Limeghost opens" must mean the launch, not every window. Without
+    /// the one-shot, ⌘N would reopen the chosen page forever — which is a
+    /// homepage, a different setting this product does not have.
+    func testTheStartupPageOpensOncePerLaunchAndNotOnEveryWindow() {
+        let preferences = BrowserPreferences(defaults: emptyDefaults("startupOnce"))
+        preferences.startup = .specificPage
+        preferences.startupPage = "https://example.org/start"
+
+        XCTAssertEqual(preferences.takeStartupURL()?.absoluteString, "https://example.org/start")
+        XCTAssertNil(preferences.takeStartupURL(), "a second window would reopen the start page")
+        XCTAssertNil(preferences.takeStartupURL())
+
+        let bad = BrowserPreferences(defaults: emptyDefaults("badStartup"))
+        bad.startup = .specificPage
+        bad.startupPage = "not a url at all"
+        XCTAssertNil(bad.takeStartupURL())
+    }
+
+    /// Saving without asking has to refuse a folder it cannot write to. The app
+    /// is not sandboxed, so a folder can be pickable and then refused by the
+    /// privacy system — and `WKDownload` handed a bad destination reports only
+    /// "failed", with nothing saying why.
+    func testDownloadsFallBackToTheSavePanelRatherThanFailing() throws {
+        let preferences = BrowserPreferences(defaults: emptyDefaults("downloads"))
+
+        XCTAssertTrue(preferences.asksWhereToSave, "asking must stay the default")
+        XCTAssertNil(preferences.resolvedDownloadFolder, "asking must never resolve a folder")
+
+        preferences.asksWhereToSave = false
+        let missing = FileManager.default.temporaryDirectory
+            .appendingPathComponent("limeghost-gone-\(UUID().uuidString)")
+        preferences.downloadFolderPath = missing.path
+        XCTAssertNil(preferences.resolvedDownloadFolder, "a folder that is gone must fall back")
+
+        let real = FileManager.default.temporaryDirectory
+            .appendingPathComponent("limeghost-real-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: real, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: real) }
+        preferences.downloadFolderPath = real.path
+        XCTAssertEqual(preferences.resolvedDownloadFolder?.path, real.path)
+
+        let file = real.appendingPathComponent("a.txt")
+        try "x".write(to: file, atomically: true, encoding: .utf8)
+        preferences.downloadFolderPath = file.path
+        XCTAssertNil(preferences.resolvedDownloadFolder, "a file is not somewhere to save into")
+    }
+
+    /// The save panel may replace a file, because it showed the name and the
+    /// person chose Replace. Saving without asking has no such consent, so a
+    /// second download of one name must not destroy the first.
+    func testSavingWithoutAskingNeverOverwritesAFile() throws {
+        let folder = FileManager.default.temporaryDirectory
+            .appendingPathComponent("limeghost-names-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+
+        let first = DownloadCenter.availableURL(in: folder, named: "report.pdf")
+        XCTAssertEqual(first.lastPathComponent, "report.pdf")
+        try "one".write(to: first, atomically: true, encoding: .utf8)
+
+        let second = DownloadCenter.availableURL(in: folder, named: "report.pdf")
+        XCTAssertEqual(second.lastPathComponent, "report 2.pdf")
+        try "two".write(to: second, atomically: true, encoding: .utf8)
+
+        XCTAssertEqual(
+            DownloadCenter.availableURL(in: folder, named: "report.pdf").lastPathComponent,
+            "report 3.pdf"
+        )
+        XCTAssertEqual(try String(contentsOf: first, encoding: .utf8), "one", "the first file was destroyed")
+
+        let noExtension = DownloadCenter.availableURL(in: folder, named: "notes")
+        try "x".write(to: noExtension, atomically: true, encoding: .utf8)
+        XCTAssertEqual(DownloadCenter.availableURL(in: folder, named: "notes").lastPathComponent, "notes 2")
+    }
+
+    /// A Home address that stops parsing must not strand Home on a blank tab.
+    func testHomeFallsBackToTheGuideWhenItsAddressIsUnusable() {
+        let preferences = BrowserPreferences(defaults: emptyDefaults("home"))
+        XCTAssertEqual(preferences.homeTarget, .aiGuide)
+        XCTAssertNil(preferences.homeURL)
+
+        preferences.homeTarget = .specificPage
+        preferences.homePage = "   "
+        XCTAssertNil(preferences.homeURL, "goHome reads nil here and shows the guide")
+
+        preferences.homePage = "https://example.org/home"
+        XCTAssertEqual(preferences.homeURL?.absoluteString, "https://example.org/home")
+
+        preferences.homeTarget = .bookmarks
+        XCTAssertNil(preferences.homeURL, "bookmarks is a surface, not an address")
+    }
+
     func testTheBrandMarkIsActuallyInTheAppBundle() {
         XCTAssertTrue(
             BrandMark.isAvailable,

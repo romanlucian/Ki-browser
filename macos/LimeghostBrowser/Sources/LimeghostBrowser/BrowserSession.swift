@@ -72,7 +72,11 @@ final class BrowserSession: NSObject, ObservableObject {
     /// Mirrors `webView.pageZoom` so the chrome and tests can read the current
     /// step. Per tab, and deliberately not stored: a site's zoom is not
     /// remembered between tabs or between launches.
-    @Published private(set) var pageZoom: CGFloat = BrowserSession.defaultPageZoom
+    /// Starts at the size chosen in Settings → General rather than at 1.0, so
+    /// somebody who reads at 125% gets it on every page instead of pressing ⌘+
+    /// on each one. ⌘0 still returns to 100%: the preference is where pages
+    /// open, not a floor under them.
+    @Published private(set) var pageZoom: CGFloat = BrowserPreferences.shared.defaultPageZoom
     /// A link Limeghost declined to open, stated as a dismissible line above
     /// the page. Refusing a link must never take away the page the reader is
     /// on, so this never touches `loadState`.

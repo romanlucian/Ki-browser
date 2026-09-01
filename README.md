@@ -71,7 +71,7 @@ swift run --disable-sandbox LimeghostBrowser
 
 Then:
 
-1. On the first launch, complete or skip the short introduction. It stores only a local completion flag and your selected search engine. Reopen it later from **Settings → Limeghost introduction**.
+1. On the first launch, complete or skip the short introduction. It stores only a local completion flag and your selected search engine. Reopen it later from **Settings → General → Limeghost introduction**. Settings itself is a sidebar of nine pages — General, Search, Tabs, Privacy, Blocking, Downloads, Bookmarks, Advanced, About — where you can also set what opens at start, where the Home button goes, the text size pages open at, and whether downloads ask where to save.
 2. A new tab opens Limeghost’s local AI guide. Choose a human task, search the catalog, or explicitly reveal all tools; then select a card to open that service’s official website.
 3. Enter a URL or search in the address bar. Click the lock/globe chip at the left of the address pill for site information: the host, how the connection stands, this site's tracker-blocking switch, and **Remove this site's data**. The same chip still drags this page's link out to the bookmarks bar.
 4. Browse with independent tabs; use `⌘T` for a new tab, `⌘⇧N` for a private tab, and `⌘W` to close the current tab. Private tabs use an ephemeral WebKit data store and are not written to history or session restoration.

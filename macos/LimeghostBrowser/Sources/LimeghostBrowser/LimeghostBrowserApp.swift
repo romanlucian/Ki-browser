@@ -263,10 +263,8 @@ struct LimeghostBrowserApp: App {
         }
 
         Settings {
-            AISettingsView()
+            LimeghostSettingsView()
                 .environmentObject(onboarding)
-                .frame(width: 560)
-                .frame(minHeight: 690)
         }
     }
 

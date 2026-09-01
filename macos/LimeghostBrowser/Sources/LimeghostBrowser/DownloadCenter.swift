@@ -130,6 +130,27 @@ final class DownloadCenter: NSObject, ObservableObject {
     }
 }
 
+extension DownloadCenter {
+    /// A name inside `folder` that no file already uses.
+    ///
+    /// The save-panel path may replace a file because the person was shown the
+    /// name and chose Replace. Saving without asking has no such consent, so a
+    /// second download of one file becomes `report 2.pdf` rather than silently
+    /// destroying the first.
+    static func availableURL(in folder: URL, named filename: String) -> URL {
+        let candidate = folder.appendingPathComponent(filename)
+        guard FileManager.default.fileExists(atPath: candidate.path) else { return candidate }
+        let base = candidate.deletingPathExtension().lastPathComponent
+        let ext = candidate.pathExtension
+        for suffix in 2...999 {
+            let name = ext.isEmpty ? "\(base) \(suffix)" : "\(base) \(suffix).\(ext)"
+            let next = folder.appendingPathComponent(name)
+            if !FileManager.default.fileExists(atPath: next.path) { return next }
+        }
+        return candidate
+    }
+}
+
 extension DownloadCenter: WKDownloadDelegate {
     func download(
         _ download: WKDownload,
@@ -143,6 +164,19 @@ extension DownloadCenter: WKDownloadDelegate {
         }
 
         let safeFilename = URL(fileURLWithPath: suggestedFilename).lastPathComponent.nilIfEmpty ?? "Download"
+
+        // Settings → Downloads can send files straight to a folder. It answers
+        // nil when the person still wants to be asked, and also when the folder
+        // has gone or cannot be written to — the app is not sandboxed, so a
+        // folder can be pickable and then refused by the privacy system.
+        // Falling back to the panel is visible; a download that says only
+        // "failed" is not.
+        if let folder = BrowserPreferences.shared.resolvedDownloadFolder {
+            let destination = Self.availableURL(in: folder, named: safeFilename)
+            completionHandler(destination)
+            return
+        }
+
         let panel = NSSavePanel()
         panel.title = "Save Download"
         panel.prompt = "Download"

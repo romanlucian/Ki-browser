@@ -2,187 +2,11 @@ import AppKit
 import LimeghostCore
 import SwiftUI
 
-struct AISettingsView: View {
-    @EnvironmentObject private var onboarding: OnboardingController
-    // Settings edits the application, not one window: these are the stores
-    // every window shares, and the two actions below reach all of them.
-    private let services = BrowserServices.shared
-    @ObservedObject private var dataStore = BrowserServices.shared.dataStore
-    @ObservedObject private var downloads = BrowserServices.shared.downloads
-    @ObservedObject private var webFeatures = BrowserServices.shared.webFeatures
-    @AppStorage("clearframe.restoreTabs") private var restoresTabs = true
-    @AppStorage("clearframe.reloadRestoredTabs") private var reloadsRestoredTabs = false
-    @AppStorage("clearframe.saveHistory") private var savesHistory = true
-    @State private var showsResetConfirmation = false
-    @State private var isResettingBrowserData = false
-    @State private var browserDataStatus = ""
-    @StateObject private var siteData = SiteDataInventory()
+// The settings sections the category pages reuse. The window and the pages
+// live in SettingsWindow.swift; this file held one 357-line Form until
+// September 1, 2026.
 
-    var body: some View {
-        Form {
-            DefaultBrowserSettingsSection()
-
-            SearchEngineSettingsSection(settings: services.searchSettings)
-
-            Section("Limeghost introduction") {
-                Button("Show welcome tour") {
-                    onboarding.revisit()
-                    NSApp.keyWindow?.close()
-                    Task { @MainActor in
-                        await Task.yield()
-                        BrowserApplicationActivation.bringBrowserToFront()
-                    }
-                }
-                Text("Reopens the three-step introduction in the browser window. It does not clear tabs, history, bookmarks, or settings.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            Section("Connection") {
-                Toggle(
-                    "Use HTTPS when a site is known to support it",
-                    isOn: Binding(
-                        get: { webFeatures.upgradesToHTTPS },
-                        set: { webFeatures.setUpgradesToHTTPS($0) }
-                    )
-                )
-                Text("Upgrades the address you are opening when WebKit already knows that host serves HTTPS. It applies to tabs you open from now on, and it upgrades the page request itself — it does not promise that everything the page then loads is encrypted.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            Section("Advanced") {
-                Toggle(
-                    "Show features for web developers",
-                    isOn: Binding(
-                        get: { webFeatures.showsDeveloperFeatures },
-                        set: {
-                            webFeatures.setShowsDeveloperFeatures($0)
-                            services.liveWorkspaces.forEach { $0.applyDeveloperFeatureSetting() }
-                        }
-                    )
-                )
-                Text("Lets Safari's Develop menu attach the Web Inspector to pages open in Limeghost, so you can examine a page the way you would in Safari. Off by default. Changing it applies to tabs that are already open.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            Section("Browser privacy") {
-                Toggle("Restore open tabs when Limeghost starts", isOn: $restoresTabs)
-                Text("When enabled, Limeghost stores only each open tab’s current URL and title in this Mac user profile. Page contents and assistant results are not restored.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Toggle("Load every restored tab at start", isOn: $reloadsRestoredTabs)
-                    .disabled(!restoresTabs)
-                Text("Off by default, as in other browsers: the tab you were on loads, and the rest load the first time you open them. They are all there with their names and site icons either way. Turning this on opens every page at start, which costs a burst of network and memory in exchange for pages already loaded when you get to them.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Toggle("Save browsing history on this Mac", isOn: $savesHistory)
-                Text("History stays in this Mac user profile and is never included in AI requests. Turning this off stops Limeghost recording new visits; visits it already saved stay until you clear them from History (⌘Y) or with Clear local browsing data below.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                if let notice = dataStore.recoveryNotice {
-                    VStack(alignment: .leading, spacing: 7) {
-                        Label("Local data recovery", systemImage: "externaldrive.badge.checkmark")
-                            .font(.callout.weight(.semibold))
-                        Text(notice)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        Button("Dismiss") { dataStore.dismissRecoveryNotice() }
-                            .font(.caption)
-                    }
-                    .padding(.vertical, 4)
-                }
-                Button("Clear local browsing data…", role: .destructive) {
-                    showsResetConfirmation = true
-                }
-                .disabled(isResettingBrowserData || downloads.activeCount > 0)
-                Text(downloads.activeCount > 0
-                     ? "Cancel or finish active downloads before clearing browser data. Saved files are never deleted."
-                     : "Clears tabs, history, bookmarks, the in-app download list, cookies, caches, local website storage, per-site tracker-blocking exceptions, and recovery backups. Saved files, search choice, and onboarding state are kept.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                if isResettingBrowserData {
-                    ProgressView("Clearing local browser data…")
-                        .font(.caption)
-                } else if !browserDataStatus.isEmpty {
-                    Text(browserDataStatus)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-
-            SiteDataSettingsSection(inventory: siteData)
-
-            ContentBlockingSettingsSection(provider: services.contentBlocking)
-
-            Section("Bookmarks bar") {
-                Toggle(
-                    "Show bookmarks below the address bar",
-                    isOn: Binding(
-                        get: { dataStore.showsBookmarksBar },
-                        set: { dataStore.showsBookmarksBar = $0 }
-                    )
-                )
-                Text("Shows top-level folders and unfiled bookmarks in a compact local bar. Folder menus include nested subfolders. This preference and all bookmark data stay on this Mac.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            Section("About") {
-                LabeledContent("Limeghost") {
-                    Text("by Zincoo")
-                        .foregroundStyle(.secondary)
-                }
-                Link("zincoo.com", destination: URL(string: "https://zincoo.com/")!)
-                    .font(.caption)
-            }
-
-            Section("Production boundary") {
-                Text("Direct user-key access is only for this personal prototype. A public product must use an authenticated, metered backend, redact sensitive data, publish retention controls, and keep page agents read-only until a separate security review.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .formStyle(.grouped)
-        .padding(16)
-        .task { await siteData.refresh() }
-        .onChange(of: restoresTabs) { _, enabled in
-            if !enabled {
-                dataStore.clearSavedWorkspace()
-            }
-        }
-        // Deliberately no `onChange` for `savesHistory`: switching it off used
-        // to delete every stored visit as a side effect of a preference. The
-        // preference decides what Limeghost records next (`recordVisit`
-        // checks it); erasing what is already saved is a separate, confirmed
-        // action the user takes from Clear History or Clear local browsing data.
-        .confirmationDialog(
-            "Clear local browsing data?",
-            isPresented: $showsResetConfirmation,
-            titleVisibility: .visible
-        ) {
-            Button("Clear browsing data", role: .destructive) {
-                isResettingBrowserData = true
-                browserDataStatus = ""
-                Task { @MainActor in
-                    for window in services.liveWorkspaces { await window.resetLocalBrowsingData() }
-                    isResettingBrowserData = false
-                    browserDataStatus = "Local browsing data cleared."
-                    // The per-site list describes the same WebKit store the
-                    // reset just emptied; leaving it on screen would show
-                    // sites that no longer hold anything.
-                    await siteData.refresh()
-                }
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("This cannot be undone. Your general preferences will remain.")
-        }
-    }
-}
-
-private struct SearchEngineSettingsSection: View {
+struct SearchEngineSettingsSection: View {
     @ObservedObject var settings: SearchSettingsStore
 
     var body: some View {
@@ -213,7 +37,7 @@ private struct SearchEngineSettingsSection: View {
 /// display name and a set of data types — no byte count, no cookie count — so
 /// "4.9 MB · 34 cookies" is not something Limeghost could report without
 /// inventing it.
-private struct SiteDataSettingsSection: View {
+struct SiteDataSettingsSection: View {
     @ObservedObject var inventory: SiteDataInventory
     @State private var pendingRemoval: SiteDataEntry?
 
@@ -295,7 +119,7 @@ private struct SiteDataSettingsSection: View {
     }
 }
 
-private struct ContentBlockingSettingsSection: View {
+struct ContentBlockingSettingsSection: View {
     @ObservedObject var provider: ContentRuleListProvider
 
     var body: some View {
