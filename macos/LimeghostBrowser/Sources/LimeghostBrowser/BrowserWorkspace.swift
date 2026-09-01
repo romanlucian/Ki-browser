@@ -1,4 +1,5 @@
 import os
+import AppKit
 import LimeghostCore
 import Combine
 import Foundation
@@ -24,6 +25,13 @@ final class BrowserTab: ObservableObject, Identifiable {
     @Published private(set) var displayTitle: String
     @Published private(set) var lastActivatedAt: Date
     @Published var startSurface: StartSurface = .aiHome
+    /// The page as the extractor read it, while Reader is open on this tab.
+    ///
+    /// Per tab, like `find` and `startSurface`: one tab reading an article and
+    /// another on a live page is the ordinary case. Cleared on every
+    /// navigation, because the article belongs to the document that produced
+    /// it and showing it over a different page would be a quiet lie.
+    @Published var readerArticle: ReaderArticle?
     /// The tab group this tab belongs to. `BrowserWorkspace` owns every write
     /// so grouped tabs stay contiguous in the strip.
     @Published fileprivate(set) var groupID: UUID?
@@ -117,6 +125,60 @@ final class BrowserTab: ObservableObject, Identifiable {
                 if !value.isEmpty { self?.pendingRestoreURL = nil }
             }
             .store(in: &cancellables)
+
+        // The same counter Copy for AI checks before putting anything on the
+        // clipboard. A page that moves invalidates what was read from it.
+        session.$navigationVersion
+            .dropFirst()
+            .sink { [weak self] _ in self?.readerArticle = nil }
+            .store(in: &cancellables)
+    }
+
+    /// Reads the page in front of the reader, or says why it could not.
+    ///
+    /// Copy for AI and Reader both arrive here. One extraction, one
+    /// `ReaderArticle`, two uses — which is what keeps Reader's claim true:
+    /// the text on screen is the text on the clipboard, not a second opinion
+    /// about the same page.
+    ///
+    /// On the tab rather than in a view because two views need it, and because
+    /// the article belongs to the page this tab is showing.
+    func readCurrentPage(verb: String) async -> ReaderArticle? {
+        guard WebURLPolicy.validatedURL(session.currentURLString) != nil else {
+            session.showPageNotice("There is no web page in this tab to \(verb).")
+            return nil
+        }
+        // The page can move while it is being read. Acting on what the reader
+        // has already navigated away from is worse than doing nothing, because
+        // nothing about the result would say so.
+        let expectedNavigationVersion = session.navigationVersion
+        guard let page = try? await session.extractPage() else {
+            session.showPageNotice("Limeghost could not read enough text on this page to \(verb).")
+            return nil
+        }
+        guard session.navigationVersion == expectedNavigationVersion else {
+            session.showPageNotice("The page changed while Limeghost was reading it.")
+            return nil
+        }
+        guard let article = ReaderArticle(page: page) else {
+            session.showPageNotice("Limeghost found no readable text on this page.")
+            return nil
+        }
+        return article
+    }
+
+    /// Puts an article already read on the clipboard.
+    ///
+    /// Takes the article rather than reading the page again, so Reader's own
+    /// Copy button copies precisely the words on screen — the guarantee stops
+    /// depending on two extractions agreeing.
+    func copyArticleForAI(_ article: ReaderArticle) {
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(article.clipboardPayload, forType: .string)
+        if let notice = article.copyNotice {
+            session.showPageNotice(notice)
+        }
     }
 
     var persistenceRecord: BrowserTabRecord {
@@ -549,6 +611,28 @@ final class BrowserWorkspace: ObservableObject {
         selectTab(tab.id)
         makeRoomForPage()
         schedulePersistence()
+    }
+
+    /// Copy for AI, reached from the Page menu and ⇧⌘C.
+    ///
+    /// The toolbar carried this on an icon until September 1, 2026.
+    /// `doc.on.doc` named neither AI nor copying to anybody who had not been
+    /// told, and once Reader existed there were two ways to copy one page a
+    /// toolbar apart. The visible, labelled path is now Reader's own button.
+    ///
+    /// Prefers the article already on screen: while Reader is open, copying
+    /// must produce the words being read rather than a second extraction of a
+    /// page whose script may have changed it since.
+    func copySelectedPageForAI() async {
+        guard let tab = selectedTab else { return }
+        let article: ReaderArticle?
+        if let open = tab.readerArticle {
+            article = open
+        } else {
+            article = await tab.readCurrentPage(verb: "copy")
+        }
+        guard let article else { return }
+        tab.copyArticleForAI(article)
     }
 
     func selectTab(_ id: UUID) {

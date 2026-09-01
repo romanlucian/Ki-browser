@@ -29,7 +29,7 @@ The native app provides:
 - a visible, locally persisted search-engine chooser for DuckDuckGo, Google, Bing, Brave Search, and Startpage;
 - a native new-tab AI guide with a small, locally defined catalog organized by everyday tasks;
 - a concise three-step first-run introduction covering Limeghost's promise, search choice, privacy boundary, AI home, and the copy-for-AI workflow;
-- **Copy for AI** — Limeghost pulls the readable article out of a page, shows you the exact text and its size, and copies it for you to paste into whichever AI you already use. No account, no API key, nothing sent anywhere by Limeghost;
+- **Reader and Copy for AI** (`⇧⌘R`, `⇧⌘C`) — Limeghost pulls the readable article out of a page. Reader shows you that text, on its own, with its word count and reading time: it is the extracted article and nothing else, so what you read is exactly what an AI would receive. Copy puts the same text on your clipboard to paste into whichever AI you already use. No account, no API key, nothing sent anywhere by Limeghost;
 - **your AI beside the page** (`⇧⌘A`) — ChatGPT, Claude, Gemini, Le Chat or Grok in a panel on the right, signed in with your own account. It belongs to the window rather than the tab, so the conversation stays put while you read around it, and switching between two assistants returns you to where each of them was. Limeghost does not type into it or read it: you paste and ask, as you would in a tab. **Compare answers** puts two of them side by side for asking the same question twice;
 - visible risk signals such as unencrypted password forms, encoded domains, urgent payment language, wallet-secret requests, and contextual remote-access requests;
 
@@ -75,7 +75,7 @@ Then:
 2. A new tab opens Limeghost’s local AI guide. Choose a human task, search the catalog, or explicitly reveal all tools; then select a card to open that service’s official website.
 3. Enter a URL or search in the address bar. Click the lock/globe chip at the left of the address pill for site information: the host, how the connection stands, this site's tracker-blocking switch, and **Remove this site's data**. The same chip still drags this page's link out to the bookmarks bar.
 4. Browse with independent tabs; use `⌘T` for a new tab, `⌘⇧N` for a private tab, and `⌘W` to close the current tab. Private tabs use an ephemeral WebKit data store and are not written to history or session restoration.
-5. Press **⇧⌘C**, or the copy button at the right of the toolbar, to put the page's readable text on your clipboard for whichever AI you use. Limeghost stays quiet when it works; it speaks only when it could not find the article, or when the page is a list rather than one piece of writing.
+5. Press **⇧⌘R**, or the page button in the toolbar's outlined pair, to open **Reader**: the page's article with the site's furniture removed, and a Copy for AI button beside it. **⇧⌘C** — or **Page → Copy Page for AI** — copies without opening Reader first. Limeghost stays quiet when it works; it speaks only when it could not find the article, or when the page is a list rather than one piece of writing.
 6. Press **⇧⌘A**, or the speech-bubble button in the toolbar, to open your own AI beside the page. Pick which one from the panel header; the button beside it with two panes opens **Compare answers**, a second assistant next to the first. Both are ordinary websites on your own account — paste and send them yourself.
 7. Click the lock/globe chip at the left of the address bar and choose **Check this page** to look for visible risk signals — an unencrypted password form, an encoded address, urgent payment or wallet-secret language.
 8. The bookmarks bar shows Unfiled links and emoji-labeled folders. Drag the address bar’s lock/globe page-link chip—or an existing bookmark—onto bar space or a visible folder to file it; dropping the same URL moves its single record instead of duplicating it. Secondary-click and the **More** and **Page** menus expose the same create, file, organize, and show/hide actions, with an accessible Move menu for keyboard use. **⌘⌥B** and the bar’s All Bookmarks chip open the full-page bookmarks home; the toolbar’s Library button keeps a separate quick popover for fast lookups. Legacy bookmarks remain in **Unfiled**.
@@ -125,9 +125,13 @@ The project root is also a local-first Manifest V3 side-panel extension. To run 
 
 The extension uses the temporary `activeTab` permission. When you navigate to a different site, click its toolbar icon again before analyzing the new page.
 
-## What the copy button actually does
+## What Reader and the copy button actually do
 
-One keystroke — **⇧⌘C** — extracts the page's rendered reading text, keeps it in the page's own language, removes interface noise like a video player's control labels and anything the page repeats three or more times, and puts the result on your clipboard. There is no panel and nothing to read: the text appears in front of you when you paste it. Limeghost interrupts only for the two things a paste would not reveal — that it was unsure it found the article, or that the page lists many articles rather than being one.
+Both run one extraction. It takes the page's rendered reading text, keeps it in the page's own language, and removes interface noise like a video player's control labels and anything the page repeats three or more times.
+
+**⇧⌘C** puts that text straight on your clipboard. Limeghost interrupts only for the two things a paste would not reveal — that it was unsure it found the article, or that the page lists many articles rather than being one.
+
+**⇧⌘R** shows you the same text first. Reader is not a prettier rendering of the page: it is the extractor's output, drawn — no images, no links, no reconstructed layout — because the point is to let you see what an assistant would be given before you give it. Where the extractor was unsure it found an article, Reader says so above the text rather than after the fact. Copying from Reader copies the words on screen, not a second reading of the page.
 
 **Limeghost makes no AI request and holds no credential for one.** There is no key to configure and nothing to enable. The only way a page reaches an AI is you copying it and pasting it somewhere yourself — which means you can see exactly what you are handing over, and to whom.
 

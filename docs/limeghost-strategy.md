@@ -43,7 +43,7 @@ The installed local version currently includes:
 - a visible native bookmarks bar with local top-level links, nested emoji-folder menus, safe current-page/saved-bookmark drag filing, the full local folder organizer, capped history, and user-confirmed downloads with a clear toolbar status/destination panel;
 - a native first-run introduction and a Settings action to revisit it;
 - a task-first curated AI home organized around Ask & Learn, Write, Research, Create Images, Create Videos, Translate, and Code;
-- user-triggered Analyze Page with source-language extraction, reading time, explained risk signals, a listing-page notice, and Copy for AI with a full-payload preview;
+- user-triggered Analyze Page with source-language extraction, reading time, explained risk signals, a listing-page notice, and Copy for AI, with Reader (`⇧⌘R`) as the full-payload preview;
 - explicit on-device voice dictation into the visible address field for review;
 - an optional provider contract and user-owned prototype key stored in macOS Keychain;
 - local-data recovery from last-known-good records, a user-confirmed browsing-data reset, WebKit process-failure handling, and visible page dialog/media-permission prompts;

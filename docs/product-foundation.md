@@ -37,7 +37,7 @@ Scam signals are a supporting trust feature, not the initial positioning. A smal
 1. The user opens a page in the standalone Limeghost browser.
 2. Only after the user clicks Analyze Page, Limeghost extracts visible reading content and analyzes it locally.
 3. The panel leads with the source, the read time, and any visible risk signals.
-4. The user presses Copy page for AI, sees the complete payload and its size, and pastes it into whichever AI they use.
+4. The user opens Reader to see the complete payload and its size, or presses ⇧⌘C to skip that, and pastes it into whichever AI they use.
 6. The native browser can keep bookmarks, a capped local history, and recent-tab metadata in the Mac user profile. History and tab restoration can be disabled; browsing history is never uploaded to the AI provider or sold.
 7. A new tab can help an ordinary user choose an AI service by task from a small static catalog, then open the service's official website without transferring the current page or an inferred prompt.
 
@@ -52,7 +52,7 @@ Scam signals are a supporting trust feature, not the initial positioning. A smal
 - Task-first native AI-guide start page with locally defined task categories, local filtering, an explicit All Tools view, broad access hints, and ordinary links to listed services' official websites.
 - User-confirmed downloads plus local bookmark/history organization, recovery backups, and an explicit local browsing-data reset.
 - On-demand visible-page extraction from the app’s current web view.
-- Source-language extraction with interface noise removed, read-time estimate, risk signals, a listing-page notice, and Copy for AI with a full-payload preview.
+- Source-language extraction with interface noise removed, read-time estimate, risk signals, a listing-page notice, Copy for AI, and Reader as the full-payload preview.
 - An assistant beside the page: the person's own ChatGPT, Claude, Gemini, Le Chat or Grok in a web view, one per window, signed in with their own account. It survives switching tabs, hiding, and switching assistant. Compare answers puts two of them side by side in the window.
 - No AI of Limeghost's own: no provider, no key, no request.
 - Clear separation between the Foundation-only analysis/service core and macOS-specific browser UI.

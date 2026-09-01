@@ -75,6 +75,7 @@ private struct BrowserTabContent: View {
             BrowserToolbar(
                 session: session,
                 workspace: workspace,
+                tab: tab,
                 dataStore: workspace.dataStore,
                 companion: companion,
                 downloads: workspace.downloads,
@@ -147,6 +148,19 @@ private struct BrowserTabContent: View {
                             WebView(session: session)
                                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                             stateOverlay
+                            // Drawn over the page rather than in place of it.
+                            // `WebView` hands SwiftUI a web view the session
+                            // owns, so swapping it out of this branch would
+                            // destroy and rebuild it — the same mistake that
+                            // once shipped Compare as a blank rectangle.
+                            if let article = tab.readerArticle {
+                                ReaderView(
+                                    article: article,
+                                    copy: { tab.copyArticleForAI(article) },
+                                    close: { tab.readerArticle = nil }
+                                )
+                                .transition(.opacity)
+                            }
                         }
                         if companion.isVisible && !fillsWindow {
                             Divider()
@@ -293,6 +307,10 @@ private struct BrowserTabContent: View {
 private struct BrowserToolbar: View {
     @ObservedObject var session: BrowserSession
     @ObservedObject var workspace: BrowserWorkspace
+    /// Observed, not reached through `workspace.selectedTab`: the Reader button
+    /// lights from `tab.readerArticle`, and a nested object's change does not
+    /// republish the view holding its owner.
+    @ObservedObject var tab: BrowserTab
     @ObservedObject var dataStore: BrowserDataStore
     @ObservedObject var companion: AICompanion
     @ObservedObject var downloads: DownloadCenter
@@ -305,8 +323,6 @@ private struct BrowserToolbar: View {
     let goHome: () -> Void
     @StateObject private var voiceInput = VoiceInputController()
     @State private var folderEditorRequest: BookmarkFolderEditorRequest?
-    /// Briefly true after a copy, so the toolbar icon can confirm without a sentence.
-    @State private var didCopyPage = false
     @State private var showsBookmarkImport = false
     /// Which suggestion row is highlighted. Row zero is the best answer, so
     /// Return without touching the arrows does what the field already shows.
@@ -392,21 +408,42 @@ private struct BrowserToolbar: View {
                         DownloadsPopover(center: downloads)
                     }
 
-                    Button { companion.toggle() } label: {
-                        Image(systemName: "bubble.left.and.text.bubble.right")
-                    }
-                    .buttonStyle(GhostButtonStyle(isActive: companion.isVisible))
-                    .keyboardShortcut("a", modifiers: [.command, .shift])
-                    .help("Show or hide your AI beside the page (⇧⌘A)")
-                    .accessibilityLabel("Assistant")
+                    // The AI workflow, ringed so it reads as one thing rather
+                    // than two more icons in a row of seven. The assistant and
+                    // the page it would be given belong together; bookmarks,
+                    // voice, library and downloads do not.
+                    //
+                    // Ringed here rather than moved into the assistant panel's
+                    // own header, which was the other idea: that header says
+                    // "ChatGPT" and carries ChatGPT's mark, so a Copy button
+                    // inside it reads as "send this to ChatGPT" — the one thing
+                    // Limeghost must never do. The clipboard is a deliberate
+                    // gap between this app and a provider, and hiding it inside
+                    // the provider's frame would advertise an action that does
+                    // not exist.
+                    HStack(spacing: 2) {
+                        Button { companion.toggle() } label: {
+                            Image(systemName: "bubble.left.and.text.bubble.right")
+                        }
+                        .buttonStyle(GhostButtonStyle(isActive: companion.isVisible))
+                        .keyboardShortcut("a", modifiers: [.command, .shift])
+                        .help("Show or hide your AI beside the page (⇧⌘A)")
+                        .accessibilityLabel("Assistant")
 
-                    Button { Task { await copyPageForAI() } } label: {
-                        Image(systemName: didCopyPage ? "checkmark" : "doc.on.doc")
+                        Button { Task { await toggleReader() } } label: {
+                            Image(systemName: "doc.plaintext")
+                        }
+                        .buttonStyle(GhostButtonStyle(isActive: tab.readerArticle != nil))
+                        .keyboardShortcut("r", modifiers: [.command, .shift])
+                        .help("Read this page as Limeghost extracts it — the same text an AI would get (⇧⌘R)")
+                        .accessibilityLabel("Reader")
+                        .disabled(!session.loadState.showsLoadedPage)
                     }
-                    .buttonStyle(GhostButtonStyle(tint: didCopyPage ? LimeghostTheme.accent : LimeghostTheme.textPrimary))
-                    .keyboardShortcut("c", modifiers: [.command, .shift])
-                    .help("Copy this page's readable text for an AI (⇧⌘C)")
-                    .accessibilityLabel("Copy page for AI")
+                    .padding(2)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: LimeghostTheme.radius10)
+                            .stroke(LimeghostTheme.groupOutline, lineWidth: 1)
+                    )
                 }
             }
             .padding(.horizontal, 10)
@@ -502,53 +539,14 @@ private struct BrowserToolbar: View {
     /// from. Nothing is sent anywhere: this is the person's own clipboard, and
     /// what happens next is their own paste.
     ///
-    /// Deliberately silent when it works. A confirmation on every copy is a
-    /// sentence nobody reads by the third time, and the text is about to appear
-    /// in front of them anyway when they paste it. The notice bar is used only
-    /// for the two things a paste would not reveal: that the extractor was
-    /// unsure it found the article, and that the page is a list rather than one
-    /// piece of writing.
-    private func copyPageForAI() async {
-        guard WebURLPolicy.validatedURL(session.currentURLString) != nil else {
-            session.showPageNotice("There is no web page in this tab to copy.")
+    /// Reader is a toggle, and closing it costs nothing to reopen — the page is
+    /// still loaded underneath, and reading it again is one extraction.
+    private func toggleReader() async {
+        guard tab.readerArticle == nil else {
+            tab.readerArticle = nil
             return
         }
-        // The page can move while it is being read. Copying what the reader has
-        // already navigated away from is worse than not copying at all, because
-        // nothing about the pasted text would say so.
-        let expectedNavigationVersion = session.navigationVersion
-        guard let page = try? await session.extractPage() else {
-            session.showPageNotice("Limeghost could not read enough text on this page to copy.")
-            return
-        }
-        guard session.navigationVersion == expectedNavigationVersion else {
-            session.showPageNotice("The page changed while Limeghost was reading it. Nothing was copied.")
-            return
-        }
-        guard let payload = LocalAnalysisEngine.clipboardPayload(page: page) else {
-            session.showPageNotice("Limeghost found no readable text on this page.")
-            return
-        }
-        let words = LocalAnalysisEngine.wordCount(of: LocalAnalysisEngine.readableText(page: page))
-        let pasteboard = NSPasteboard.general
-        pasteboard.clearContents()
-        pasteboard.setString(payload, forType: .string)
-
-        didCopyPage = true
-        Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 1_600_000_000)
-            didCopyPage = false
-        }
-
-        if let confidence = page.extractionConfidence, confidence < 0.5 {
-            session.showPageNotice(
-                confidence == 0
-                    ? "Copied \(words) words — but Limeghost could not find an article here, so this is the whole page, menus included."
-                    : "Copied \(words) words — but Limeghost is not confident it found the article on this page."
-            )
-        } else if LocalAnalysisEngine.assessStructure(page: page) == .listing {
-            session.showPageNotice("Copied \(words) words — note this page lists many articles rather than being one.")
-        }
+        tab.readerArticle = await tab.readCurrentPage(verb: "read")
     }
 
     private var addressPill: some View {

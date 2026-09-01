@@ -244,6 +244,15 @@ struct LimeghostBrowserApp: App {
                 // Find, zoom, and print all act on the page in front, so they
                 // live with the rest of the page commands. Each one reaches the
                 // selected tab only.
+                // Copy for AI lost its toolbar icon on September 1, 2026 —
+                // `doc.on.doc` named neither AI nor copying to anybody who had
+                // not been told, and Reader's own labelled button says both.
+                // The shortcut belongs here, where a menu can spell it out.
+                Button("Copy Page for AI") {
+                    Task { await focusedWorkspace?.copySelectedPageForAI() }
+                }
+                .keyboardShortcut("c", modifiers: [.command, .shift])
+                Divider()
                 Button("Find in Page") { focusedWorkspace?.findInSelectedTab() }
                     .keyboardShortcut("f", modifiers: [.command])
                 Button("Find Next") { focusedWorkspace?.findNextInSelectedTab() }

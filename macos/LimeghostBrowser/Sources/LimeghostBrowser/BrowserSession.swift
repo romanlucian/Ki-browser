@@ -24,6 +24,18 @@ enum BrowserLoadState: Equatable {
     case loading
     case content
     case failed(BrowserFailure)
+
+    /// Whether there is a real web document in front of the reader.
+    ///
+    /// The page actions that read a page — Reader, and anything added beside it
+    /// — belong only here. On a start surface there is no document to extract,
+    /// and on a failure there is nothing but the error Limeghost drew itself.
+    var showsLoadedPage: Bool {
+        switch self {
+        case .content, .loading: return true
+        case .startPage, .failed: return false
+        }
+    }
 }
 
 @MainActor

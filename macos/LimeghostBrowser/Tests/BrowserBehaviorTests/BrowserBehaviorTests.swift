@@ -508,6 +508,124 @@ final class BrowserBehaviorTests: XCTestCase {
     /// reshuffle — `Bundle.module` returns nil, the view draws nothing, and
     /// nothing anywhere raises an error. The address bar just ships empty. This
     /// is the only thing standing between that and a release.
+    /// Reader's entire claim is that what somebody reads on screen is what an
+    /// assistant receives. That is only true while both come from one value, so
+    /// it is asserted rather than trusted: the paragraphs Reader draws must
+    /// reconstruct `readableText` exactly, and the string its Copy button puts
+    /// on the clipboard must be `clipboardPayload` untouched.
+    ///
+    /// Break either and the feature still looks perfectly fine on screen. That
+    /// is the whole reason this test exists.
+    func testReaderShowsExactlyWhatTheAssistantWouldReceive() throws {
+        let page = PageSnapshot(
+            title: "How barn owls hunt",
+            url: "https://example.org/owls",
+            hostname: "example.org",
+            scheme: "https",
+            language: "en",
+            text: """
+            Barn owls hunt almost entirely by sound, and their hearing is among the sharpest of any animal tested.
+            The facial disc works as a parabolic reflector, gathering faint noise toward asymmetrically placed ears.
+            That asymmetry lets the bird locate prey in the vertical plane as precisely as it does in the horizontal.
+            """,
+            wordCount: 62,
+            hasPasswordField: false,
+            formActions: []
+        )
+
+        let article = try XCTUnwrap(ReaderArticle(page: page))
+        let readable = LocalAnalysisEngine.readableText(page: page)
+
+        // What is drawn reconstructs the extractor's output, block for block.
+        let expectedBlocks = readable
+            .components(separatedBy: "\n")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+        XCTAssertEqual(article.paragraphs, expectedBlocks)
+        XCTAssertFalse(article.paragraphs.isEmpty)
+
+        // What is copied is the payload itself, not a rebuild of it.
+        XCTAssertEqual(article.clipboardPayload, LocalAnalysisEngine.clipboardPayload(page: page))
+        // And the payload really does carry the text Reader shows.
+        for paragraph in article.paragraphs {
+            XCTAssertTrue(
+                article.clipboardPayload.contains(paragraph),
+                "a paragraph Reader draws is missing from what the assistant would get: \(paragraph)"
+            )
+        }
+
+        XCTAssertEqual(article.words, LocalAnalysisEngine.wordCount(of: readable))
+        XCTAssertEqual(article.readingMinutes, LocalAnalysisEngine.readingTime(wordCount: article.words))
+    }
+
+    /// A page with nothing readable must produce no article at all, rather than
+    /// an empty Reader that looks like extraction succeeded and found silence.
+    func testReaderRefusesAPageWithNothingToRead() {
+        let empty = PageSnapshot(
+            title: "Nothing here",
+            url: "https://example.org/empty",
+            hostname: "example.org",
+            scheme: "https",
+            language: "en",
+            text: "   \n  \n ",
+            wordCount: 0,
+            hasPasswordField: false,
+            formActions: []
+        )
+        XCTAssertNil(ReaderArticle(page: empty))
+    }
+
+    /// The extractor's own doubt has to reach the reader. A page where no
+    /// article was found is the case where the text on screen is the whole
+    /// document, menus included, and Reader is the one place that is visible.
+    func testReaderRepeatsTheExtractorsDoubt() throws {
+        func page(confidence: Double?) -> PageSnapshot {
+            PageSnapshot(
+                title: "Title",
+                url: "https://example.org/a",
+                hostname: "example.org",
+                scheme: "https",
+                language: "en",
+                text: "A sentence with enough words in it to be read as a page of prose rather than a fragment.",
+                wordCount: 18,
+                hasPasswordField: false,
+                formActions: [],
+                extractionConfidence: confidence
+            )
+        }
+
+        let noArticle = try XCTUnwrap(ReaderArticle(page: page(confidence: 0)))
+        XCTAssertEqual(
+            noArticle.extractionWarning,
+            "Limeghost could not find an article here, so this is the whole page, menus included."
+        )
+        XCTAssertTrue(noArticle.copyNotice?.contains("menus included") == true)
+
+        let unsure = try XCTUnwrap(ReaderArticle(page: page(confidence: 0.2)))
+        XCTAssertEqual(
+            unsure.extractionWarning,
+            "Limeghost is not confident it found the article on this page."
+        )
+
+        // Confident extraction says nothing. A warning on every page is a
+        // warning nobody reads.
+        let confident = try XCTUnwrap(ReaderArticle(page: page(confidence: 0.9)))
+        XCTAssertNil(confident.extractionWarning)
+        XCTAssertNil(confident.copyNotice)
+    }
+
+    /// Page actions that read a document belong only where there is one.
+    func testOnlyALoadedPageOffersToBeRead() {
+        XCTAssertTrue(BrowserLoadState.content.showsLoadedPage)
+        XCTAssertTrue(BrowserLoadState.loading.showsLoadedPage)
+        XCTAssertFalse(BrowserLoadState.startPage.showsLoadedPage)
+        XCTAssertFalse(
+            BrowserLoadState.failed(
+                BrowserFailure(kind: .offline, title: "Offline", message: "No network.", retryable: true)
+            ).showsLoadedPage
+        )
+    }
+
     func testTheBrandMarkIsActuallyInTheAppBundle() {
         XCTAssertTrue(
             BrandMark.isAvailable,

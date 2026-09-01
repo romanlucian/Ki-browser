@@ -45,6 +45,15 @@ enum LimeghostTheme {
     /// this wash while hovered, open, or otherwise active.
     static let itemHover = Color.white.opacity(0.06)
 
+    /// The outline that binds a set of toolbar buttons into one group.
+    ///
+    /// Accent rather than a neutral hairline because the thing it groups is the
+    /// AI workflow, and mint is what marks that everywhere else. Faint on
+    /// purpose: it has to read as a boundary at a glance without competing with
+    /// the lit state of a button inside it, which is the same accent at full
+    /// strength.
+    static let groupOutline = accent.opacity(0.26)
+
     // MARK: - Hairlines
 
     static let hairline1 = Color.white.opacity(0.06)
