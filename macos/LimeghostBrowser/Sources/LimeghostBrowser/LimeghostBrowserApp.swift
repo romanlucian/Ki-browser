@@ -223,8 +223,21 @@ struct LimeghostBrowserApp: App {
             // every one of them down.
             CommandMenu("Profiles") {
                 ForEach(profiles.profiles) { profile in
-                    Button(Self.profileMenuTitle(profile, focused: focusedWorkspace?.profileID)) {
+                    Button {
                         openWindow(inProfile: profile.id)
+                    } label: {
+                        // The same face the switcher shows. A menu and a
+                        // popover listing one set of profiles two different
+                        // ways is the drift this app keeps closing.
+                        if let image = ProfileAvatar.menuImage(for: profile, profiles: profiles) {
+                            Label {
+                                Text(Self.profileMenuTitle(profile, focused: focusedWorkspace?.profileID))
+                            } icon: {
+                                Image(nsImage: image)
+                            }
+                        } else {
+                            Text(Self.profileMenuTitle(profile, focused: focusedWorkspace?.profileID))
+                        }
                     }
                 }
                 Divider()

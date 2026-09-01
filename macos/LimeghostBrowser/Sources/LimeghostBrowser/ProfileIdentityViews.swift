@@ -44,6 +44,21 @@ struct ProfileAvatar: View {
     }
 }
 
+extension ProfileAvatar {
+    /// The same face, as an `NSImage`, for the Profiles menu.
+    ///
+    /// Rendered from this very view rather than drawn a second way, so the
+    /// menu and the switcher cannot show one profile two different faces.
+    /// `ImageRenderer` is the only way to get SwiftUI content into an
+    /// `NSMenuItem`, which takes an image and not a view.
+    @MainActor
+    static func menuImage(for profile: BrowserProfileRecord, profiles: ProfileStore) -> NSImage? {
+        let renderer = ImageRenderer(content: ProfileAvatar(profile: profile, profiles: profiles, size: 16))
+        renderer.scale = 2
+        return renderer.nsImage
+    }
+}
+
 /// The toolbar chip and the switcher behind it.
 ///
 /// Chrome puts a coloured blob here and Vivaldi a stock photograph. Limeghost
