@@ -32,8 +32,12 @@ struct OnboardingView: View {
                 Group {
                     switch controller.step {
                     case .welcome: welcomeStep
-                    case .searchAndPrivacy: searchAndPrivacyStep
-                    case .analyzePages: analyzeStep
+                    case .search: searchStep
+                    case .privacy: privacyStep
+                    case .assistant: assistantStep
+                    case .compare: compareStep
+                    case .reader: readerStep
+                    case .makeItYours: makeItYoursStep
                     }
                 }
                 .frame(maxWidth: 920, maxHeight: .infinity)
@@ -55,9 +59,10 @@ struct OnboardingView: View {
     private var topBar: some View {
         HStack(spacing: 14) {
             HStack(spacing: 10) {
-                Text("C")
-                    .font(.system(size: 20, weight: .bold, design: .serif))
-                    .foregroundStyle(accent)
+                // The mark itself, not a letter. This drew a serif "C" until
+                // September 1, 2026 — the Clearframe initial, left behind by
+                // the rename in the one place a new person looks first.
+                BrandMark(size: 30)
                     .frame(width: 38, height: 38)
                     .background(deepGreen, in: RoundedRectangle(cornerRadius: 11))
                 VStack(alignment: .leading, spacing: 2) {
@@ -93,44 +98,38 @@ struct OnboardingView: View {
     }
 
     private var welcomeStep: some View {
-        VStack(spacing: 30) {
-            Spacer(minLength: 18)
-            VStack(spacing: 15) {
-                Text("Browse with a clearer frame.")
-                    .font(.system(size: 49, weight: .bold, design: .serif))
-                    .tracking(-1.3)
-                    .foregroundStyle(.white)
-                    .multilineTextAlignment(.center)
-                Text("Limeghost helps you meet an unfamiliar page with the AI you already use: it finds the article, leaves the menus behind, and points out obvious pressure or risk signals—without turning every page into a chat session.")
-                    .font(.system(size: 16))
-                    .foregroundStyle(Color.white.opacity(0.68))
-                    .multilineTextAlignment(.center)
-                    .lineSpacing(3)
-                    .frame(maxWidth: 680)
-            }
+        VStack(alignment: .leading, spacing: 20) {
+            Spacer(minLength: 0)
+            Text("The AI world, made simple.")
+                .font(.system(size: 46, weight: .bold, design: .serif))
+                .foregroundStyle(.white)
+                .fixedSize(horizontal: false, vertical: true)
+            Text("Limeghost puts the AI you already use beside the page you are reading, and hands it the article rather than the whole cluttered site. It holds no key of its own and calls no model — everything below happens on this Mac, or in your own account.")
+                .font(.system(size: 16))
+                .foregroundStyle(Color.white.opacity(0.68))
+                .lineSpacing(4)
+                .frame(maxWidth: 660, alignment: .leading)
 
-            HStack(spacing: 14) {
-                PromiseCard(symbol: "square.grid.2x2", title: "Choose", detail: "A small set of useful AI paths, not a list of model names")
-                PromiseCard(symbol: "doc.on.doc", title: "Prepare", detail: "Pull the article out of a page, ready for your AI")
+            HStack(spacing: 13) {
+                PromiseCard(symbol: "bubble.left.and.text.bubble.right", title: "Ask", detail: "Your own ChatGPT, Claude, Gemini, Le Chat or Grok, beside the page")
+                PromiseCard(symbol: "doc.plaintext", title: "Read", detail: "The article without the menus — and it is what your AI gets")
                 PromiseCard(symbol: "exclamationmark.shield", title: "Notice", detail: "Explain visible risk signals, never issue verdicts")
             }
-            .frame(maxWidth: 820)
-            Spacer(minLength: 18)
+            Spacer(minLength: 0)
         }
+        .frame(maxWidth: 850, maxHeight: .infinity, alignment: .leading)
     }
 
-    private var searchAndPrivacyStep: some View {
-        VStack(spacing: 25) {
-            Spacer(minLength: 12)
-            VStack(spacing: 10) {
-                Text("Choose how you search.")
-                    .font(.system(size: 40, weight: .bold, design: .serif))
-                    .foregroundStyle(.white)
-                Text("This choice affects address-bar searches only. Website addresses always open directly.")
-                    .font(.system(size: 15))
-                    .foregroundStyle(Color.white.opacity(0.64))
-            }
-
+    private var searchStep: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            Spacer(minLength: 0)
+            Text("Choose how you search.")
+                .font(.system(size: 40, weight: .bold, design: .serif))
+                .foregroundStyle(.white)
+            Text("This affects address-bar searches only. Website addresses always open directly, and you can change it later in Settings.")
+                .font(.system(size: 15))
+                .foregroundStyle(Color.white.opacity(0.62))
+                .frame(maxWidth: 620, alignment: .leading)
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 142, maximum: 175), spacing: 10)], spacing: 10) {
                 ForEach(SearchEngine.allCases) { engine in
                     SearchProviderCard(
@@ -141,53 +140,79 @@ struct OnboardingView: View {
                     )
                 }
             }
-            .frame(maxWidth: 820)
+            .frame(maxWidth: 720, alignment: .leading)
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: 850, maxHeight: .infinity, alignment: .leading)
+    }
 
+    /// Rewritten September 1, 2026. It used to promise that "after you
+    /// configure it and deliberately request an online action, the provider
+    /// receives the page title, hostname, language, and extracted text" — a
+    /// description of a provider layer deleted on August 30. It was the first
+    /// privacy claim a new person read, and it was false in the direction that
+    /// matters: it implied Limeghost might send a page somewhere.
+    private var privacyStep: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            Spacer(minLength: 0)
+            Text("Nothing leaves this Mac by itself.")
+                .font(.system(size: 40, weight: .bold, design: .serif))
+                .foregroundStyle(.white)
+                .fixedSize(horizontal: false, vertical: true)
             VStack(spacing: 10) {
-                PrivacyLine(symbol: "square.grid.2x2", title: "The AI guide is local", detail: "Its curated cards and filters are bundled in Limeghost; opening one is ordinary website navigation.")
-                PrivacyLine(symbol: "lock.shield", title: "Reading a page is local", detail: "Visible page text is read only when you press copy. It is not sold, and Limeghost uploads nothing.")
-                PrivacyLine(symbol: "cloud", title: "Online AI is optional", detail: "After you configure it and deliberately request an online action, the provider receives the page title, hostname, language, and extracted text—not the full URL, cookies, forms, or history.")
+                PrivacyLine(symbol: "key.slash", title: "Limeghost has no AI key", detail: "It calls no model and pays for no service. There is nothing to configure and nothing to switch off.")
+                PrivacyLine(symbol: "doc.on.clipboard", title: "A page moves by your clipboard", detail: "Reading a page happens here. The only way its text reaches an AI is you copying it and pasting it yourself — so you can see exactly what you are handing over, and to whom.")
+                PrivacyLine(symbol: "person.crop.circle", title: "The assistant is your own account", detail: "ChatGPT, Claude, Gemini, Le Chat and Grok open as ordinary websites, signed in as you. Limeghost never types into them or reads what they say.")
+                PrivacyLine(symbol: "internaldrive", title: "History and bookmarks stay here", detail: "Kept in this Mac user profile, never sold, never included in anything sent anywhere.")
             }
             .frame(maxWidth: 820)
-            Spacer(minLength: 12)
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: 850, maxHeight: .infinity, alignment: .leading)
+    }
+
+    private var assistantStep: some View {
+        FeatureStep(
+            title: "Your AI, beside the page.",
+            detail: "Press ⇧⌘A and the assistant opens on the right, on your own account. Read on the left, ask on the right, without a second window.",
+            shortcut: "⇧⌘A",
+            accent: accent
+        ) {
+            AssistantPreview(accent: accent)
         }
     }
 
-    private var analyzeStep: some View {
-        HStack(spacing: 34) {
-            VStack(alignment: .leading, spacing: 19) {
-                Text("The useful part is one click away.")
-                    .font(.system(size: 40, weight: .bold, design: .serif))
-                    .foregroundStyle(.white)
-                    .fixedSize(horizontal: false, vertical: true)
-                Text("Open an article, guide, product page, or unfamiliar site. Limeghost finds the article, leaves the menus behind, and hands it to whichever AI you use.")
-                    .font(.system(size: 15))
-                    .foregroundStyle(Color.white.opacity(0.66))
-                    .lineSpacing(3)
-
-                VStack(alignment: .leading, spacing: 13) {
-                    OnboardingInstruction(number: "1", text: "Open a page you want help with")
-                    OnboardingInstruction(number: "2", text: "Press ⇧⌘C, or the copy button in the toolbar")
-                    OnboardingInstruction(number: "3", text: "Paste it into ChatGPT, Claude, or whatever you use")
-                }
-
-                HStack(alignment: .top, spacing: 10) {
-                    Image(systemName: "sparkles")
-                        .foregroundStyle(accent)
-                    Text("Limeghost Pro may arrive later for heavier online AI use. There is no purchase or paywall in this introduction, and local browsing tools remain the foundation.")
-                        .font(.caption)
-                        .foregroundStyle(Color.white.opacity(0.53))
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .padding(14)
-                .background(Color.white.opacity(0.045), in: RoundedRectangle(cornerRadius: 12))
-            }
-            .frame(maxWidth: 430, alignment: .leading)
-
-            AnalyzePreview(accent: accent)
-                .frame(maxWidth: 360)
+    private var compareStep: some View {
+        FeatureStep(
+            title: "Two answers, side by side.",
+            detail: "Ask the same question twice and read both. Two is the limit on purpose — three would be a vote, and models that share training data share their mistakes.",
+            shortcut: nil,
+            accent: accent
+        ) {
+            ComparePreview(accent: accent)
         }
-        .frame(maxWidth: 850, maxHeight: .infinity)
+    }
+
+    private var readerStep: some View {
+        FeatureStep(
+            title: "See what your AI will get.",
+            detail: "⇧⌘R shows the article Limeghost pulled out of the page — no menus, no footers, no player controls. It is exactly the text ⇧⌘C puts on your clipboard, so nothing is hidden between reading it and sending it.",
+            shortcut: "⇧⌘R",
+            accent: accent
+        ) {
+            ReaderPreview(accent: accent)
+        }
+    }
+
+    private var makeItYoursStep: some View {
+        FeatureStep(
+            title: "Make it yours.",
+            detail: "Bookmark folders take an icon from \(LimeghostIconCatalog.all.count.formatted()) drawings across three sets, and Limeghost's own set takes your colour. Tracker blocking runs from a curated list — it is not a complete ad blocker, and WebKit never reports what it stopped, so you will never see an invented number.",
+            shortcut: nil,
+            accent: accent
+        ) {
+            IconsPreview(accent: accent)
+        }
     }
 
     private var actionBar: some View {
@@ -214,11 +239,8 @@ struct OnboardingView: View {
     }
 
     private var primaryActionTitle: String {
-        switch controller.step {
-        case .welcome: return "Continue"
-        case .searchAndPrivacy: return "Continue"
-        case .analyzePages: return controller.isInitialPresentation ? "Start browsing" : "Return to browsing"
-        }
+        guard controller.step.isLast else { return "Continue" }
+        return controller.isInitialPresentation ? "Start browsing" : "Return to browsing"
     }
 
     private func focusPrimaryAction() {
@@ -233,7 +255,7 @@ struct OnboardingView: View {
     }
 
     private func performPrimaryAction() {
-        if controller.step == .analyzePages {
+        if controller.step.isLast {
             finish()
         } else {
             controller.advance()
@@ -362,55 +384,236 @@ private struct OnboardingInstruction: View {
     }
 }
 
-private struct AnalyzePreview: View {
+/// The shape the four feature steps share: words on the left, the thing itself
+/// on the right. They lead with a picture because the founder's note on the old
+/// step was that it explained where it could have shown.
+private struct FeatureStep<Preview: View>: View {
+    let title: String
+    let detail: String
+    let shortcut: String?
+    let accent: Color
+    @ViewBuilder var preview: () -> Preview
+
+    var body: some View {
+        HStack(spacing: 34) {
+            VStack(alignment: .leading, spacing: 17) {
+                Text(title)
+                    .font(.system(size: 38, weight: .bold, design: .serif))
+                    .foregroundStyle(.white)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(detail)
+                    .font(.system(size: 15))
+                    .foregroundStyle(Color.white.opacity(0.64))
+                    .lineSpacing(3)
+                    .fixedSize(horizontal: false, vertical: true)
+                if let shortcut {
+                    HStack(spacing: 9) {
+                        Text(shortcut)
+                            .font(.system(size: 14, weight: .semibold, design: .rounded))
+                            .foregroundStyle(LimeghostTheme.onAccent)
+                            .padding(.horizontal, 11)
+                            .padding(.vertical, 6)
+                            .background(accent, in: RoundedRectangle(cornerRadius: 8))
+                        Text("also in the Page menu")
+                            .font(.caption)
+                            .foregroundStyle(Color.white.opacity(0.42))
+                    }
+                }
+            }
+            .frame(maxWidth: 420, alignment: .leading)
+
+            preview()
+                .frame(maxWidth: 380)
+        }
+        .frame(maxWidth: 850, maxHeight: .infinity)
+    }
+}
+
+/// A window with the assistant docked on its right, drawn rather than
+/// screenshotted so it cannot go stale the way this tour just did.
+private struct AssistantPreview: View {
     let accent: Color
 
     var body: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 6) {
-                Circle().fill(Color.red.opacity(0.75)).frame(width: 8, height: 8)
-                Circle().fill(Color.yellow.opacity(0.75)).frame(width: 8, height: 8)
-                Circle().fill(Color.green.opacity(0.75)).frame(width: 8, height: 8)
-                Spacer()
-                Label("⇧⌘C", systemImage: "doc.on.doc")
-                    .font(.system(size: 10, weight: .semibold))
-                    .padding(.horizontal, 9)
-                    .frame(height: 25)
-                    .background(LimeghostTheme.accentDimStrong, in: RoundedRectangle(cornerRadius: 8))
-            }
-            .padding(12)
-            .background(Color.black.opacity(0.28))
+        PreviewWindow {
+            HStack(spacing: 0) {
+                VStack(alignment: .leading, spacing: 7) {
+                    PreviewLine(width: 0.8)
+                    PreviewLine(width: 1.0)
+                    PreviewLine(width: 0.9)
+                    PreviewLine(width: 0.55)
+                }
+                .padding(13)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
 
-            VStack(spacing: 17) {
-                Text("C")
-                    .font(.system(size: 28, weight: .bold, design: .serif))
-                    .foregroundStyle(accent)
-                    .frame(width: 56, height: 56)
-                    .background(LimeghostTheme.accentDimStrong, in: RoundedRectangle(cornerRadius: 17))
-                Text("Copied 871 words")
-                    .font(.system(size: 23, weight: .bold, design: .serif))
-                    .foregroundStyle(.white)
-                Text("The article, without the menus, footers and player controls — on your clipboard, ready to paste.")
-                    .font(.caption)
-                    .foregroundStyle(Color.white.opacity(0.58))
-                    .multilineTextAlignment(.center)
-                Label("Paste into your AI", systemImage: "arrow.right")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(LimeghostTheme.onAccent)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 42)
-                    .background(LimeghostTheme.accent, in: RoundedRectangle(cornerRadius: 9))
-                Text("Nothing is sent anywhere by Limeghost")
-                    .font(.system(size: 10))
-                    .foregroundStyle(Color.white.opacity(0.4))
+                Rectangle().fill(Color.white.opacity(0.09)).frame(width: 1)
+
+                VStack(spacing: 9) {
+                    HStack(spacing: 6) {
+                        Circle().fill(accent).frame(width: 13, height: 13)
+                        Text("your AI")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(Color.white.opacity(0.72))
+                        Spacer()
+                    }
+                    RoundedRectangle(cornerRadius: 7)
+                        .fill(Color.white.opacity(0.07))
+                        .frame(height: 44)
+                    RoundedRectangle(cornerRadius: 7)
+                        .fill(accent.opacity(0.16))
+                        .frame(height: 30)
+                    Spacer()
+                }
+                .padding(11)
+                .frame(width: 132)
             }
-            .padding(26)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .frame(height: 390)
-        .background(LimeghostTheme.bg1, in: RoundedRectangle(cornerRadius: 19))
-        .clipShape(RoundedRectangle(cornerRadius: 19))
-        .overlay(RoundedRectangle(cornerRadius: 19).stroke(Color.white.opacity(0.1)))
-        .shadow(color: .black.opacity(0.28), radius: 30, y: 16)
+    }
+}
+
+/// Two assistants filling the window, which is what Compare actually does.
+private struct ComparePreview: View {
+    let accent: Color
+
+    var body: some View {
+        PreviewWindow {
+            HStack(spacing: 0) {
+                comparePane(label: "one", tint: accent)
+                Rectangle().fill(Color.white.opacity(0.09)).frame(width: 1)
+                comparePane(label: "two", tint: Color.white.opacity(0.5))
+            }
+        }
+    }
+
+    private func comparePane(label: String, tint: Color) -> some View {
+        VStack(spacing: 8) {
+            HStack(spacing: 6) {
+                Circle().fill(tint).frame(width: 11, height: 11)
+                Text(label)
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(Color.white.opacity(0.66))
+                Spacer()
+            }
+            PreviewLine(width: 1.0)
+            PreviewLine(width: 0.85)
+            PreviewLine(width: 0.95)
+            PreviewLine(width: 0.6)
+            Spacer()
+        }
+        .padding(11)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+    }
+}
+
+/// One column of clean prose with a word count — Reader's own header, in
+/// miniature.
+private struct ReaderPreview: View {
+    let accent: Color
+
+    var body: some View {
+        PreviewWindow {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 7) {
+                    Image(systemName: "doc.plaintext")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(accent)
+                    Text("Reader")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(.white)
+                    Spacer()
+                    Text("871 words · 4 min")
+                        .font(.system(size: 9))
+                        .foregroundStyle(Color.white.opacity(0.4))
+                }
+                Rectangle().fill(Color.white.opacity(0.09)).frame(height: 1)
+                RoundedRectangle(cornerRadius: 3)
+                    .fill(Color.white.opacity(0.5))
+                    .frame(width: 150, height: 11)
+                VStack(alignment: .leading, spacing: 6) {
+                    PreviewLine(width: 1.0)
+                    PreviewLine(width: 0.94)
+                    PreviewLine(width: 0.98)
+                    PreviewLine(width: 0.5)
+                }
+                Spacer()
+            }
+            .padding(13)
+        }
+    }
+}
+
+/// Real icons from the real catalog, so this cannot drift from what the picker
+/// offers. Limeghost's own set is the tintable one, which is why these take the
+/// accent.
+private struct IconsPreview: View {
+    let accent: Color
+
+    private var sample: [LimeghostIcon] {
+        Array(LimeghostIconCatalog.all.filter { $0.style == .limeghost }.prefix(18))
+    }
+
+    var body: some View {
+        PreviewWindow {
+            VStack(alignment: .leading, spacing: 11) {
+                HStack(spacing: 7) {
+                    Image(systemName: "folder")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(accent)
+                    Text("Folder icon")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(.white)
+                    Spacer()
+                    Text("\(LimeghostIconCatalog.all.count.formatted()) to choose from")
+                        .font(.system(size: 9))
+                        .foregroundStyle(Color.white.opacity(0.4))
+                }
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 6), spacing: 9) {
+                    ForEach(sample) { icon in
+                        LimeghostIconView(iconID: icon.id, size: 20)
+                            .foregroundStyle(accent)
+                    }
+                }
+                Spacer()
+            }
+            .padding(13)
+        }
+    }
+}
+
+/// The frame the four previews share — traffic lights and a rounded body, so a
+/// drawing reads as a window rather than as decoration.
+private struct PreviewWindow<Content: View>: View {
+    @ViewBuilder var content: () -> Content
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 5) {
+                Circle().fill(Color(red: 1, green: 0.37, blue: 0.34)).frame(width: 8, height: 8)
+                Circle().fill(Color(red: 1, green: 0.74, blue: 0.18)).frame(width: 8, height: 8)
+                Circle().fill(Color(red: 0.16, green: 0.79, blue: 0.25)).frame(width: 8, height: 8)
+                Spacer()
+            }
+            .padding(.horizontal, 11)
+            .frame(height: 26)
+            content()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .frame(height: 236)
+        .background(LimeghostTheme.bg1, in: RoundedRectangle(cornerRadius: 13))
+        .overlay(RoundedRectangle(cornerRadius: 13).stroke(Color.white.opacity(0.09)))
+    }
+}
+
+/// A line of text that is not text, for the drawn windows above.
+private struct PreviewLine: View {
+    let width: CGFloat
+
+    var body: some View {
+        GeometryReader { geometry in
+            RoundedRectangle(cornerRadius: 2)
+                .fill(Color.white.opacity(0.17))
+                .frame(width: geometry.size.width * width, height: 6)
+        }
+        .frame(height: 6)
     }
 }

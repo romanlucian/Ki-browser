@@ -2,10 +2,23 @@ import LimeghostCore
 import Combine
 import Foundation
 
+/// The first-run introduction, one screen at a time.
+///
+/// Three steps until September 1, 2026, when it grew to seven so that the
+/// features built since — the assistant panel, Compare, Reader, and the folder
+/// icon sets — have somewhere to be seen. The founder chose the longer tour
+/// over a short one knowing it is shown once and can be skipped at step one;
+/// the menu entries added the same day are what make the shortcuts survive it.
 enum OnboardingStep: Int, CaseIterable {
     case welcome
-    case searchAndPrivacy
-    case analyzePages
+    case search
+    case privacy
+    case assistant
+    case compare
+    case reader
+    case makeItYours
+
+    var isLast: Bool { self == OnboardingStep.allCases.last }
 }
 
 @MainActor

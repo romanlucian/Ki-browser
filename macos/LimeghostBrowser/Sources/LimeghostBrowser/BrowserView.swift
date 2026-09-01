@@ -426,7 +426,6 @@ private struct BrowserToolbar: View {
                             Image(systemName: "bubble.left.and.text.bubble.right")
                         }
                         .buttonStyle(GhostButtonStyle(isActive: companion.isVisible))
-                        .keyboardShortcut("a", modifiers: [.command, .shift])
                         .help("Show or hide your AI beside the page (⇧⌘A)")
                         .accessibilityLabel("Assistant")
 
@@ -434,7 +433,6 @@ private struct BrowserToolbar: View {
                             Image(systemName: "doc.plaintext")
                         }
                         .buttonStyle(GhostButtonStyle(isActive: tab.readerArticle != nil))
-                        .keyboardShortcut("r", modifiers: [.command, .shift])
                         .help("Read this page as Limeghost extracts it — the same text an AI would get (⇧⌘R)")
                         .accessibilityLabel("Reader")
                         .disabled(!session.loadState.showsLoadedPage)

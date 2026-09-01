@@ -873,6 +873,65 @@ final class BrowserBehaviorTests: XCTestCase {
         XCTAssertNil(preferences.homeURL, "bookmarks is a surface, not an address")
     }
 
+    /// The introduction walks every step and stops at the last one.
+    func testTheIntroductionWalksEveryStepAndStopsAtTheEnd() {
+        let controller = OnboardingController(preferences: OnboardingPreferences(defaults: emptyDefaults("intro")))
+        XCTAssertEqual(controller.step, .welcome)
+        XCTAssertFalse(OnboardingStep.welcome.isLast)
+
+        var visited: [OnboardingStep] = [controller.step]
+        for _ in 0..<20 {
+            controller.advance()
+            if visited.last != controller.step { visited.append(controller.step) }
+        }
+        XCTAssertEqual(visited, OnboardingStep.allCases, "the tour does not reach every step in order")
+        XCTAssertTrue(controller.step.isLast, "advancing past the end moved somewhere it should not")
+
+        for _ in 0..<20 { controller.goBack() }
+        XCTAssertEqual(controller.step, .welcome, "going back past the start moved somewhere it should not")
+    }
+
+    /// The introduction must never say a page is sent anywhere.
+    ///
+    /// It said exactly that until September 1, 2026 — "after you configure it
+    /// and deliberately request an online action, the provider receives the
+    /// page title, hostname, language, and extracted text" — describing a
+    /// provider layer deleted on August 30. It was the first privacy claim a
+    /// new person read, and it was false in the direction that matters.
+    ///
+    /// Read from the source file rather than from a rendered view: SwiftUI
+    /// gives no way to ask a `Text` what it says, and the thing worth guarding
+    /// is the copy itself.
+    func testTheIntroductionNeverClaimsAPageIsSentToAProvider() throws {
+        let source = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Sources/LimeghostBrowser/OnboardingView.swift")
+        let text = try String(contentsOf: source, encoding: .utf8)
+
+        // Phrases that only appear when somebody has reintroduced an online
+        // provider layer, or described one that does not exist.
+        for banned in [
+            "the provider receives",
+            "Online AI is optional",
+            "Limeghost Pro",
+            "after you configure it",
+        ] {
+            XCTAssertFalse(
+                text.contains(banned),
+                "the introduction has gone back to describing an online provider: \"\(banned)\""
+            )
+        }
+
+        // And the rename leftovers that sat in front of every new person.
+        XCTAssertFalse(text.contains("clearer frame"), "the Clearframe pun is back in the introduction")
+        XCTAssertFalse(
+            text.contains("Text(\"C\")"),
+            "the introduction is drawing the Clearframe letter instead of the mark"
+        )
+    }
+
     func testTheBrandMarkIsActuallyInTheAppBundle() {
         XCTAssertTrue(
             BrandMark.isAvailable,

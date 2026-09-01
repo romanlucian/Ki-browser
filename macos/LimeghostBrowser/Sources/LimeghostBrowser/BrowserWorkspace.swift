@@ -650,6 +650,21 @@ final class BrowserWorkspace: ObservableObject {
         schedulePersistence()
     }
 
+    /// Reader, from the Page menu.
+    ///
+    /// Reader and the assistant lived only on toolbar buttons until
+    /// September 1, 2026, so their shortcuts appeared nowhere a person could
+    /// find them. A first-run tour is shown once; a menu is there every day,
+    /// and macOS teaches shortcuts through menus.
+    func toggleReaderInSelectedTab() async {
+        guard let tab = selectedTab else { return }
+        guard tab.readerArticle == nil else {
+            tab.readerArticle = nil
+            return
+        }
+        tab.readerArticle = await tab.readCurrentPage(verb: "read")
+    }
+
     /// Copy for AI, reached from the Page menu and ⇧⌘C.
     ///
     /// The toolbar carried this on an icon until September 1, 2026.

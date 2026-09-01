@@ -141,10 +141,14 @@ final class BrowserE2ESmokeTests: XCTestCase {
             let onboardingPreferences = OnboardingPreferences(defaults: defaults)
             let onboarding = OnboardingController(preferences: onboardingPreferences)
             try require(onboarding.isPresented && onboarding.isInitialPresentation && onboarding.step == .welcome, "first run did not present the welcome step")
-            onboarding.advance()
-            try require(onboarding.step == .searchAndPrivacy, "onboarding did not advance to search and privacy")
-            onboarding.advance()
-            try require(onboarding.step == .analyzePages, "onboarding did not advance to Analyze page guidance")
+            // Walk the whole tour rather than naming two steps: it grew from
+            // three to seven on September 1, 2026, and a smoke check that
+            // names individual steps has to be edited every time it changes.
+            for expected in OnboardingStep.allCases.dropFirst() {
+                onboarding.advance()
+                try require(onboarding.step == expected, "onboarding did not advance to \(expected)")
+            }
+            try require(onboarding.step.isLast, "onboarding did not end on its last step")
             onboarding.complete()
             try require(!onboarding.isPresented && onboardingPreferences.hasCompletedIntroduction, "onboarding completion did not persist locally")
             onboarding.revisit()

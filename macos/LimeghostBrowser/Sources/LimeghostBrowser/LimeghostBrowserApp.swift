@@ -248,10 +248,22 @@ struct LimeghostBrowserApp: App {
                 // `doc.on.doc` named neither AI nor copying to anybody who had
                 // not been told, and Reader's own labelled button says both.
                 // The shortcut belongs here, where a menu can spell it out.
+                Button("Reader") {
+                    Task { await focusedWorkspace?.toggleReaderInSelectedTab() }
+                }
+                .keyboardShortcut("r", modifiers: [.command, .shift])
                 Button("Copy Page for AI") {
                     Task { await focusedWorkspace?.copySelectedPageForAI() }
                 }
                 .keyboardShortcut("c", modifiers: [.command, .shift])
+                Divider()
+                // The assistant is a page-side action too: it opens beside the
+                // page, not over it. Its shortcut was on a toolbar button and
+                // nowhere else, which is no way to learn one.
+                Button("Your AI Beside the Page") {
+                    focusedWorkspace?.aiCompanion.toggle()
+                }
+                .keyboardShortcut("a", modifiers: [.command, .shift])
                 Divider()
                 Button("Find in Page") { focusedWorkspace?.findInSelectedTab() }
                     .keyboardShortcut("f", modifiers: [.command])
