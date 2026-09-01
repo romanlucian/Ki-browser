@@ -76,7 +76,7 @@ final class BrowserSession: NSObject, ObservableObject {
     /// somebody who reads at 125% gets it on every page instead of pressing ⌘+
     /// on each one. ⌘0 still returns to 100%: the preference is where pages
     /// open, not a floor under them.
-    @Published private(set) var pageZoom: CGFloat = BrowserPreferences.shared.defaultPageZoom
+    @Published private(set) var pageZoom: CGFloat
     /// A link Limeghost declined to open, stated as a dismissible line above
     /// the page. Refusing a link must never take away the page the reader is
     /// on, so this never touches `loadState`.
@@ -138,8 +138,16 @@ final class BrowserSession: NSObject, ObservableObject {
         /// The profile's cookies and logins. Left unset, the app's default
         /// store — which is where anything saved before profiles existed is.
         websiteDataStore: WKWebsiteDataStore? = nil,
+        /// The size this page opens at. Injectable rather than read straight
+        /// from the shared preferences, so a test can hand in a size that
+        /// differs from the default — the first version of that test compared
+        /// 1.0 to 1.0 and passed with the wiring removed. Nil means the
+        /// preference, resolved here because a default argument cannot reach a
+        /// main-actor value.
+        initialPageZoom: CGFloat? = nil,
         adoptingPopupConfiguration popupConfiguration: WKWebViewConfiguration? = nil
     ) {
+        self.pageZoom = initialPageZoom ?? BrowserPreferences.shared.defaultPageZoom
         self.downloadCenter = downloadCenter
         self.searchSettings = searchSettings
         self.isPrivate = isPrivate
@@ -177,6 +185,11 @@ final class BrowserSession: NSObject, ObservableObject {
         // Pages follow the Mac, and keep following it when it changes.
         // Off unless the person turned it on in Settings; it lets Safari's
         // Develop menu attach the Web Inspector to this page.
+        // The size chosen in Settings → General. `pageZoom` is initialised from
+        // the same preference, but that only sets the number this object
+        // publishes — WKWebView starts at 1.0 regardless, so without this line
+        // the setting moves a number and never the page.
+        webView.pageZoom = pageZoom
         webView.isInspectable = webFeatures?.showsDeveloperFeatures ?? false
         webView.appearance = NSApp.effectiveAppearance
         webView.navigationDelegate = self

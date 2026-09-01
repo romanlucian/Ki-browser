@@ -57,6 +57,8 @@ final class BrowserDataStore: ObservableObject {
     private let historyKey = "clearframe.history.v1"
     private let workspaceKey = "clearframe.workspace.v1"
     private let restoreTabsKey = "clearframe.restoreTabs"
+    private let startupBehaviourKey = "clearframe.startupBehaviour"
+    private let startupPageKey = "clearframe.startupPage"
     private let reloadRestoredTabsKey = "clearframe.reloadRestoredTabs"
     private let saveHistoryKey = "clearframe.saveHistory"
     private let showsBookmarksBarKey = "clearframe.showBookmarksBar"
@@ -118,6 +120,50 @@ final class BrowserDataStore: ObservableObject {
 
     var restoresTabs: Bool {
         defaults.bool(forKey: restoreTabsKey)
+    }
+
+    /// What a window shows when Limeghost starts.
+    ///
+    /// Stored here rather than in `BrowserPreferences` because it is a
+    /// **per-profile** answer: this store is built with the current profile's
+    /// defaults suite, and `restoresTabs` — which decides whether a session is
+    /// written at all — is read from that same suite. A copy in the standard
+    /// suite would be invisible to every profile but the default one, so the
+    /// picker would appear to do nothing on any other.
+    ///
+    /// Seeded from `restoresTabs`, which is the answer somebody already gave
+    /// when this was a checkbox.
+    var startupBehaviour: StartupBehaviour {
+        get {
+            defaults.string(forKey: startupBehaviourKey).flatMap(StartupBehaviour.init(rawValue:))
+                ?? (restoresTabs ? .restore : .newTab)
+        }
+        set {
+            objectWillChange.send()
+            defaults.set(newValue.rawValue, forKey: startupBehaviourKey)
+            defaults.set(newValue == .restore, forKey: restoreTabsKey)
+            // The session on disk is a record of tabs somebody has just said
+            // they do not want restored. It went unerased when this moved out
+            // of the old settings Form, so it is deleted here, where the
+            // decision is made, rather than in a view that may not exist.
+            if newValue != .restore { clearSavedWorkspace() }
+        }
+    }
+
+    /// The address `startupBehaviour == .specificPage` opens, as typed.
+    var startupPage: String {
+        get { defaults.string(forKey: startupPageKey) ?? "" }
+        set {
+            objectWillChange.send()
+            defaults.set(newValue, forKey: startupPageKey)
+        }
+    }
+
+    /// The page to open at launch, or nil when the choice is not a specific
+    /// page or what is stored is not a page Limeghost will open.
+    var startupURL: URL? {
+        guard startupBehaviour == .specificPage else { return nil }
+        return WebURLPolicy.validatedURL(startupPage)
     }
 
     /// Whether every restored tab loads its page at start, rather than the

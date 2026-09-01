@@ -3,13 +3,8 @@ import Combine
 import Foundation
 import LimeghostCore
 
-/// What a new window shows when Limeghost starts.
-///
-/// Stored as the existing `clearframe.restoreTabs` boolean plus a page,
-/// deliberately: that key is what `BrowserDataStore` already reads to decide
-/// whether to write a session at all, and giving the choice a second home would
-/// mean two sources of truth for one behaviour. This enum is a reading of that
-/// key, not a replacement for it.
+/// What a window shows when Limeghost starts. Stored per profile on
+/// `BrowserDataStore`, beside the `restoreTabs` key it writes.
 enum StartupBehaviour: String, CaseIterable, Identifiable {
     case newTab
     case restore
@@ -44,8 +39,14 @@ enum HomeTarget: String, CaseIterable, Identifiable {
 }
 
 /// The preferences an ordinary person goes looking for and, until September 1,
-/// 2026, could not find: what opens at start, where Home goes, how big page
-/// text is, and where downloaded files are saved.
+/// 2026, could not find: where Home goes, how big page text is, and where
+/// downloaded files are saved.
+///
+/// Application-wide, in the standard suite. What opens at start deliberately
+/// is **not** here: it decides whether a session is written, which is a
+/// per-profile question, so it lives on `BrowserDataStore` beside the profile's
+/// own `restoreTabs`. A copy here would be invisible to every profile but the
+/// default one.
 ///
 /// One store rather than scattered `@AppStorage`, because several of these are
 /// read from outside a view — `BrowserTab.goHome`, `DownloadCenter`, and every
@@ -58,42 +59,6 @@ final class BrowserPreferences: ObservableObject {
     static let shared = BrowserPreferences()
 
     private let defaults: UserDefaults
-
-    // MARK: - Start-up
-
-    @Published var startup: StartupBehaviour {
-        didSet {
-            // `restoreTabs` stays authoritative for whether a session is
-            // written at all, so it is set from here rather than shadowed.
-            defaults.set(startup == .restore, forKey: Keys.restoreTabs)
-            defaults.set(startup.rawValue, forKey: Keys.startup)
-        }
-    }
-
-    @Published var startupPage: String {
-        didSet { defaults.set(startupPage, forKey: Keys.startupPage) }
-    }
-
-    /// The address to open at start, or nil when the choice is not a specific
-    /// page or the one stored is not a page Limeghost will open.
-    var startupURL: URL? {
-        guard startup == .specificPage else { return nil }
-        return WebURLPolicy.validatedURL(startupPage)
-    }
-
-    private var startupURLWasTaken = false
-
-    /// The start-up page, once per launch.
-    ///
-    /// The setting reads "when Limeghost opens", and a window built by ⌘N is
-    /// not Limeghost opening. Without this the chosen page would reappear every
-    /// time somebody made a window, which is a homepage — a different setting
-    /// that this product does not have.
-    func takeStartupURL() -> URL? {
-        guard !startupURLWasTaken else { return nil }
-        startupURLWasTaken = true
-        return startupURL
-    }
 
     // MARK: - Home
 
@@ -165,17 +130,6 @@ final class BrowserPreferences: ObservableObject {
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
 
-        // No stored choice means this is somebody who has used Limeghost
-        // before the setting existed. Their `restoreTabs` answer is the choice
-        // they already made, so it is read rather than overwritten.
-        if let raw = defaults.string(forKey: Keys.startup),
-           let stored = StartupBehaviour(rawValue: raw) {
-            startup = stored
-        } else {
-            startup = defaults.bool(forKey: Keys.restoreTabs) ? .restore : .newTab
-        }
-        startupPage = defaults.string(forKey: Keys.startupPage) ?? ""
-
         homeTarget = defaults.string(forKey: Keys.homeTarget)
             .flatMap(HomeTarget.init(rawValue:)) ?? .aiGuide
         homePage = defaults.string(forKey: Keys.homePage) ?? ""
@@ -188,9 +142,6 @@ final class BrowserPreferences: ObservableObject {
     }
 
     private enum Keys {
-        static let restoreTabs = "clearframe.restoreTabs"
-        static let startup = "clearframe.startupBehaviour"
-        static let startupPage = "clearframe.startupPage"
         static let homeTarget = "clearframe.homeTarget"
         static let homePage = "clearframe.homePage"
         static let defaultPageZoom = "clearframe.defaultPageZoom"

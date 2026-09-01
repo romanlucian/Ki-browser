@@ -636,42 +636,81 @@ final class BrowserBehaviorTests: XCTestCase {
     /// picker already answered this question, as a checkbox. Reading their
     /// `restoreTabs` answer is the difference between the picker showing what
     /// they chose and silently telling them their tabs will not come back.
-    /// Nothing on screen would look wrong either way.
     func testTheStartupPickerInheritsTheAnswerSomebodyAlreadyGave() {
         let restoring = emptyDefaults("restoring")
         restoring.set(true, forKey: "clearframe.restoreTabs")
-        XCTAssertEqual(BrowserPreferences(defaults: restoring).startup, .restore)
+        XCTAssertEqual(BrowserDataStore(defaults: restoring).startupBehaviour, .restore)
 
         let notRestoring = emptyDefaults("notRestoring")
         notRestoring.set(false, forKey: "clearframe.restoreTabs")
-        XCTAssertEqual(BrowserPreferences(defaults: notRestoring).startup, .newTab)
-
-        // And the picker keeps that key authoritative, because it is what
-        // BrowserDataStore reads to decide whether to write a session at all.
-        let writing = emptyDefaults("writing")
-        let preferences = BrowserPreferences(defaults: writing)
-        preferences.startup = .restore
-        XCTAssertTrue(writing.bool(forKey: "clearframe.restoreTabs"))
-        preferences.startup = .specificPage
-        XCTAssertFalse(writing.bool(forKey: "clearframe.restoreTabs"))
+        XCTAssertEqual(BrowserDataStore(defaults: notRestoring).startupBehaviour, .newTab)
     }
 
-    /// "When Limeghost opens" must mean the launch, not every window. Without
-    /// the one-shot, ⌘N would reopen the chosen page forever — which is a
-    /// homepage, a different setting this product does not have.
-    func testTheStartupPageOpensOncePerLaunchAndNotOnEveryWindow() {
-        let preferences = BrowserPreferences(defaults: emptyDefaults("startupOnce"))
-        preferences.startup = .specificPage
-        preferences.startupPage = "https://example.org/start"
+    /// Start-up lives on the profile's own store, not in the standard suite.
+    ///
+    /// Every profile but the default gets its own defaults suite, and it is
+    /// that suite `restoresTabs` is read from when deciding whether to write a
+    /// session. A copy in the standard suite would be invisible to every other
+    /// profile — the picker would appear to do nothing there, and nothing on
+    /// screen would say why.
+    func testStartupIsWrittenWhereTheProfileWillReadIt() {
+        let profileSuite = emptyDefaults("profile")
+        let store = BrowserDataStore(defaults: profileSuite)
 
-        XCTAssertEqual(preferences.takeStartupURL()?.absoluteString, "https://example.org/start")
-        XCTAssertNil(preferences.takeStartupURL(), "a second window would reopen the start page")
-        XCTAssertNil(preferences.takeStartupURL())
+        store.startupBehaviour = .restore
+        XCTAssertTrue(profileSuite.bool(forKey: "clearframe.restoreTabs"))
+        XCTAssertTrue(store.restoresTabs, "the store that decides restoration disagrees with the picker")
 
-        let bad = BrowserPreferences(defaults: emptyDefaults("badStartup"))
-        bad.startup = .specificPage
-        bad.startupPage = "not a url at all"
-        XCTAssertNil(bad.takeStartupURL())
+        store.startupBehaviour = .specificPage
+        XCTAssertFalse(profileSuite.bool(forKey: "clearframe.restoreTabs"))
+        XCTAssertFalse(store.restoresTabs)
+
+        store.startupPage = "https://example.org/start"
+        XCTAssertEqual(store.startupURL?.absoluteString, "https://example.org/start")
+
+        // An address that does not parse must not be handed to a tab.
+        store.startupPage = "not a url at all"
+        XCTAssertNil(store.startupURL)
+
+        // And a page is only opened when that is the choice.
+        store.startupBehaviour = .newTab
+        store.startupPage = "https://example.org/start"
+        XCTAssertNil(store.startupURL)
+    }
+
+    /// Choosing away from "the tabs I had open" has to erase the tabs already
+    /// on disk. The old settings Form did this in an `onChange` that was lost
+    /// when Settings moved to a sidebar, leaving a URL-and-title snapshot
+    /// sitting there while the interface said no record was kept.
+    func testTurningRestorationOffErasesTheSessionAlreadySaved() {
+        let defaults = emptyDefaults("erase")
+        let store = BrowserDataStore(defaults: defaults)
+        store.startupBehaviour = .restore
+        store.saveWorkspace(
+            BrowserWorkspaceSnapshot(
+                tabs: [BrowserTabRecord(
+                    id: UUID(),
+                    url: "https://example.org/a",
+                    title: "A",
+                    lastActivatedAt: Date(),
+                    groupID: nil,
+                    isPinned: false
+                )],
+                selectedTabID: nil,
+                groups: []
+            )
+        )
+        // Read the stored value, not `loadWorkspace()`: that guards on
+        // `restoresTabs` and returns nil once restoration is off whether or not
+        // anything was erased. The claim being tested is that the record leaves
+        // disk, because the interface says no record is kept.
+        XCTAssertNotNil(defaults.object(forKey: "clearframe.workspace.v1"), "the fixture did not save")
+
+        store.startupBehaviour = .newTab
+        XCTAssertNil(
+            defaults.object(forKey: "clearframe.workspace.v1"),
+            "the saved tab session is still on disk after somebody chose not to restore it"
+        )
     }
 
     /// Saving without asking has to refuse a folder it cannot write to. The app
@@ -729,6 +768,92 @@ final class BrowserBehaviorTests: XCTestCase {
         let noExtension = DownloadCenter.availableURL(in: folder, named: "notes")
         try "x".write(to: noExtension, atomically: true, encoding: .utf8)
         XCTAssertEqual(DownloadCenter.availableURL(in: folder, named: "notes").lastPathComponent, "notes 2")
+    }
+
+    /// The default text size has to reach the page, not just the number the
+    /// session publishes.
+    ///
+    /// This shipped broken: `pageZoom` was initialised from the preference and
+    /// `webView.pageZoom` was left at WKWebView's own 1.0, so Settings moved a
+    /// figure in the chrome and no page ever changed size. Nothing failed, and
+    /// the setting looked like it worked until you read a page.
+    @MainActor
+    func testTheDefaultTextSizeReachesTheWebViewAndNotOnlyTheNumber() {
+        // A size that is not 1.0 on purpose: the first version of this test
+        // compared the default to the default and passed with the wiring gone.
+        let chosen: CGFloat = 1.5
+        let session = BrowserSession(
+            downloadCenter: DownloadCenter(),
+            searchSettings: SearchSettingsStore(defaults: emptyDefaults("zoomSearch")),
+            initialPageZoom: chosen
+        )
+        XCTAssertEqual(session.pageZoom, chosen)
+        XCTAssertEqual(
+            session.webView.pageZoom,
+            chosen,
+            "the page is not at the size the session reports"
+        )
+
+        // ⌘0 still means 100%, not "back to the preference".
+        session.resetPageZoom()
+        XCTAssertEqual(session.webView.pageZoom, BrowserSession.defaultPageZoom)
+        XCTAssertNotEqual(chosen, BrowserSession.defaultPageZoom, "the fixture must differ from 1.0")
+    }
+
+    /// A download saved without asking has to enter the same state the panel
+    /// path puts it in.
+    ///
+    /// This shipped broken: the direct branch called the completion handler and
+    /// returned, skipping the filename, destination and `.downloading` updates.
+    /// The shelf sat on "Choose where to save" for the whole transfer, and
+    /// Reveal afterwards did nothing because the item never learned where the
+    /// file went. Nothing failed and nothing was red.
+    @MainActor
+    func testASilentDownloadStillRecordsWhereTheFileWent() throws {
+        let folder = FileManager.default.temporaryDirectory
+            .appendingPathComponent("limeghost-silent-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+
+        let preferences = BrowserPreferences.shared
+        let previousAsks = preferences.asksWhereToSave
+        let previousPath = preferences.downloadFolderPath
+        defer {
+            preferences.asksWhereToSave = previousAsks
+            preferences.downloadFolderPath = previousPath
+        }
+        preferences.asksWhereToSave = false
+        preferences.downloadFolderPath = folder.path
+
+        // Open Downloads Folder has to follow the file, not open ~/Downloads
+        // and leave somebody hunting in an empty folder.
+        XCTAssertEqual(preferences.resolvedDownloadFolder?.path, folder.path)
+    }
+
+    /// The collision loop must never hand back a name that is already taken —
+    /// WKDownload refuses to write over an existing file and reports only
+    /// "failed", with nothing saying why.
+    func testTheCollisionLoopNeverReturnsAnOccupiedName() throws {
+        let folder = FileManager.default.temporaryDirectory
+            .appendingPathComponent("limeghost-collide-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+
+        // Fill every suffix the loop walks, plus the original.
+        try "x".write(to: folder.appendingPathComponent("f.txt"), atomically: true, encoding: .utf8)
+        for suffix in 2...999 {
+            try "x".write(
+                to: folder.appendingPathComponent("f \(suffix).txt"),
+                atomically: true,
+                encoding: .utf8
+            )
+        }
+
+        let chosen = DownloadCenter.availableURL(in: folder, named: "f.txt")
+        XCTAssertFalse(
+            FileManager.default.fileExists(atPath: chosen.path),
+            "handed back a name that already exists: \(chosen.lastPathComponent)"
+        )
     }
 
     /// A Home address that stops parsing must not strand Home on a blank tab.

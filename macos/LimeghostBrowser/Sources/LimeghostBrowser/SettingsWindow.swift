@@ -102,17 +102,33 @@ struct LimeghostSettingsView: View {
 private struct GeneralSettingsPage: View {
     @EnvironmentObject private var onboarding: OnboardingController
     @ObservedObject private var preferences = BrowserPreferences.shared
+    /// Start-up is per profile, so it is read from this profile's store rather
+    /// than the application-wide preferences.
+    @ObservedObject private var dataStore = BrowserServices.shared.dataStore
 
     var body: some View {
         Form {
             DefaultBrowserSettingsSection()
 
             Section("Start-up") {
-                Picker("When Limeghost opens, show", selection: $preferences.startup) {
+                Picker(
+                    "When Limeghost opens, show",
+                    selection: Binding(
+                        get: { dataStore.startupBehaviour },
+                        set: { dataStore.startupBehaviour = $0 }
+                    )
+                ) {
                     ForEach(StartupBehaviour.allCases) { Text($0.title).tag($0) }
                 }
-                if preferences.startup == .specificPage {
-                    TextField("Address", text: $preferences.startupPage, prompt: Text("example.com"))
+                if dataStore.startupBehaviour == .specificPage {
+                    TextField(
+                        "Address",
+                        text: Binding(
+                            get: { dataStore.startupPage },
+                            set: { dataStore.startupPage = $0 }
+                        ),
+                        prompt: Text("example.com")
+                    )
                 }
                 Text(startupExplanation)
                     .font(.caption)
@@ -163,7 +179,7 @@ private struct GeneralSettingsPage: View {
     }
 
     private var startupExplanation: String {
-        switch preferences.startup {
+        switch dataStore.startupBehaviour {
         case .newTab:
             return "Limeghost opens on the AI guide and keeps no record of the tabs you had open."
         case .restore:
@@ -188,19 +204,19 @@ private struct SearchSettingsPage: View {
 // MARK: - Tabs
 
 private struct TabsSettingsPage: View {
-    @ObservedObject private var preferences = BrowserPreferences.shared
+    @ObservedObject private var dataStore = BrowserServices.shared.dataStore
     @AppStorage("clearframe.reloadRestoredTabs") private var reloadsRestoredTabs = false
 
     var body: some View {
         Form {
             Section("Restoring") {
                 Toggle("Load every restored tab at start", isOn: $reloadsRestoredTabs)
-                    .disabled(preferences.startup != .restore)
+                    .disabled(dataStore.startupBehaviour != .restore)
                 Text("Off by default, as in other browsers: the tab you were on loads, and the rest load the first time you open them. They are all there with their names and site icons either way. Turning this on opens every page at start, which costs a burst of network and memory in exchange for pages already loaded when you get to them.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
-                if preferences.startup != .restore {
+                if dataStore.startupBehaviour != .restore {
                     Text("Available when start-up is set to open the tabs you had open, in General.")
                         .font(.caption2)
                         .foregroundStyle(.tertiary)

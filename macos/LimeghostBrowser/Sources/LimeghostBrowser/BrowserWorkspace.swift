@@ -267,6 +267,13 @@ final class BrowserTab: ObservableObject, Identifiable {
 
 @MainActor
 final class BrowserWorkspace: ObservableObject {
+    /// Whether this process has already built a non-private window.
+    ///
+    /// The start-up page belongs to the launch, and a window made with ⌘N is
+    /// not the launch. Set on every path — including the restored session,
+    /// which never asks for a start page — because leaving it unset there is
+    /// what let the next ⌘N open the launch page an hour later.
+    private static var launchWindowWasBuilt = false
     @Published private(set) var tabs: [BrowserTab] = []
     /// Tab groups in creation order. A group exists only while at least one
     /// tab belongs to it; closing or ungrouping the last member removes it.
@@ -464,9 +471,10 @@ final class BrowserWorkspace: ObservableObject {
             }
         } else {
             // Settings → General can open a chosen page at launch. Never in a
-            // private window, which adopts and restores nothing by design, and
-            // only once per launch — see `takeStartupURL`.
-            let launchURL = isPrivate ? nil : BrowserPreferences.shared.takeStartupURL()
+            // private window, which adopts and restores nothing by design.
+            let launchURL = (isPrivate || BrowserWorkspace.launchWindowWasBuilt)
+                ? nil
+                : resolvedDataStore.startupURL
             let tab = BrowserTab(
                 initialURL: launchURL,
                 downloadCenter: resolvedDownloads,
@@ -480,6 +488,11 @@ final class BrowserWorkspace: ObservableObject {
             tabs = [tab]
             selectedTabID = tab.id
         }
+
+        // Claimed whichever branch built this window, including the restored
+        // one that never asks for a start page: leaving it unclaimed there is
+        // what let a later ⌘N open the launch page mid-session.
+        if !isPrivate { BrowserWorkspace.launchWindowWasBuilt = true }
 
         tabs.forEach(configure)
         selectedTab?.activate()

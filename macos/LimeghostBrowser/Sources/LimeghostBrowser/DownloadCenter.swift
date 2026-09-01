@@ -58,9 +58,13 @@ final class DownloadCenter: NSObject, ObservableObject {
         isPanelPresented.toggle()
     }
 
+    /// Opens where files are actually being saved, which is the folder chosen
+    /// in Settings when Limeghost is not asking, and the Mac's own Downloads
+    /// otherwise. Opening `~/Downloads` while writing somewhere else sends
+    /// somebody to an empty folder to look for a file that is not there.
     func openDownloadsFolder() {
-        guard let downloadsDirectory else { return }
-        NSWorkspace.shared.open(downloadsDirectory)
+        guard let folder = BrowserPreferences.shared.resolvedDownloadFolder ?? downloadsDirectory else { return }
+        NSWorkspace.shared.open(folder)
     }
 
     func track(_ download: WKDownload, sourceURL: URL?) {
@@ -147,7 +151,12 @@ extension DownloadCenter {
             let next = folder.appendingPathComponent(name)
             if !FileManager.default.fileExists(atPath: next.path) { return next }
         }
-        return candidate
+        // Nine hundred and ninety-nine of one name is absurd, but returning the
+        // occupied original would hand WKDownload a destination it fails on.
+        // A stamped name is ugly and free.
+        let stamp = UUID().uuidString.prefix(8)
+        let name = ext.isEmpty ? "\(base) \(stamp)" : "\(base) \(stamp).\(ext)"
+        return folder.appendingPathComponent(name)
     }
 }
 
@@ -173,6 +182,15 @@ extension DownloadCenter: WKDownloadDelegate {
         // "failed" is not.
         if let folder = BrowserPreferences.shared.resolvedDownloadFolder {
             let destination = Self.availableURL(in: folder, named: safeFilename)
+            // The same bookkeeping the panel path does below. Without it the
+            // shelf sits on "Choose where to save" for the whole transfer and
+            // Reveal does nothing afterwards, because the item never learns
+            // where the file went.
+            update(id) {
+                $0.filename = destination.lastPathComponent
+                $0.destinationURL = destination
+                $0.status = .downloading
+            }
             completionHandler(destination)
             return
         }
