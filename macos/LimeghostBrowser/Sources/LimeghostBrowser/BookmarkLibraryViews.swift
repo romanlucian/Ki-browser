@@ -439,7 +439,6 @@ struct BookmarkFolderEditor: View {
     @State private var title: String
     @State private var iconID: String
     @State private var color: LimeghostIconColor
-    @State private var search = ""
     @State private var style: LimeghostIconStyle
 
     init(request: BookmarkFolderEditorRequest, save: @escaping (String, String, String) -> Void) {
@@ -453,22 +452,6 @@ struct BookmarkFolderEditor: View {
         _style = State(initialValue: LimeghostIconCatalog.icon(id: request.iconID)?.style ?? .limeghost)
     }
 
-    /// Matches on the icon's own name and its category, so "work" finds the
-    /// whole work set and "plane" finds the one icon. Scoped to the chosen
-    /// style: the sets are different visual languages, and a grid that mixed
-    /// them would invite a bar that mixes them too.
-    private var matches: [LimeghostIconCategory: [LimeghostIcon]] {
-        let query = search.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard !query.isEmpty else { return LimeghostIconCatalog.byCategory(style: style) }
-        var result: [LimeghostIconCategory: [LimeghostIcon]] = [:]
-        for category in LimeghostIconCategory.allCases {
-            let icons = LimeghostIconCatalog.icons(in: category, style: style).filter {
-                $0.displayName.contains(query) || category.title.lowercased().contains(query)
-            }
-            if !icons.isEmpty { result[category] = icons }
-        }
-        return result
-    }
 
     /// Whether the grid currently being browsed is tintable. Drives how its
     /// cells draw.
@@ -502,18 +485,14 @@ struct BookmarkFolderEditor: View {
 
             Divider()
 
-            stylePicker
-
-            TextField("Search icons", text: $search)
-                .textFieldStyle(.roundedBorder)
-
-            iconGrid
-
-            if let attribution = style.attribution {
-                Text(attribution)
-                    .font(.system(size: 10.5))
-                    .foregroundStyle(LimeghostTheme.textTertiary)
-            }
+            // The set chooser, search and grid live in `LimeghostIconPicker`
+            // so the profile editor offers the same 1,465 drawings through the
+            // same code. Two grids is how a search fix reaches one of them.
+            LimeghostIconPicker(
+                iconID: $iconID,
+                style: $style,
+                tint: selectedIsTintable ? Color(color) : nil
+            )
 
             HStack {
                 Spacer()
@@ -546,21 +525,6 @@ struct BookmarkFolderEditor: View {
         .background(LimeghostTheme.bg3, in: RoundedRectangle(cornerRadius: LimeghostTheme.radius9))
     }
 
-    /// The sets are separate styles rather than one mixed grid. Switching here
-    /// changes what the grid offers; it never rewrites the folder's icon, so
-    /// looking around costs nothing until something is picked.
-    private var stylePicker: some View {
-        Picker("Icon set", selection: $style) {
-            ForEach(LimeghostIconCatalog.availableStyles, id: \.self) { option in
-                Text(option.title).tag(option)
-            }
-        }
-        .pickerStyle(.segmented)
-        .labelsHidden()
-        .help(style.subtitle)
-        .accessibilityLabel("Icon set")
-        .accessibilityHint(style.subtitle)
-    }
 
     /// Four tints, not a colour well: the set holds together because it is
     /// drawn in one of these. Shown only for artwork that named no colour of
@@ -586,73 +550,7 @@ struct BookmarkFolderEditor: View {
         }
     }
 
-    private var iconGrid: some View {
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: 14, pinnedViews: []) {
-                ForEach(LimeghostIconCategory.allCases, id: \.self) { category in
-                    if let icons = matches[category], !icons.isEmpty {
-                        VStack(alignment: .leading, spacing: 7) {
-                            Text(category.title.uppercased())
-                                .font(LimeghostTheme.metaFont)
-                                .tracking(LimeghostTheme.metaTracking)
-                                .foregroundStyle(LimeghostTheme.textTertiary)
-                            LazyVGrid(
-                                columns: [GridItem(.adaptive(minimum: 38, maximum: 38), spacing: 6)],
-                                alignment: .leading,
-                                spacing: 6
-                            ) {
-                                ForEach(icons) { icon in
-                                    iconCell(icon)
-                                }
-                            }
-                        }
-                    }
-                }
-                if matches.isEmpty {
-                    Text("No icon matches “\(search)”.")
-                        .font(.callout)
-                        .foregroundStyle(LimeghostTheme.textSecondary)
-                        .padding(.vertical, 18)
-                }
-            }
-            .padding(.vertical, 2)
-        }
-        .frame(height: 240)
-    }
 
-    private func iconCell(_ icon: LimeghostIcon) -> some View {
-        let isSelected = icon.id == iconID
-        return Button { iconID = icon.id } label: {
-            cellArtwork(icon, isSelected: isSelected)
-                .frame(width: 38, height: 38)
-                .background(
-                    // A tintable icon inverts into its tint when chosen. A
-                    // multicolour one cannot — recolouring it would do nothing
-                    // — so selection is a ring around artwork left alone.
-                    isSelected && isTintable ? Color(color) : LimeghostTheme.bg3,
-                    in: RoundedRectangle(cornerRadius: LimeghostTheme.radius6)
-                )
-                .overlay {
-                    if isSelected && !isTintable {
-                        RoundedRectangle(cornerRadius: LimeghostTheme.radius6)
-                            .stroke(LimeghostTheme.accent, lineWidth: 2)
-                    }
-                }
-        }
-        .buttonStyle(.plain)
-        .help(icon.displayName)
-        .accessibilityLabel(icon.displayName)
-        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
-    }
 
-    @ViewBuilder
-    private func cellArtwork(_ icon: LimeghostIcon, isSelected: Bool) -> some View {
-        let artwork = LimeghostIconView(iconID: icon.id, size: 22)
-        if isTintable {
-            artwork.foregroundStyle(isSelected ? LimeghostTheme.bg0 : Color(color))
-        } else {
-            artwork
-        }
-    }
 }
 

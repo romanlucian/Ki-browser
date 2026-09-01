@@ -53,6 +53,7 @@ private struct BrowserTabContent: View {
     static let minimumReadableWidth: CGFloat = 600
 
     @ObservedObject var tab: BrowserTab
+    @ObservedObject private var profiles = BrowserServices.shared.profiles
     @ObservedObject private var session: BrowserSession
     @ObservedObject private var find: PageFindController
     @ObservedObject var workspace: BrowserWorkspace
@@ -70,8 +71,25 @@ private struct BrowserTabContent: View {
         _addressText = State(initialValue: tab.session.currentURLString)
     }
 
+    private var profileColorID: String {
+        profiles.profile(workspace.profileID)?.colorID ?? TabGroupRecord.colorIDs[1]
+    }
+
     var body: some View {
         VStack(spacing: 0) {
+            // Which profile this window belongs to, told without words.
+            //
+            // Only when there is more than one: somebody who never makes a
+            // second profile should never see a stripe they cannot explain.
+            // Three points, at the very top, and nowhere else — the chrome's
+            // colour comes from LimeghostTheme and stays there.
+            if BrowserServices.shared.profiles.profiles.count > 1 {
+                Rectangle()
+                    .fill(Color(TabGroupPalette.color(for: profileColorID)))
+                    .frame(height: 3)
+                    .accessibilityHidden(true)
+            }
+
             BrowserToolbar(
                 session: session,
                 workspace: workspace,
@@ -324,6 +342,14 @@ private struct BrowserToolbar: View {
     @StateObject private var voiceInput = VoiceInputController()
     @State private var folderEditorRequest: BookmarkFolderEditorRequest?
     @State private var showsBookmarkImport = false
+    /// The profile being edited, if one is. One sheet for naming, colouring,
+    /// choosing a drawing and choosing a picture — it replaced two prompts
+    /// that could set a name and nothing else.
+    ///
+    /// Wrapped rather than a bare `UUID`, which is not `Identifiable` and so
+    /// cannot drive `.sheet(item:)` on its own.
+    @State private var editingProfileID: EditedProfile?
+    @Environment(\.openWindow) private var openWindow
     /// Which suggestion row is highlighted. Row zero is the best answer, so
     /// Return without touching the arrows does what the field already shows.
     @State private var suggestionSelection = 0
@@ -442,12 +468,21 @@ private struct BrowserToolbar: View {
                         RoundedRectangle(cornerRadius: LimeghostTheme.radius10)
                             .stroke(LimeghostTheme.groupOutline, lineWidth: 1)
                     )
+
+                    profileChip
                 }
             }
             .padding(.horizontal, 10)
             .frame(height: 44)
             .background(LimeghostTheme.bg1)
             .zIndex(1)
+            .sheet(item: $editingProfileID) { edited in
+                ProfileEditor(
+                    profiles: BrowserServices.shared.profiles,
+                    profileID: edited.id,
+                    dismiss: { editingProfileID = nil }
+                )
+            }
 
             if dataStore.showsBookmarksBar {
                 // No divider: the bar continues the toolbar's own bg1 plane
@@ -539,6 +574,33 @@ private struct BrowserToolbar: View {
     ///
     /// Reader is a toggle, and closing it costs nothing to reopen — the page is
     /// still loaded underneath, and reading it again is one extraction.
+    /// The profile control, at the window's own edge, where an account control
+    /// sits in every other browser.
+    ///
+    /// Its own property rather than another item inline: the toolbar's HStack
+    /// had grown past what Swift will type-check in one expression, and the
+    /// compiler said so rather than merely getting slower.
+    private var profileChip: some View {
+        ProfileSwitcherChip(
+            profiles: BrowserServices.shared.profiles,
+            currentProfileID: workspace.profileID,
+            openWindow: { id in
+                let services = BrowserServices.shared
+                services.profiles.setCurrent(id)
+                services.markNextWindow(profileID: id)
+                openWindow(id: BrowserWindowScene.id)
+            },
+            edit: { editingProfileID = EditedProfile(id: $0) },
+            addProfile: {
+                // Created first, then named in the sheet: a profile with a
+                // face and a colour to choose is a better first impression
+                // than a bare "what shall we call it?" box.
+                let created = BrowserServices.shared.profiles.addProfile(name: "New profile")
+                editingProfileID = EditedProfile(id: created.id)
+            }
+        )
+    }
+
     private func toggleReader() async {
         guard tab.readerArticle == nil else {
             tab.readerArticle = nil

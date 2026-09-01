@@ -932,6 +932,89 @@ final class BrowserBehaviorTests: XCTestCase {
         )
     }
 
+    /// A profile saved before avatars existed has to keep working.
+    ///
+    /// `iconID` and `pictureFileName` were added on September 1, 2026. They are
+    /// optional so the synthesised decoder uses `decodeIfPresent` and old JSON
+    /// still reads — but "optional so it should be fine" is exactly the kind of
+    /// assumption that strands somebody's profiles, so it is decoded here from
+    /// the shape that was actually stored.
+    func testAProfileStoredBeforeAvatarsExistedStillDecodes() throws {
+        let stored = """
+        {"id":"11111111-2222-3333-4444-555555555555","name":"Work","colorID":"mint"}
+        """
+        let record = try JSONDecoder().decode(BrowserProfileRecord.self, from: Data(stored.utf8))
+        XCTAssertEqual(record.name, "Work")
+        XCTAssertEqual(record.colorID, "mint")
+        XCTAssertNil(record.iconID, "an old profile must not arrive with an icon it never chose")
+        XCTAssertNil(record.pictureFileName)
+        // And it still draws the thing it always drew.
+        XCTAssertEqual(record.initials, "W")
+    }
+
+    /// Choosing a drawing and choosing a picture are the same decision, so one
+    /// must clear the other. Otherwise a picture stays on disk behind an icon
+    /// and reappears the moment the icon is cleared.
+    @MainActor
+    func testAPictureAndADrawingCannotBothWin() throws {
+        let store = ProfileStore(defaults: emptyDefaults("avatars"))
+        let created = store.addProfile(name: "Design")
+
+        let drawing = try XCTUnwrap(LimeghostIconCatalog.all.first { $0.style == .limeghost })
+        store.setIcon(drawing.id, for: created.id)
+        XCTAssertEqual(store.profile(created.id)?.iconID, drawing.id)
+        XCTAssertNil(store.profile(created.id)?.pictureFileName)
+
+        // A drawing that is not in the catalogue is refused rather than stored
+        // and then silently ignored at draw time.
+        store.setIcon("not-a-real-icon", for: created.id)
+        XCTAssertEqual(store.profile(created.id)?.iconID, drawing.id, "an unknown icon id was accepted")
+
+        // Clearing returns the profile to its coloured initials.
+        store.setIcon(nil, for: created.id)
+        XCTAssertNil(store.profile(created.id)?.iconID)
+    }
+
+    /// A picture is copied in and centre-cropped, not referenced where it sits.
+    /// An avatar that vanishes when somebody tidies their Desktop is worse than
+    /// no avatar.
+    @MainActor
+    func testAProfilePictureIsCopiedInAndCroppedSquare() throws {
+        let store = ProfileStore(defaults: emptyDefaults("pictures"))
+        let created = store.addProfile(name: "Personal")
+
+        // A deliberately non-square source, so a squashed result would show.
+        let source = FileManager.default.temporaryDirectory
+            .appendingPathComponent("limeghost-avatar-\(UUID().uuidString).png")
+        let wide = NSImage(size: CGSize(width: 400, height: 100))
+        wide.lockFocus()
+        NSColor.systemTeal.drawSwatch(in: CGRect(x: 0, y: 0, width: 400, height: 100))
+        wide.unlockFocus()
+        let png = try XCTUnwrap(ProfileStore.squareAvatarPNG(from: wide, side: 400))
+        try png.write(to: source)
+        defer { try? FileManager.default.removeItem(at: source) }
+
+        XCTAssertTrue(store.setPicture(from: source, for: created.id))
+        let stored = try XCTUnwrap(store.profile(created.id)?.pictureFileName)
+        XCTAssertTrue(stored.hasSuffix(".png"))
+
+        let copied = try XCTUnwrap(store.pictureURL(for: try XCTUnwrap(store.profile(created.id))))
+        XCTAssertNotEqual(copied.path, source.path, "the picture was referenced rather than copied")
+        let image = try XCTUnwrap(NSImage(contentsOf: copied))
+        XCTAssertEqual(image.size.width, image.size.height, "the stored avatar is not square")
+
+        // Deleting the original must not take the avatar with it.
+        try FileManager.default.removeItem(at: source)
+        XCTAssertNotNil(store.pictureURL(for: try XCTUnwrap(store.profile(created.id))))
+
+        // A file that is not an image is refused, so the editor can say so.
+        let notAnImage = FileManager.default.temporaryDirectory
+            .appendingPathComponent("limeghost-notimage-\(UUID().uuidString).txt")
+        try "hello".write(to: notAnImage, atomically: true, encoding: .utf8)
+        defer { try? FileManager.default.removeItem(at: notAnImage) }
+        XCTAssertFalse(store.setPicture(from: notAnImage, for: created.id))
+    }
+
     func testTheBrandMarkIsActuallyInTheAppBundle() {
         XCTAssertTrue(
             BrandMark.isAvailable,

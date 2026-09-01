@@ -767,13 +767,35 @@ public struct BrowserProfileRecord: Codable, Equatable, Identifiable, Sendable {
     /// One of `TabGroupRecord.colorIDs`, so profiles and tab groups draw from
     /// the same palette rather than two that drift apart.
     public var colorID: String
+    /// A drawing from `LimeghostIconCatalog`, or nil for the coloured initial.
+    ///
+    /// Optional so that every profile stored before September 1, 2026 decodes
+    /// without migration code and keeps the initial it has always drawn. The
+    /// catalogue is the one bookmark folders already use — 1,465 drawings that
+    /// were already licensed, already shipped, and doing nothing here.
+    public var iconID: String?
+    /// A picture the person chose, stored inside this profile's own folder.
+    ///
+    /// A file name rather than a path: the original may be moved or deleted,
+    /// and a profile avatar that vanishes when somebody tidies their Desktop
+    /// is worse than no avatar. The file is copied in and belongs to Limeghost
+    /// from then on. It takes precedence over `iconID`.
+    public var pictureFileName: String?
 
     public var isDefault: Bool { id == Self.defaultID }
 
-    public init(id: UUID = UUID(), name: String, colorID: String = TabGroupRecord.colorIDs[1]) {
+    public init(
+        id: UUID = UUID(),
+        name: String,
+        colorID: String = TabGroupRecord.colorIDs[1],
+        iconID: String? = nil,
+        pictureFileName: String? = nil
+    ) {
         self.id = id
         self.name = name
         self.colorID = colorID
+        self.iconID = iconID
+        self.pictureFileName = pictureFileName
     }
 
     /// The one or two letters shown when a profile has no picture, taken from

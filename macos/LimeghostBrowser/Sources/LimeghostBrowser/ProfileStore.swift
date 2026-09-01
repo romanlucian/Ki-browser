@@ -1,3 +1,4 @@
+import AppKit
 import LimeghostCore
 import Foundation
 import WebKit
@@ -78,6 +79,98 @@ final class ProfileStore: ObservableObject {
         save()
     }
 
+    /// Sets a profile's avatar to a drawing from the catalogue, or to nothing,
+    /// which returns it to its coloured initial.
+    func setIcon(_ iconID: String?, for id: UUID) {
+        guard let index = profiles.firstIndex(where: { $0.id == id }) else { return }
+        if let iconID, LimeghostIconCatalog.icon(id: iconID) == nil { return }
+        profiles[index].iconID = iconID
+        // A drawing and a picture cannot both win. Choosing one clears the
+        // other rather than leaving a hidden file that reappears later.
+        if iconID != nil { removePicture(for: id, keepingRecord: false) }
+        save()
+    }
+
+    /// Copies a picture into this profile's own folder and uses it.
+    ///
+    /// Copied rather than referenced: the original may be moved or deleted, and
+    /// an avatar that disappears when somebody tidies their Desktop is worse
+    /// than no avatar. Downscaled on the way in, because a profile list should
+    /// not hold a twelve-megapixel photograph in memory.
+    ///
+    /// Returns false when the file could not be read as an image or written,
+    /// so the editor can say so rather than silently doing nothing.
+    @discardableResult
+    func setPicture(from source: URL, for id: UUID) -> Bool {
+        guard let index = profiles.firstIndex(where: { $0.id == id }),
+              let directory = ProfileStorage.pictureDirectory(for: id),
+              let image = NSImage(contentsOf: source),
+              let data = Self.squareAvatarPNG(from: image) else { return false }
+        do {
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            // A fresh name each time so an image cache keyed on the URL cannot
+            // hand back the previous picture.
+            let name = "avatar-\(UUID().uuidString).png"
+            try data.write(to: directory.appendingPathComponent(name), options: .atomic)
+            removePicture(for: id, keepingRecord: false)
+            profiles[index].pictureFileName = name
+            profiles[index].iconID = nil
+            save()
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    /// Drops the picture and returns the profile to its icon or initial.
+    func removePicture(for id: UUID, keepingRecord: Bool = true) {
+        guard let index = profiles.firstIndex(where: { $0.id == id }),
+              let existing = profiles[index].pictureFileName,
+              let directory = ProfileStorage.pictureDirectory(for: id) else { return }
+        try? FileManager.default.removeItem(at: directory.appendingPathComponent(existing))
+        guard keepingRecord else {
+            profiles[index].pictureFileName = nil
+            return
+        }
+        profiles[index].pictureFileName = nil
+        save()
+    }
+
+    /// Where a profile's chosen picture actually is, if it still exists.
+    func pictureURL(for profile: BrowserProfileRecord) -> URL? {
+        guard let name = profile.pictureFileName,
+              let directory = ProfileStorage.pictureDirectory(for: profile.id) else { return nil }
+        let url = directory.appendingPathComponent(name)
+        return FileManager.default.fileExists(atPath: url.path) ? url : nil
+    }
+
+    /// A centre-cropped square PNG at avatar size.
+    ///
+    /// Cropped rather than squashed: a portrait squeezed into a circle is the
+    /// thing that makes an avatar look wrong, and nobody can say why.
+    static func squareAvatarPNG(from image: NSImage, side: CGFloat = 256) -> Data? {
+        let source = image.size
+        guard source.width > 0, source.height > 0 else { return nil }
+        let scale = max(side / source.width, side / source.height)
+        let scaled = CGSize(width: source.width * scale, height: source.height * scale)
+        let origin = CGPoint(x: (side - scaled.width) / 2, y: (side - scaled.height) / 2)
+
+        let output = NSImage(size: CGSize(width: side, height: side))
+        output.lockFocus()
+        NSGraphicsContext.current?.imageInterpolation = .high
+        image.draw(
+            in: CGRect(origin: origin, size: scaled),
+            from: .zero,
+            operation: .copy,
+            fraction: 1
+        )
+        output.unlockFocus()
+
+        guard let tiff = output.tiffRepresentation,
+              let bitmap = NSBitmapImageRep(data: tiff) else { return nil }
+        return bitmap.representation(using: .png, properties: [:])
+    }
+
     /// Whether a profile can be removed. The original one cannot: it holds the
     /// data that existed before profiles did, and there has to be somewhere
     /// for a window to open.
@@ -129,6 +222,15 @@ enum ProfileStorage {
 
     static func suiteName(for profileID: UUID) -> String {
         "com.clearframe.browser.profile.\(profileID.uuidString)"
+    }
+
+    /// Where a profile keeps the picture somebody chose for it.
+    ///
+    /// Beside its site icons rather than in the preferences suite: a preference
+    /// store is for small values, and a photograph is not one.
+    static func pictureDirectory(for profileID: UUID) -> URL? {
+        guard let icons = faviconDirectory(for: profileID) else { return nil }
+        return icons.deletingLastPathComponent().appendingPathComponent("Avatar", isDirectory: true)
     }
 
     static func faviconDirectory(for profileID: UUID) -> URL? {

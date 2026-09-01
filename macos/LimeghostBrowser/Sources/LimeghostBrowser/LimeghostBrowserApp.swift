@@ -228,9 +228,11 @@ struct LimeghostBrowserApp: App {
                     }
                 }
                 Divider()
+                // Naming, colour, a drawing and a picture all live in the
+                // editor sheet the toolbar chip opens. The menu switches
+                // windows and starts things; it no longer owns a second,
+                // poorer way to edit a profile.
                 Button("New Profile…") { addProfile() }
-                Button("Rename This Profile…") { renameFocusedProfile() }
-                    .disabled(focusedWorkspace == nil)
                 Button("Delete This Profile…") { deleteFocusedProfile() }
                     .disabled(!(focusedWorkspace.map { profiles.canDelete($0.profileID) } ?? false))
             }
