@@ -41,6 +41,19 @@ enum ConnectionSecurity: Equatable {
         }
     }
 
+    /// The short form for the site information popover's disclosure row, where
+    /// `statusLine` would wrap to three lines. The two must never disagree:
+    /// this is the same fact with fewer words.
+    var badge: String {
+        switch self {
+        case .noPage: return "No page"
+        case .checking: return "Checking…"
+        case .secure: return "Secure"
+        case .mixedContent: return "Mixed content"
+        case .notSecure: return "Not secure"
+        }
+    }
+
     var detail: String {
         switch self {
         case .noPage:
@@ -53,6 +66,29 @@ enum ConnectionSecurity: Equatable {
             return "The page itself came over HTTPS, but some of what it loaded did not. Anything that arrives unencrypted can be read or changed on the way, so treat this page as you would a plain HTTP one."
         case .notSecure:
             return "This page was loaded over plain HTTP. What you type here — passwords included — can be read or changed by anyone on the network between you and the site."
+        }
+    }
+
+    /// The words the address bar spells out beside the glyph, or nil where the
+    /// glyph alone is enough.
+    ///
+    /// Only the two states that describe missing encryption get words. A green
+    /// lock needs none — the normal case should be quiet — and `checking` gets
+    /// none because it lasts a fraction of a second and would flicker a warning
+    /// onto pages that turn out to be fine.
+    ///
+    /// This exists because an orange slashed padlock is not readable by the
+    /// people Limeghost is for. Chrome added the same words for the same
+    /// reason. They state a fact about the transport and nothing about the
+    /// site, which is the only thing Limeghost knows.
+    var inlineWarning: String? {
+        switch self {
+        case .notSecure: return "Not secure"
+        // Chrome flattens this into "Not secure" too. Limeghost keeps the
+        // distinction it already documents: the page itself did arrive
+        // encrypted, and saying otherwise would overstate what went wrong.
+        case .mixedContent: return "Not fully secure"
+        case .secure, .checking, .noPage: return nil
         }
     }
 
@@ -96,8 +132,7 @@ struct SiteInformationChip: View {
     @ViewBuilder
     var body: some View {
         if let url = BookmarkURLPolicy.validatedURL(session.currentURLString), let host = pageHost {
-            symbol
-                .frame(width: 20, height: 22)
+            chipContent
                 .background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 5))
                 .contentShape(RoundedRectangle(cornerRadius: 5))
                 .draggable(url) {
@@ -126,6 +161,40 @@ struct SiteInformationChip: View {
                 .frame(width: 20, height: 22)
                 .accessibilityHidden(true)
         }
+    }
+
+    /// The mark on a page with nothing to report; the warning glyph and its
+    /// words on one without full encryption.
+    ///
+    /// The owl is never damaged to signal a problem — it is replaced by one.
+    /// A slashed or reddened brand mark would make Limeghost's own face the
+    /// symbol of a bad page, and the mark has to survive being seen on the
+    /// worst site somebody visits. Swapping it out costs the brand nothing and
+    /// says far more than a broken owl could.
+    ///
+    /// Greyed while the page is still arriving, because until it commits
+    /// WebKit is still describing the *previous* document, and a confident
+    /// green mark over an answer that is not in yet is a claim Limeghost
+    /// cannot make. Colour returns when the page does.
+    private var chipContent: some View {
+        let security = session.connectionSecurity
+        let warning = security.inlineWarning
+        return HStack(spacing: 4) {
+            if warning == nil {
+                BrandMark(size: 15)
+                    .grayscale(security == .checking ? 1 : 0)
+                    .opacity(security == .checking ? 0.55 : 1)
+            } else {
+                symbol
+                Text(warning ?? "")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(security.tint)
+                    .lineLimit(1)
+                    .fixedSize()
+            }
+        }
+        .padding(.horizontal, warning == nil ? 0 : 6)
+        .frame(minWidth: 20, minHeight: 22)
     }
 
     private var symbol: some View {
@@ -164,50 +233,63 @@ private struct SiteInformationPopover: View {
         return ShieldState.make(status: contentBlocking.status, hostDisabled: hostDisabled)
     }
 
+    /// Which section is showing its detail, if any. One at a time on purpose:
+    /// an accordion is what guarantees the popover cannot grow back into the
+    /// scrolling wall of text it replaced.
+    @State private var openSection: SiteSection?
+
+    @Environment(\.openSettings) private var openSettings
+
+    private enum SiteSection: Hashable {
+        case connection, blocking, risk, storage
+    }
+
+    private func toggle(_ section: SiteSection) {
+        withAnimation(.easeOut(duration: 0.16)) {
+            openSection = openSection == section ? nil : section
+        }
+    }
+
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 1) {
                 Text(host)
                     .font(.system(size: 15, weight: .semibold))
                     .lineLimit(2)
                     .truncationMode(.middle)
+                    .padding(.horizontal, 10)
+                    .padding(.bottom, 8)
 
-                connectionSection
+                connectionRow
+                blockingRow
+                riskRow
+                storageRow
 
-                Divider()
+                Divider().padding(.vertical, 7)
 
-                ContentBlockingSiteControl(
-                    provider: contentBlocking,
-                    session: session,
-                    host: blockingHost,
-                    shieldState: shieldState
-                )
-
-                Divider()
-
-                riskSection
-
-                Divider()
-
-                siteDataSection
+                settingsRow
             }
-            .padding(16)
+            .padding(12)
             .frame(width: 340, alignment: .leading)
         }
         .frame(width: 340)
         .frame(maxHeight: 560)
+        .background(LimeghostTheme.bg2)
         .task { await loadStoredKinds() }
     }
 
-    private var connectionSection: some View {
-        HStack(alignment: .top, spacing: 9) {
-            Image(systemName: session.connectionSecurity.symbolName)
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(session.connectionSecurity.tint)
-                .frame(width: 16)
-            VStack(alignment: .leading, spacing: 4) {
+    private var connectionRow: some View {
+        SiteSectionRow(
+            symbol: session.connectionSecurity.symbolName,
+            title: "Connection",
+            badge: session.connectionSecurity.badge,
+            badgeTint: session.connectionSecurity.tint,
+            isOpen: openSection == .connection,
+            toggle: { toggle(.connection) }
+        ) {
+            VStack(alignment: .leading, spacing: 6) {
                 Text(session.connectionSecurity.statusLine)
-                    .font(.subheadline.weight(.semibold))
+                    .font(.caption.weight(.semibold))
                     .foregroundStyle(session.connectionSecurity.tint)
                     .fixedSize(horizontal: false, vertical: true)
                 Text(session.connectionSecurity.detail)
@@ -218,33 +300,74 @@ private struct SiteInformationPopover: View {
         }
     }
 
-    /// Risk signals live here rather than in a panel of their own: this popover is
-    /// already where somebody looks when they are wondering about a page, beside
-    /// the connection and what the site has stored.
+    /// `ContentBlockingSiteControl` supplies the body; the row above is its
+    /// header. This is the only place tracker blocking is reachable now that
+    /// the address pill's separate shield button is gone.
+    private var blockingRow: some View {
+        SiteSectionRow(
+            symbol: shieldState.symbolName,
+            title: "Tracker blocking",
+            badge: shieldState.badge,
+            badgeTint: shieldState == .activeForSite ? .green : .secondary,
+            isOpen: openSection == .blocking,
+            toggle: { toggle(.blocking) }
+        ) {
+            ContentBlockingSiteControl(
+                provider: contentBlocking,
+                session: session,
+                host: blockingHost,
+                shieldState: shieldState
+            )
+        }
+    }
+
+    /// Risk signals live here rather than in a panel of their own: this popover
+    /// is already where somebody looks when they are wondering about a page,
+    /// beside the connection and what the site has stored.
     ///
     /// Behind a button, not automatic. Reading the page's text is something the
-    /// person asks for; opening a popover is not asking.
-    @ViewBuilder
-    private var riskSection: some View {
-        VStack(alignment: .leading, spacing: 9) {
-            Label("Risk signals", systemImage: "exclamationmark.shield")
-                .font(.headline)
-
-            if let risk {
-                RiskCard(assessment: risk)
-            } else if isCheckingRisk {
-                Text("Reading the visible page…")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            } else {
-                Text("Limeghost can look for obvious signals in this page's visible text — an unencrypted password form, an encoded address, urgent payment or wallet-secret language. It explains what it found and never issues a verdict.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                Button("Check this page") {
-                    Task { await checkRisk() }
+    /// person asks for; opening a popover is not asking, and neither is opening
+    /// this row.
+    private var riskRow: some View {
+        SiteSectionRow(
+            symbol: risk == nil ? "exclamationmark.shield" : "exclamationmark.shield.fill",
+            title: "Risk signals",
+            badge: riskBadge,
+            badgeTint: riskTint,
+            isOpen: openSection == .risk,
+            toggle: { toggle(.risk) }
+        ) {
+            VStack(alignment: .leading, spacing: 9) {
+                if let risk {
+                    RiskCard(assessment: risk)
+                } else if isCheckingRisk {
+                    Text("Reading the visible page…")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    Text("Limeghost can look for obvious signals in this page's visible text — an unencrypted password form, an encoded address, urgent payment or wallet-secret language. It explains what it found and never issues a verdict.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Button("Check this page") {
+                        Task { await checkRisk() }
+                    }
                 }
             }
+        }
+    }
+
+    private var riskBadge: String {
+        if let risk { return risk.level.rawValue }
+        return isCheckingRisk ? "Checking…" : "Not checked"
+    }
+
+    private var riskTint: Color {
+        guard let risk else { return .secondary }
+        switch risk.level {
+        case .low: return .green
+        case .caution: return .orange
+        case .high: return .red
         }
     }
 
@@ -256,46 +379,71 @@ private struct SiteInformationPopover: View {
         risk = RiskAnalyzer.assess(page: page)
     }
 
-    @ViewBuilder
-    private var siteDataSection: some View {
-        VStack(alignment: .leading, spacing: 9) {
-            Label("Cookies and site data", systemImage: "internaldrive")
-                .font(.headline)
-
-            if isRemoving {
-                Text("Removing data stored by \(host)…")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            } else if let storedKinds {
-                if storedKinds.isEmpty {
-                    Text("This site has stored nothing on this Mac.")
+    private var storageRow: some View {
+        SiteSectionRow(
+            symbol: "internaldrive",
+            title: "Cookies and site data",
+            badge: storageBadge,
+            badgeTint: .secondary,
+            isOpen: openSection == .storage,
+            toggle: { toggle(.storage) }
+        ) {
+            VStack(alignment: .leading, spacing: 9) {
+                if isRemoving {
+                    Text("Removing data stored by \(host)…")
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                } else if let storedKinds {
+                    if storedKinds.isEmpty {
+                        Text("This site has stored nothing on this Mac.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        Text(SiteDataKind.summary(of: storedKinds))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 } else {
-                    Text(SiteDataKind.summary(of: storedKinds))
+                    Text("Checking what this site has stored…")
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
                 }
-            } else {
-                Text("Checking what this site has stored…")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
 
-            if isConfirmingRemoval {
-                confirmation
-            } else {
-                Button("Remove this site’s data…", role: .destructive) {
-                    isConfirmingRemoval = true
+                if isConfirmingRemoval {
+                    confirmation
+                } else {
+                    Button("Remove this site’s data…", role: .destructive) {
+                        isConfirmingRemoval = true
+                    }
+                    .disabled(isRemoving || storedKinds?.isEmpty != false)
                 }
-                .disabled(isRemoving || storedKinds?.isEmpty != false)
-            }
 
-            Text(Self.limitCopy)
-                .font(.caption2)
-                .foregroundStyle(.tertiary)
-                .fixedSize(horizontal: false, vertical: true)
+                Text(Self.limitCopy)
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    /// A count of kinds, never of cookies or bytes: `WKWebsiteDataRecord`
+    /// carries neither, so any number here beyond this one would be invented.
+    private var storageBadge: String {
+        if isRemoving { return "Removing…" }
+        guard let storedKinds else { return "Checking…" }
+        if storedKinds.isEmpty { return "None" }
+        return "\(storedKinds.count) kind\(storedKinds.count == 1 ? "" : "s")"
+    }
+
+    /// Limeghost has no per-site settings page, so this says Settings and not
+    /// "Site settings" — the window it opens is the app's, and applies to every
+    /// site. The row is here because the per-site switches above are only half
+    /// the story when blocking is off globally.
+    private var settingsRow: some View {
+        SiteActionRow(symbol: "gearshape", title: "Open Settings…") {
+            dismiss()
+            openSettings()
         }
     }
 
@@ -379,5 +527,148 @@ struct RiskCard: View {
         .padding(14)
         .background(tint.opacity(0.09), in: RoundedRectangle(cornerRadius: 13))
         .overlay(RoundedRectangle(cornerRadius: 13).stroke(tint.opacity(0.24)))
+    }
+}
+
+/// One line of the site information popover: what the section is, the one word
+/// for the state it is in, and a chevron that reveals the rest.
+///
+/// The popover said all of it at once until September 1, 2026 — four headings,
+/// four paragraphs and four controls stacked 560 points tall, scrolling on any
+/// window. Every word of that is still here. Only one section's worth of it is
+/// on screen at a time, which is the whole change: the reader chooses what to
+/// read instead of scrolling past what they did not ask for.
+private struct SiteSectionRow<Content: View>: View {
+    let symbol: String
+    let title: String
+    let badge: String
+    let badgeTint: Color
+    let isOpen: Bool
+    let toggle: () -> Void
+    @ViewBuilder var content: () -> Content
+
+    @State private var isHovering = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Button(action: toggle) {
+                HStack(spacing: 9) {
+                    Image(systemName: symbol)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(badgeTint)
+                        .frame(width: 16)
+                    Text(title)
+                        .font(.subheadline.weight(.medium))
+                    Spacer(minLength: 8)
+                    Text(badge)
+                        .font(.caption)
+                        .foregroundStyle(badgeTint)
+                        .lineLimit(1)
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(.tertiary)
+                        .rotationEffect(.degrees(isOpen ? 90 : 0))
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 9)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .background(
+                RoundedRectangle(cornerRadius: LimeghostTheme.radius8)
+                    .fill(rowFill)
+            )
+            .onHover { isHovering = $0 }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("\(title), \(badge)")
+            .accessibilityHint(isOpen ? "Hides the details for this section." : "Shows the details for this section.")
+
+            if isOpen {
+                content()
+                    .padding(.horizontal, 10)
+                    .padding(.top, 9)
+                    .padding(.bottom, 6)
+            }
+        }
+    }
+
+    private var rowFill: Color {
+        if isOpen { return LimeghostTheme.itemHover }
+        return isHovering ? LimeghostTheme.itemHover.opacity(0.6) : .clear
+    }
+}
+
+/// A row that leaves rather than expands. Same metrics as `SiteSectionRow` so
+/// the popover's last line sits on the same rhythm as the four above it.
+private struct SiteActionRow: View {
+    let symbol: String
+    let title: String
+    let action: () -> Void
+
+    @State private var isHovering = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 9) {
+                Image(systemName: symbol)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 16)
+                Text(title)
+                    .font(.subheadline.weight(.medium))
+                Spacer(minLength: 8)
+                Image(systemName: "arrow.up.forward")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(.tertiary)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 9)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .background(
+            RoundedRectangle(cornerRadius: LimeghostTheme.radius8)
+                .fill(isHovering ? LimeghostTheme.itemHover : .clear)
+        )
+        .onHover { isHovering = $0 }
+    }
+}
+
+/// The Limeghost mark, drawn from the artwork rather than redrawn in code so
+/// the address bar and the app icon can never show two different owls.
+///
+/// The *small* mark on purpose: it is the face alone, drawn for 16–32 px, and
+/// it is the only one of the three that survives this size. The full mark's
+/// ring closes to a smear below 32 px and takes the face with it, which
+/// `docs/brand/limeghost-mark-2026-08-31/README.md` records as measured rather
+/// than assumed.
+///
+/// Falls back to nothing rather than to a placeholder: an address bar missing
+/// its mark is a build mistake worth noticing, and a stand-in glyph sitting
+/// where a security indicator belongs is worse than an empty space.
+struct BrandMark: View {
+    var size: CGFloat = 15
+
+    private static let image: NSImage? = {
+        guard let url = Bundle.module.url(forResource: "limeghost-mark-small", withExtension: "png") else {
+            return nil
+        }
+        return NSImage(contentsOf: url)
+    }()
+
+    /// Whether the artwork is actually in the bundle. A missing resource draws
+    /// nothing and raises no error, so the address bar would simply ship empty
+    /// — this is what lets a test catch that before somebody sees it.
+    static var isAvailable: Bool { image != nil }
+
+    var body: some View {
+        if let image = Self.image {
+            Image(nsImage: image)
+                .resizable()
+                .interpolation(.high)
+                .aspectRatio(contentMode: .fit)
+                .frame(width: size, height: size)
+                .accessibilityHidden(true)
+        }
     }
 }

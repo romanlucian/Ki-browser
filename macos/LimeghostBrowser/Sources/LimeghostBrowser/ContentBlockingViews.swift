@@ -39,54 +39,33 @@ enum ShieldState: Equatable {
         }
     }
 
+    /// The short form for the site information popover's disclosure row. Same
+    /// fact as `statusLine`, fewer words — never a different one.
+    var badge: String {
+        switch self {
+        case .activeForSite: return "On"
+        case .preparing: return "Not yet"
+        case .disabledForSite: return "Off"
+        case .disabledGlobally: return "Off in Settings"
+        case .unavailable: return "Unavailable"
+        }
+    }
+
     var symbolName: String {
         self == .activeForSite ? "shield" : "shield.slash"
     }
 }
 
-/// The address-pill tracker-blocking control. WebKit applies the compiled
-/// rules inside the page process, so this button and its popover can only
-/// ever state the current configuration — never a count of what was blocked.
-struct ContentBlockingShieldButton: View {
-    @ObservedObject var provider: ContentRuleListProvider
-    @ObservedObject var session: BrowserSession
-    @State private var showsPopover = false
-
-    private var host: String? {
-        ContentBlockingSettingsStore.normalizedHost(from: session.currentURLString)
-    }
-
-    private var shieldState: ShieldState {
-        let hostDisabled = host.map { provider.settings.isDisabled(forHost: $0) } ?? false
-        return ShieldState.make(status: provider.status, hostDisabled: hostDisabled)
-    }
-
-    var body: some View {
-        Button {
-            showsPopover = true
-        } label: {
-            Image(systemName: shieldState.symbolName)
-                .font(.system(size: 16, weight: .medium))
-                .frame(width: 22, height: 22)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .foregroundStyle(shieldState == .activeForSite ? Color.green : Color.secondary)
-        .help("Tracker blocking: \(shieldState.statusLine)")
-        .accessibilityLabel("Tracker blocking: \(shieldState.statusLine)")
-        .accessibilityHint("Shows tracker blocking status and this site's controls.")
-        .popover(isPresented: $showsPopover, arrowEdge: .top) {
-            ContentBlockingSiteControl(provider: provider, session: session, host: host, shieldState: shieldState)
-                .padding(16)
-                .frame(width: 320)
-        }
-    }
-}
-
 /// The whole per-site tracker-blocking control: what state blocking is in, why,
-/// and the switch for this one site. The shield's own popover and the address
-/// bar's site information popover both show this exact view, so the two can
-/// never drift into saying different things about the same site.
+/// and the switch for this one site.
+///
+/// It carries no header of its own. The address bar's site information popover
+/// is its only home, and the disclosure row it opens under already names the
+/// section and states it — a second heading underneath would say it twice.
+/// A separate shield button in the address pill showed this same view until
+/// September 1, 2026; it was removed because everything it said had become a
+/// row in that popover, and because a shield in the address bar promises
+/// protection where a lock only reports encryption.
 struct ContentBlockingSiteControl: View {
     @ObservedObject var provider: ContentRuleListProvider
     @ObservedObject var session: BrowserSession
@@ -99,14 +78,7 @@ struct ContentBlockingSiteControl: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Label("Tracker blocking", systemImage: shieldState.symbolName)
-                .font(.headline)
-
-            Text(shieldState.statusLine)
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(shieldState == .activeForSite ? Color.green : Color.secondary)
-
+        VStack(alignment: .leading, spacing: 10) {
             bodyText
                 .font(.caption)
                 .foregroundStyle(.secondary)

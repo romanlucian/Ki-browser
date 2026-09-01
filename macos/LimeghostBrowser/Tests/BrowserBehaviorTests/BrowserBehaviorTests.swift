@@ -454,6 +454,96 @@ final class BrowserBehaviorTests: XCTestCase {
         XCTAssertEqual(ShieldState.unavailable.symbolName, "shield.slash")
     }
 
+    /// The site information popover's disclosure rows show a one-word badge
+    /// where the full status line would wrap to three lines. Shorter is the
+    /// only difference allowed: a badge that reads "On" or "Secure" on a state
+    /// that is neither would claim protection the app is not applying, one
+    /// layer above the bug `testConnectionSecurityReadsWebKitsSecureContent…`
+    /// exists for.
+    func testOnlyTheProtectedStatesGetAProtectedBadge() {
+        let shieldStates: [(ShieldState, String)] = [
+            (.activeForSite, "On"),
+            (.preparing, "Not yet"),
+            (.disabledForSite, "Off"),
+            (.disabledGlobally, "Off in Settings"),
+            (.unavailable, "Unavailable"),
+        ]
+        for (state, badge) in shieldStates {
+            XCTAssertEqual(state.badge, badge, "badge for \(state)")
+            XCTAssertFalse(state.badge.isEmpty, "empty badge for \(state)")
+            // "On" and only "On" — "Off in Settings" must not read as on.
+            XCTAssertEqual(
+                state.badge == "On",
+                state == .activeForSite,
+                "\(state) badges as On but is not the state that blocks"
+            )
+        }
+
+        let connections: [(ConnectionSecurity, String)] = [
+            (.secure, "Secure"),
+            (.mixedContent, "Mixed content"),
+            (.notSecure, "Not secure"),
+            (.checking, "Checking…"),
+            (.noPage, "No page"),
+        ]
+        for (state, badge) in connections {
+            XCTAssertEqual(state.badge, badge, "badge for \(state)")
+            XCTAssertFalse(state.badge.isEmpty, "empty badge for \(state)")
+            XCTAssertEqual(
+                state.badge == "Secure",
+                state == .secure,
+                "\(state) badges as Secure but is not a fully encrypted page"
+            )
+        }
+    }
+
+    /// The address bar spells out "Not secure" rather than relying on an orange
+    /// slashed padlock, which the people this browser is for cannot read. Two
+    /// ways that can go wrong and neither shows up in a screenshot of a working
+    /// page: words appearing on a page that is fine, which cries wolf on every
+    /// site, and words vanishing from a page that is not, which removes the
+    /// whole warning silently.
+    /// The address bar draws the brand mark from a bundled PNG. If the resource
+    /// stops being copied — a `Package.swift` edit, a renamed file, a target
+    /// reshuffle — `Bundle.module` returns nil, the view draws nothing, and
+    /// nothing anywhere raises an error. The address bar just ships empty. This
+    /// is the only thing standing between that and a release.
+    func testTheBrandMarkIsActuallyInTheAppBundle() {
+        XCTAssertTrue(
+            BrandMark.isAvailable,
+            "limeghost-mark-small.png is missing from the app bundle — check `resources:` in Package.swift"
+        )
+    }
+
+    func testOnlyTheUnencryptedStatesSpellOutAWarning() {
+        XCTAssertEqual(ConnectionSecurity.notSecure.inlineWarning, "Not secure")
+        XCTAssertEqual(ConnectionSecurity.mixedContent.inlineWarning, "Not fully secure")
+
+        // The quiet cases. A green lock that says "Not secure" is the loudest
+        // possible bug and it would ship looking fine on every HTTPS page.
+        XCTAssertNil(ConnectionSecurity.secure.inlineWarning)
+        XCTAssertNil(ConnectionSecurity.checking.inlineWarning)
+        XCTAssertNil(ConnectionSecurity.noPage.inlineWarning)
+
+        // Words exist exactly where encryption is missing or incomplete.
+        let warned: [ConnectionSecurity] = [.notSecure, .mixedContent]
+        for state in [ConnectionSecurity.secure, .mixedContent, .notSecure, .checking, .noPage] {
+            XCTAssertEqual(
+                state.inlineWarning != nil,
+                warned.contains(state),
+                "\(state) disagrees with whether it should carry a warning"
+            )
+        }
+
+        // The two warnings must not read as the same problem: a page that
+        // arrived encrypted but pulled in something that did not is a smaller
+        // failure than one that never encrypted at all.
+        XCTAssertNotEqual(
+            ConnectionSecurity.mixedContent.inlineWarning,
+            ConnectionSecurity.notSecure.inlineWarning
+        )
+    }
+
     func testConnectionSecurityReadsWebKitsSecureContentReportAndNotJustTheScheme() {
         // The bug this exists for: an HTTPS page pulling part of itself over
         // HTTP used to show a full green lock, because only the scheme was read.

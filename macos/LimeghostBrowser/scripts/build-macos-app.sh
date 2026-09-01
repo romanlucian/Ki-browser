@@ -30,6 +30,26 @@ cp "$PACKAGE_DIR/App/Info.plist" "$CONTENTS_DIR/Info.plist"
 cp "$PACKAGE_DIR/App/PkgInfo" "$CONTENTS_DIR/PkgInfo"
 cp "$PACKAGE_DIR/App/PrivacyInfo.xcprivacy" "$CONTENTS_DIR/Resources/PrivacyInfo.xcprivacy"
 cp "$ICON_FILE" "$CONTENTS_DIR/Resources/Limeghost.icns"
+
+# SwiftPM emits a target's resources as a separate .bundle beside the binary and
+# does not put it anywhere an app bundle looks. Without this copy `Bundle.module`
+# resolves to nothing at runtime, every resource-backed view silently draws
+# blank, and no build step fails — the address bar simply ships without its
+# mark. Copied into Contents/Resources because that is the first place the
+# generated `Bundle.module` accessor searches.
+RESOURCE_BUNDLE="$BUILD_DIR/LimeghostBrowser_LimeghostBrowser.bundle"
+if [[ ! -d "$RESOURCE_BUNDLE" ]]; then
+    echo "error: $RESOURCE_BUNDLE is missing; the app would ship with no bundled resources" >&2
+    exit 1
+fi
+cp -R "$RESOURCE_BUNDLE" "$CONTENTS_DIR/Resources/"
+
+# Extended attributes ride along on any file that has passed through Finder or a
+# screenshot tool, and codesign refuses a bundle carrying them ("resource fork,
+# Finder information, or similar detritus not allowed"). Strip them from the
+# staged copy rather than trusting every source file to be clean.
+xattr -cr "$STAGED_APP"
+
 touch "$STAGED_APP"
 
 plutil -lint "$CONTENTS_DIR/Info.plist"

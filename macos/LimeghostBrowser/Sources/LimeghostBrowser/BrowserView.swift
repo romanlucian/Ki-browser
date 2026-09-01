@@ -553,10 +553,6 @@ private struct BrowserToolbar: View {
 
     private var addressPill: some View {
         HStack(spacing: 8) {
-            ContentBlockingShieldButton(provider: workspace.contentBlocking, session: session)
-
-            pillDivider
-
             Menu {
                 ForEach(SearchEngine.allCases) { engine in
                     Button {
@@ -574,7 +570,7 @@ private struct BrowserToolbar: View {
             } label: {
                 // Compacted to the engine name alone: in the pill it is a
                 // quiet label for what Enter will do, not a second control
-                // competing with the shield and the address itself.
+                // competing with the site chip and the address itself.
                 Text(searchSettings.selectedEngine.displayName)
                     .lineLimit(1)
                     .font(.system(size: 11, weight: .medium))
