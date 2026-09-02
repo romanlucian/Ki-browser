@@ -5,16 +5,31 @@ import PackageDescription
 let package = Package(
     name: "LimeghostBrowser",
     platforms: [
-        .macOS(.v14)
+        .macOS(.v14),
+        // iOS 17 is the floor: `WKWebsiteDataStore(forIdentifier:)`,
+        // `.focusable` on iOS, and `onChange(of:initial:)` all arrive there.
+        .iOS(.v17)
     ],
     products: [
-        .executable(name: "LimeghostBrowser", targets: ["LimeghostBrowser"])
+        .executable(name: "LimeghostBrowser", targets: ["LimeghostBrowser"]),
+        // The iOS app is an Xcode target that consumes these two as a local
+        // package; SwiftPM cannot build an iOS app itself.
+        .library(name: "LimeghostShared", targets: ["LimeghostShared"])
     ],
     targets: [
         .target(name: "LimeghostCore"),
+        .target(
+            name: "LimeghostShared",
+            dependencies: ["LimeghostCore"],
+            linkerSettings: [
+                .linkedFramework("WebKit"),
+                .linkedFramework("AVFoundation"),
+                .linkedFramework("Speech")
+            ]
+        ),
         .executableTarget(
             name: "LimeghostBrowser",
-            dependencies: ["LimeghostCore"],
+            dependencies: ["LimeghostCore", "LimeghostShared"],
             // The brand mark, so the address bar can draw it. The copy under
             // `Resources/` is exactly the small mark from
             // `docs/brand/limeghost-mark-2026-08-31/`, which stays the source of
@@ -34,8 +49,12 @@ let package = Package(
             resources: [.process("Fixtures")]
         ),
         .testTarget(
+            name: "LimeghostSharedTests",
+            dependencies: ["LimeghostShared", "LimeghostCore"]
+        ),
+        .testTarget(
             name: "BrowserBehaviorTests",
-            dependencies: ["LimeghostBrowser", "LimeghostCore"]
+            dependencies: ["LimeghostBrowser", "LimeghostCore", "LimeghostShared"]
         )
     ],
     swiftLanguageModes: [.v5]
