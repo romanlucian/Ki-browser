@@ -16,3 +16,6 @@ chromium/cef-spike/third_party/
 *.p12
 *.mobileprovision
 npm-debug.log*
+
+# Linked git worktrees created by Claude Code sessions; never repository content.
+.claude/worktrees/
