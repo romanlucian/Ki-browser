@@ -27,6 +27,35 @@
   - 29 of 60 UI files are already iOS-clean; 4 more become clean by deleting a stale `import AppKit`.
   - `import SwiftUI` re-exports AppKit on macOS, so "does not import AppKit" is **not** evidence of portability. Verify with the compiler, never with grep.
 
+- **How to verify iOS portability on this machine.** Xcode 26.6's **iOS platform is not
+  installed** — `xcodebuild -showdestinations` lists iOS under "Ineligible destinations"
+  (`iOS 26.5 is not installed`), and a leftover iOS 26.2 simulator runtime does not
+  satisfy it. So `xcodebuild` cannot build or test for iOS here, while the SDK stub on
+  disk means the compiler can. Every iOS check in this plan therefore uses:
+
+  ```bash
+  cd macos/LimeghostBrowser/Sources
+  xcrun --sdk iphonesimulator swiftc -typecheck -swift-version 5 \
+    -target arm64-apple-ios17.0-simulator LimeghostCore/*.swift
+  ```
+
+  Expected: exit 0, no output. To check `LimeghostShared` as well, first emit a Core
+  module and pass it with `-I`:
+
+  ```bash
+  cd macos/LimeghostBrowser/Sources
+  xcrun --sdk iphonesimulator swiftc -emit-module -module-name LimeghostCore \
+    -swift-version 5 -target arm64-apple-ios17.0-simulator \
+    -emit-module-path /tmp/limeghost-ios/LimeghostCore.swiftmodule LimeghostCore/*.swift
+  xcrun --sdk iphonesimulator swiftc -typecheck -swift-version 5 \
+    -target arm64-apple-ios17.0-simulator -I /tmp/limeghost-ios LimeghostShared/*.swift
+  ```
+
+  Create `/tmp/limeghost-ios` first. **Do not** use `xcodebuild` for any iOS step in this
+  plan; it will fail with a misleading destination error. Running the shared tests on a
+  real Simulator waits on the platform download and belongs to CI (Task 9), whose runner
+  has it installed.
+
 ---
 
 ### Task 1: Declare iOS and create the empty shared target
@@ -169,17 +198,20 @@ cd macos/LimeghostBrowser && swift test 2>&1 | tail -5
 
 Expected: `Executed 477 tests, with 2 tests skipped and 0 failures` (476 before, plus the new one).
 
-- [ ] **Step 6: Prove Core and Shared build for the iOS Simulator**
+- [ ] **Step 6: Prove Core and Shared compile for iOS**
 
 ```bash
-cd macos/LimeghostBrowser && xcodebuild -scheme LimeghostShared \
-  -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.2' \
-  -derivedDataPath /tmp/limeghost-ios-dd build 2>&1 | tail -5
+mkdir -p /tmp/limeghost-ios
+cd macos/LimeghostBrowser/Sources
+xcrun --sdk iphonesimulator swiftc -emit-module -module-name LimeghostCore \
+  -swift-version 5 -target arm64-apple-ios17.0-simulator \
+  -emit-module-path /tmp/limeghost-ios/LimeghostCore.swiftmodule LimeghostCore/*.swift
+xcrun --sdk iphonesimulator swiftc -typecheck -swift-version 5 \
+  -target arm64-apple-ios17.0-simulator -I /tmp/limeghost-ios LimeghostShared/*.swift
+echo "exit: $?"
 ```
 
-Expected: `BUILD SUCCEEDED`.
-
-If xcodebuild reports "Unable to find a destination", list what is installed with `xcrun simctl list devices available` and substitute a device name and OS from that output. The machine used to write this plan had iOS 26.2 with iPhone 17 Pro, iPhone 17, iPhone Air, iPhone 16e and four iPads. Do **not** use `generic/platform=iOS Simulator`: it resolves against the SDK version (26.5), which has no installed runtime, and fails misleadingly.
+Expected: `exit: 0` with no diagnostics. See the iOS-verification note in Global Constraints for why this is a typecheck rather than an `xcodebuild` invocation.
 
 - [ ] **Step 7: Commit**
 
@@ -617,9 +649,14 @@ Expected: `Executed 485 tests … 0 failures`.
 - [ ] **Step 6: Prove the moved files build for iOS**
 
 ```bash
-cd macos/LimeghostBrowser && xcodebuild -scheme LimeghostShared \
-  -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.2' \
-  -derivedDataPath /tmp/limeghost-ios-dd build 2>&1 | tail -3
+mkdir -p /tmp/limeghost-ios
+cd macos/LimeghostBrowser/Sources
+xcrun --sdk iphonesimulator swiftc -emit-module -module-name LimeghostCore \
+  -swift-version 5 -target arm64-apple-ios17.0-simulator \
+  -emit-module-path /tmp/limeghost-ios/LimeghostCore.swiftmodule LimeghostCore/*.swift
+xcrun --sdk iphonesimulator swiftc -typecheck -swift-version 5 \
+  -target arm64-apple-ios17.0-simulator -I /tmp/limeghost-ios LimeghostShared/*.swift
+echo "exit: $?"
 ```
 
 Expected: `BUILD SUCCEEDED`. This is the first moment the phone has real Limeghost behaviour in it.
@@ -893,9 +930,14 @@ cd macos/LimeghostBrowser && swift test 2>&1 | tail -5
 Expected: `Executed 488 tests … 0 failures`.
 
 ```bash
-cd macos/LimeghostBrowser && xcodebuild -scheme LimeghostShared \
-  -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.2' \
-  -derivedDataPath /tmp/limeghost-ios-dd build 2>&1 | tail -3
+mkdir -p /tmp/limeghost-ios
+cd macos/LimeghostBrowser/Sources
+xcrun --sdk iphonesimulator swiftc -emit-module -module-name LimeghostCore \
+  -swift-version 5 -target arm64-apple-ios17.0-simulator \
+  -emit-module-path /tmp/limeghost-ios/LimeghostCore.swiftmodule LimeghostCore/*.swift
+xcrun --sdk iphonesimulator swiftc -typecheck -swift-version 5 \
+  -target arm64-apple-ios17.0-simulator -I /tmp/limeghost-ios LimeghostShared/*.swift
+echo "exit: $?"
 ```
 
 Expected: `BUILD SUCCEEDED`. The assistant's whole model — the two-session cap, park and restore, `canShareWindow`, `makeRoomForPage` — now compiles for a phone.
@@ -981,9 +1023,14 @@ cd macos/LimeghostBrowser && swift test 2>&1 | tail -5
 Expected: `Executed 488 tests … 0 failures` — the door test moved rather than being added, so the count does not rise.
 
 ```bash
-cd macos/LimeghostBrowser && xcodebuild -scheme LimeghostShared \
-  -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.2' \
-  -derivedDataPath /tmp/limeghost-ios-dd build 2>&1 | tail -3
+mkdir -p /tmp/limeghost-ios
+cd macos/LimeghostBrowser/Sources
+xcrun --sdk iphonesimulator swiftc -emit-module -module-name LimeghostCore \
+  -swift-version 5 -target arm64-apple-ios17.0-simulator \
+  -emit-module-path /tmp/limeghost-ios/LimeghostCore.swiftmodule LimeghostCore/*.swift
+xcrun --sdk iphonesimulator swiftc -typecheck -swift-version 5 \
+  -target arm64-apple-ios17.0-simulator -I /tmp/limeghost-ios LimeghostShared/*.swift
+echo "exit: $?"
 ```
 
 Expected: `BUILD SUCCEEDED`.
@@ -1026,15 +1073,30 @@ cd macos/LimeghostBrowser && swift test 2>&1 | tail -5
 
 Expected: total still 488, redistributed between targets.
 
-- [ ] **Step 3: Run the shared suite on the Simulator**
+- [ ] **Step 3: Confirm the moved tests still compile for iOS**
+
+Running them on a real Simulator waits on the iOS platform download (see Global Constraints), so locally this step is a typecheck of the test sources against the iOS SDK:
+
+```bash
+mkdir -p /tmp/limeghost-ios
+cd macos/LimeghostBrowser/Sources
+xcrun --sdk iphonesimulator swiftc -emit-module -module-name LimeghostCore \
+  -swift-version 5 -target arm64-apple-ios17.0-simulator \
+  -emit-module-path /tmp/limeghost-ios/LimeghostCore.swiftmodule LimeghostCore/*.swift
+xcrun --sdk iphonesimulator swiftc -typecheck -swift-version 5 \
+  -target arm64-apple-ios17.0-simulator -I /tmp/limeghost-ios LimeghostShared/*.swift
+echo "exit: $?"
+```
+
+Expected: `exit: 0`. The CI job added in Step 4 is what actually *runs* them on a Simulator, on a runner that has the platform installed. If the iOS platform has since been installed locally (`xcodebuild -downloadPlatform iOS`), also run:
 
 ```bash
 cd macos/LimeghostBrowser && xcodebuild test -scheme LimeghostShared \
-  -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.2' \
+  -destination "platform=iOS Simulator,name=$(xcrun simctl list devices available | grep -m1 'iPhone' | sed 's/ (.*//;s/^ *//')" \
   -derivedDataPath /tmp/limeghost-ios-dd 2>&1 | tail -8
 ```
 
-Expected: `TEST SUCCEEDED`. The door rule and the narrow-window rule now pass on a phone.
+Expected if run: `TEST SUCCEEDED`. Skip without comment if the platform is still absent.
 
 - [ ] **Step 4: Add the CI job**
 
