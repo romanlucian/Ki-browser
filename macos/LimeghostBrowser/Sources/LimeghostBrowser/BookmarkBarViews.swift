@@ -14,7 +14,10 @@ enum BookmarkBarMetrics {
     /// they must still take the whole height for pointing: a strip of bar
     /// above and below each one that swallowed clicks meant a right-click near
     /// an item opened the bar's own menu instead of the item's.
-    static let barHeight: CGFloat = 28
+    /// 40 since September 2, 2026, matching the tab strip and the toolbar.
+    /// At 28 it was the short row in a stack of three, which is what made the
+    /// chrome read as uneven beside Chrome's.
+    static let barHeight: CGFloat = 40
     /// Padding inside one item, left and right of its content.
     static let itemPadding: CGFloat = 8
     /// Space between two adjacent items. With `itemPadding` on both sides this

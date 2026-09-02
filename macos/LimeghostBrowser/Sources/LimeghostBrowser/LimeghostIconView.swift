@@ -221,7 +221,10 @@ struct BookmarkFolderIcon: View {
     }
 }
 
-private extension VectorShape.LineCap {
+// Internal rather than private to this file: `ChromeIconView` draws in the
+// same hand and must honour a cap the markup names the same way. One
+// conversion, both callers.
+extension VectorShape.LineCap {
     var cgLineCap: CGLineCap {
         switch self {
         case .butt: return .butt
@@ -231,7 +234,7 @@ private extension VectorShape.LineCap {
     }
 }
 
-private extension VectorShape.LineJoin {
+extension VectorShape.LineJoin {
     var cgLineJoin: CGLineJoin {
         switch self {
         case .miter: return .miter

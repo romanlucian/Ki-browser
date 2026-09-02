@@ -1,5 +1,6 @@
 import LimeghostCore
 import Foundation
+import SwiftUI
 import WebKit
 import XCTest
 @testable import LimeghostBrowser
@@ -1013,6 +1014,134 @@ final class BrowserBehaviorTests: XCTestCase {
         try "hello".write(to: notAnImage, atomically: true, encoding: .utf8)
         defer { try? FileManager.default.removeItem(at: notAnImage) }
         XCTAssertFalse(store.setPicture(from: notAnImage, for: created.id))
+    }
+
+    /// Every chrome glyph has to parse into something drawable.
+    ///
+    /// `VectorPathParser` returns nil on markup it cannot read, and a nil
+    /// parse draws an empty view — a blank square where a back arrow should
+    /// be, with nothing failing and nothing logged. A typo in one path is
+    /// invisible until somebody looks at that one button.
+    func testEveryChromeIconParsesIntoSomethingDrawable() throws {
+        for icon in ChromeIcon.allCases {
+            let shapes = try XCTUnwrap(
+                VectorPathParser.parse(icon.markup),
+                "\(icon.rawValue) is not readable markup"
+            )
+            XCTAssertFalse(shapes.isEmpty, "\(icon.rawValue) parsed to no shapes")
+            for shape in shapes {
+                XCTAssertFalse(
+                    shape.commands.isEmpty,
+                    "\(icon.rawValue) has a shape with no drawing commands"
+                )
+            }
+        }
+        XCTAssertGreaterThanOrEqual(ChromeIcon.allCases.count, 11, "the toolbar set shrank")
+    }
+
+    /// The toolbar and the bookmarks bar have to draw in one hand.
+    ///
+    /// That is the whole reason the chrome set exists: the folder icons were
+    /// already a 16-unit box at a 1.5 stroke with round caps, and the toolbar
+    /// above them was SF Symbols. If the chrome set ever drifts off the
+    /// catalogue's stroke, the two rows stop matching and nothing says so.
+    func testTheChromeSetDrawsInTheSameHandAsTheFolderSet() {
+        XCTAssertEqual(LimeghostIconStyle.limeghost.strokeWidth, 1.5)
+        XCTAssertEqual(LimeghostIconStyle.limeghost.defaultLineCap, .round)
+        XCTAssertEqual(LimeghostIconStyle.limeghost.defaultLineJoin, .round)
+
+        // Two chrome glyphs are the catalogue's own drawings, used verbatim
+        // rather than redrawn. If either is edited in one place only, the
+        // toolbar and the folder picker show two different stars.
+        let catalogueStar = LimeghostIconCatalog.all.first { $0.displayName == "star" && $0.style == .limeghost }
+        XCTAssertEqual(
+            ChromeIcon.star.markup,
+            catalogueStar?.markup,
+            "the toolbar star and the folder star have drifted apart"
+        )
+    }
+
+    /// The three chrome rows are one height.
+    ///
+    /// They ran 41 / 44 / 28, and the short bookmarks bar was what made the
+    /// stack read as uneven. Nothing on screen fails if one drifts again — it
+    /// just looks slightly wrong in a way that is hard to name.
+    @MainActor
+    func testTheThreeChromeRowsShareOneHeight() {
+        XCTAssertEqual(BookmarkBarMetrics.barHeight, LimeghostTheme.chromeRowHeight)
+        // The tab strip is its inset plus a chip, and has to land on the same
+        // number rather than merely being close to it.
+        XCTAssertEqual(
+            TabStripMetrics.chipHeight + TabStrip.topInsetForTests,
+            LimeghostTheme.chromeRowHeight,
+            "the tab strip no longer matches the toolbar"
+        )
+        // A full pill, not a rounded rectangle: the radius follows the height
+        // because a Capsule has no radius of its own to keep in sync.
+        XCTAssertGreaterThan(LimeghostTheme.addressPillHeight, 0)
+        XCTAssertLessThan(
+            LimeghostTheme.addressPillHeight,
+            LimeghostTheme.chromeRowHeight,
+            "the address pill has to fit inside its row"
+        )
+    }
+
+    /// The chrome's surfaces have to climb in one direction.
+    ///
+    /// Chrome's three rows work because the tab well is DARKER than the plane
+    /// the active tab rises into, and a raised control is lighter still.
+    /// Limeghost had it inverted — the toolbar was darker than the tab strip —
+    /// which is why the stack read as flat and black however the rows were
+    /// sized, and why the app did not look like the board it was built from.
+    ///
+    /// Nothing fails if one of these is nudged the wrong way. It just goes
+    /// subtly wrong again in a way that is hard to name.
+    @MainActor
+    func testTheChromeSurfacesClimbFromWellToPill() throws {
+        func luminance(_ color: Color) -> Double {
+            let ns = NSColor(color).usingColorSpace(.sRGB)
+            guard let ns else { return -1 }
+            return 0.2126 * Double(ns.redComponent)
+                 + 0.7152 * Double(ns.greenComponent)
+                 + 0.0722 * Double(ns.blueComponent)
+        }
+        let base  = luminance(LimeghostTheme.bg0)
+        let well  = luminance(LimeghostTheme.tabWell)
+        let plane = luminance(LimeghostTheme.bg1)
+        let float = luminance(LimeghostTheme.bg2)
+        let pill  = luminance(LimeghostTheme.bg3)
+
+        XCTAssertLessThan(base, well, "the window base must sit under the tab well")
+        XCTAssertLessThan(well, plane, "the tab well must be darker than the plane the active tab rises into")
+        XCTAssertLessThan(plane, float, "a popover must read as floating above the toolbar")
+        XCTAssertLessThan(float, pill, "the address pill is the raised control and must be the lightest")
+        XCTAssertLessThan(pill, luminance(LimeghostTheme.bg3Hover), "hover must lighten a chip, not darken it")
+
+        // An inactive tab sits between the well it is in and the plane its
+        // active neighbour has risen into.
+        let inactive = luminance(LimeghostTheme.tabChip)
+        XCTAssertGreaterThan(inactive, well)
+        XCTAssertLessThan(inactive, plane)
+    }
+
+    /// Every connection state has a drawing in the chrome set.
+    ///
+    /// The address bar's glyph was the last SF Symbol in the toolbar. If a
+    /// state ever points at a chrome icon that does not parse, that one state
+    /// draws an empty square — and the states that matter most are the ones
+    /// nobody sees until something is wrong with a page.
+    func testEveryConnectionStateHasADrawableGlyph() throws {
+        for state: ConnectionSecurity in [.noPage, .checking, .secure, .mixedContent, .notSecure] {
+            let shapes = try XCTUnwrap(
+                VectorPathParser.parse(state.chromeIcon.markup),
+                "\(state) points at unreadable markup"
+            )
+            XCTAssertFalse(shapes.isEmpty, "\(state) draws nothing")
+        }
+        // The two states that describe missing encryption must not share the
+        // glyph of the one that does not.
+        XCTAssertNotEqual(ConnectionSecurity.secure.chromeIcon, ConnectionSecurity.notSecure.chromeIcon)
+        XCTAssertNotEqual(ConnectionSecurity.secure.chromeIcon, ConnectionSecurity.mixedContent.chromeIcon)
     }
 
     func testTheBrandMarkIsActuallyInTheAppBundle() {
@@ -2070,7 +2199,10 @@ final class BrowserBehaviorTests: XCTestCase {
             BookmarkBarMetrics.itemHeight,
             "the chip is meant to sit inside a taller bar"
         )
-        XCTAssertEqual(BookmarkBarMetrics.barHeight, 28)
+        // The bar joined the tab strip and the toolbar at one height on
+        // September 2, 2026. Read from the theme rather than pinned here, so
+        // the three cannot drift apart again without a test saying so.
+        XCTAssertEqual(BookmarkBarMetrics.barHeight, LimeghostTheme.chromeRowHeight)
         XCTAssertEqual(BookmarkBarMetrics.itemHeight, 22)
     }
 

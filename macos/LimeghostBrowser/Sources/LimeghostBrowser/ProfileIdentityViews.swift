@@ -39,7 +39,15 @@ struct ProfileAvatar: View {
         }
         .frame(width: size, height: size)
         .clipShape(Circle())
-        .overlay(Circle().stroke(Color.white.opacity(0.14), lineWidth: 1))
+        // The profile's colour rides the avatar's own rim.
+        //
+        // It was a 3pt bar across the top of the window until September 2,
+        // 2026. That read as an unexplained line rather than as identity —
+        // twice the founder asked where it came from — and a line nobody can
+        // name is worse than no signal. Here the colour sits on the thing it
+        // describes, so a photograph and a drawing are still told apart at a
+        // glance and nothing is left to explain.
+        .overlay(Circle().stroke(tint, lineWidth: size > 30 ? 2 : 1.5))
         .accessibilityHidden(true)
     }
 }

@@ -92,6 +92,20 @@ enum ConnectionSecurity: Equatable {
         }
     }
 
+    /// The chrome set's own drawing for this state.
+    ///
+    /// The set carries locks so the address bar can speak in one hand; the SF
+    /// Symbol it replaced was the last glyph in the toolbar that did not.
+    var chromeIcon: ChromeIcon {
+        switch self {
+        case .noPage: return .globe
+        case .checking: return .lock
+        case .secure: return .lock
+        case .mixedContent: return .lockWarning
+        case .notSecure: return .lockSlash
+        }
+    }
+
     var symbolName: String {
         switch self {
         case .noPage: return "globe"
@@ -197,10 +211,13 @@ struct SiteInformationChip: View {
         .frame(minWidth: 20, minHeight: 22)
     }
 
+    /// What the connection is, in the toolbar's own hand.
+    ///
+    /// Only drawn where there is something to say — a secure page shows the
+    /// mark instead, and the words beside this carry the meaning either way.
     private var symbol: some View {
-        Image(systemName: session.connectionSecurity.symbolName)
+        ChromeIconView(icon: session.connectionSecurity.chromeIcon, size: 14)
             .foregroundStyle(session.connectionSecurity.tint)
-            .font(.system(size: 11, weight: .semibold))
     }
 }
 

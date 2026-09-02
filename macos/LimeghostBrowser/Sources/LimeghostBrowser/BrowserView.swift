@@ -53,7 +53,6 @@ private struct BrowserTabContent: View {
     static let minimumReadableWidth: CGFloat = 600
 
     @ObservedObject var tab: BrowserTab
-    @ObservedObject private var profiles = BrowserServices.shared.profiles
     @ObservedObject private var session: BrowserSession
     @ObservedObject private var find: PageFindController
     @ObservedObject var workspace: BrowserWorkspace
@@ -71,25 +70,8 @@ private struct BrowserTabContent: View {
         _addressText = State(initialValue: tab.session.currentURLString)
     }
 
-    private var profileColorID: String {
-        profiles.profile(workspace.profileID)?.colorID ?? TabGroupRecord.colorIDs[1]
-    }
-
     var body: some View {
         VStack(spacing: 0) {
-            // Which profile this window belongs to, told without words.
-            //
-            // Only when there is more than one: somebody who never makes a
-            // second profile should never see a stripe they cannot explain.
-            // Three points, at the very top, and nowhere else — the chrome's
-            // colour comes from LimeghostTheme and stays there.
-            if BrowserServices.shared.profiles.profiles.count > 1 {
-                Rectangle()
-                    .fill(Color(TabGroupPalette.color(for: profileColorID)))
-                    .frame(height: 3)
-                    .accessibilityHidden(true)
-            }
-
             BrowserToolbar(
                 session: session,
                 workspace: workspace,
@@ -134,12 +116,10 @@ private struct BrowserTabContent: View {
             if let notice = session.pageNotice {
                 LinkNoticeBar(message: notice, symbol: "doc.on.doc") { session.dismissPageNotice() }
             }
-            if session.isLoading {
-                ProgressView(value: session.estimatedProgress)
-                    .progressViewStyle(.linear)
-                    .tint(LimeghostTheme.accent)
-                    .frame(height: 2)
-            }
+            // The full-width loading line is gone as of September 2, 2026.
+            // Progress moved into the mark at the left of the address bar,
+            // where the eye already is — one signal, in the place the eye
+            // goes first, instead of a bar drawn across the whole window.
             Divider()
             // Two columns need room for both. Below the threshold the assistant
             // covers the page instead of squeezing it — the same answer a phone
@@ -369,11 +349,11 @@ private struct BrowserToolbar: View {
         VStack(spacing: 0) {
             HStack(spacing: 10) {
                 HStack(spacing: 4) {
-                    NavigationButton(symbol: "chevron.left", label: "Back", enabled: session.canGoBack) { session.goBack() }
-                    NavigationButton(symbol: "chevron.right", label: "Forward", enabled: session.canGoForward) { session.goForward() }
-                    NavigationButton(symbol: "house", label: "Start page", enabled: true) { goHome() }
+                    NavigationButton(symbol: .back, label: "Back", enabled: session.canGoBack) { session.goBack() }
+                    NavigationButton(symbol: .forward, label: "Forward", enabled: session.canGoForward) { session.goForward() }
+                    NavigationButton(symbol: .home, label: "Start page", enabled: true) { goHome() }
                     NavigationButton(
-                        symbol: session.isLoading ? "xmark" : "arrow.clockwise",
+                        symbol: session.isLoading ? .close : .reload,
                         label: session.isLoading ? "Stop" : "Reload",
                         enabled: true
                     ) { session.isLoading ? session.stopLoading() : session.reload() }
@@ -383,14 +363,14 @@ private struct BrowserToolbar: View {
 
                 HStack(spacing: 4) {
                     Button { workspace.toggleBookmarkForSelectedTab() } label: {
-                        Image(systemName: isBookmarked ? "star.fill" : "star")
+                        ChromeIconView(icon: isBookmarked ? .starFilled : .star)
                     }
                     .buttonStyle(GhostButtonStyle(tint: isBookmarked ? Color.orange : LimeghostTheme.textPrimary))
                     .disabled(session.currentURLString.isEmpty)
                     .help(isBookmarked ? "Remove bookmark" : "Bookmark this page (⌘D)")
 
                     Button { voiceInput.toggle() } label: {
-                        Image(systemName: voiceInput.isListening ? "waveform" : "mic")
+                        ChromeIconView(icon: .voice)
                     }
                     .buttonStyle(GhostButtonStyle(tint: voiceInput.isListening ? Color.red : LimeghostTheme.textPrimary))
                     .help(voiceInput.isListening ? "Stop voice input" : "Start on-device voice input")
@@ -398,7 +378,7 @@ private struct BrowserToolbar: View {
                     .accessibilityHint("Voice input fills the address field but does not submit automatically.")
 
                     Button { showsLibrary.toggle() } label: {
-                        Image(systemName: "books.vertical")
+                        ChromeIconView(icon: .library)
                     }
                     .buttonStyle(GhostButtonStyle())
                     .help("Bookmarks")
@@ -414,7 +394,7 @@ private struct BrowserToolbar: View {
 
                     Button { downloads.togglePanel() } label: {
                         ZStack(alignment: .topTrailing) {
-                            Image(systemName: downloads.items.isEmpty ? "arrow.down.circle" : "arrow.down.circle.fill")
+                            ChromeIconView(icon: .download)
                                 .frame(width: 28, height: 28)
                             if downloads.activeCount > 0 {
                                 Text("\(downloads.activeCount)")
@@ -449,14 +429,14 @@ private struct BrowserToolbar: View {
                     // not exist.
                     HStack(spacing: 2) {
                         Button { companion.toggle() } label: {
-                            Image(systemName: "bubble.left.and.text.bubble.right")
+                            ChromeIconView(icon: .assistant)
                         }
                         .buttonStyle(GhostButtonStyle(isActive: companion.isVisible))
                         .help("Show or hide your AI beside the page (⇧⌘A)")
                         .accessibilityLabel("Assistant")
 
                         Button { Task { await toggleReader() } } label: {
-                            Image(systemName: "doc.plaintext")
+                            ChromeIconView(icon: .reader)
                         }
                         .buttonStyle(GhostButtonStyle(isActive: tab.readerArticle != nil))
                         .help("Read this page as Limeghost extracts it — the same text an AI would get (⇧⌘R)")
@@ -473,7 +453,7 @@ private struct BrowserToolbar: View {
                 }
             }
             .padding(.horizontal, 10)
-            .frame(height: 44)
+            .frame(height: LimeghostTheme.chromeRowHeight)
             .background(LimeghostTheme.bg1)
             .zIndex(1)
             .sheet(item: $editingProfileID) { edited in
@@ -692,7 +672,7 @@ private struct BrowserToolbar: View {
             )
 
             Button { submitAddress() } label: {
-                Image(systemName: "arrow.right")
+                ChromeIconView(icon: .arrowRight)
                     .font(.system(size: 11, weight: .bold))
                     .frame(width: 20, height: 20)
                     .contentShape(Rectangle())
@@ -710,11 +690,34 @@ private struct BrowserToolbar: View {
             }
         }
         .padding(.horizontal, 12)
-        .frame(height: 30)
-        .background(LimeghostTheme.bg3, in: RoundedRectangle(cornerRadius: LimeghostTheme.radius9))
+        .frame(height: LimeghostTheme.addressPillHeight)
+        .background(LimeghostTheme.bg3, in: Capsule())
         .overlay(
-            RoundedRectangle(cornerRadius: LimeghostTheme.radius9)
+            Capsule()
                 .stroke(addressFocused ? LimeghostTheme.accent : LimeghostTheme.hairline2, lineWidth: 1)
+        )
+        // The page arriving, drawn on the pill's own outline.
+        //
+        // A hairline that already frames the address bar travels green as the
+        // page loads, then fades. It replaced a small ring around the mark on
+        // September 2, 2026 — that ring was 19 points across and, worse, only
+        // ever drew on a page carrying a security warning, so on an ordinary
+        // page nobody had seen it. The outline is the full width of the
+        // control, it is already there, and it costs one more overlay.
+        //
+        // Chrome, Brave and Opera all float a bar across the top of the page.
+        // Nobody puts it on the frame.
+        .overlay(
+            Capsule()
+                .trim(from: 0, to: session.isLoading ? max(0.02, session.estimatedProgress) : 1)
+                .stroke(
+                    LimeghostTheme.accent,
+                    style: StrokeStyle(lineWidth: 1.6, lineCap: .round)
+                )
+                .opacity(session.isLoading ? 1 : 0)
+                .animation(.easeOut(duration: 0.22), value: session.estimatedProgress)
+                .animation(.easeOut(duration: 0.35), value: session.isLoading)
+                .allowsHitTesting(false)
         )
         // Hung off the pill so it lines up with the field it belongs to, and
         // drawn outside the toolbar's own height so it floats over the page.
@@ -978,15 +981,14 @@ private struct FindInPageBar: View {
 }
 
 private struct NavigationButton: View {
-    let symbol: String
+    let symbol: ChromeIcon
     let label: String
     let enabled: Bool
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            Image(systemName: symbol)
-                .font(.system(size: 13, weight: .medium))
+            ChromeIconView(icon: symbol)
         }
         .buttonStyle(GhostButtonStyle(tint: enabled ? LimeghostTheme.textPrimary : LimeghostTheme.textTertiary))
         .disabled(!enabled)

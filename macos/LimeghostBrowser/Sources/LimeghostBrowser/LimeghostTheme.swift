@@ -7,21 +7,33 @@ import SwiftUI
 enum LimeghostTheme {
     // MARK: - Surfaces (back to front)
 
-    /// Window base, visible behind the tab strip/toolbar stack.
-    static let bg0 = Color(hex: 0x07070a)
-    /// Toolbar row, bookmarks bar, and the active tab chip that joins them —
-    /// one continuous darker plane under the tab strip.
-    static let bg1 = Color(hex: 0x0b0b0e)
-    /// The tab strip the chips sit in, plus roomier page surfaces (bookmark
-    /// cards) that want one step of lift off `bg0`.
-    static let bg2 = Color(hex: 0x101013)
-    /// Chips, pills, and popover-adjacent surfaces.
-    static let bg3 = Color(hex: 0x15151a)
+    /// Window base, behind everything.
+    static let bg0 = Color(hex: 0x0d0d0f)
+    /// The trough the tab chips sit in.
+    ///
+    /// Its own token since September 2, 2026. It used to be `bg2`, which is
+    /// also every popover and card — and in Chrome's arrangement, which this
+    /// now follows, the tab well is *darker* than the toolbar while a card is
+    /// *lighter*. One token could not be both.
+    static let tabWell = Color(hex: 0x131316)
+    /// The plane: the toolbar row, the bookmarks bar, and the active tab chip
+    /// that joins them — one continuous surface the active tab rises into.
+    ///
+    /// Lighter than the well as of September 2, 2026. It was darker, which is
+    /// the inverse of how Chrome builds the same three rows, and it is why the
+    /// whole stack read as flat and black however the rows were sized.
+    static let bg1 = Color(hex: 0x2a2a2e)
+    /// One step above the plane: popovers, cards, the reader's header, the
+    /// address suggestion list. Things that float.
+    static let bg2 = Color(hex: 0x303035)
+    /// Chips and pills — the address pill above all. The lightest chrome
+    /// surface, because a raised control should read as raised.
+    static let bg3 = Color(hex: 0x38383d)
     /// `bg3`, lightened one notch for hover states.
-    static let bg3Hover = Color(hex: 0x1b1b21)
-    /// Inactive tab chip: a touch lighter than `bg3` so an unselected tab
-    /// reads as raised out of the strip rather than cut into it.
-    static let tabChip = Color(hex: 0x1a1a1f)
+    static let bg3Hover = Color(hex: 0x42424a)
+    /// Inactive tab chip: between the well it sits in and the plane its active
+    /// neighbour rises into, so an unselected tab reads as on its way up.
+    static let tabChip = Color(hex: 0x222226)
 
     // MARK: - Text
 
@@ -59,6 +71,20 @@ enum LimeghostTheme {
     static let hairline1 = Color.white.opacity(0.06)
     static let hairline2 = Color.white.opacity(0.08)
     static let hairline3 = Color.white.opacity(0.10)
+
+    // MARK: - Chrome metrics
+
+    /// The tab strip, the toolbar and the bookmarks bar are one height.
+    ///
+    /// They ran 41 / 44 / 28 until September 2, 2026, and the short bookmarks
+    /// bar was what made the stack read as uneven beside Chrome's, whose three
+    /// rows are near enough equal. One number so they cannot drift again.
+    static let chromeRowHeight: CGFloat = 40
+
+    /// The address pill. Drawn as a `Capsule`, so its radius is always half
+    /// this — a full pill the way Chrome's omnibox is, rather than a rounded
+    /// rectangle that has to be kept in sync with the height by hand.
+    static let addressPillHeight: CGFloat = 32
 
     // MARK: - Radii
 

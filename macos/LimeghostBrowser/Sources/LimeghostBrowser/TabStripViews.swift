@@ -208,7 +208,7 @@ struct TabStrip: View {
             .padding(.top, Self.topInset - TabStripMetrics.groupEnclosureLift)
         }
         .frame(height: Self.topInset + TabStripMetrics.chipHeight)
-        .background(LimeghostTheme.bg2)
+        .background(LimeghostTheme.tabWell)
         .contentShape(Rectangle())
         // The pairing that lets a tab dragged out of another window find this
         // strip is made in `WindowDragArea`, where the window is known.
@@ -338,7 +338,14 @@ struct TabStrip: View {
     /// join that window.
     static var stripHeight: CGFloat { topInset + TabStripMetrics.chipHeight }
 
-    private static let topInset: CGFloat = 7
+    /// 6 rather than 7 since September 2, 2026: the strip is 40 to match the
+    /// toolbar and the bookmarks bar, and a 34pt chip has to fill it.
+    private static let topInset: CGFloat = 6
+
+    /// The inset, for the test that checks the strip lands on the same height
+    /// as the toolbar and the bookmarks bar. Exposed rather than duplicated in
+    /// the test, so a change here is what the test reads.
+    static var topInsetForTests: CGFloat { topInset }
     private static let horizontalInset: CGFloat = 12
     /// Chip height plus the clearance a group's tint needs above it.
     private static let stripItemBand = TabStripMetrics.chipHeight + TabStripMetrics.groupEnclosureLift
@@ -1037,7 +1044,7 @@ private struct TabGroupEditor: View {
         }
         .padding(14)
         .frame(width: 268)
-        .background(LimeghostTheme.bg2)
+        .background(LimeghostTheme.tabWell)
     }
 
     private func swatch(_ entry: TabGroupPalette.Entry) -> some View {
