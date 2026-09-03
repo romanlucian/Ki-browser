@@ -40,6 +40,38 @@ jobs:
       - run: codesign --verify --deep --strict ../../dist/Limeghost.app
       - run: plutil -lint ../../dist/Limeghost.app/Contents/Resources/PrivacyInfo.xcprivacy
 
+  # The point of the whole shared-layer plan: the door rule, the narrow-window
+  # rule and the assistant's session cap are not "should also work on a
+  # phone" — they run on one here. `LimeghostShared` and `LimeghostCore` are
+  # the only two targets this job builds; `LimeghostBrowser` itself (the
+  # executable) and `BrowserBehaviorTests` stay AppKit and stay Mac-only,
+  # exactly as macos-browser above already exercises them.
+  ios-simulator:
+    runs-on: macos-15
+    defaults:
+      run:
+        working-directory: macos/LimeghostBrowser
+    steps:
+      - uses: actions/checkout@v4
+      # Same pin as macos-browser and for the same reason: a loud failure
+      # here beats the iOS platform silently drifting out from under this job.
+      - run: sudo xcode-select -s /Applications/Xcode_16.4.app/Contents/Developer
+      - run: swift --version
+      # Never a hard-coded simulator name or OS version: this runner's image
+      # ships different runtimes than a developer's machine, so the device is
+      # discovered here and the destination below is built from its UDID.
+      - name: Pick an available iOS simulator
+        run: |
+          UDID=$(xcrun simctl list devices available --json \
+            | python3 -c "import json,sys;d=json.load(sys.stdin)['devices'];print(next(v['udid'] for k in d for v in d[k] if 'iPhone' in v['name']))")
+          echo "SIM_UDID=$UDID" >> "$GITHUB_ENV"
+      - run: >-
+          xcodebuild test -scheme LimeghostShared
+          -destination "platform=iOS Simulator,id=$SIM_UDID"
+      - run: >-
+          xcodebuild test -scheme LimeghostCore
+          -destination "platform=iOS Simulator,id=$SIM_UDID"
+
   cef-contract:
     runs-on: macos-15
     steps:

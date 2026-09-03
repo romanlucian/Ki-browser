@@ -14,7 +14,8 @@ let package = Package(
         .executable(name: "LimeghostBrowser", targets: ["LimeghostBrowser"]),
         // The iOS app is an Xcode target that consumes these two as a local
         // package; SwiftPM cannot build an iOS app itself.
-        .library(name: "LimeghostShared", targets: ["LimeghostShared"])
+        .library(name: "LimeghostShared", targets: ["LimeghostShared"]),
+        .library(name: "LimeghostCore", targets: ["LimeghostCore"])
     ],
     targets: [
         .target(name: "LimeghostCore"),

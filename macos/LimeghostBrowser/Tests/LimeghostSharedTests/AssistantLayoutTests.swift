@@ -37,4 +37,13 @@ final class AssistantLayoutTests: XCTestCase {
         XCTAssertEqual(AssistantLayout.companionWidth, 500)
         XCTAssertEqual(AssistantLayout.minimumReadableWidth, 600)
     }
+
+    /// `fitsBesidePage`'s boundary is pinned above; this one was not, and a
+    /// mutation test proved it: shifting `minimumForTwoAssistants` by up to
+    /// ±23 points still passed every existing test. Pinned exactly, the same
+    /// way, so a refactor cannot drift this one either.
+    func testTheTwoAssistantThresholdIsExactlyOneThousand() {
+        XCTAssertFalse(AssistantLayout.fitsTwoAssistants(width: 999))
+        XCTAssertTrue(AssistantLayout.fitsTwoAssistants(width: 1000))
+    }
 }
