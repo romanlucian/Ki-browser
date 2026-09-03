@@ -8,6 +8,8 @@ Limeghost is a **standalone macOS browser foundation** built with SwiftUI and We
 
 The installed and `dist` builds still use WebKit. A future Chromium migration now has an isolated [CEF migration plan](docs/chromium-migration.md) and validation scaffold under `chromium/cef-spike`; that scaffold is not linked into the current app and must not be described as a working Chromium build.
 
+An iOS pocket browser is in progress, on top of the same `LimeghostCore`. As of September 3, 2026 there is a boundary and nothing more: a new `LimeghostShared` Swift target holds the platform-neutral session, workspace, store, and assistant code both platforms need, typechecked against the iOS 17 SDK and exercised by a CI job that has resolved and passed on macOS but never yet run against a real iOS Simulator. There is no `ios/` Xcode project, no phone UI, and nothing installed on a device. See [docs/ios-browser-foundation.md](docs/ios-browser-foundation.md) for what exists and [docs/superpowers/specs/2026-09-03-ios-pocket-browser-design.md](docs/superpowers/specs/2026-09-03-ios-pocket-browser-design.md) for the full design.
+
 The native app provides:
 
 - a single-row dark browser chrome with inline traffic lights in the tab strip, one unified toolbar and address pill, and per-site icons: a site's real icon is captured only while you visit it, from that site's own pages, and cached locally; sites you have not visited show a locally computed identity-color square, and no third-party icon service is ever contacted;
@@ -167,6 +169,7 @@ Limeghost presents Safari's user agent because it renders with WebKit, Safari's 
 - Private tabs isolate website storage for that tab and avoid history/restoration, but they do not provide network anonymity, hide activity from websites or the network, or erase files the user downloads.
 - Passkeys do not work yet. WebKit implements them, but macOS withholds the on-device authenticator (Touch ID and iCloud Keychain passkeys) from a web view inside an app that is not Developer ID signed, so `isUserVerifyingPlatformAuthenticatorAvailable()` reports false and sites fall back to scanning a cross-device passkey over Bluetooth. Sign in with a password and second factor until the app is properly signed and the browser entitlement is in place.
 - The native browser is a version-1 MVP with basic tabs; its local bundle is ad hoc signed with the hardened runtime, but it is not Developer ID signed, notarized, or independently security reviewed for consumer distribution.
+- An iOS app does not exist yet. `LimeghostShared`, the platform-neutral layer it will be built on, does, and typechecks against the iOS 17 SDK — but there is no `ios/` Xcode project, no phone UI, no App Store presence, and nothing installed on any device. The iOS CI job has resolved and passed on macOS but has never run against a real iOS Simulator on this machine. See [docs/ios-browser-foundation.md](docs/ios-browser-foundation.md).
 - WebKit does not provide Chrome extension compatibility and is not a drop-in substitute for a future Chromium product.
 - The repository is published under the [GNU Affero General Public License v3.0](LICENSE). Source may be read, modified, and redistributed under those terms; modified versions offered to users over a network must also offer their corresponding source. Limeghost holds the copyright and may additionally offer separate commercial terms.
 - The folder icon picker offers three sets. The Limeghost set (104 icons) is the project's own artwork, and the only one a folder's tint reaches — it is drawn in `currentColor`, while the licensed sets carry their own colours, so the swatch row hides for them rather than showing a control that does nothing. Licensed sets are credited in the picker wherever they are shown.
@@ -196,6 +199,7 @@ The mark is in [`docs/brand/limeghost-mark-2026-08-31/`](docs/brand/limeghost-ma
 - [Focused zero-budget go-to-market plan](docs/go-to-market.md)
 - [Product and technical foundation](docs/product-foundation.md)
 - [Native macOS architecture and limits](docs/macos-browser-foundation.md)
+- [iOS pocket-browser foundation](docs/ios-browser-foundation.md)
 - [Chromium/CEF migration foundation](docs/chromium-migration.md)
 - [Tracker blocking](docs/content-blocking.md)
 - [Privacy and safety notes](docs/privacy-and-safety.md)

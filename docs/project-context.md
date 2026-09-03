@@ -18,6 +18,23 @@ The quality objective is “fast and calm even when the web is heavy.” This is
 
 Voice is an additional primary interface, not a replacement for visual search or cited visual answers. The first voice phase is explicit, on-device dictation into the visible search/address field. There is no wake word, background listening, automatic submission, or autonomous transaction.
 
+## iOS pocket browser
+
+**Decided September 2–3, 2026.** A real iOS browser — not a companion app, not a share-sheet extension — that owns navigation on the phone: tabs, address bar, bookmarks, history, Reader, Copy for AI, tracker blocking, and the person's own assistant on their own account. The full design is [docs/superpowers/specs/2026-09-03-ios-pocket-browser-design.md](superpowers/specs/2026-09-03-ios-pocket-browser-design.md); this entry records the decisions, not the design.
+
+Four decisions and two amendments, in the order they were made:
+
+1. **Scope is a pocket browser**, as above — not a companion, not an extension.
+2. **The assistant fills the screen on a phone.** There is no "beside the page" at phone width; Compare answers does not exist there.
+3. **Continuity is iCloud private sync, bookmarks only, never history** — CloudKit's private database, in the person's own iCloud account; Limeghost runs no server and holds nothing. *Amended:* designed now, **built after Apple Developer Program enrolment**, because CloudKit needs paid provisioning and the founder has said the fee is not available now. v1 ships as an island with an export/import bridge instead.
+4. **Licensing is dual-license.** The repository stays AGPL-3.0; an eventual App Store binary ships under the copyright holder's separate terms — the same principle [docs/ip-and-ownership.md](ip-and-ownership.md) already records, now applied to the founder's own distribution.
+5. *Amendment:* **bookmark import is in v1**, because it is the one piece of continuity that costs nothing and needs no Apple money.
+6. **One repository, one Core, a new shared layer, an Xcode project under `ios/` later.** Not a second repository (the shared contract would drift) and not a whole-repository Xcode conversion now (it would collide with live desktop work).
+
+**This reverses a non-goal, on the record rather than by silent deletion.** `docs/product-foundation.md` lists "a mobile browser" among explicit non-goals, and `docs/limeghost-strategy.md` says the next differentiated feature should not start "before an outside tester can install the app at all" — that sentence stays, and this is a dated, conscious exception to it, decided by the founder on September 2, 2026, alongside his August 24 decision to dogfood rather than recruit testers. The non-goal was written against the cost of a **second rendering engine**: "maintaining Chromium would add security updates, packaging, sync, profiles, password migration, mobile support…". iOS mandates WebKit, which is already this browser's engine — it is the one platform where the WebKit + SwiftUI + `LimeghostCore` bet is native rather than a compromise, and the CEF platform-expansion gate does not fire, because nothing new is being maintained. The sequencing rule stays true for the two features it names: the iOS app is buildable and dogfoodable at no cost, and validatable by nobody but the founder until enrolment — the same position the Mac app is already in. **It is unvalidated by anyone but the founder, and no document may say otherwise.**
+
+The first implementation step — a `LimeghostShared` Swift target holding the platform-neutral session, workspace, store, and assistant code, typechecked against the iOS 17 SDK — landed September 3, 2026; see [docs/ios-browser-foundation.md](ios-browser-foundation.md). Nothing beyond that layer exists yet: no `ios/` Xcode project, no phone shell, no CloudKit code, nothing installed on a device but through free provisioning on the founder's own iPhone once a later plan builds it. Website logins do not carry from the Mac — WebKit's data store has no export API, so the person signs in again — and neither does history, a documented non-goal on both platforms.
+
 ## AI and privacy decisions
 
 - Extraction and risk signals work locally without an account or API key, because there is no account or API key: Limeghost calls no AI service and stores no credential for one.

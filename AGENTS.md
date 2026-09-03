@@ -5,7 +5,8 @@ Read both [docs/limeghost-strategy.md](docs/limeghost-strategy.md) and [docs/pro
 ## Architecture
 
 - `macos/LimeghostBrowser/Sources/LimeghostCore`: reusable models, deterministic local analysis, risk heuristics, source comparison, and the optional-provider contract. Keep this layer independent of SwiftUI and WebKit where practical.
-- `macos/LimeghostBrowser/Sources/LimeghostBrowser`: macOS-specific SwiftUI window/UI, `WKWebView` sessions, tabs, persistence, downloads, Keychain settings, and app lifecycle.
+- `macos/LimeghostBrowser/Sources/LimeghostShared`: added September 3, 2026 for the iOS pocket-browser design (`docs/superpowers/specs/2026-09-03-ios-pocket-browser-design.md`). Platform-neutral code that needs more than `LimeghostCore` can hold — `@MainActor`, `WKWebView` types, `ObservableObject` — but none of AppKit, UIKit, or SwiftUI: `BrowserSession`, `BrowserWorkspace`, `AICompanion`, the bookmark/history/preference stores, `FaviconStore`, and more. See [docs/ios-browser-foundation.md](docs/ios-browser-foundation.md) for the full boundary and how it is verified. **Takes no `#if os(...)`** — a platform difference is a protocol member (`BrowserSessionPlatform`; `WorkspaceCollaborators.swift`'s `PageSharing`/`ClipboardWriting`), never a conditional.
+- `macos/LimeghostBrowser/Sources/LimeghostBrowser`: macOS-specific SwiftUI window/UI, AppKit-specific code, tabs, persistence UI, downloads, Keychain settings, and app lifecycle. `BrowserSession`'s WebKit plumbing and the data stores it used to hold directly now live in `LimeghostShared`; this target keeps their macOS conformers (`MacSessionPlatform`, `PageFileCommands`) and everything that draws chrome.
 - `chromium/cef-spike`: isolated CEF dependency/build validation and the Swift-facing bridge contract. It is not linked into the current app. Keep CEF C++ types behind Objective-C++ and do not commit downloaded runtimes or generated builds.
 - Root Manifest V3 files: earlier extension validation artifact only. Do not present the extension as the primary browser.
 - `docs/page-intelligence-contract.md`: conceptual boundary a later Windows implementation can reproduce; native UI code is platform-specific.
@@ -73,6 +74,25 @@ Plus `npm test` and `npm run validate` from the root. The smoke suite is `Tests/
 
 The smoke test requires a real logged-in macOS desktop session with WebKit/AppKit services available. A headless or restricted agent sandbox may compile the test and expose the SwiftUI window while blocking WebKit’s content process.
 
+**Verifying `LimeghostShared` for iOS.** Prove portability with the compiler, never with a search for `import AppKit` — `import SwiftUI` re-exports AppKit on macOS, so an import list alone both under- and over-counts what is actually portable; this was measured wrong repeatedly while building the target (see [docs/ios-browser-foundation.md](docs/ios-browser-foundation.md)). This machine has no iOS platform component installed (`xcodebuild -showdestinations` lists iOS under "Ineligible destinations": `iOS 26.5 is not installed`), so a typecheck stands in for a Simulator build locally:
+
+```bash
+cd macos/LimeghostBrowser/Sources
+xcrun --sdk iphonesimulator swiftc -emit-module -module-name LimeghostCore \
+  -swift-version 5 -target arm64-apple-ios17.0-simulator \
+  -emit-module-path /tmp/limeghost-ios/LimeghostCore.swiftmodule LimeghostCore/*.swift
+xcrun --sdk iphonesimulator swiftc -typecheck -swift-version 5 \
+  -target arm64-apple-ios17.0-simulator -I /tmp/limeghost-ios LimeghostShared/*.swift
+```
+
+`LimeghostSharedLayer`, a scheme committed at `.swiftpm/xcode/xcshareddata/xcschemes/` (note the `.gitignore` exceptions carved into its blanket `**/.swiftpm/` rule — without them the scheme file is untracked and CI fails on a missing scheme with nothing in the diff to explain why), builds and tests exactly `LimeghostCore` and `LimeghostShared` plus their two test targets. This needed its own scheme because SwiftPM's auto-generated per-*product* schemes (the `LimeghostCore` and `LimeghostShared` entries in `xcodebuild -list`) carry **no test action at all**; only the whole-*package* scheme does, and that one's build action also drags in the AppKit-heavy `LimeghostBrowser` executable and `BrowserBehaviorTests`, neither of which can compile for iOS. Verify it locally with:
+
+```bash
+xcodebuild test -scheme LimeghostSharedLayer -destination 'platform=macOS'
+```
+
+The `ios-simulator` CI job runs this same scheme against a real Simulator on GitHub's macos-15 image, which ships the iOS platform this machine lacks. That job has never been observed to run here — only confirmed to resolve and to pass on `platform=macOS` — so report it that way, never as known-green, until an actual Simulator run has been seen.
+
 From the repository root, validate the retained extension artifact with:
 
 ```bash
@@ -90,6 +110,7 @@ The preferred user launch path is Finder → `dist/Limeghost.app`. `swift run` i
 - [Focused zero-budget go-to-market plan](docs/go-to-market.md)
 - [Product foundation](docs/product-foundation.md)
 - [macOS architecture and release gaps](docs/macos-browser-foundation.md)
+- [iOS pocket-browser foundation](docs/ios-browser-foundation.md)
 - [Chromium/CEF migration foundation](docs/chromium-migration.md)
 - [Privacy and safety](docs/privacy-and-safety.md)
 - [Market research](docs/market-research.md)
