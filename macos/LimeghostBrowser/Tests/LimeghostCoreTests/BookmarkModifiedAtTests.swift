@@ -54,4 +54,21 @@ final class BookmarkModifiedAtTests: XCTestCase {
 
         XCTAssertEqual(decoded.modifiedAt, when)
     }
+
+    /// Resaving a folder with the exact title, icon and colour it already has
+    /// is not an edit. The folder editor's Save button is gated only on a
+    /// non-empty title, never on whether anything actually changed, so this
+    /// is reached in ordinary use, not just in theory. `BrowserDataStore`
+    /// decides whether to write to disk and republish by comparing the whole
+    /// folder, so stamping `modifiedAt` on a no-op Save would turn a person
+    /// opening an editor and changing nothing into an always-on disk write.
+    func testResavingAFolderWithNoActualChangeLeavesItUntouched() throws {
+        var collection = BookmarkCollection()
+        let created = collection.createFolder(title: "Reading", iconID: "book", colorID: "mint", parentID: nil)
+        let folder = try XCTUnwrap(created)
+
+        collection.updateFolder(id: folder.id, title: folder.title, iconID: folder.iconID ?? "", colorID: folder.colorID)
+
+        XCTAssertEqual(collection.folders, [folder], "resaving the same values must not look like an edit")
+    }
 }

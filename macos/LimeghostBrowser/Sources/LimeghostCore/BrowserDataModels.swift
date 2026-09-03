@@ -480,10 +480,29 @@ public struct BookmarkCollection: Codable, Equatable, Sendable {
         guard let index = folders.firstIndex(where: { $0.id == id }) else { return }
         let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedTitle.isEmpty else { return }
-        folders[index].title = trimmedTitle
         let trimmedIconID = iconID.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !trimmedIconID.isEmpty { folders[index].iconID = trimmedIconID }
-        if let normalized = LimeghostIconColor.normalizedID(colorID) { folders[index].colorID = normalized }
+        let normalizedColorID = LimeghostIconColor.normalizedID(colorID)
+
+        // Resaving the exact values a folder already has is not an edit. The
+        // editor's Save button is gated only on a non-empty title, never on
+        // whether anything actually changed, so this is reached in ordinary
+        // use — and `BrowserDataStore.apply` decides whether to write to disk
+        // and republish by comparing the whole folder, so an unconditional
+        // stamp here would turn every no-op Save into a disk write.
+        var changed = false
+        if folders[index].title != trimmedTitle {
+            folders[index].title = trimmedTitle
+            changed = true
+        }
+        if !trimmedIconID.isEmpty, folders[index].iconID != trimmedIconID {
+            folders[index].iconID = trimmedIconID
+            changed = true
+        }
+        if let normalizedColorID, folders[index].colorID != normalizedColorID {
+            folders[index].colorID = normalizedColorID
+            changed = true
+        }
+        guard changed else { return }
         folders[index].modifiedAt = Date()
     }
 
