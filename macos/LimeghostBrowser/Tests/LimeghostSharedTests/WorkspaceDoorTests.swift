@@ -64,6 +64,7 @@ final class WorkspaceDoorTests: XCTestCase {
             ("the history home", { $0.openHistoryHome() }),
             ("back", { $0.goBackInSelectedTab() }),
             ("forward", { $0.goForwardInSelectedTab() }),
+            ("a typed address", { $0.navigate("example.com") }),
         ]
 
         for (name, openADoor) in doors {

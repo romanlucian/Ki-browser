@@ -1260,6 +1260,20 @@ public final class BrowserWorkspace: ObservableObject {
         }
     }
 
+    /// Somebody typed something and pressed Return. Unlike `open(_:)` this
+    /// accepts what a person actually types — a bare host, or search terms —
+    /// because resolving that is `BrowserSession.navigate`'s job.
+    ///
+    /// It exists so that typing an address is a door like every other. The Mac
+    /// applied that rule inline in its address field for as long as it was the
+    /// only address field; a second platform is exactly when an inline rule
+    /// gets forgotten.
+    public func navigate(_ input: String) {
+        makeRoomForPage()
+        if selectedTab == nil { addTab() }
+        selectedTab?.session.navigate(input)
+    }
+
     /// Opens a file the person chose, in a tab of its own so the page they
     /// were on is not replaced by it.
     public func openLocalFile(_ url: URL) {

@@ -847,8 +847,7 @@ private struct BrowserToolbar: View {
         voiceInput.stop()
         voiceInput.dismissStatus()
         addressFocused = false
-        workspace.makeRoomForPage()
-        session.navigate(destination)
+        workspace.navigate(destination)
         DispatchQueue.main.async {
             session.webView.window?.makeFirstResponder(session.webView)
         }
