@@ -13,10 +13,15 @@ final class MacSessionPlatform: BrowserSessionPlatform {
     /// takes `platform` before it has built one — the session, not the
     /// platform, owns web view construction, which has to stay true for a
     /// popup to keep adopting WebKit's own configuration — so nothing here
-    /// can know which web view is its own until the convenience initializer
-    /// below hands it over, right after `self.init(platform:...)` returns.
-    /// Weak, like every other back-reference a delegate holds to the object
-    /// that owns it.
+    /// can know which web view is its own until `prepareWebView(_:)` below
+    /// sets it. That happens from inside the designated initializer itself,
+    /// immediately after the web view is built and before
+    /// `webView.navigationDelegate`/`uiDelegate` are even assigned — not
+    /// after that initializer returns, and not from the convenience
+    /// initializer below. Doing it that early closed a real gap: a
+    /// UI-delegate callback arriving during the first load could otherwise
+    /// have found this reference still nil. Weak, like every other
+    /// back-reference a delegate holds to the object that owns it.
     fileprivate weak var webView: WKWebView?
 
     func openExternal(_ url: URL) {
@@ -53,9 +58,10 @@ final class MacSessionPlatform: BrowserSessionPlatform {
     /// flags — including `allowsDirectories`, the page asking for a folder
     /// rather than files — survive that trip intact, since the protocol
     /// carries both explicitly, and `webView` here is the very web view that
-    /// delegate method already has in hand: set once, right after
-    /// `BrowserSession.init` returns, in the convenience initializer below.
-    /// Nothing is lost by routing through the protocol.
+    /// delegate method already has in hand: set by `prepareWebView(_:)`
+    /// below, from inside `BrowserSession`'s designated initializer, before
+    /// this delegate method could ever be invoked. Nothing is lost by
+    /// routing through the protocol.
     func chooseFiles(allowsMultiple: Bool, allowsDirectories: Bool) async -> [URL]? {
         await withCheckedContinuation { continuation in
             let panel = NSOpenPanel()
@@ -188,17 +194,30 @@ extension BrowserSession {
     /// `completionHandler` fires exactly once, so the one-shot latch the
     /// original inline version needed no longer has a job.
     ///
-    /// The explicit `@objc(...)` is load-bearing, not decoration: Objective-C
-    /// derives this requirement's real selector from
-    /// `-webView:runOpenPanelWithParameters:initiatedByFrame:completionHandler:`
-    /// in WebKit's own header, dropping "Parameters" only because Swift's
-    /// importer trims a label that repeats its parameter's type name
-    /// (`WKOpenPanelParameters`) when it *originally* imports the protocol.
-    /// That trim does not run again for a method added afterwards, in a
-    /// separate extension, with no `: WKUIDelegate` of its own to re-trigger
-    /// it — so Swift's automatic inference would instead synthesize
-    /// `webView:runOpenPanelWith:initiatedByFrame:completionHandler:` (no
-    /// "Parameters"), which WebKit never calls. Confirmed by
+    /// The explicit `@objc(...)` is load-bearing, not decoration — and what
+    /// it guards against is starker than a wrong selector name. Per
+    /// SE-0160, a member of an extension declared outside its type's own
+    /// module is not a protocol witness at all; because every `WKUIDelegate`
+    /// requirement is `@objc optional`, nothing here fails to compile
+    /// without the annotation — the method just becomes ordinary Swift,
+    /// invisible to `objc_msgSend`. Implicit `@objc` inference does not run
+    /// for it: no selector is emitted, not a differently-named one — no
+    /// `__objc_catlist` section, no method list, no thunk symbol, no
+    /// `runOpenPanel` selector string of any spelling. WebKit's
+    /// selector-based dispatch has nothing to find, and `<input
+    /// type="file">` would silently stop working with every test still
+    /// green. A *bare* `@objc`, with no parentheses, is worse than no
+    /// annotation at all here: inference does fire for it, but only from
+    /// this extension's own Swift signature. The label-trim that drops
+    /// "Parameters" runs once, when the compiler originally imports
+    /// `WKUIDelegate` from WebKit's header, and does not run again for a
+    /// method added afterwards, in a separate extension, with no `:
+    /// WKUIDelegate` of its own to re-trigger it — so a bare `@objc` would
+    /// synthesize `webView:runOpenPanelWith:initiatedByFrame:completionHandler:`
+    /// (no "Parameters"), a selector WebKit never calls. Only the explicit
+    /// form below matches the real one, which WebKit's own header declares
+    /// as `-webView:runOpenPanelWithParameters:initiatedByFrame:completionHandler:`.
+    /// Confirmed by
     /// `BrowserBehaviorTests.testASessionAnswersWebKitsOpenPanelRequest`,
     /// which asserts `responds(to:)` the real selector: it failed before this
     /// annotation and passes with it.
