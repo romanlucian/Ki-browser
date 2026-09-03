@@ -9,7 +9,7 @@ import Foundation
 /// icon sets — have somewhere to be seen. The founder chose the longer tour
 /// over a short one knowing it is shown once and can be skipped at step one;
 /// the menu entries added the same day are what make the shortcuts survive it.
-enum OnboardingStep: Int, CaseIterable {
+public enum OnboardingStep: Int, CaseIterable {
     case welcome
     case search
     case privacy
@@ -18,42 +18,42 @@ enum OnboardingStep: Int, CaseIterable {
     case reader
     case makeItYours
 
-    var isLast: Bool { self == OnboardingStep.allCases.last }
+    public var isLast: Bool { self == OnboardingStep.allCases.last }
 }
 
 @MainActor
-final class OnboardingController: ObservableObject {
-    @Published private(set) var isPresented: Bool
-    @Published private(set) var step: OnboardingStep = .welcome
-    @Published private(set) var isInitialPresentation: Bool
+public final class OnboardingController: ObservableObject {
+    @Published public private(set) var isPresented: Bool
+    @Published public private(set) var step: OnboardingStep = .welcome
+    @Published public private(set) var isInitialPresentation: Bool
 
     private let preferences: OnboardingPreferences
 
-    init(preferences: OnboardingPreferences = OnboardingPreferences()) {
+    public init(preferences: OnboardingPreferences = OnboardingPreferences()) {
         self.preferences = preferences
         let needsIntroduction = !preferences.hasCompletedIntroduction
         isPresented = needsIntroduction
         isInitialPresentation = needsIntroduction
     }
 
-    func advance() {
+    public func advance() {
         guard let next = OnboardingStep(rawValue: step.rawValue + 1) else { return }
         step = next
     }
 
-    func goBack() {
+    public func goBack() {
         guard let previous = OnboardingStep(rawValue: step.rawValue - 1) else { return }
         step = previous
     }
 
-    func complete() {
+    public func complete() {
         preferences.markIntroductionCompleted()
         isPresented = false
         step = .welcome
         isInitialPresentation = false
     }
 
-    func revisit() {
+    public func revisit() {
         step = .welcome
         isInitialPresentation = false
         isPresented = true

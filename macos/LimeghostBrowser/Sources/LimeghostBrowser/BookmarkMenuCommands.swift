@@ -1,4 +1,5 @@
 import LimeghostCore
+import LimeghostShared
 import SwiftUI
 
 /// The bookmarks bar's folders, as menu-bar menus.

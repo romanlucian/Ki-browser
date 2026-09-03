@@ -7,25 +7,25 @@ import Foundation
 /// `example.com` and `www.example.com` are the same site, and they are cleared
 /// together with the rest of the local browsing data.
 @MainActor
-final class ContentBlockingSettingsStore: ObservableObject {
-    @Published private(set) var isEnabled: Bool
-    @Published private(set) var disabledHosts: [String]
+public final class ContentBlockingSettingsStore: ObservableObject {
+    @Published public private(set) var isEnabled: Bool
+    @Published public private(set) var disabledHosts: [String]
 
     private let defaults: UserDefaults
 
-    init(defaults: UserDefaults = .standard) {
+    public init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         isEnabled = defaults.object(forKey: Keys.enabled) as? Bool ?? true
         disabledHosts = Self.normalized(defaults.stringArray(forKey: Keys.disabledHosts) ?? [])
     }
 
-    func setEnabled(_ value: Bool) {
+    public func setEnabled(_ value: Bool) {
         guard value != isEnabled else { return }
         isEnabled = value
         defaults.set(value, forKey: Keys.enabled)
     }
 
-    func isDisabled(forHost host: String) -> Bool {
+    public func isDisabled(forHost host: String) -> Bool {
         guard let normalized = Self.normalizedHost(fromHost: host) else { return false }
         return disabledHosts.contains(normalized)
     }
@@ -33,7 +33,7 @@ final class ContentBlockingSettingsStore: ObservableObject {
     /// Returns `true` when the stored exceptions changed, so callers only
     /// recompile the rule list when they have to.
     @discardableResult
-    func setDisabled(_ disabled: Bool, forHost host: String) -> Bool {
+    public func setDisabled(_ disabled: Bool, forHost host: String) -> Bool {
         guard let normalized = Self.normalizedHost(fromHost: host) else { return false }
         var updated = disabledHosts
         if disabled {
@@ -48,7 +48,7 @@ final class ContentBlockingSettingsStore: ObservableObject {
     }
 
     @discardableResult
-    func clearExceptions() -> Bool {
+    public func clearExceptions() -> Bool {
         guard !disabledHosts.isEmpty else { return false }
         store([])
         return true
@@ -57,7 +57,7 @@ final class ContentBlockingSettingsStore: ObservableObject {
     /// Accepts either a full web URL or a bare host and returns the comparable
     /// form used for exceptions. Non-web input is rejected by the same policy
     /// that guards navigation, history, and bookmarks.
-    static func normalizedHost(from value: String) -> String? {
+    public static func normalizedHost(from value: String) -> String? {
         guard let url = WebURLPolicy.validatedURL(value) else { return nil }
         return normalizedHost(fromHost: url.host ?? "")
     }

@@ -1,5 +1,6 @@
 import AppKit
 import LimeghostCore
+import LimeghostShared
 import SwiftUI
 
 /// What actually happened when a `BookmarkImportPlan` was applied to the

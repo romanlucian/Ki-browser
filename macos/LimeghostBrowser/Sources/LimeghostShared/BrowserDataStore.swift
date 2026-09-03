@@ -3,47 +3,47 @@ import Combine
 import Foundation
 
 @MainActor
-final class BrowserDataStore: ObservableObject {
-    @Published private(set) var bookmarks: [BookmarkRecord] {
+public final class BrowserDataStore: ObservableObject {
+    @Published public private(set) var bookmarks: [BookmarkRecord] {
         didSet {
             cachedBookmarkCollection = nil
             cachedAddressCandidates = nil
         }
     }
-    @Published private(set) var bookmarkFolders: [BookmarkFolderRecord] { didSet { cachedBookmarkCollection = nil } }
-    @Published private(set) var history: [HistoryRecord] { didSet { cachedAddressCandidates = nil } }
-    @Published private(set) var recoveryNotice: String?
-    @Published var showsBookmarksBar: Bool {
+    @Published public private(set) var bookmarkFolders: [BookmarkFolderRecord] { didSet { cachedBookmarkCollection = nil } }
+    @Published public private(set) var history: [HistoryRecord] { didSet { cachedAddressCandidates = nil } }
+    @Published public private(set) var recoveryNotice: String?
+    @Published public var showsBookmarksBar: Bool {
         didSet { defaults.set(showsBookmarksBar, forKey: showsBookmarksBarKey) }
     }
     /// Which assistant the AI companion opens. A preference like the search
     /// engine: chosen once, remembered, and changed from the panel itself.
-    @Published var aiCompanionToolID: String {
+    @Published public var aiCompanionToolID: String {
         didSet { defaults.set(aiCompanionToolID, forKey: aiCompanionToolIDKey) }
     }
     /// Which AI tools the reader has opened from the AI home, and where they sit
     /// on its row. A count of catalogued tools opened here, in this Mac's own
     /// preferences; it records nothing about anywhere else the reader goes.
-    @Published private(set) var aiToolShelf: AIToolShelf {
+    @Published public private(set) var aiToolShelf: AIToolShelf {
         didSet {
             guard let data = try? encoder.encode(aiToolShelf) else { return }
             defaults.set(data, forKey: aiToolShelfKey)
         }
     }
 
-    func recordAIToolOpen(_ toolID: String) {
+    public func recordAIToolOpen(_ toolID: String) {
         var shelf = aiToolShelf
         shelf.recordOpen(toolID)
         if shelf != aiToolShelf { aiToolShelf = shelf }
     }
 
-    func setAIToolPinned(_ toolID: String, pinned: Bool) {
+    public func setAIToolPinned(_ toolID: String, pinned: Bool) {
         var shelf = aiToolShelf
         if pinned { shelf.pin(toolID) } else { shelf.unpin(toolID) }
         if shelf != aiToolShelf { aiToolShelf = shelf }
     }
 
-    func removeAITool(_ toolID: String) {
+    public func removeAITool(_ toolID: String) {
         var shelf = aiToolShelf
         shelf.remove(toolID)
         if shelf != aiToolShelf { aiToolShelf = shelf }
@@ -66,7 +66,7 @@ final class BrowserDataStore: ObservableObject {
     private let aiToolShelfKey = "clearframe.aiToolShelf.v1"
     private let maximumHistoryItems = 500
 
-    init(defaults: UserDefaults = .standard) {
+    public init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         aiToolShelf = (defaults.data(forKey: "clearframe.aiToolShelf.v1"))
             .flatMap { try? JSONDecoder().decode(AIToolShelf.self, from: $0) }
@@ -118,7 +118,7 @@ final class BrowserDataStore: ObservableObject {
         if !folderLoad.isUnreadable { save(bookmarkFolders, key: bookmarkFoldersKey) }
     }
 
-    var restoresTabs: Bool {
+    public var restoresTabs: Bool {
         defaults.bool(forKey: restoreTabsKey)
     }
 
@@ -133,7 +133,7 @@ final class BrowserDataStore: ObservableObject {
     ///
     /// Seeded from `restoresTabs`, which is the answer somebody already gave
     /// when this was a checkbox.
-    var startupBehaviour: StartupBehaviour {
+    public var startupBehaviour: StartupBehaviour {
         get {
             defaults.string(forKey: startupBehaviourKey).flatMap(StartupBehaviour.init(rawValue:))
                 ?? (restoresTabs ? .restore : .newTab)
@@ -151,7 +151,7 @@ final class BrowserDataStore: ObservableObject {
     }
 
     /// The address `startupBehaviour == .specificPage` opens, as typed.
-    var startupPage: String {
+    public var startupPage: String {
         get { defaults.string(forKey: startupPageKey) ?? "" }
         set {
             objectWillChange.send()
@@ -161,7 +161,7 @@ final class BrowserDataStore: ObservableObject {
 
     /// The page to open at launch, or nil when the choice is not a specific
     /// page or what is stored is not a page Limeghost will open.
-    var startupURL: URL? {
+    public var startupURL: URL? {
         guard startupBehaviour == .specificPage else { return nil }
         return WebURLPolicy.validatedURL(startupPage)
     }
@@ -173,11 +173,11 @@ final class BrowserDataStore: ObservableObject {
     /// of twelve restored tabs would otherwise mean twelve page loads nobody
     /// asked for, competing for the network on the slowest minute of the day.
     /// The tabs and their icons are there either way.
-    var reloadsRestoredTabs: Bool {
+    public var reloadsRestoredTabs: Bool {
         defaults.bool(forKey: reloadRestoredTabsKey)
     }
 
-    func loadWorkspace() -> BrowserWorkspaceSnapshot? {
+    public func loadWorkspace() -> BrowserWorkspaceSnapshot? {
         guard restoresTabs else { return nil }
         let load = Self.loadRecovering(BrowserWorkspaceSnapshot.self, key: workspaceKey, defaults: defaults)
         if load.wasRecovered {
@@ -188,7 +188,7 @@ final class BrowserDataStore: ObservableObject {
         return load.value?.normalized()
     }
 
-    func saveWorkspace(_ snapshot: BrowserWorkspaceSnapshot) {
+    public func saveWorkspace(_ snapshot: BrowserWorkspaceSnapshot) {
         guard restoresTabs else {
             removeStoredValue(forKey: workspaceKey)
             return
@@ -196,20 +196,20 @@ final class BrowserDataStore: ObservableObject {
         save(snapshot.normalized(), key: workspaceKey)
     }
 
-    func clearSavedWorkspace() {
+    public func clearSavedWorkspace() {
         removeStoredValue(forKey: workspaceKey)
     }
 
-    func isBookmarked(_ url: String) -> Bool {
+    public func isBookmarked(_ url: String) -> Bool {
         bookmarks.contains { $0.url == url }
     }
 
-    func bookmark(for url: String) -> BookmarkRecord? {
+    public func bookmark(for url: String) -> BookmarkRecord? {
         bookmarks.first { $0.url == url }
     }
 
     @discardableResult
-    func addBookmark(title: String, url: String, folderID: UUID?) -> BookmarkRecord? {
+    public func addBookmark(title: String, url: String, folderID: UUID?) -> BookmarkRecord? {
         guard let safeURL = BookmarkURLPolicy.validatedURL(url) else { return nil }
         let normalizedURL = safeURL.absoluteString
         var collection = bookmarkCollection
@@ -235,7 +235,7 @@ final class BrowserDataStore: ObservableObject {
     /// Files a URL delivered by a native drag. An exact normalized URL is unique:
     /// dropping it again reuses and, when needed, moves the existing record.
     @discardableResult
-    func fileBookmarkFromDrop(_ url: URL, title: String?, to folderID: UUID?) -> BookmarkDropResult? {
+    public func fileBookmarkFromDrop(_ url: URL, title: String?, to folderID: UUID?) -> BookmarkDropResult? {
         guard let safeURL = BookmarkURLPolicy.validatedURL(url.absoluteString) else { return nil }
         if let folderID, bookmarkFolder(id: folderID) == nil { return nil }
 
@@ -256,7 +256,7 @@ final class BrowserDataStore: ObservableObject {
         return BookmarkDropResult(bookmark: bookmark, disposition: disposition)
     }
 
-    func toggleBookmark(title: String, url: String) {
+    public func toggleBookmark(title: String, url: String) {
         guard let safeURL = BookmarkURLPolicy.validatedURL(url) else { return }
         let normalizedURL = safeURL.absoluteString
         var collection = bookmarkCollection
@@ -272,7 +272,7 @@ final class BrowserDataStore: ObservableObject {
         apply(collection)
     }
 
-    func removeBookmark(_ bookmark: BookmarkRecord) {
+    public func removeBookmark(_ bookmark: BookmarkRecord) {
         var collection = bookmarkCollection
         collection.removeBookmark(id: bookmark.id)
         apply(collection)
@@ -282,7 +282,7 @@ final class BrowserDataStore: ObservableObject {
     /// nothing — when the address is not a credential-free web link or the
     /// bookmark no longer exists, so the editor can stay open and say why.
     @discardableResult
-    func updateBookmark(id: UUID, title: String, url: String) -> Bool {
+    public func updateBookmark(id: UUID, title: String, url: String) -> Bool {
         var collection = bookmarkCollection
         guard collection.updateBookmark(id: id, title: title, url: url) else { return false }
         apply(collection)
@@ -290,27 +290,27 @@ final class BrowserDataStore: ObservableObject {
     }
 
     @discardableResult
-    func createBookmarkFolder(title: String, iconID: String, colorID: String? = nil, parentID: UUID?) -> BookmarkFolderRecord? {
+    public func createBookmarkFolder(title: String, iconID: String, colorID: String? = nil, parentID: UUID?) -> BookmarkFolderRecord? {
         var collection = bookmarkCollection
         let folder = collection.createFolder(title: title, iconID: iconID, colorID: colorID, parentID: parentID)
         if folder != nil { apply(collection) }
         return folder
     }
 
-    func updateBookmarkFolder(id: UUID, title: String, iconID: String, colorID: String? = nil) {
+    public func updateBookmarkFolder(id: UUID, title: String, iconID: String, colorID: String? = nil) {
         var collection = bookmarkCollection
         collection.updateFolder(id: id, title: title, iconID: iconID, colorID: colorID)
         apply(collection)
     }
 
-    func deleteBookmarkFolderPreservingContents(_ folder: BookmarkFolderRecord) {
+    public func deleteBookmarkFolderPreservingContents(_ folder: BookmarkFolderRecord) {
         var collection = bookmarkCollection
         collection.deleteFolderPreservingContents(id: folder.id)
         apply(collection)
     }
 
     /// Puts a folder at a given place among the ones beside it.
-    func moveFolder(_ id: UUID, toIndex index: Int) {
+    public func moveFolder(_ id: UUID, toIndex index: Int) {
         var collection = bookmarkCollection
         collection.moveFolder(id: id, toIndex: index)
         apply(collection)
@@ -318,41 +318,41 @@ final class BrowserDataStore: ObservableObject {
 
     /// Puts a bookmark at a given place among the ones beside it, which is
     /// what dragging one along the bar means.
-    func moveBookmark(_ id: UUID, toIndex index: Int) {
+    public func moveBookmark(_ id: UUID, toIndex index: Int) {
         var collection = bookmarkCollection
         collection.moveBookmark(id: id, toIndex: index)
         apply(collection)
     }
 
-    func moveBookmark(_ bookmark: BookmarkRecord, to folderID: UUID?) {
+    public func moveBookmark(_ bookmark: BookmarkRecord, to folderID: UUID?) {
         var collection = bookmarkCollection
         collection.moveBookmark(id: bookmark.id, to: folderID)
         apply(collection)
     }
 
-    func bookmarkFolder(id: UUID) -> BookmarkFolderRecord? {
+    public func bookmarkFolder(id: UUID) -> BookmarkFolderRecord? {
         bookmarkCollection.folder(id: id)
     }
 
-    func bookmarkFolders(in parentID: UUID?) -> [BookmarkFolderRecord] {
+    public func bookmarkFolders(in parentID: UUID?) -> [BookmarkFolderRecord] {
         bookmarkCollection.folders(in: parentID)
     }
 
-    func bookmarks(in folderID: UUID?) -> [BookmarkRecord] {
+    public func bookmarks(in folderID: UUID?) -> [BookmarkRecord] {
         bookmarkCollection.bookmarks(in: folderID)
     }
 
-    func bookmarkFolderContainsItems(_ folder: BookmarkFolderRecord) -> Bool {
+    public func bookmarkFolderContainsItems(_ folder: BookmarkFolderRecord) -> Bool {
         bookmarkCollection.containsItems(in: folder.id)
     }
 
     /// Nested totals for every folder in one pass. Views that show many folders
     /// call this once per render and look each folder up in the result.
-    func bookmarkDescendantCounts() -> [UUID: BookmarkDescendantCounts] {
+    public func bookmarkDescendantCounts() -> [UUID: BookmarkDescendantCounts] {
         bookmarkCollection.descendantCounts()
     }
 
-    func recordVisit(title: String, url: String, at date: Date = Date()) {
+    public func recordVisit(title: String, url: String, at date: Date = Date()) {
         guard defaults.bool(forKey: saveHistoryKey) else { return }
         guard BookmarkURLPolicy.validatedURL(url) != nil else { return }
         if history.first?.url == url, date.timeIntervalSince(history.first?.visitedAt ?? .distantPast) < 30 {
@@ -372,17 +372,17 @@ final class BrowserDataStore: ObservableObject {
         save(history, key: historyKey)
     }
 
-    func removeHistory(_ item: HistoryRecord) {
+    public func removeHistory(_ item: HistoryRecord) {
         history.removeAll { $0.id == item.id }
         save(history, key: historyKey)
     }
 
-    func clearHistory() {
+    public func clearHistory() {
         history = []
         removeStoredValue(forKey: historyKey)
     }
 
-    func clearAllBrowserRecords() {
+    public func clearAllBrowserRecords() {
         bookmarks = []
         bookmarkFolders = []
         history = []
@@ -393,7 +393,7 @@ final class BrowserDataStore: ObservableObject {
         recoveryNotice = nil
     }
 
-    func dismissRecoveryNotice() {
+    public func dismissRecoveryNotice() {
         recoveryNotice = nil
     }
 
@@ -452,7 +452,7 @@ final class BrowserDataStore: ObservableObject {
     /// actor, between one character and the next.
     private var cachedAddressCandidates: [AddressCandidate]?
 
-    var addressCandidates: [AddressCandidate] {
+    public var addressCandidates: [AddressCandidate] {
         if let cachedAddressCandidates { return cachedAddressCandidates }
         let built = AddressCompletion.candidates(history: history, bookmarks: bookmarks)
         cachedAddressCandidates = built
@@ -480,7 +480,7 @@ final class BrowserDataStore: ObservableObject {
     /// writing waits. A crash inside a batch therefore loses the whole
     /// import rather than an arbitrary prefix of it, which is the better of
     /// the two outcomes.
-    func performBatch(_ body: () -> Void) {
+    public func performBatch(_ body: () -> Void) {
         let wasBatching = isBatchingWrites
         isBatchingWrites = true
         body()
@@ -557,15 +557,20 @@ private struct PersistenceLoad<Value> {
     let isUnreadable: Bool
 }
 
-enum BookmarkDropDisposition: Equatable {
+public enum BookmarkDropDisposition: Equatable {
     case created
     case moved
     case alreadyFiled
 }
 
-struct BookmarkDropResult {
-    let bookmark: BookmarkRecord
-    let disposition: BookmarkDropDisposition
+public struct BookmarkDropResult {
+    public let bookmark: BookmarkRecord
+    public let disposition: BookmarkDropDisposition
+
+    public init(bookmark: BookmarkRecord, disposition: BookmarkDropDisposition) {
+        self.bookmark = bookmark
+        self.disposition = disposition
+    }
 }
 
 private extension String {

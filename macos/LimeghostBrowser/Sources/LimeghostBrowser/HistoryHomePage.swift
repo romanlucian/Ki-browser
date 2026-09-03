@@ -1,4 +1,5 @@
 import LimeghostCore
+import LimeghostShared
 import SwiftUI
 
 /// One wording for the Clear History confirmation, used wherever history can

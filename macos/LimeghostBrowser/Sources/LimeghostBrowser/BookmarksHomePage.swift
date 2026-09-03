@@ -1,4 +1,5 @@
 import LimeghostCore
+import LimeghostShared
 import SwiftUI
 
 /// The full-page bookmarks home (⌘⌥B, the bookmarks bar's "All bookmarks"

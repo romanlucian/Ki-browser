@@ -1,5 +1,6 @@
 import AppKit
 import LimeghostCore
+import LimeghostShared
 import SwiftUI
 
 /// One page of Settings.

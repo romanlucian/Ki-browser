@@ -10,15 +10,15 @@ import Foundation
 /// The scheme is deliberately not a web one. `WebURLPolicy` refuses it, so a
 /// folder reference dropped somewhere that saves bookmarks cannot quietly
 /// become one.
-enum BookmarkDragPayload {
+public enum BookmarkDragPayload {
     static let folderScheme = "limeghost-folder"
 
-    static func folderURL(_ id: UUID) -> URL? {
+    public static func folderURL(_ id: UUID) -> URL? {
         URL(string: "\(folderScheme)://\(id.uuidString)")
     }
 
     /// The folder a dragged URL refers to, or nil if it refers to a page.
-    static func folderID(from url: URL) -> UUID? {
+    public static func folderID(from url: URL) -> UUID? {
         guard url.scheme == folderScheme else { return nil }
         let raw = url.host ?? url.absoluteString.replacingOccurrences(of: "\(folderScheme)://", with: "")
         return UUID(uuidString: raw)

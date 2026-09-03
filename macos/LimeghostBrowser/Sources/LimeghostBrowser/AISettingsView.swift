@@ -1,4 +1,5 @@
 import LimeghostCore
+import LimeghostShared
 import SwiftUI
 
 // The settings sections the category pages reuse. The window and the pages

@@ -13,9 +13,9 @@ import Foundation
 /// is true: what a site sends Safari is what Limeghost can draw. The Safari
 /// version is read from the copy installed on this Mac so it stays current on
 /// its own rather than rotting into another stale claim.
-enum BrowserUserAgent {
+public enum BrowserUserAgent {
     /// WebKit's own build token, stable across recent Safari releases.
-    static let safariBuild = "605.1.15"
+    public static let safariBuild = "605.1.15"
 
     /// Used only when Safari cannot be read — a restricted sandbox, or a Mac
     /// without it. Keep it recent when this file is touched.
@@ -25,16 +25,16 @@ enum BrowserUserAgent {
 
     /// Appended to `WKWebView`'s default user agent, which already carries the
     /// platform and `AppleWebKit/` build.
-    static var applicationName: String {
+    public static var applicationName: String {
         "Version/\(installedSafariVersion) Safari/\(safariBuild)"
     }
 
-    static var installedSafariVersion: String {
+    public static var installedSafariVersion: String {
         version(fromInfoPlistAt: safariInfoPlist) ?? fallbackSafariVersion
     }
 
     /// Split out so a test can read a plist it controls instead of the Mac's.
-    static func version(fromInfoPlistAt path: String) -> String? {
+    public static func version(fromInfoPlistAt path: String) -> String? {
         guard let info = NSDictionary(contentsOfFile: path),
               let version = info["CFBundleShortVersionString"] as? String else { return nil }
         let trimmed = version.trimmingCharacters(in: .whitespacesAndNewlines)

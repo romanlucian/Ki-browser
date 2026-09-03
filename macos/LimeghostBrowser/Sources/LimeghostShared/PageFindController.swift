@@ -10,38 +10,38 @@ import Foundation
 /// nothing. Never present a position or a count here; the browser does not
 /// have one to present.
 @MainActor
-final class PageFindController: ObservableObject {
-    enum Outcome: Equatable {
+public final class PageFindController: ObservableObject {
+    public enum Outcome: Equatable {
         /// Nothing has been searched for on the page currently loaded.
         case idle
         case matched
         case noResults
     }
 
-    @Published var query = ""
-    @Published private(set) var isPresented = false
-    @Published private(set) var outcome: Outcome = .idle
+    @Published public var query = ""
+    @Published public private(set) var isPresented = false
+    @Published public private(set) var outcome: Outcome = .idle
     /// Bumped whenever the bar should take the keyboard. The bar owns its own
     /// `FocusState`; nothing here touches the address field's focus wiring.
-    @Published private(set) var focusRequest = 0
+    @Published public private(set) var focusRequest = 0
 
     private weak var webView: WKWebView?
     private var searchTask: Task<Void, Never>?
 
-    init(webView: WKWebView?) {
+    public init(webView: WKWebView?) {
         self.webView = webView
     }
 
     /// ⌘F. Pressing it again while the bar is open re-focuses the field, which
     /// is what a second ⌘F is for.
-    func present() {
+    public func present() {
         isPresented = true
         focusRequest += 1
     }
 
     /// Escape and the bar's close button: hide the bar and drop the highlight.
     /// The query survives so ⌘G still steps through the same text afterwards.
-    func close() {
+    public func close() {
         isPresented = false
         outcome = .idle
         searchTask?.cancel()
@@ -51,7 +51,7 @@ final class PageFindController: ObservableObject {
     /// Each edit restarts at the top of the document, so the bar always lands
     /// on the first match of what has been typed instead of skipping forward
     /// from wherever the previous keystroke left the selection.
-    func queryChanged() {
+    public func queryChanged() {
         guard !query.isEmpty else {
             outcome = .idle
             searchTask?.cancel()
@@ -63,7 +63,7 @@ final class PageFindController: ObservableObject {
 
     /// ⌘G, ⇧⌘G, and the bar's previous/next buttons. With nothing to look for
     /// yet, the shortcut simply opens the bar.
-    func step(backwards: Bool) {
+    public func step(backwards: Bool) {
         guard !query.isEmpty else {
             present()
             return
@@ -74,7 +74,7 @@ final class PageFindController: ObservableObject {
 
     /// A result describes the page it was found on. Once that page is replaced
     /// it is no longer true, so it is dropped rather than left on screen.
-    func resetForNavigation() {
+    public func resetForNavigation() {
         searchTask?.cancel()
         searchTask = nil
         outcome = .idle
@@ -83,7 +83,7 @@ final class PageFindController: ObservableObject {
     /// The one place a find actually runs. It returns the outcome it publishes
     /// so a test can await the answer instead of polling for it.
     @discardableResult
-    func search(backwards: Bool, fromTop: Bool) async -> Outcome {
+    public func search(backwards: Bool, fromTop: Bool) async -> Outcome {
         guard let webView, !query.isEmpty else {
             outcome = .idle
             return .idle
@@ -105,7 +105,7 @@ final class PageFindController: ObservableObject {
         return resolved
     }
 
-    func teardown() {
+    public func teardown() {
         searchTask?.cancel()
         searchTask = nil
         webView = nil

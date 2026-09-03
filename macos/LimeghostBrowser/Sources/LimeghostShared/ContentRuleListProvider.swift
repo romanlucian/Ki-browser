@@ -3,7 +3,7 @@ import Combine
 import Foundation
 @preconcurrency import WebKit
 
-enum ContentBlockingStatus: Equatable {
+public enum ContentBlockingStatus: Equatable {
     case compiling
     case active(ruleCount: Int)
     case disabled
@@ -18,15 +18,15 @@ enum ContentBlockingStatus: Equatable {
 /// therefore the single honest source for the UI: it reaches `.active` only
 /// after a list is genuinely compiled and attached.
 @MainActor
-final class ContentRuleListProvider: ObservableObject {
-    @Published private(set) var status: ContentBlockingStatus = .compiling
+public final class ContentRuleListProvider: ObservableObject {
+    @Published public private(set) var status: ContentBlockingStatus = .compiling
 
-    let settings: ContentBlockingSettingsStore
-    let blockList: TrackerBlockList
+    public let settings: ContentBlockingSettingsStore
+    public let blockList: TrackerBlockList
 
     /// The identifier of the rule list currently attached to registered web
     /// views, or `nil` when nothing is attached.
-    private(set) var appliedIdentifier: String?
+    public private(set) var appliedIdentifier: String?
 
     private let ruleStore: WKContentRuleListStore?
     private let thirdPartyOnly: Bool
@@ -36,7 +36,7 @@ final class ContentRuleListProvider: ObservableObject {
     private var applyTask: Task<Void, Never>?
     private var settingsSubscription: AnyCancellable?
 
-    init(
+    public init(
         settings: ContentBlockingSettingsStore,
         blockList: TrackerBlockList = TrackerBlockerCatalog.current,
         ruleStore: WKContentRuleListStore? = nil,
@@ -55,42 +55,42 @@ final class ContentRuleListProvider: ObservableObject {
         apply()
     }
 
-    var ruleCount: Int { Set(blockList.domains).count }
+    public var ruleCount: Int { Set(blockList.domains).count }
 
-    var registeredWebViewCount: Int { registeredWebViews.count }
+    public var registeredWebViewCount: Int { registeredWebViews.count }
 
     /// Web views register once, at creation. The table holds them weakly so a
     /// closed tab does not keep its web view alive.
-    func register(_ webView: WKWebView) {
+    public func register(_ webView: WKWebView) {
         registeredWebViews.add(webView)
         attach(compiledList, to: webView)
     }
 
-    func unregister(_ webView: WKWebView) {
+    public func unregister(_ webView: WKWebView) {
         registeredWebViews.remove(webView)
         attach(nil, to: webView)
     }
 
     /// Completes only once the change has been applied to live web views, so
     /// callers can reload the page and see the new behaviour.
-    func setEnabled(_ enabled: Bool) async {
+    public func setEnabled(_ enabled: Bool) async {
         settings.setEnabled(enabled)
         await apply().value
     }
 
-    func setSiteDisabled(_ disabled: Bool, forHost host: String) async {
+    public func setSiteDisabled(_ disabled: Bool, forHost host: String) async {
         settings.setDisabled(disabled, forHost: host)
         await apply().value
     }
 
-    func clearSiteExceptions() async {
+    public func clearSiteExceptions() async {
         settings.clearExceptions()
         await apply().value
     }
 
     /// Awaits whatever compile is currently in flight, including the one
     /// started during initialisation.
-    func refresh() async {
+    public func refresh() async {
         await apply().value
     }
 
@@ -212,15 +212,15 @@ final class ContentRuleListProvider: ObservableObject {
         if let list { controller.add(list) }
     }
 
-    static let identifierPrefix = "limeghost-tracker-block."
+    public static let identifierPrefix = "limeghost-tracker-block."
 
-    static func identifier(version: String, exceptionHosts: [String]) -> String {
+    public static func identifier(version: String, exceptionHosts: [String]) -> String {
         let exceptions = Set(exceptionHosts).sorted().joined(separator: ",")
         return "\(identifierPrefix)v\(version).x\(StableHash.fnv1a64Hex(exceptions))"
     }
 }
 
-enum ContentBlockingError: Error {
+public enum ContentBlockingError: Error {
     case missing
     case compileFailed
 }

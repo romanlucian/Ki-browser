@@ -1,4 +1,5 @@
 import LimeghostCore
+import LimeghostShared
 import Foundation
 import SwiftUI
 

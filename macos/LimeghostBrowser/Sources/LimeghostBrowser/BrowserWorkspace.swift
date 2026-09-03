@@ -1,6 +1,7 @@
 import os
 import AppKit
 import LimeghostCore
+import LimeghostShared
 import Combine
 import Foundation
 import WebKit

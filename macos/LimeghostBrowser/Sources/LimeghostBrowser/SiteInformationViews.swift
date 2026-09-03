@@ -1,4 +1,5 @@
 import LimeghostCore
+import LimeghostShared
 import SwiftUI
 
 /// How the connection to the page in front of the reader actually stands.

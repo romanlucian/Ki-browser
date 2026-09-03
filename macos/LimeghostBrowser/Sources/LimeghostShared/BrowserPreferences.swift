@@ -4,14 +4,14 @@ import LimeghostCore
 
 /// What a window shows when Limeghost starts. Stored per profile on
 /// `BrowserDataStore`, beside the `restoreTabs` key it writes.
-enum StartupBehaviour: String, CaseIterable, Identifiable {
+public enum StartupBehaviour: String, CaseIterable, Identifiable {
     case newTab
     case restore
     case specificPage
 
-    var id: String { rawValue }
+    public var id: String { rawValue }
 
-    var title: String {
+    public var title: String {
         switch self {
         case .newTab: return "The AI guide"
         case .restore: return "The tabs I had open"
@@ -21,14 +21,14 @@ enum StartupBehaviour: String, CaseIterable, Identifiable {
 }
 
 /// What the Home button and ⌘⇧H return a tab to.
-enum HomeTarget: String, CaseIterable, Identifiable {
+public enum HomeTarget: String, CaseIterable, Identifiable {
     case aiGuide
     case bookmarks
     case specificPage
 
-    var id: String { rawValue }
+    public var id: String { rawValue }
 
-    var title: String {
+    public var title: String {
         switch self {
         case .aiGuide: return "The AI guide"
         case .bookmarks: return "Bookmarks"
@@ -54,22 +54,22 @@ enum HomeTarget: String, CaseIterable, Identifiable {
 /// Every key keeps the `clearframe.` prefix. The storage names were left behind
 /// deliberately at the rename and must not be tidied; see CLAUDE.md.
 @MainActor
-final class BrowserPreferences: ObservableObject {
-    static let shared = BrowserPreferences()
+public final class BrowserPreferences: ObservableObject {
+    public static let shared = BrowserPreferences()
 
     private let defaults: UserDefaults
 
     // MARK: - Home
 
-    @Published var homeTarget: HomeTarget {
+    @Published public var homeTarget: HomeTarget {
         didSet { defaults.set(homeTarget.rawValue, forKey: Keys.homeTarget) }
     }
 
-    @Published var homePage: String {
+    @Published public var homePage: String {
         didSet { defaults.set(homePage, forKey: Keys.homePage) }
     }
 
-    var homeURL: URL? {
+    public var homeURL: URL? {
         guard homeTarget == .specificPage else { return nil }
         return WebURLPolicy.validatedURL(homePage)
     }
@@ -78,7 +78,7 @@ final class BrowserPreferences: ObservableObject {
 
     /// The zoom every new tab starts at. One of `BrowserSession.pageZoomSteps`,
     /// so the setting and ⌘+/⌘− speak in the same increments.
-    @Published var defaultPageZoom: CGFloat {
+    @Published public var defaultPageZoom: CGFloat {
         didSet { defaults.set(Double(defaultPageZoom), forKey: Keys.defaultPageZoom) }
     }
 
@@ -86,13 +86,13 @@ final class BrowserPreferences: ObservableObject {
 
     /// Where files go when Limeghost is not asking. Empty means the Mac's own
     /// Downloads folder.
-    @Published var downloadFolderPath: String {
+    @Published public var downloadFolderPath: String {
         didSet { defaults.set(downloadFolderPath, forKey: Keys.downloadFolder) }
     }
 
     /// On by default, because that is what Limeghost has always done and a
     /// download that silently lands somewhere is worse than one that asks.
-    @Published var asksWhereToSave: Bool {
+    @Published public var asksWhereToSave: Bool {
         didSet { defaults.set(asksWhereToSave, forKey: Keys.askWhereToSave) }
     }
 
@@ -104,7 +104,7 @@ final class BrowserPreferences: ObservableObject {
     /// sandboxed, so a folder can be readable in the picker and refused later
     /// by the privacy system. Falling back to the panel is visible; a failed
     /// download that says only "failed" is not.
-    var resolvedDownloadFolder: URL? {
+    public var resolvedDownloadFolder: URL? {
         guard !asksWhereToSave else { return nil }
         let folder = downloadFolderPath.isEmpty
             ? FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first
@@ -118,7 +118,7 @@ final class BrowserPreferences: ObservableObject {
     }
 
     /// What the Downloads settings row shows for the chosen folder.
-    var downloadFolderDisplayName: String {
+    public var downloadFolderDisplayName: String {
         if downloadFolderPath.isEmpty {
             return FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask)
                 .first?.lastPathComponent ?? "Downloads"
@@ -126,7 +126,7 @@ final class BrowserPreferences: ObservableObject {
         return URL(fileURLWithPath: downloadFolderPath).lastPathComponent
     }
 
-    init(defaults: UserDefaults = .standard) {
+    public init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
 
         homeTarget = defaults.string(forKey: Keys.homeTarget)
@@ -134,11 +134,18 @@ final class BrowserPreferences: ObservableObject {
         homePage = defaults.string(forKey: Keys.homePage) ?? ""
 
         let storedZoom = defaults.double(forKey: Keys.defaultPageZoom)
-        defaultPageZoom = storedZoom > 0 ? CGFloat(storedZoom) : BrowserSession.defaultPageZoom
+        defaultPageZoom = storedZoom > 0 ? CGFloat(storedZoom) : Self.unzoomedPageZoom
 
         downloadFolderPath = defaults.string(forKey: Keys.downloadFolder) ?? ""
         asksWhereToSave = defaults.object(forKey: Keys.askWhereToSave) as? Bool ?? true
     }
+
+    /// The unzoomed page value — 1.0, identical to `BrowserSession.defaultPageZoom`.
+    /// Duplicated rather than referenced: `BrowserSession` has not moved into this
+    /// target yet (Task 7 moves it, alongside `AICompanion`), and this target
+    /// cannot depend back on the app target to read its constant. Reunify the two
+    /// once `BrowserSession` is here too.
+    private static let unzoomedPageZoom: CGFloat = 1.0
 
     private enum Keys {
         static let homeTarget = "clearframe.homeTarget"

@@ -1,5 +1,6 @@
 import AppKit
 import LimeghostCore
+import LimeghostShared
 import UniformTypeIdentifiers
 
 /// The Bookmarks menu's "Export Bookmarks…" command: writes every saved

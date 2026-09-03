@@ -1,4 +1,5 @@
 import LimeghostCore
+import LimeghostShared
 import SwiftUI
 
 /// What the shield control shows, derived purely from the provider's compile

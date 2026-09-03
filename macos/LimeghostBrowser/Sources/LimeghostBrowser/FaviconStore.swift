@@ -1,5 +1,6 @@
 import AppKit
 import ImageIO
+import LimeghostShared
 import SwiftUI
 @preconcurrency import WebKit
 

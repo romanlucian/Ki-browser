@@ -1,5 +1,6 @@
 import AppKit
 import LimeghostCore
+import LimeghostShared
 import SwiftUI
 
 /// Metrics for one row of bookmarks bar items.

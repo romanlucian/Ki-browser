@@ -4,7 +4,7 @@ import Foundation
 import Speech
 
 @MainActor
-final class VoiceInputController: ObservableObject {
+public final class VoiceInputController: ObservableObject {
     enum State: Equatable {
         case idle
         case requestingPermission
@@ -15,7 +15,7 @@ final class VoiceInputController: ObservableObject {
     }
 
     @Published private(set) var state: State = .idle
-    @Published private(set) var transcript = ""
+    @Published public private(set) var transcript = ""
 
     private let audioEngine = AVAudioEngine()
     private let recognizer = SFSpeechRecognizer(locale: Locale(identifier: "en-US"))
@@ -24,11 +24,13 @@ final class VoiceInputController: ObservableObject {
     private var sessionID: UUID?
     private var hasInstalledTap = false
 
-    var isListening: Bool { state == .listening }
+    public init() {}
 
-    var presentsStatus: Bool { state != .idle }
+    public var isListening: Bool { state == .listening }
 
-    var statusMessage: String {
+    public var presentsStatus: Bool { state != .idle }
+
+    public var statusMessage: String {
         switch state {
         case .idle: return ""
         case .requestingPermission: return "Requesting microphone and speech access…"
@@ -38,7 +40,7 @@ final class VoiceInputController: ObservableObject {
         }
     }
 
-    func toggle() {
+    public func toggle() {
         if state == .listening || state == .requestingPermission {
             stop()
         } else {
@@ -123,13 +125,13 @@ final class VoiceInputController: ObservableObject {
         }
     }
 
-    func stop() {
+    public func stop() {
         let hadTranscript = !transcript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         endCapture(cancelTask: true)
         state = hadTranscript ? .ready : .idle
     }
 
-    func dismissStatus() {
+    public func dismissStatus() {
         if state != .listening && state != .requestingPermission {
             state = .idle
         }

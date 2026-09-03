@@ -1,4 +1,5 @@
 import LimeghostCore
+import LimeghostShared
 import WebKit
 import XCTest
 @testable import LimeghostBrowser
