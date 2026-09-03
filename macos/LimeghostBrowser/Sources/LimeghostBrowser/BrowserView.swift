@@ -1,5 +1,6 @@
 import AppKit
 import LimeghostCore
+import LimeghostShared
 import SwiftUI
 
 struct BrowserView: View {
@@ -47,11 +48,6 @@ struct BrowserView: View {
 }
 
 private struct BrowserTabContent: View {
-    /// Wide enough for an assistant's own page without forcing its phone layout.
-    static let companionWidth: CGFloat = 500
-    /// Below this a page is too narrow to read beside anything.
-    static let minimumReadableWidth: CGFloat = 600
-
     @ObservedObject var tab: BrowserTab
     @ObservedObject private var session: BrowserSession
     @ObservedObject private var find: PageFindController
@@ -125,9 +121,9 @@ private struct BrowserTabContent: View {
             // covers the page instead of squeezing it — the same answer a phone
             // would need, arrived at on a small laptop first.
             GeometryReader { geometry in
-                let fitsBesidePage = geometry.size.width >= Self.companionWidth + Self.minimumReadableWidth
+                let fitsBesidePage = AssistantLayout.fitsBesidePage(width: geometry.size.width)
                 // Two assistants need two readable columns and nothing else.
-                let fitsTwoAssistants = geometry.size.width >= Self.companionWidth * 2
+                let fitsTwoAssistants = AssistantLayout.fitsTwoAssistants(width: geometry.size.width)
                 // Expanded by choice, or with no room to share.
                 let fillsWindow = companion.isExpanded || !fitsBesidePage
                 // **One panel, always in the same place in this tree.** Sharing
@@ -164,12 +160,12 @@ private struct BrowserTabContent: View {
                             Divider()
                             // Holds the docked panel's width so the page lays out
                             // beside it instead of underneath it.
-                            Color.clear.frame(width: Self.companionWidth)
+                            Color.clear.frame(width: AssistantLayout.companionWidth)
                         }
                     }
                     if companion.isVisible {
                         AICompanionPanel(companion: companion, allowsComparison: fitsTwoAssistants)
-                            .frame(width: fillsWindow ? geometry.size.width : Self.companionWidth)
+                            .frame(width: fillsWindow ? geometry.size.width : AssistantLayout.companionWidth)
                             .frame(maxHeight: .infinity)
                             .transition(.move(edge: .trailing).combined(with: .opacity))
                     }
