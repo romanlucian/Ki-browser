@@ -2,7 +2,16 @@
 dist/
 node_modules/
 **/.build/
-**/.swiftpm/
+# SwiftPM's own local state is ignored, except the one shared Xcode scheme
+# CI depends on: a per-product SwiftPM scheme carries no test action at all
+# (see .github/workflows/ci.yml's ios-simulator job), so the portable-only
+# test scheme has to be committed rather than left to auto-generation.
+**/.swiftpm/*
+!**/.swiftpm/xcode/
+**/.swiftpm/xcode/*
+!**/.swiftpm/xcode/xcshareddata/
+**/.swiftpm/xcode/xcshareddata/*
+!**/.swiftpm/xcode/xcshareddata/xcschemes/
 DerivedData/
 *.xcuserstate
 xcuserdata/

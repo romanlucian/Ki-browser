@@ -42,9 +42,15 @@ jobs:
 
   # The point of the whole shared-layer plan: the door rule, the narrow-window
   # rule and the assistant's session cap are not "should also work on a
-  # phone" — they run on one here. `LimeghostShared` and `LimeghostCore` are
-  # the only two targets this job builds; `LimeghostBrowser` itself (the
-  # executable) and `BrowserBehaviorTests` stay AppKit and stay Mac-only,
+  # phone" — they run on one here. `LimeghostSharedLayer` (a shared scheme
+  # committed at .swiftpm/xcode/xcshareddata/xcschemes/, since SwiftPM's own
+  # per-product auto-generated schemes carry no test action at all — that is
+  # the whole reason this job needs a checked-in scheme rather than naming a
+  # product directly) builds and tests exactly four targets: `LimeghostCore`,
+  # `LimeghostShared`, and their two test targets. `LimeghostBrowser` itself
+  # (the executable) and `BrowserBehaviorTests` are not in that scheme's
+  # build action at all — confirmed locally by reading xcodebuild's own
+  # target-dependency-graph output — so they stay AppKit and stay Mac-only,
   # exactly as macos-browser above already exercises them.
   ios-simulator:
     runs-on: macos-15
@@ -66,10 +72,7 @@ jobs:
             | python3 -c "import json,sys;d=json.load(sys.stdin)['devices'];print(next(v['udid'] for k in d for v in d[k] if 'iPhone' in v['name']))")
           echo "SIM_UDID=$UDID" >> "$GITHUB_ENV"
       - run: >-
-          xcodebuild test -scheme LimeghostShared
-          -destination "platform=iOS Simulator,id=$SIM_UDID"
-      - run: >-
-          xcodebuild test -scheme LimeghostCore
+          xcodebuild test -scheme LimeghostSharedLayer
           -destination "platform=iOS Simulator,id=$SIM_UDID"
 
   cef-contract:
