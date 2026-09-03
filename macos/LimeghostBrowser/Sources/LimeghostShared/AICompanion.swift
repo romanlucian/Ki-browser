@@ -16,11 +16,11 @@ import WebKit
 /// preference — scripting a provider's page would be automated access to a
 /// service Limeghost has no agreement with, which their consumer terms forbid.
 @MainActor
-final class AICompanion: ObservableObject {
+public final class AICompanion: ObservableObject {
     /// The assistants worth putting beside a page: the ones the catalog files
     /// under Ask & Learn, which is where the conversational tools live. Today
     /// that is ChatGPT, Claude, Gemini, Le Chat and Grok.
-    static var choices: [AIToolListing] {
+    public static var choices: [AIToolListing] {
         AIToolCatalog.tools.filter { $0.categories.contains(.askAndLearn) }
     }
 
@@ -33,19 +33,19 @@ final class AICompanion: ObservableObject {
     /// the two I am using" needs, and it is also exactly what Compare shows.
     static let maximumLiveSessions = 2
 
-    @Published private(set) var isVisible = false
+    @Published public private(set) var isVisible = false
     /// Filling the window rather than sharing it with the page.
-    @Published private(set) var isExpanded = false
+    @Published public private(set) var isExpanded = false
     /// Whether this window is wide enough to show a page and the assistant at
     /// once. The view measures it; the model needs it to know whether stepping
     /// out of a page's way means shrinking or leaving.
     @Published private(set) var canShareWindow = true
     /// The assistant on the left, and the one Compare puts on the right.
-    @Published private(set) var tool: AIToolListing
-    @Published private(set) var comparisonTool: AIToolListing?
+    @Published public private(set) var tool: AIToolListing
+    @Published public private(set) var comparisonTool: AIToolListing?
 
     /// Loaded assistants, keyed by tool. Never larger than `maximumLiveSessions`.
-    @Published private(set) var live: [String: BrowserSession] = [:]
+    @Published public private(set) var live: [String: BrowserSession] = [:]
     /// Most recently used first. Decides what is dropped when a third arrives.
     private var recency: [String] = []
     /// Where a dropped assistant's conversation was, so returning reopens it
@@ -64,14 +64,14 @@ final class AICompanion: ObservableObject {
     /// they deliberately shut.
     private var hiddenBecauseThereWasNoRoom = false
 
-    var isComparing: Bool { comparisonTool != nil }
+    public var isComparing: Bool { comparisonTool != nil }
 
     /// The assistants currently on screen, which are never dropped.
     private var shown: [String] {
         [tool.id, comparisonTool?.id].compactMap { $0 }
     }
 
-    init(
+    public init(
         tool: AIToolListing,
         makeSession: @escaping (AIToolListing, URL) -> BrowserSession,
         rememberChoice: @escaping (String) -> Void
@@ -81,7 +81,7 @@ final class AICompanion: ObservableObject {
         self.rememberChoice = rememberChoice
     }
 
-    func session(for tool: AIToolListing) -> BrowserSession? { live[tool.id] }
+    public func session(for tool: AIToolListing) -> BrowserSession? { live[tool.id] }
 
     /// The assistant on the left, which is the only one there is unless the
     /// person asked to compare.
@@ -89,7 +89,7 @@ final class AICompanion: ObservableObject {
 
     // MARK: - Showing
 
-    func toggle() { isVisible ? hide() : show() }
+    public func toggle() { isVisible ? hide() : show() }
 
     func show() {
         load(tool)
@@ -105,25 +105,25 @@ final class AICompanion: ObservableObject {
     }
 
     /// The view reporting how much room this window has.
-    func setCanShareWindow(_ canShare: Bool) {
+    public func setCanShareWindow(_ canShare: Bool) {
         guard canShare != canShareWindow else { return }
         canShareWindow = canShare
         // Room again for the assistant that only left because there was none.
         if canShare, hiddenBecauseThereWasNoRoom { show() }
     }
 
-    func toggleExpanded() { isExpanded.toggle() }
+    public func toggleExpanded() { isExpanded.toggle() }
 
     // MARK: - Choosing
 
-    func select(_ choice: AIToolListing) {
+    public func select(_ choice: AIToolListing) {
         guard choice.id != tool.id, choice.id != comparisonTool?.id else { return }
         tool = choice
         rememberChoice(choice.id)
         if isVisible { load(choice) }
     }
 
-    func selectComparison(_ choice: AIToolListing) {
+    public func selectComparison(_ choice: AIToolListing) {
         guard choice.id != tool.id, choice.id != comparisonTool?.id else { return }
         comparisonTool = choice
         load(choice)
@@ -134,7 +134,7 @@ final class AICompanion: ObservableObject {
     /// Two assistants, side by side, for asking the same thing twice and reading
     /// the difference. Fills the window, because two columns and a page do not
     /// fit on a laptop — and the page is not what you are looking at here.
-    func startComparing() {
+    public func startComparing() {
         guard comparisonTool == nil else { return }
         // Whichever assistant they were last talking to, if it is still loaded:
         // Compare then reopens that conversation rather than a blank one.
@@ -156,7 +156,7 @@ final class AICompanion: ObservableObject {
     /// it already lives in the toolbar (⇧⌘A). Two identical glyphs a thousand
     /// points apart doing different amounts of damage is how somebody loses a
     /// conversation they meant to keep.
-    func closeColumn(_ closing: AIToolListing) {
+    public func closeColumn(_ closing: AIToolListing) {
         guard let second = comparisonTool else {
             hide()
             return
@@ -171,7 +171,7 @@ final class AICompanion: ObservableObject {
         stopComparing()
     }
 
-    func stopComparing() {
+    public func stopComparing() {
         guard comparisonTool != nil else { return }
         comparisonTool = nil
         isExpanded = wasExpandedBeforeComparing
@@ -192,7 +192,7 @@ final class AICompanion: ObservableObject {
     /// assistant answers it with a page nobody can see. Comparing ends and the
     /// panel returns to the side of the window. Both conversations stay loaded,
     /// so nothing reloads and nothing is lost — only the layout changes.
-    func makeRoomForPage() {
+    public func makeRoomForPage() {
         guard isVisible else { return }
         stopComparing()
         guard canShareWindow else {
@@ -208,7 +208,7 @@ final class AICompanion: ObservableObject {
         isExpanded = false
     }
 
-    func teardown() {
+    public func teardown() {
         live.values.forEach { $0.teardown() }
         live = [:]
         recency = []

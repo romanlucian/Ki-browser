@@ -2,36 +2,12 @@ import LimeghostCore
 import LimeghostShared
 import SwiftUI
 
-/// How the connection to the page in front of the reader actually stands.
-///
-/// The scheme alone is not the answer: an `https://` page that pulled part of
-/// itself over `http://` is not fully encrypted, and a lock over it would be a
-/// claim Limeghost cannot back. WebKit answers that second half with
-/// `hasOnlySecureContent`, so both facts are used and the chip and the popover
-/// read from the same value. Kept as a plain derivation, like `ShieldState`, so
-/// it can be tested without a web view.
-enum ConnectionSecurity: Equatable {
-    /// A Limeghost surface, not a website.
-    case noPage
-    /// An HTTPS page that has not committed yet. Until it does,
-    /// `hasOnlySecureContent` still describes the document being replaced, so
-    /// there is nothing truthful to say about this one's subresources.
-    case checking
-    case secure
-    case mixedContent
-    case notSecure
-
-    static func make(
-        urlString: String,
-        hasOnlySecureContent: Bool,
-        hasCommittedNavigation: Bool
-    ) -> ConnectionSecurity {
-        guard let url = WebURLPolicy.validatedURL(urlString) else { return .noPage }
-        guard url.scheme?.lowercased() == "https" else { return .notSecure }
-        guard hasCommittedNavigation else { return .checking }
-        return hasOnlySecureContent ? .secure : .mixedContent
-    }
-
+/// The chrome-facing presentation of `ConnectionSecurity` (`LimeghostShared`):
+/// wording, the chrome set's icon, and the semantic tint. Kept here rather
+/// than with the enum's cases because it draws on `ChromeIcon` and SwiftUI
+/// `Color`, which `BrowserSession` — the reason the enum itself has to live in
+/// `LimeghostShared` — never touches.
+extension ConnectionSecurity {
     var statusLine: String {
         switch self {
         case .noPage: return "No page loaded"

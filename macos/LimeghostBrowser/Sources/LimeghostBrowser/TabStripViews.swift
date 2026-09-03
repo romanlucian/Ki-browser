@@ -1,4 +1,5 @@
 import LimeghostCore
+import LimeghostShared
 import SwiftUI
 
 /// The tab strip: grouped and ungrouped tabs sharing one row of width, a

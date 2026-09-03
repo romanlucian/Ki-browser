@@ -1,6 +1,6 @@
 import AppKit
 import LimeghostCore
-import LimeghostShared
+@testable import LimeghostShared
 import Foundation
 import SwiftUI
 import XCTest

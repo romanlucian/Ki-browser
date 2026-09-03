@@ -875,23 +875,24 @@ final class BrowserBehaviorTests: XCTestCase {
         XCTAssertNil(preferences.homeURL, "bookmarks is a surface, not an address")
     }
 
-    /// `BrowserPreferences.defaultPageZoom` falls back to the same 1.0
-    /// `BrowserSession.defaultPageZoom` uses, but the two are two separate
-    /// constants, not one shared between them: `BrowserPreferences` moved into
-    /// `LimeghostShared` in Task 5, `BrowserSession` has not moved yet — that
-    /// is Task 7's job — and `LimeghostShared` cannot depend back on the app
-    /// target to read `BrowserSession`'s constant in the meantime. Nothing
-    /// else stops the two drifting apart before Task 7 reunifies them into one
-    /// constant; this test is that stop. It builds `BrowserPreferences` from a
+    /// `BrowserPreferences.defaultPageZoom` falls back to
+    /// `BrowserSession.defaultPageZoom` directly — one constant, not two.
+    /// Between Task 5 (which moved `BrowserPreferences` into `LimeghostShared`
+    /// while `BrowserSession` was still in the app target) and Task 7 (which
+    /// moved `BrowserSession` too), the fallback was a duplicated literal
+    /// because `LimeghostShared` could not yet depend back on the app target
+    /// to read `BrowserSession`'s constant. Both now live in the same target,
+    /// so `init` reads the real constant and this test guards against the
+    /// duplication quietly coming back. It builds `BrowserPreferences` from a
     /// defaults suite with nothing stored, so it exercises the fallback itself
-    /// rather than a value already on disk — the fallback is the only place
-    /// the duplication actually matters.
+    /// rather than a value already on disk — the fallback is the only place a
+    /// reintroduced duplicate would matter.
     func testTheZoomFallbackStaysInSyncWithBrowserSessionsDefault() {
         let preferences = BrowserPreferences(defaults: emptyDefaults("zoomFallback"))
         XCTAssertEqual(
             preferences.defaultPageZoom,
             BrowserSession.defaultPageZoom,
-            "BrowserPreferences duplicates this value until BrowserSession moves into LimeghostShared in Task 7 — keep the two in sync until then"
+            "BrowserPreferences.init reads BrowserSession.defaultPageZoom directly — this failing means that reference broke"
         )
     }
 

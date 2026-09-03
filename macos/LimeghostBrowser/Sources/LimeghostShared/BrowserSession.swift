@@ -1,11 +1,21 @@
 import LimeghostCore
-import LimeghostShared
-import AppKit
 import Combine
 import Foundation
 @preconcurrency import WebKit
 
-enum BrowserFailureKind: Equatable {
+/// The one thing `BrowserSession` needs from download handling. `WKDownload`
+/// itself is cross-platform WebKit, but `DownloadCenter` — the object that
+/// actually chooses a destination and tells Finder and Notification Center
+/// about it — is AppKit-heavy (a save panel among other things) and lives in
+/// the app target, well beyond this file's six platform edges. A session only
+/// ever hands a finished download over; `DownloadCenter` already has a method
+/// of exactly this shape, so conforming it costs nothing.
+@MainActor
+public protocol DownloadTracking: AnyObject {
+    func track(_ download: WKDownload, sourceURL: URL?)
+}
+
+public enum BrowserFailureKind: Equatable {
     case offline
     case timedOut
     case cannotReachHost
@@ -13,14 +23,14 @@ enum BrowserFailureKind: Equatable {
     case other
 }
 
-struct BrowserFailure: Equatable {
-    let kind: BrowserFailureKind
-    let title: String
-    let message: String
-    let retryable: Bool
+public struct BrowserFailure: Equatable {
+    public let kind: BrowserFailureKind
+    public let title: String
+    public let message: String
+    public let retryable: Bool
 }
 
-enum BrowserLoadState: Equatable {
+public enum BrowserLoadState: Equatable {
     case startPage
     case loading
     case content
@@ -31,7 +41,7 @@ enum BrowserLoadState: Equatable {
     /// The page actions that read a page — Reader, and anything added beside it
     /// — belong only here. On a start surface there is no document to extract,
     /// and on a failure there is nothing but the error Limeghost drew itself.
-    var showsLoadedPage: Bool {
+    public var showsLoadedPage: Bool {
         switch self {
         case .content, .loading: return true
         case .startPage, .failed: return false
@@ -40,7 +50,7 @@ enum BrowserLoadState: Equatable {
 }
 
 @MainActor
-final class BrowserSession: NSObject, ObservableObject {
+public final class BrowserSession: NSObject, ObservableObject {
     /// Stable identity for SwiftUI, which needs to know when the session behind
     /// a view has been replaced.
     ///
@@ -50,26 +60,29 @@ final class BrowserSession: NSObject, ObservableObject {
     /// is likely to hand back the block it just took — SwiftUI would read the
     /// same identity, keep the view it already had, and show a torn-down web
     /// view forever.
-    let instanceID = UUID()
-    let webView: WKWebView
-    let downloadCenter: DownloadCenter
-    let searchSettings: SearchSettingsStore
-    let isPrivate: Bool
+    public let instanceID = UUID()
+    public let webView: WKWebView
+    let downloadCenter: DownloadTracking
+    public let searchSettings: SearchSettingsStore
+    public let isPrivate: Bool
+    /// The six things this session needs from the OS that macOS and iOS do
+    /// differently. See `BrowserSessionPlatform`.
+    private let platform: BrowserSessionPlatform
 
-    @Published private(set) var currentURLString = ""
-    @Published private(set) var pageTitle = "New Page"
-    @Published private(set) var canGoBack = false
-    @Published private(set) var canGoForward = false
-    @Published private(set) var isLoading = false
-    @Published private(set) var estimatedProgress = 0.0
-    @Published private(set) var navigationVersion = 0
-    @Published private(set) var loadState: BrowserLoadState = .startPage
-    @Published private(set) var hasCommittedNavigation = false
+    @Published public private(set) var currentURLString = ""
+    @Published public private(set) var pageTitle = "New Page"
+    @Published public private(set) var canGoBack = false
+    @Published public private(set) var canGoForward = false
+    @Published public private(set) var isLoading = false
+    @Published public private(set) var estimatedProgress = 0.0
+    @Published public private(set) var navigationVersion = 0
+    @Published public private(set) var loadState: BrowserLoadState = .startPage
+    @Published public private(set) var hasCommittedNavigation = false
     /// Whether the web view still holds a page from an earlier navigation.
     /// While it does, following a link must leave it on screen: covering it
     /// with a progress card is something no other browser does, and it hides
     /// the page the reader was still reading.
-    @Published private(set) var hasRenderedPage = false
+    @Published public private(set) var hasRenderedPage = false
     /// Mirrors `webView.pageZoom` so the chrome and tests can read the current
     /// step. Per tab, and deliberately not stored: a site's zoom is not
     /// remembered between tabs or between launches.
@@ -77,33 +90,35 @@ final class BrowserSession: NSObject, ObservableObject {
     /// somebody who reads at 125% gets it on every page instead of pressing ⌘+
     /// on each one. ⌘0 still returns to 100%: the preference is where pages
     /// open, not a floor under them.
-    @Published private(set) var pageZoom: CGFloat
+    @Published public private(set) var pageZoom: CGFloat
     /// A link Limeghost declined to open, stated as a dismissible line above
     /// the page. Refusing a link must never take away the page the reader is
     /// on, so this never touches `loadState`.
-    @Published private(set) var linkNotice: String?
+    @Published public private(set) var linkNotice: String?
     /// A short sentence about the page itself, shown in the same bar and dismissed
     /// the same way. Used when copying a page has a caveat worth one line — the
     /// extractor was unsure, or the page is a list rather than an article. Silence
     /// is the normal case: a notice that appears every time is one nobody reads.
-    @Published private(set) var pageNotice: String?
+    @Published public private(set) var pageNotice: String?
     /// How the connection to the current page actually stands, from the scheme
     /// *and* from WebKit's own report of whether everything on the page arrived
     /// encrypted. Published so the address chip and the site information
     /// popover can never disagree about the same page.
-    @Published private(set) var connectionSecurity: ConnectionSecurity = .noPage
+    @Published public private(set) var connectionSecurity: ConnectionSecurity = .noPage
 
     /// `nil` opens an empty tab: a popup script may set the location later.
-    var onRequestNewTab: ((URL?) -> Void)?
+    public var onRequestNewTab: ((URL?) -> Void)?
     /// Builds the tab a `window.open()` popup will live in and returns the web
     /// view that tab adopted, so WebKit can drive that exact instance and keep
     /// `window.opener` connected to the page that opened it.
-    var onRequestPopupWebView: ((WKWebViewConfiguration) -> WKWebView?)?
-    var onCompletedVisit: ((String, String) -> Void)?
+    public var onRequestPopupWebView: ((WKWebViewConfiguration) -> WKWebView?)?
+    public var onCompletedVisit: ((String, String) -> Void)?
     /// How a `mailto:`/`tel:` link reaches the app that owns it. Injectable so
     /// the smoke suite can prove the page survives the hand-off without
-    /// launching the tester's mail client.
-    var openExternalScheme: (URL) -> Void = { NSWorkspace.shared.open($0) }
+    /// launching the tester's mail client. Defaults to `platform.openExternal`,
+    /// assigned once `platform` is available inside `init` below — a stored
+    /// property's own initializer cannot reference another property.
+    public var openExternalScheme: (URL) -> Void = { _ in }
 
     private var isShowingStartPage = true
     private var lastRequestedURL: URL?
@@ -121,15 +136,19 @@ final class BrowserSession: NSObject, ObservableObject {
     private var lastObservedWebURLString: String?
     private var lastVersionedStandardNavigationURLString: String?
     private var webViewSubscriptions: Set<AnyCancellable> = []
-    private var appearanceObservation: NSKeyValueObservation?
+    /// The platform's own observation token (an `NSKeyValueObservation` on
+    /// macOS). Type-erased because `BrowserSessionPlatform.observeAppearance`
+    /// hands back `Any?` — this file cannot name the concrete AppKit type.
+    private var appearanceObservation: Any?
     private let contentBlocking: ContentRuleListProvider?
     private let favicons: FaviconStore?
     private var faviconTask: Task<Void, Never>?
     private var linkNoticeTask: Task<Void, Never>?
     private var pageNoticeTask: Task<Void, Never>?
 
-    init(
-        downloadCenter: DownloadCenter,
+    public init(
+        platform: BrowserSessionPlatform,
+        downloadCenter: DownloadTracking,
         searchSettings: SearchSettingsStore,
         initialURL: URL? = nil,
         isPrivate: Bool = false,
@@ -149,6 +168,7 @@ final class BrowserSession: NSObject, ObservableObject {
         adoptingPopupConfiguration popupConfiguration: WKWebViewConfiguration? = nil
     ) {
         self.pageZoom = initialPageZoom ?? BrowserPreferences.shared.defaultPageZoom
+        self.platform = platform
         self.downloadCenter = downloadCenter
         self.searchSettings = searchSettings
         self.isPrivate = isPrivate
@@ -177,6 +197,7 @@ final class BrowserSession: NSObject, ObservableObject {
         }
         webView = WKWebView(frame: .zero, configuration: configuration)
         super.init()
+        self.openExternalScheme = { [platform] url in platform.openExternal(url) }
         // Registered before the first load so tracker rules apply from the
         // first request, including in private tabs.
         contentBlocking?.register(webView)
@@ -192,12 +213,26 @@ final class BrowserSession: NSObject, ObservableObject {
         // the setting moves a number and never the page.
         webView.pageZoom = pageZoom
         webView.isInspectable = webFeatures?.showsDeveloperFeatures ?? false
-        webView.appearance = NSApp.effectiveAppearance
+        // The one-time appearance set that used to sit here directly
+        // (`webView.appearance = NSApp.effectiveAppearance`) now happens in
+        // the platform-specific convenience initializer that wraps this one,
+        // once it knows which web view is its own — this initializer runs
+        // before that, and `platform` cannot touch AppKit's `NSAppearance`
+        // from inside `LimeghostShared`.
         webView.navigationDelegate = self
         webView.uiDelegate = self
-        webView.allowsMagnification = true
+        // `webView.allowsMagnification = true` (trackpad pinch-to-zoom) is not
+        // set here: `WKWebView.allowsMagnification` does not exist on iOS at
+        // all — not merely AppKit, an entirely different, macOS-only WKWebView
+        // property — so this file cannot reference it without failing the iOS
+        // typecheck regardless of platform abstraction. It moved to the same
+        // macOS-only convenience initializer that sets the one-time appearance
+        // (`webView.appearance = NSApp.effectiveAppearance`), for the same
+        // reason: neither can be named from here.
         // Two-finger swipe for back and forward. It is reflexive on a Mac
-        // trackpad, and a browser that ignores it reads as broken.
+        // trackpad, and a browser that ignores it reads as broken. Available
+        // on iOS too — edge-swipe back/forward is the same affordance there —
+        // so this one line stays here rather than moving with the one above.
         webView.allowsBackForwardNavigationGestures = true
         observeSystemAppearance()
         observeWebViewState()
@@ -237,11 +272,11 @@ final class BrowserSession: NSObject, ObservableObject {
 
     /// App activation may focus the address field on a start/new tab, but must
     /// not steal keyboard focus from an already loaded webpage.
-    var shouldFocusAddressOnAppActivation: Bool {
+    public var shouldFocusAddressOnAppActivation: Bool {
         isShowingStartPage
     }
 
-    func navigate(_ input: String) {
+    public func navigate(_ input: String) {
         guard let url = resolve(input) else {
             loadState = .failed(
                 BrowserFailure(
@@ -256,7 +291,7 @@ final class BrowserSession: NSObject, ObservableObject {
         load(url)
     }
 
-    func load(_ url: URL, displayName: String? = nil) {
+    public func load(_ url: URL, displayName: String? = nil) {
         guard let safeURL = WebURLPolicy.validatedURL(url) else {
             loadState = .failed(
                 BrowserFailure(
@@ -294,7 +329,7 @@ final class BrowserSession: NSObject, ObservableObject {
     /// it and would otherwise render bare. WebKit gives file pages opaque
     /// origins, so this widens what the page may *display*, not what its
     /// scripts may read.
-    func loadLocalFile(_ url: URL) {
+    public func loadLocalFile(_ url: URL) {
         guard url.isFileURL else { return }
         isShowingStartPage = false
         lastRequestedURL = url
@@ -312,7 +347,7 @@ final class BrowserSession: NSObject, ObservableObject {
         )
     }
 
-    func openAITool(_ tool: AIToolListing) {
+    public func openAITool(_ tool: AIToolListing) {
         load(tool.officialURL, displayName: tool.name)
     }
 
@@ -320,19 +355,19 @@ final class BrowserSession: NSObject, ObservableObject {
 
     /// The steps ⌘+ and ⌘− walk. `1.0` is the unzoomed page and the value ⌘0
     /// returns to.
-    static let pageZoomSteps: [CGFloat] = [0.5, 0.67, 0.8, 0.9, 1.0, 1.1, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0]
-    static let defaultPageZoom: CGFloat = 1.0
+    public static let pageZoomSteps: [CGFloat] = [0.5, 0.67, 0.8, 0.9, 1.0, 1.1, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0]
+    public static let defaultPageZoom: CGFloat = 1.0
 
-    func zoomIn() {
+    public func zoomIn() {
         setPageZoom(Self.pageZoomSteps.first { $0 > pageZoom } ?? pageZoom)
     }
 
-    func zoomOut() {
+    public func zoomOut() {
         setPageZoom(Self.pageZoomSteps.last { $0 < pageZoom } ?? pageZoom)
     }
 
     /// ⌘0.
-    func resetPageZoom() {
+    public func resetPageZoom() {
         setPageZoom(Self.defaultPageZoom)
     }
 
@@ -346,55 +381,38 @@ final class BrowserSession: NSObject, ObservableObject {
     /// True only while a real web page is on screen. The AI guide, the
     /// bookmarks home, and the error surfaces are app views, not documents, so
     /// the Print command disables itself on them.
-    var canPrintPage: Bool { loadState == .content }
+    public var canPrintPage: Bool { loadState == .content }
 
     /// The page as a PDF, laid out as WebKit is showing it.
-    func makePDF(completion: @escaping (Result<Data, Error>) -> Void) {
+    public func makePDF(completion: @escaping (Result<Data, Error>) -> Void) {
         webView.createPDF { completion($0) }
     }
 
     /// The page as WebKit currently holds it, resources included, so a saved
     /// copy is what was on screen rather than a fresh fetch of the address.
-    func makeWebArchive(completion: @escaping (Result<Data, Error>) -> Void) {
+    public func makeWebArchive(completion: @escaping (Result<Data, Error>) -> Void) {
         webView.createWebArchiveData { completion($0) }
     }
 
-    /// ⌘P. WebKit paginates the page the user is looking at; the print panel
-    /// runs as a sheet on the browser window when there is one.
-    func printPage() {
+    /// ⌘P.
+    public func printPage() {
         guard canPrintPage else { return }
-        let printInfo = NSPrintInfo.shared
-        let operation = webView.printOperation(with: printInfo)
-        operation.showsPrintPanel = true
-        operation.showsProgressPanel = true
-        // The operation's view has no frame of its own; without one WebKit
-        // paginates an empty rectangle and the job comes out blank.
-        operation.view?.frame = NSRect(
-            x: 0,
-            y: 0,
-            width: max(printInfo.paperSize.width - printInfo.leftMargin - printInfo.rightMargin, 1),
-            height: max(printInfo.paperSize.height - printInfo.topMargin - printInfo.bottomMargin, 1)
-        )
-        if let window = webView.window {
-            operation.runModal(for: window, delegate: nil, didRun: nil, contextInfo: nil)
-        } else {
-            operation.run()
-        }
+        platform.printPage(webView)
     }
 
-    func goBack() { webView.goBack() }
-    func goForward() { webView.goForward() }
-    func reload() {
+    public func goBack() { webView.goBack() }
+    public func goForward() { webView.goForward() }
+    public func reload() {
         if isShowingStartPage { showStartPage() } else { webView.reload() }
     }
-    func stopLoading() {
+    public func stopLoading() {
         webView.stopLoading()
         isLoading = false
         navigationDisplayName = nil
         loadState = isShowingStartPage ? .startPage : .content
     }
 
-    func showStartPage() {
+    public func showStartPage() {
         isShowingStartPage = true
         hasRenderedPage = false
         lastRequestedURL = nil
@@ -409,7 +427,7 @@ final class BrowserSession: NSObject, ObservableObject {
         activeNavigation = webView.loadHTMLString(Self.startPageHTML, baseURL: nil)
     }
 
-    func retry() {
+    public func retry() {
         guard let lastRequestedURL else {
             showStartPage()
             return
@@ -457,7 +475,7 @@ final class BrowserSession: NSObject, ObservableObject {
         onRequestNewTab?(url.flatMap(WebURLPolicy.validatedURL))
     }
 
-    func showPageNotice(_ message: String) {
+    public func showPageNotice(_ message: String) {
         pageNoticeTask?.cancel()
         pageNotice = message
         pageNoticeTask = Task { [weak self] in
@@ -467,7 +485,7 @@ final class BrowserSession: NSObject, ObservableObject {
         }
     }
 
-    func dismissPageNotice() {
+    public func dismissPageNotice() {
         pageNoticeTask?.cancel()
         pageNotice = nil
     }
@@ -482,7 +500,7 @@ final class BrowserSession: NSObject, ObservableObject {
         }
     }
 
-    func dismissLinkNotice() {
+    public func dismissLinkNotice() {
         linkNoticeTask?.cancel()
         linkNoticeTask = nil
         linkNotice = nil
@@ -506,7 +524,7 @@ final class BrowserSession: NSObject, ObservableObject {
         refreshConnectionSecurity()
     }
 
-    func teardown() {
+    public func teardown() {
         // `stopLoading` ends the network fetch and nothing else. A <video> that
         // has already buffered goes on playing, so a closed tab or a closed
         // window kept making noise with nothing left on screen to stop it.
@@ -535,7 +553,7 @@ final class BrowserSession: NSObject, ObservableObject {
         webView.loadHTMLString("", baseURL: nil)
     }
 
-    func extractPage() async throws -> PageSnapshot {
+    public func extractPage() async throws -> PageSnapshot {
         let value: Any = try await withCheckedThrowingContinuation { continuation in
             webView.evaluateJavaScript(Self.extractionScript) { value, error in
                 if let error {
@@ -556,12 +574,13 @@ final class BrowserSession: NSObject, ObservableObject {
         return snapshot
     }
 
-    /// macOS posts this when the user switches Light and Dark; the page should
-    /// follow without needing a reload.
+    /// The system posts a change when the user switches Light and Dark (or,
+    /// on iOS, when the trait collection changes); the page should follow
+    /// without needing a reload. The platform applies the new appearance to
+    /// this session's own web view itself — see `MacSessionPlatform` — this
+    /// closure exists only because the protocol needs one to call back into.
     private func observeSystemAppearance() {
-        appearanceObservation = NSApp.observe(\.effectiveAppearance) { [weak self] app, _ in
-            Task { @MainActor in self?.webView.appearance = app.effectiveAppearance }
-        }
+        appearanceObservation = platform.observeAppearance {}
     }
 
     private func observeWebViewState() {
@@ -717,11 +736,11 @@ final class BrowserSession: NSObject, ObservableObject {
         error.domain == "WebKitErrorDomain" && error.code == 102
     }
 
-    var loadingTitle: String {
+    public var loadingTitle: String {
         navigationDisplayName.map { "Opening \($0)…" } ?? "Opening page…"
     }
 
-    var loadingHost: String {
+    public var loadingHost: String {
         lastRequestedURL?.host ?? ""
     }
 
@@ -950,7 +969,7 @@ final class BrowserSession: NSObject, ObservableObject {
 }
 
 extension BrowserSession: WKNavigationDelegate {
-    func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
+    public func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
         // A provisional navigation that starts now is by definition the newest,
         // so it takes over. Refusing it would leave the older one active while
         // WebKit quietly abandons it, and the newer one's didFinish would then
@@ -972,7 +991,7 @@ extension BrowserSession: WKNavigationDelegate {
         refreshState()
     }
 
-    func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
+    public func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
         if let activeNavigation, navigation !== activeNavigation { return }
         // A back or forward move onto the tab's own start-surface entry may
         // arrive here without passing the policy decision — WebKit can restore
@@ -997,7 +1016,7 @@ extension BrowserSession: WKNavigationDelegate {
         refreshState()
     }
 
-    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+    public func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         if let activeNavigation, navigation !== activeNavigation { return }
         activeNavigation = nil
         isLoading = false
@@ -1050,11 +1069,11 @@ extension BrowserSession: WKNavigationDelegate {
         }
     }
 
-    func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+    public func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
         handleFailure(error, navigation: navigation)
     }
 
-    func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+    public func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
         activeNavigation = nil
         isLoading = false
         hasCommittedNavigation = false
@@ -1068,7 +1087,7 @@ extension BrowserSession: WKNavigationDelegate {
         )
     }
 
-    func webView(
+    public func webView(
         _ webView: WKWebView,
         didFailProvisionalNavigation navigation: WKNavigation!,
         withError error: Error
@@ -1076,7 +1095,7 @@ extension BrowserSession: WKNavigationDelegate {
         handleFailure(error, navigation: navigation)
     }
 
-    func webView(
+    public func webView(
         _ webView: WKWebView,
         decidePolicyFor navigationAction: WKNavigationAction,
         decisionHandler: @escaping (WKNavigationActionPolicy) -> Void
@@ -1121,7 +1140,7 @@ extension BrowserSession: WKNavigationDelegate {
         decisionHandler(.allow)
     }
 
-    func webView(
+    public func webView(
         _ webView: WKWebView,
         decidePolicyFor navigationResponse: WKNavigationResponse,
         decisionHandler: @escaping (WKNavigationResponsePolicy) -> Void
@@ -1129,7 +1148,7 @@ extension BrowserSession: WKNavigationDelegate {
         decisionHandler(navigationResponse.canShowMIMEType ? .allow : .download)
     }
 
-    func webView(
+    public func webView(
         _ webView: WKWebView,
         navigationAction: WKNavigationAction,
         didBecome download: WKDownload
@@ -1137,7 +1156,7 @@ extension BrowserSession: WKNavigationDelegate {
         downloadCenter.track(download, sourceURL: navigationAction.request.url)
     }
 
-    func webView(
+    public func webView(
         _ webView: WKWebView,
         navigationResponse: WKNavigationResponse,
         didBecome download: WKDownload
@@ -1147,7 +1166,7 @@ extension BrowserSession: WKNavigationDelegate {
 }
 
 extension BrowserSession: WKUIDelegate {
-    func webView(
+    public func webView(
         _ webView: WKWebView,
         createWebViewWith configuration: WKWebViewConfiguration,
         for navigationAction: WKNavigationAction,
@@ -1173,78 +1192,51 @@ extension BrowserSession: WKUIDelegate {
         return nil
     }
 
-    /// Without this, every `<input type="file">` on the web is dead: no picker
-    /// appears and the page is never told anything happened. Private tabs are
-    /// no different — a file the user chose is a file the user chose.
-    func webView(
-        _ webView: WKWebView,
-        runOpenPanelWith parameters: WKOpenPanelParameters,
-        initiatedByFrame frame: WKFrameInfo,
-        completionHandler: @escaping ([URL]?) -> Void
-    ) {
-        // WebKit keeps the page's file input suspended until this handler is
-        // called, and dropping it deadlocks uploads for the rest of the
-        // session. Every path out of here — choose, cancel, no window — answers
-        // through one latch that fires exactly once.
-        let answer = OpenPanelAnswer(completionHandler)
-        let panel = NSOpenPanel()
-        panel.allowsMultipleSelection = parameters.allowsMultipleSelection
-        panel.canChooseFiles = true
-        panel.canChooseDirectories = parameters.allowsDirectories
-        panel.canCreateDirectories = false
-        panel.prompt = "Choose"
-        panel.message = webView.url?.host.map { "Choose what to upload to \($0)." }
-            ?? "Choose what to upload to this page."
-        if let window = webView.window {
-            panel.beginSheetModal(for: window) { response in
-                answer.deliver(response == .OK ? panel.urls : nil)
-            }
-        } else {
-            answer.deliver(panel.runModal() == .OK ? panel.urls : nil)
-        }
-    }
+    // `webView(_:runOpenPanelWith:initiatedByFrame:completionHandler:)` — the
+    // `<input type="file">` picker — is not declared here. Its parameter type
+    // `WKOpenPanelParameters` is only available from iOS 18.4, below this
+    // project's iOS 17 floor, so the *signature* alone would fail this file's
+    // iOS typecheck no matter what its body did. `MacSessionPlatform.swift`
+    // adds it back, from the app target, as an extension on `BrowserSession`:
+    // `WKUIDelegate`'s methods are all `@objc optional`, so nothing about
+    // conforming to it here requires every method to live in this file.
 
-    func webView(
+    public func webView(
         _ webView: WKWebView,
         runJavaScriptAlertPanelWithMessage message: String,
         initiatedByFrame frame: WKFrameInfo,
         completionHandler: @escaping () -> Void
     ) {
-        let alert = pageAlert(message: message)
-        alert.addButton(withTitle: "OK")
-        alert.runModal()
-        completionHandler()
+        Task { @MainActor [platform] in
+            await platform.presentAlert(message: message)
+            completionHandler()
+        }
     }
 
-    func webView(
+    public func webView(
         _ webView: WKWebView,
         runJavaScriptConfirmPanelWithMessage message: String,
         initiatedByFrame frame: WKFrameInfo,
         completionHandler: @escaping (Bool) -> Void
     ) {
-        let alert = pageAlert(message: message)
-        alert.addButton(withTitle: "OK")
-        alert.addButton(withTitle: "Cancel")
-        completionHandler(alert.runModal() == .alertFirstButtonReturn)
+        Task { @MainActor [platform] in
+            completionHandler(await platform.presentConfirm(message: message))
+        }
     }
 
-    func webView(
+    public func webView(
         _ webView: WKWebView,
         runJavaScriptTextInputPanelWithPrompt prompt: String,
         defaultText: String?,
         initiatedByFrame frame: WKFrameInfo,
         completionHandler: @escaping (String?) -> Void
     ) {
-        let alert = pageAlert(message: prompt)
-        let field = NSTextField(string: defaultText ?? "")
-        field.frame = NSRect(x: 0, y: 0, width: 320, height: 24)
-        alert.accessoryView = field
-        alert.addButton(withTitle: "OK")
-        alert.addButton(withTitle: "Cancel")
-        completionHandler(alert.runModal() == .alertFirstButtonReturn ? field.stringValue : nil)
+        Task { @MainActor [platform] in
+            completionHandler(await platform.presentPrompt(message: prompt, defaultText: defaultText))
+        }
     }
 
-    func webView(
+    public func webView(
         _ webView: WKWebView,
         requestMediaCapturePermissionFor origin: WKSecurityOrigin,
         initiatedByFrame frame: WKFrameInfo,
@@ -1254,31 +1246,6 @@ extension BrowserSession: WKUIDelegate {
         // WebKit owns the visible per-request prompt. Limeghost never remembers or
         // silently grants camera/microphone access from page content.
         decisionHandler(.prompt)
-    }
-
-    private func pageAlert(message: String) -> NSAlert {
-        let alert = NSAlert()
-        alert.messageText = webView.url?.host.map { "Message from \($0)" } ?? "Message from this page"
-        alert.informativeText = String(message.prefix(4_000))
-        alert.alertStyle = .informational
-        return alert
-    }
-}
-
-/// One-shot latch for WebKit's open-panel completion handler. WebKit treats a
-/// second call as a hard error and a missing call as a permanent stall, so the
-/// handler is released here once and then forgotten.
-private final class OpenPanelAnswer {
-    private var completionHandler: (([URL]?) -> Void)?
-
-    init(_ completionHandler: @escaping ([URL]?) -> Void) {
-        self.completionHandler = completionHandler
-    }
-
-    func deliver(_ urls: [URL]?) {
-        guard let completionHandler else { return }
-        self.completionHandler = nil
-        completionHandler(urls)
     }
 }
 

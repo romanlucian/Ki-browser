@@ -134,18 +134,11 @@ public final class BrowserPreferences: ObservableObject {
         homePage = defaults.string(forKey: Keys.homePage) ?? ""
 
         let storedZoom = defaults.double(forKey: Keys.defaultPageZoom)
-        defaultPageZoom = storedZoom > 0 ? CGFloat(storedZoom) : Self.unzoomedPageZoom
+        defaultPageZoom = storedZoom > 0 ? CGFloat(storedZoom) : BrowserSession.defaultPageZoom
 
         downloadFolderPath = defaults.string(forKey: Keys.downloadFolder) ?? ""
         asksWhereToSave = defaults.object(forKey: Keys.askWhereToSave) as? Bool ?? true
     }
-
-    /// The unzoomed page value — 1.0, identical to `BrowserSession.defaultPageZoom`.
-    /// Duplicated rather than referenced: `BrowserSession` has not moved into this
-    /// target yet (Task 7 moves it, alongside `AICompanion`), and this target
-    /// cannot depend back on the app target to read its constant. Reunify the two
-    /// once `BrowserSession` is here too.
-    private static let unzoomedPageZoom: CGFloat = 1.0
 
     private enum Keys {
         static let homeTarget = "clearframe.homeTarget"
