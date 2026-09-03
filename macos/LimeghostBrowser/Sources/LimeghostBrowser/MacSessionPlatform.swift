@@ -46,24 +46,22 @@ final class MacSessionPlatform: BrowserSessionPlatform {
         return alert.runModal() == .alertFirstButtonReturn ? field.stringValue : nil
     }
 
-    /// Satisfies the protocol, but is not today's live path for `<input
-    /// type="file">` on macOS: see `BrowserSession.webView(_:runOpenPanelWith:
-    /// initiatedByFrame:completionHandler:)` below, which keeps the original
-    /// panel-construction code verbatim instead of routing through here. That
-    /// method needs `WKOpenPanelParameters`, which carries `allowsDirectories`
-    /// — this protocol's narrower `allowsMultiple: Bool` cannot — and it also
-    /// has the calling web view in hand directly, rather than through a weak
-    /// reference set after the fact. Losing directory-selection support (a
-    /// site asking for a folder, not files) to fit this signature would be a
-    /// real behaviour change, so that method does not call this one. This
-    /// implementation exists to be a faithful, protocol-shaped answer for any
-    /// caller that only has `allowsMultiple` to give it.
-    func chooseFiles(allowsMultiple: Bool) async -> [URL]? {
+    /// `<input type="file">`. This is the live macOS path: `BrowserSession
+    /// .webView(_:runOpenPanelWith:initiatedByFrame:completionHandler:)`
+    /// below calls `BrowserSession.chooseFiles(allowsMultiple:
+    /// allowsDirectories:)`, which calls this. Both `WKOpenPanelParameters`
+    /// flags — including `allowsDirectories`, the page asking for a folder
+    /// rather than files — survive that trip intact, since the protocol
+    /// carries both explicitly, and `webView` here is the very web view that
+    /// delegate method already has in hand: set once, right after
+    /// `BrowserSession.init` returns, in the convenience initializer below.
+    /// Nothing is lost by routing through the protocol.
+    func chooseFiles(allowsMultiple: Bool, allowsDirectories: Bool) async -> [URL]? {
         await withCheckedContinuation { continuation in
             let panel = NSOpenPanel()
             panel.allowsMultipleSelection = allowsMultiple
             panel.canChooseFiles = true
-            panel.canChooseDirectories = false
+            panel.canChooseDirectories = allowsDirectories
             panel.canCreateDirectories = false
             panel.prompt = "Choose"
             panel.message = webView?.url?.host.map { "Choose what to upload to \($0)." }
@@ -186,11 +184,12 @@ extension BrowserSession {
     /// so this is found and called exactly as if it had been written
     /// alongside `BrowserSession`'s other `WKUIDelegate` methods.
     ///
-    /// The body is the original code, unchanged: WebKit keeps the page's
-    /// file input suspended until this handler is called, and dropping it
-    /// deadlocks uploads for the rest of the session, so every path out —
-    /// choose, cancel, no window — answers through one latch that fires
-    /// exactly once.
+    /// The body routes through `BrowserSession.chooseFiles(allowsMultiple:
+    /// allowsDirectories:)` (`MacSessionPlatform.chooseFiles(allowsMultiple:
+    /// allowsDirectories:)` above does the actual `NSOpenPanel` work) rather
+    /// than building the panel inline: `async`/`await` already guarantees
+    /// `completionHandler` fires exactly once, so the one-shot latch the
+    /// original inline version needed no longer has a job.
     ///
     /// The explicit `@objc(...)` is load-bearing, not decoration: Objective-C
     /// derives this requirement's real selector from
@@ -202,9 +201,10 @@ extension BrowserSession {
     /// separate extension, with no `: WKUIDelegate` of its own to re-trigger
     /// it — so Swift's automatic inference would instead synthesize
     /// `webView:runOpenPanelWith:initiatedByFrame:completionHandler:` (no
-    /// "Parameters"), which WebKit never calls. Confirmed with a throwaway
-    /// `session.responds(to:)` check against the real selector: it failed
-    /// before this annotation and passes with it.
+    /// "Parameters"), which WebKit never calls. Confirmed by
+    /// `BrowserBehaviorTests.testASessionAnswersWebKitsOpenPanelRequest`,
+    /// which asserts `responds(to:)` the real selector: it failed before this
+    /// annotation and passes with it.
     @objc(webView:runOpenPanelWithParameters:initiatedByFrame:completionHandler:)
     func webView(
         _ webView: WKWebView,
@@ -212,40 +212,12 @@ extension BrowserSession {
         initiatedByFrame frame: WKFrameInfo,
         completionHandler: @escaping ([URL]?) -> Void
     ) {
-        let answer = OpenPanelAnswer(completionHandler)
-        let panel = NSOpenPanel()
-        panel.allowsMultipleSelection = parameters.allowsMultipleSelection
-        panel.canChooseFiles = true
-        panel.canChooseDirectories = parameters.allowsDirectories
-        panel.canCreateDirectories = false
-        panel.prompt = "Choose"
-        panel.message = webView.url?.host.map { "Choose what to upload to \($0)." }
-            ?? "Choose what to upload to this page."
-        if let window = webView.window {
-            panel.beginSheetModal(for: window) { response in
-                answer.deliver(response == .OK ? panel.urls : nil)
-            }
-        } else {
-            answer.deliver(panel.runModal() == .OK ? panel.urls : nil)
+        Task { @MainActor in
+            completionHandler(await chooseFiles(
+                allowsMultiple: parameters.allowsMultipleSelection,
+                allowsDirectories: parameters.allowsDirectories
+            ))
         }
-    }
-}
-
-/// One-shot latch for WebKit's open-panel completion handler. WebKit treats a
-/// second call as a hard error and a missing call as a permanent stall, so the
-/// handler is released here once and then forgotten. Moved here with
-/// `runOpenPanelWith`, its only caller.
-private final class OpenPanelAnswer {
-    private var completionHandler: (([URL]?) -> Void)?
-
-    init(_ completionHandler: @escaping ([URL]?) -> Void) {
-        self.completionHandler = completionHandler
-    }
-
-    func deliver(_ urls: [URL]?) {
-        guard let completionHandler else { return }
-        self.completionHandler = nil
-        completionHandler(urls)
     }
 }
 

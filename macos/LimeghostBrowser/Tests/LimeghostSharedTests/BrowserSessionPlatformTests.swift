@@ -10,7 +10,7 @@ final class RecordingPlatform: BrowserSessionPlatform {
     func presentAlert(message: String) async {}
     func presentConfirm(message: String) async -> Bool { false }
     func presentPrompt(message: String, defaultText: String?) async -> String? { nil }
-    func chooseFiles(allowsMultiple: Bool) async -> [URL]? { nil }
+    func chooseFiles(allowsMultiple: Bool, allowsDirectories: Bool) async -> [URL]? { nil }
     func printPage(_ webView: WKWebView) {}
     func observeAppearance(_ apply: @escaping () -> Void) -> Any? { nil }
 }

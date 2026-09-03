@@ -400,6 +400,17 @@ public final class BrowserSession: NSObject, ObservableObject {
         platform.printPage(webView)
     }
 
+    // MARK: - File picker
+
+    /// `<input type="file">`. `platform` is `private`, so this is the seam
+    /// the macOS-only `webView(_:runOpenPanelWith:initiatedByFrame:
+    /// completionHandler:)` extension (declared in the app target, a
+    /// different module — see `MacSessionPlatform.swift`) uses to reach it,
+    /// the same way `printPage()` above is the seam for `platform.printPage`.
+    public func chooseFiles(allowsMultiple: Bool, allowsDirectories: Bool) async -> [URL]? {
+        await platform.chooseFiles(allowsMultiple: allowsMultiple, allowsDirectories: allowsDirectories)
+    }
+
     public func goBack() { webView.goBack() }
     public func goForward() { webView.goForward() }
     public func reload() {

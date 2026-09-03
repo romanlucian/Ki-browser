@@ -106,6 +106,37 @@ final class BrowserBehaviorTests: XCTestCase {
         }
     }
 
+    /// WebKit only shows a file picker for `<input type="file">` if the UI
+    /// delegate answers `runOpenPanelWith`; without it every file input is
+    /// silently dead. `BrowserSession` answers it from an extension declared
+    /// in the app target (`MacSessionPlatform.swift`) — a different module
+    /// than where `BrowserSession: WKUIDelegate` is declared — and Swift's
+    /// implicit `@objc` inference does not run for a method added that way,
+    /// so it carries an explicit `@objc(webView:runOpenPanelWithParameters:
+    /// initiatedByFrame:completionHandler:)` selector instead. This is the
+    /// permanent regression test for that: it failed silently the one time
+    /// this was wrong, caught only by asserting `responds(to:)` the real
+    /// selector rather than trusting the annotation was present and correct.
+    /// Checked here rather than only in the (env-gated, frequently skipped)
+    /// E2E smoke suite, which already asserts the same thing at
+    /// `BrowserE2ESmokeTests.swift:866` but does not run without
+    /// `LIMEGHOST_SMOKE_BASE_URL` set.
+    func testASessionAnswersWebKitsOpenPanelRequest() throws {
+        let suiteName = "clearframe.openPanel.selector.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { TestSuiteCleanup.destroy(suiteName, defaults: defaults) }
+        let session = BrowserSession(
+            downloadCenter: DownloadCenter(),
+            searchSettings: SearchSettingsStore(defaults: defaults)
+        )
+        defer { session.teardown() }
+
+        XCTAssertTrue(
+            session.responds(to: #selector(WKUIDelegate.webView(_:runOpenPanelWith:initiatedByFrame:completionHandler:))),
+            "the session did not answer WebKit's open-panel request, so file inputs would never show a picker"
+        )
+    }
+
     /// `window.open()` hands over a configuration; the popup's tab has to build
     /// its web view from that exact configuration, or `window.opener` is null
     /// in the new tab and a popup sign-in can never report back.

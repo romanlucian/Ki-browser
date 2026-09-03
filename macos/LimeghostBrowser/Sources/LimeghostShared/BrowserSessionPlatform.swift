@@ -23,9 +23,12 @@ public protocol BrowserSessionPlatform: AnyObject {
     /// `window.prompt`. `nil` if the person cancelled.
     func presentPrompt(message: String, defaultText: String?) async -> String?
 
-    /// `<input type="file">`. iOS returns `nil`: WebKit presents its own
+    /// `<input type="file">`. `allowsDirectories` is the page asking for a
+    /// folder (`<input type="file" webkitdirectory>`) rather than files —
+    /// carried explicitly because dropping it would be a real behaviour
+    /// change, not a cosmetic one. iOS returns `nil`: WebKit presents its own
     /// picker there, so the app must not present a second one.
-    func chooseFiles(allowsMultiple: Bool) async -> [URL]?
+    func chooseFiles(allowsMultiple: Bool, allowsDirectories: Bool) async -> [URL]?
 
     /// Print this page. iOS does nothing in v1; printing is not in scope.
     func printPage(_ webView: WKWebView)
