@@ -66,12 +66,14 @@ Scam signals are a supporting trust feature, not the initial positioning. A smal
 
 ### Explicit non-goals
 
-- A full Chromium fork, custom sync, password manager, or mobile browser.
+- A full Chromium fork, custom sync, or password manager.
 - Autonomous clicking, purchasing, messaging, form submission, or account access.
 - A “truth score,” political-bias score, malware verdict, or replacement for Safe Browsing.
 - Remote browsing-history collection, cross-device history, ad insertion, or recommendation tracking.
 - Claims of partnerships or bundled search contracts before signed agreements exist.
 - Live AI-tool rankings, country-availability claims, precise price promises, affiliate redirects, or automatic transfer of page content and prompts to a listed service.
+
+**"Mobile browser" left this list on September 2, 2026, and the reversal is recorded here rather than deleted quietly.** It was written against the cost of a second rendering engine: the Product thesis section above still reads "maintaining Chromium would add security updates, packaging, sync, profiles, password migration, mobile support, and distribution work before product demand is known." iOS mandates WebKit, which is already this browser's engine, so that specific cost does not arise — it is the one platform where the WebKit + SwiftUI + `LimeghostCore` bet is native rather than a compromise, and it is the founder's reasoning for reversing the non-goal. The reversal is a decision, not a delivered product. As of this writing, a platform-neutral `LimeghostShared` Swift target exists and typechecks against the iOS SDK; there is no iOS app, no `ios/` Xcode project, nothing installed on a device, and no user validation on that platform by anyone but the founder. See [docs/ios-browser-foundation.md](ios-browser-foundation.md) for what exists, [the iOS pocket-browser design spec](superpowers/specs/2026-09-03-ios-pocket-browser-design.md) §1.1 for the full reasoning, and [project-context.md](project-context.md) for the decision record.
 
 ## Experience principles
 

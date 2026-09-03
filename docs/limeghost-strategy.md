@@ -14,7 +14,7 @@ Limeghost's working differentiation is **“fast and calm even when the web is h
 
 ## Product decisions that must survive
 
-- Build macOS first with native SwiftUI and WebKit. Do not switch the working app to Chromium now.
+- Build macOS first, iOS second, over one `LimeghostCore` and one shared model layer (`LimeghostShared`) rather than a fork per platform. Native SwiftUI and WebKit on both. Do not switch the working app to Chromium now.
 - Keep the isolated CEF work as a future gate for demonstrated cross-platform or Chromium-extension needs. It is not linked into today's app and is not permission to begin a disruptive engine migration.
 - Keep the interface English-first while supporting pages across languages, and test with ordinary people. Technical depth should not leak into the first-minute experience.
 - Preserve radical clarity, high craft, calm interaction, and trust before monetization.
@@ -76,6 +76,8 @@ After extraction quality, the next differentiated product work is:
 2. **Extraction quality.** Everything above reads what extraction produces, so its ceiling is the product's ceiling. Currently the extractor takes the first `<article>` or `<main>` with 400+ characters and otherwise the whole page body, and discards every block under 45 characters — which silently deletes prices, ingredients, specifications and forum replies.
 
 Neither is delivered. Both require usability testing before release, and neither should start before an outside tester can install the app at all.
+
+**iOS is a conscious exception to that sequencing, decided September 2, 2026 — the sentence above still governs everything else.** It sits beside the founder's August 24, 2026 decision to dogfood rather than recruit testers: the iOS app is buildable and dogfoodable at no cost, and validatable by nobody but the founder until Apple Developer Program enrolment — the same position the Mac app is already in today. That is not a loophole in the rule above; it is the same rule applied to a second platform where nobody outside the founder can install anything yet either. As of this writing only the platform-neutral groundwork exists (`LimeghostShared`, typechecked against the iOS SDK); there is no iOS app, no observed use, and no claim of one. See [project-context.md](project-context.md) for the full decision and [docs/ios-browser-foundation.md](ios-browser-foundation.md) for what exists versus what does not.
 
 ## Privacy and security boundaries
 
@@ -149,6 +151,7 @@ Do not buy paid ads before retention is understood. Do not spam communities, fab
 
 - Complete threat modeling, security and privacy review, crash recovery, updater design, and broader hardware/site QA.
 - Obtain Apple Developer credentials, then perform Developer ID signing, notarization, and an appropriate TestFlight/App Store or direct-distribution evaluation.
+- The iOS pocket browser shares this gate. `LimeghostShared`, the platform-neutral layer both platforms' sessions, workspace, and stores run on, exists and typechecks against the iOS SDK as of September 3, 2026; the app shell does not yet. TestFlight, CloudKit bookmark sync, default-browser registration, and passkeys all wait on the same Apple Developer Program enrolment as the line above — see [docs/ios-browser-foundation.md](ios-browser-foundation.md).
 - Add production observability only with a transparent, minimal, consent-aware design.
 
 ### 4. Sustainable paid use
