@@ -1,4 +1,3 @@
-import AppKit
 import LimeghostCore
 import Foundation
 import SwiftUI
