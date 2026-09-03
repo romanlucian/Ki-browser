@@ -227,6 +227,11 @@ public struct BookmarkRecord: Codable, Equatable, Identifiable, Sendable {
     /// fills it in from the order those bookmarks were already being shown in —
     /// newest first — so nobody's bar rearranges itself on upgrade.
     public var position: Int?
+    /// When this record last changed, for the sync that resolves two devices
+    /// editing the same bookmark. Optional because every record written before
+    /// September 3, 2026 has no such field and must still decode; a decode test
+    /// holds the exact old bytes. Nothing reads it yet.
+    public var modifiedAt: Date?
 
     public init(
         id: UUID = UUID(),
@@ -234,7 +239,8 @@ public struct BookmarkRecord: Codable, Equatable, Identifiable, Sendable {
         url: String,
         createdAt: Date = Date(),
         folderID: UUID? = nil,
-        position: Int? = nil
+        position: Int? = nil,
+        modifiedAt: Date? = nil
     ) {
         self.id = id
         self.title = title
@@ -242,13 +248,14 @@ public struct BookmarkRecord: Codable, Equatable, Identifiable, Sendable {
         self.createdAt = createdAt
         self.folderID = folderID
         self.position = position
+        self.modifiedAt = modifiedAt
     }
 
     // Listed explicitly, so a field added to the struct and not added here is
     // silently dropped on the way to disk. `position` was, until a round-trip
     // test caught it.
     private enum CodingKeys: String, CodingKey {
-        case id, title, url, createdAt, folderID, position
+        case id, title, url, createdAt, folderID, position, modifiedAt
     }
 
     public init(from decoder: Decoder) throws {
@@ -261,6 +268,10 @@ public struct BookmarkRecord: Codable, Equatable, Identifiable, Sendable {
         // Absent in anything saved before bookmarks could be reordered; the
         // collection fills it in from the order they were already shown in.
         position = try container.decodeIfPresent(Int.self, forKey: .position)
+        // Absent in anything saved before this field existed. Nil there means
+        // "no known edit," which is honest — it does not claim the record was
+        // last touched at creation, only that sync has nothing more recent to go on.
+        modifiedAt = try container.decodeIfPresent(Date.self, forKey: .modifiedAt)
     }
 }
 
@@ -280,6 +291,11 @@ public struct BookmarkFolderRecord: Codable, Equatable, Identifiable, Sendable {
     /// a folder that has never chosen one and takes the default.
     public var colorID: String?
     public var parentID: UUID?
+    /// When this record last changed, for the sync that resolves two devices
+    /// editing the same bookmark. Optional because every record written before
+    /// September 3, 2026 has no such field and must still decode; a decode test
+    /// holds the exact old bytes. Nothing reads it yet.
+    public var modifiedAt: Date?
     public let createdAt: Date
     /// Where this folder sits among the folders beside it. Absent in anything
     /// saved before folders could be reordered; `BookmarkCollection` fills it
@@ -294,7 +310,8 @@ public struct BookmarkFolderRecord: Codable, Equatable, Identifiable, Sendable {
         colorID: String? = nil,
         parentID: UUID? = nil,
         createdAt: Date = Date(),
-        position: Int? = nil
+        position: Int? = nil,
+        modifiedAt: Date? = nil
     ) {
         self.id = id
         self.position = position
@@ -305,13 +322,14 @@ public struct BookmarkFolderRecord: Codable, Equatable, Identifiable, Sendable {
         self.colorID = LimeghostIconColor.normalizedID(colorID)
         self.parentID = parentID
         self.createdAt = createdAt
+        self.modifiedAt = modifiedAt
     }
 
     private enum CodingKeys: String, CodingKey {
         // Listed explicitly, so a field added to the struct and not added here
         // is silently dropped on the way to disk — see `BookmarkRecord`, where
         // exactly that happened.
-        case id, title, emoji, iconID, colorID, parentID, createdAt, position
+        case id, title, emoji, iconID, colorID, parentID, createdAt, position, modifiedAt
     }
 
     /// Written the same way the tab-group migration is: a folder saved before
@@ -327,6 +345,10 @@ public struct BookmarkFolderRecord: Codable, Equatable, Identifiable, Sendable {
         parentID = try container.decodeIfPresent(UUID.self, forKey: .parentID)
         createdAt = try container.decode(Date.self, forKey: .createdAt)
         position = try container.decodeIfPresent(Int.self, forKey: .position)
+        // Absent in anything saved before this field existed. Nil there means
+        // "no known edit," which is honest — it does not claim the record was
+        // last touched at creation, only that sync has nothing more recent to go on.
+        modifiedAt = try container.decodeIfPresent(Date.self, forKey: .modifiedAt)
     }
 
     /// The icon this folder draws, wherever it appears: its own choice first,
@@ -391,9 +413,14 @@ public struct BookmarkCollection: Codable, Equatable, Sendable {
         guard target != current else { return }
         let moving = siblings.remove(at: current)
         siblings.insert(moving, at: target)
+        // One timestamp for the whole drag: every folder this reorder actually
+        // shifts changed for the same reason, at the same moment.
+        let movedAt = Date()
         for (offset, sibling) in siblings.enumerated() {
             guard let slot = folders.firstIndex(where: { $0.id == sibling.id }) else { continue }
+            guard folders[slot].position != offset else { continue }
             folders[slot].position = offset
+            folders[slot].modifiedAt = movedAt
         }
     }
 
@@ -439,7 +466,8 @@ public struct BookmarkCollection: Codable, Equatable, Sendable {
             iconID: iconID,
             colorID: colorID,
             parentID: safeParent,
-            position: folders(in: safeParent).count
+            position: folders(in: safeParent).count,
+            modifiedAt: Date()
         )
         folders.append(folder)
         return folder
@@ -456,17 +484,23 @@ public struct BookmarkCollection: Codable, Equatable, Sendable {
         let trimmedIconID = iconID.trimmingCharacters(in: .whitespacesAndNewlines)
         if !trimmedIconID.isEmpty { folders[index].iconID = trimmedIconID }
         if let normalized = LimeghostIconColor.normalizedID(colorID) { folders[index].colorID = normalized }
+        folders[index].modifiedAt = Date()
     }
 
     /// Deletes only the folder record. Direct bookmarks and subfolders move to its
     /// parent so a folder operation never silently destroys saved pages.
     public mutating func deleteFolderPreservingContents(id: UUID) {
         guard let folder = folder(id: id) else { return }
+        // One timestamp for everything this deletion actually moves: they were
+        // all reparented by the same action, at the same moment.
+        let reparentedAt = Date()
         for index in bookmarks.indices where bookmarks[index].folderID == id {
             bookmarks[index].folderID = folder.parentID
+            bookmarks[index].modifiedAt = reparentedAt
         }
         for index in folders.indices where folders[index].parentID == id {
             folders[index].parentID = folder.parentID
+            folders[index].modifiedAt = reparentedAt
         }
         folders.removeAll { $0.id == id }
     }
@@ -484,6 +518,9 @@ public struct BookmarkCollection: Codable, Equatable, Sendable {
         if safeBookmark.position == nil {
             safeBookmark.position = bookmarks(in: safeBookmark.folderID).count
         }
+        // Every path into this function is a deliberate write — a new
+        // bookmark, or an existing one being re-filed — never a load.
+        safeBookmark.modifiedAt = Date()
         bookmarks.insert(safeBookmark, at: 0)
     }
 
@@ -515,7 +552,8 @@ public struct BookmarkCollection: Codable, Equatable, Sendable {
             title: trimmedTitle.isEmpty ? (safeURL.host ?? normalizedURL) : trimmedTitle,
             url: normalizedURL,
             createdAt: existing.createdAt,
-            folderID: existing.folderID
+            folderID: existing.folderID,
+            modifiedAt: Date()
         )
         bookmarks.removeAll { $0.id != updated.id && $0.url == normalizedURL }
         guard let editedIndex = bookmarks.firstIndex(where: { $0.id == updated.id }) else { return false }
@@ -532,6 +570,7 @@ public struct BookmarkCollection: Codable, Equatable, Sendable {
         // position that belonged to the folder it left.
         if destinationChanged {
             bookmarks[index].position = (bookmarks(in: safeFolder).count)
+            bookmarks[index].modifiedAt = Date()
             renumber(folderID: safeFolder)
         }
     }
@@ -549,9 +588,14 @@ public struct BookmarkCollection: Codable, Equatable, Sendable {
         guard target != current else { return }
         let moving = siblings.remove(at: current)
         siblings.insert(moving, at: target)
+        // One timestamp for the whole drag: every bookmark this reorder
+        // actually shifts changed for the same reason, at the same moment.
+        let movedAt = Date()
         for (offset, sibling) in siblings.enumerated() {
             guard let slot = bookmarks.firstIndex(where: { $0.id == sibling.id }) else { continue }
+            guard bookmarks[slot].position != offset else { continue }
             bookmarks[slot].position = offset
+            bookmarks[slot].modifiedAt = movedAt
         }
     }
 
@@ -611,9 +655,12 @@ public struct BookmarkCollection: Codable, Equatable, Sendable {
 
     /// Closes the gaps in one folder's numbering after something left it.
     private mutating func renumber(folderID: UUID?) {
+        let renumberedAt = Date()
         for (offset, record) in bookmarks(in: folderID).enumerated() {
             guard let slot = bookmarks.firstIndex(where: { $0.id == record.id }) else { continue }
+            guard bookmarks[slot].position != offset else { continue }
             bookmarks[slot].position = offset
+            bookmarks[slot].modifiedAt = renumberedAt
         }
     }
 
