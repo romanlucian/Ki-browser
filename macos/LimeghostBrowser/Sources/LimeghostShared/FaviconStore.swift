@@ -1,7 +1,7 @@
-import AppKit
+import Combine
+import CoreGraphics
+import Foundation
 import ImageIO
-import LimeghostShared
-import SwiftUI
 @preconcurrency import WebKit
 
 /// Site icons for pages the user actually visited.
@@ -41,11 +41,11 @@ import SwiftUI
 /// navigation, failures remembered for the session only, and no UI anywhere
 /// that reports a fetch succeeded or failed.
 @MainActor
-final class FaviconStore: ObservableObject {
+public final class FaviconStore: ObservableObject {
     /// Injected so tests can drive capture without a network. Main-actor
     /// isolated to match the store, so a test fetcher's bookkeeping runs on
     /// the same actor as its assertions.
-    typealias Fetcher = @MainActor (URL) async -> Data?
+    public typealias Fetcher = @MainActor (URL) async -> Data?
 
     /// Bumped when a newly stored icon becomes available, so views showing
     /// `SiteIconView` swap the fallback square for the real icon.
@@ -55,7 +55,7 @@ final class FaviconStore: ObservableObject {
     /// Application Support); capture then behaves like a private tab.
     private let directory: URL?
     private let fetch: Fetcher
-    private let memory = NSCache<NSString, NSImage>()
+    private let memory = NSCache<NSString, CGImage>()
     /// Hosts already looked for on disk and not found — keeps repeated view
     /// renders from re-reading a file that is not there.
     private var missingOnDisk: Set<String> = []
@@ -98,7 +98,7 @@ final class FaviconStore: ObservableObject {
     /// sources, prioritising bookmarked ones.
     private var aliases: [String: String] = [:]
 
-    init(
+    public init(
         directory: URL? = FaviconStore.defaultDirectory,
         fetch: @escaping Fetcher = FaviconStore.download
     ) {
@@ -116,7 +116,7 @@ final class FaviconStore: ObservableObject {
     /// A host's own icon always wins. Only when it has none is a redirect
     /// alias followed — so an icon captured directly can never be displaced
     /// by one borrowed from somewhere a host happened to redirect to.
-    func icon(forHost host: String) -> NSImage? {
+    public func icon(forHost host: String) -> CGImage? {
         let key = IdentityColor.normalizedHost(host)
         guard !key.isEmpty else { return nil }
         if let own = storedIcon(forNormalizedHost: key) { return own }
@@ -125,12 +125,37 @@ final class FaviconStore: ObservableObject {
         return storedIcon(forNormalizedHost: target)
     }
 
-    private func storedIcon(forNormalizedHost key: String) -> NSImage? {
+    /// Decode with ImageIO, which exists on both platforms. `NSImage(data:)`
+    /// did this on the Mac and has no iOS twin; `UIImage` would be the iOS
+    /// twin and has no Mac one, so neither belongs in a shared file.
+    ///
+    /// `nonisolated`, like every other pure encode/decode helper in this
+    /// type: it touches no actor state, `normalizedPNG` already calls
+    /// `pngData(from:)` from its own `nonisolated` context, and the coding
+    /// test calls both synchronously with no actor of its own.
+    public nonisolated static func image(from data: Data) -> CGImage? {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+              CGImageSourceGetCount(source) > 0 else { return nil }
+        return CGImageSourceCreateImageAtIndex(source, 0, nil)
+    }
+
+    /// Encode with ImageIO, for the same reason.
+    public nonisolated static func pngData(from image: CGImage) -> Data? {
+        let output = NSMutableData()
+        guard let destination = CGImageDestinationCreateWithData(
+            output as CFMutableData, "public.png" as CFString, 1, nil
+        ) else { return nil }
+        CGImageDestinationAddImage(destination, image, nil)
+        guard CGImageDestinationFinalize(destination) else { return nil }
+        return output as Data
+    }
+
+    private func storedIcon(forNormalizedHost key: String) -> CGImage? {
         if let cached = memory.object(forKey: key as NSString) { return cached }
         guard !missingOnDisk.contains(key),
               let fileURL = fileURL(forNormalizedHost: key),
               let data = try? Data(contentsOf: fileURL),
-              let image = NSImage(data: data) else {
+              let image = Self.image(from: data) else {
             missingOnDisk.insert(key)
             return nil
         }
@@ -146,7 +171,7 @@ final class FaviconStore: ObservableObject {
     /// `requestedURL` is the address the navigation started at, which differs
     /// from `pageURL` when the site redirected. Passing it lets the icon be
     /// found later under the address a bookmark actually holds.
-    func captureIfNeeded(for pageURL: URL, requestedURL: URL?, in webView: WKWebView, isPrivate: Bool) async {
+    public func captureIfNeeded(for pageURL: URL, requestedURL: URL?, in webView: WKWebView, isPrivate: Bool) async {
         guard let host = Self.captureHost(for: pageURL) else { return }
         recordRedirectAlias(from: requestedURL, to: host, isPrivate: isPrivate)
         guard shouldCapture(host: host) else { return }
@@ -192,7 +217,7 @@ final class FaviconStore: ObservableObject {
                   data.count <= Self.maximumDownloadBytes,
                   let png = Self.normalizedPNG(from: data),
                   png.count <= Self.maximumStoredBytes,
-                  let image = NSImage(data: png) else { continue }
+                  let image = Self.image(from: png) else { continue }
             memory.setObject(image, forKey: host as NSString)
             missingOnDisk.remove(host)
             // Private tabs keep the icon for the life of the tab's window and
@@ -211,7 +236,7 @@ final class FaviconStore: ObservableObject {
 
     /// Erases every stored icon: the on-disk directory and the in-memory
     /// caches, including the session's negative results.
-    func clearAll() {
+    public func clearAll() {
         memory.removeAllObjects()
         missingOnDisk.removeAll()
         failedThisSession.removeAll()
@@ -226,7 +251,7 @@ final class FaviconStore: ObservableObject {
 
     /// The normalized cache key for a page Limeghost may capture an icon
     /// for, or `nil` for anything that is not an ordinary web page.
-    nonisolated static func captureHost(for pageURL: URL) -> String? {
+    public nonisolated static func captureHost(for pageURL: URL) -> String? {
         guard let scheme = pageURL.scheme?.lowercased(), ["http", "https"].contains(scheme) else { return nil }
         let host = IdentityColor.normalizedHost(pageURL.host ?? "")
         return host.isEmpty ? nil : host
@@ -387,7 +412,7 @@ final class FaviconStore: ObservableObject {
         return name.isEmpty ? nil : name + ".png"
     }
 
-    nonisolated static var defaultDirectory: URL? {
+    public nonisolated static var defaultDirectory: URL? {
         FileManager.default
             .urls(for: .applicationSupportDirectory, in: .userDomainMask)
             .first?
@@ -550,14 +575,14 @@ final class FaviconStore: ObservableObject {
             kCGImageSourceThumbnailMaxPixelSize: maximumPixelSize
         ]
         guard let image = CGImageSourceCreateThumbnailAtIndex(source, bestIndex, options as CFDictionary) else { return nil }
-        return NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:])
+        return Self.pngData(from: image)
     }
 
     /// The shipped fetcher. Ephemeral session, no cookies, short timeouts,
     /// and no redirect to a different origin is ever followed to disk — a
     /// redirect that leaves the origin simply produces bytes we then treat
     /// like any other response for the visited host.
-    static func download(_ url: URL) async -> Data? {
+    public static func download(_ url: URL) async -> Data? {
         var request = URLRequest(url: url)
         request.timeoutInterval = requestTimeout
         request.httpShouldHandleCookies = false
@@ -606,106 +631,4 @@ final class FaviconStore: ObservableObject {
         configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
         return URLSession(configuration: configuration)
     }()
-}
-
-// MARK: - Site icon view
-
-private struct FaviconStoreKey: EnvironmentKey {
-    static let defaultValue: FaviconStore? = nil
-}
-
-extension EnvironmentValues {
-    /// Injected once, by `BrowserView`. Optional on purpose: a view rendered
-    /// without a store (a preview, a test host) still draws its fallback
-    /// square instead of crashing.
-    var faviconStore: FaviconStore? {
-        get { self[FaviconStoreKey.self] }
-        set { self[FaviconStoreKey.self] = newValue }
-    }
-}
-
-/// A site's mark at chip scale: the real icon when Limeghost captured one
-/// during a visit, otherwise the deterministic `IdentityColor` square. A
-/// square rather than a dot because at 13pt it reads as an icon slot, so a
-/// site with an icon and one without sit on the same grid.
-///
-/// Rendering never triggers a fetch — only `FaviconStore.captureIfNeeded`
-/// does, and only for the page being visited.
-struct SiteIconView: View {
-    let host: String
-    var size: CGFloat = LimeghostTheme.siteIconSize
-    /// Decorative by default: the icon sits beside a title that already says
-    /// which site this is, so announcing it again is noise. A caller that
-    /// shows the icon *instead* of a title — a pinned tab — passes the name
-    /// here, so the icon is not hidden outright. Note that the name does not
-    /// currently survive as the element's label from a pinned chip; see
-    /// `TabChip.pinnedChip`.
-    var accessibilityName: String?
-    @Environment(\.faviconStore) private var store
-
-    init(host: String, size: CGFloat = LimeghostTheme.siteIconSize, accessibilityName: String? = nil) {
-        self.host = host
-        self.size = size
-        self.accessibilityName = accessibilityName
-    }
-
-    init(urlString: String, size: CGFloat = LimeghostTheme.siteIconSize, accessibilityName: String? = nil) {
-        self.init(
-            host: URL(string: urlString)?.host ?? "",
-            size: size,
-            accessibilityName: accessibilityName
-        )
-    }
-
-    var body: some View {
-        Group {
-            if let store {
-                StoredSiteIcon(store: store, host: host, size: size)
-            } else {
-                SiteIconFallback(host: host, size: size)
-            }
-        }
-        .frame(width: size, height: size)
-        .accessibilityHidden(accessibilityName == nil)
-        .accessibilityLabel(accessibilityName ?? "")
-    }
-}
-
-/// Split out so the icon redraws when a capture completes: `@ObservedObject`
-/// needs a concrete view identity to subscribe from.
-private struct StoredSiteIcon: View {
-    @ObservedObject var store: FaviconStore
-    let host: String
-    let size: CGFloat
-
-    var body: some View {
-        if let icon = store.icon(forHost: host) {
-            Image(nsImage: icon)
-                .resizable()
-                .interpolation(.high)
-                // `fit`, not `fill`: a site's icon is not always square —
-                // Google Flow's is 653x524 — and filling a square slot with
-                // one crops its sides away and upscales what is left into a
-                // blur. Fitting shows all of it. For the square icons that
-                // are the norm the two are identical.
-                .aspectRatio(contentMode: .fit)
-                .frame(width: size, height: size)
-                .clipShape(RoundedRectangle(cornerRadius: SiteIconFallback.cornerRadius, style: .continuous))
-        } else {
-            SiteIconFallback(host: host, size: size)
-        }
-    }
-}
-
-private struct SiteIconFallback: View {
-    static let cornerRadius: CGFloat = 4
-
-    let host: String
-    let size: CGFloat
-
-    var body: some View {
-        RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous)
-            .fill(IdentityColor.color(forHost: host))
-            .frame(width: size, height: size)
-    }
 }

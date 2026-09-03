@@ -7,7 +7,7 @@ import SwiftUI
 /// Swift's per-process-seeded `Hasher` (see `TrackerBlockerCatalog.swift`).
 /// There is no favicon fetch and no network access — the color is derived
 /// entirely from the host string already available on the tab/bookmark.
-enum IdentityColor {
+public enum IdentityColor {
     /// Lowercases and strips a leading "www." — the same normalization
     /// `ContentBlockingSettingsStore` applies to site exceptions — so
     /// "example.com" and "www.example.com" always land on the same color.
@@ -19,7 +19,11 @@ enum IdentityColor {
     /// The identity color for `host`. Empty or whitespace-only input (a new
     /// tab, an unparsed bookmark URL) always returns `fallback` rather than
     /// hashing into a misleading palette entry.
-    static func color(forHost host: String) -> Color {
+    ///
+    /// Public: `SiteIconView`'s fallback square (`LimeghostBrowser`) draws
+    /// this directly, and stays in the app target since it renders with
+    /// `LimeghostTheme`, which is UI-only and does not move here.
+    public static func color(forHost host: String) -> Color {
         let normalized = normalizedHost(host)
         guard !normalized.isEmpty else { return fallback }
         let index = Int(StableHash.fnv1a64(normalized) % UInt64(palette.count))

@@ -488,7 +488,9 @@ private struct CapturedAIToolMark: View {
 
     var body: some View {
         if let host = tool.officialURL.host, let icon = store.icon(forHost: host) {
-            Image(nsImage: icon)
+            // `.resizable()` plus the explicit `.frame()` below decide the
+            // on-screen size; the scale here never reaches the display.
+            Image(decorative: icon, scale: 2)
                 .resizable()
                 .interpolation(.high)
                 .aspectRatio(contentMode: .fit)
