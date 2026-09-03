@@ -875,6 +875,26 @@ final class BrowserBehaviorTests: XCTestCase {
         XCTAssertNil(preferences.homeURL, "bookmarks is a surface, not an address")
     }
 
+    /// `BrowserPreferences.defaultPageZoom` falls back to the same 1.0
+    /// `BrowserSession.defaultPageZoom` uses, but the two are two separate
+    /// constants, not one shared between them: `BrowserPreferences` moved into
+    /// `LimeghostShared` in Task 5, `BrowserSession` has not moved yet — that
+    /// is Task 7's job — and `LimeghostShared` cannot depend back on the app
+    /// target to read `BrowserSession`'s constant in the meantime. Nothing
+    /// else stops the two drifting apart before Task 7 reunifies them into one
+    /// constant; this test is that stop. It builds `BrowserPreferences` from a
+    /// defaults suite with nothing stored, so it exercises the fallback itself
+    /// rather than a value already on disk — the fallback is the only place
+    /// the duplication actually matters.
+    func testTheZoomFallbackStaysInSyncWithBrowserSessionsDefault() {
+        let preferences = BrowserPreferences(defaults: emptyDefaults("zoomFallback"))
+        XCTAssertEqual(
+            preferences.defaultPageZoom,
+            BrowserSession.defaultPageZoom,
+            "BrowserPreferences duplicates this value until BrowserSession moves into LimeghostShared in Task 7 — keep the two in sync until then"
+        )
+    }
+
     /// The introduction walks every step and stops at the last one.
     func testTheIntroductionWalksEveryStepAndStopsAtTheEnd() {
         let controller = OnboardingController(preferences: OnboardingPreferences(defaults: emptyDefaults("intro")))
