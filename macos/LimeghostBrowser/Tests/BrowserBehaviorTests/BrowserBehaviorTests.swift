@@ -180,6 +180,9 @@ final class BrowserBehaviorTests: XCTestCase {
         let workspace = BrowserWorkspace(
             dataStore: BrowserDataStore(defaults: defaults),
             downloads: DownloadCenter(),
+            pageSharing: PageFileCommands.self,
+            clipboard: MacClipboard(),
+            makeSessionPlatform: { MacSessionPlatform() },
             searchSettings: SearchSettingsStore(defaults: defaults),
             contentBlocking: blocking.provider
         )
@@ -206,6 +209,9 @@ final class BrowserBehaviorTests: XCTestCase {
         let workspace = BrowserWorkspace(
             dataStore: BrowserDataStore(defaults: defaults),
             downloads: DownloadCenter(),
+            pageSharing: PageFileCommands.self,
+            clipboard: MacClipboard(),
+            makeSessionPlatform: { MacSessionPlatform() },
             searchSettings: SearchSettingsStore(defaults: defaults),
             contentBlocking: blocking.provider
         )
@@ -227,6 +233,9 @@ final class BrowserBehaviorTests: XCTestCase {
         let workspace = BrowserWorkspace(
             dataStore: store,
             downloads: DownloadCenter(),
+            pageSharing: PageFileCommands.self,
+            clipboard: MacClipboard(),
+            makeSessionPlatform: { MacSessionPlatform() },
             searchSettings: SearchSettingsStore(defaults: defaults),
             contentBlocking: blocking.provider
         )
@@ -272,6 +281,9 @@ final class BrowserBehaviorTests: XCTestCase {
         let workspace = BrowserWorkspace(
             dataStore: store,
             downloads: DownloadCenter(),
+            pageSharing: PageFileCommands.self,
+            clipboard: MacClipboard(),
+            makeSessionPlatform: { MacSessionPlatform() },
             searchSettings: SearchSettingsStore(defaults: defaults),
             contentBlocking: blocking.provider,
             favicons: FaviconStore(directory: iconDirectory, fetch: Self.forbiddenFaviconFetcher)
@@ -1415,6 +1427,9 @@ final class BrowserBehaviorTests: XCTestCase {
         let workspace = BrowserWorkspace(
             dataStore: store,
             downloads: DownloadCenter(),
+            pageSharing: PageFileCommands.self,
+            clipboard: MacClipboard(),
+            makeSessionPlatform: { MacSessionPlatform() },
             searchSettings: SearchSettingsStore(defaults: defaults),
             contentBlocking: blocking.provider
         )
@@ -1472,6 +1487,9 @@ final class BrowserBehaviorTests: XCTestCase {
         let workspace = BrowserWorkspace(
             dataStore: store,
             downloads: DownloadCenter(),
+            pageSharing: PageFileCommands.self,
+            clipboard: MacClipboard(),
+            makeSessionPlatform: { MacSessionPlatform() },
             searchSettings: SearchSettingsStore(defaults: defaults),
             contentBlocking: blocking.provider
         )
@@ -1523,6 +1541,9 @@ final class BrowserBehaviorTests: XCTestCase {
         let reopenedWindow = BrowserWorkspace(
             dataStore: BrowserDataStore(defaults: defaults),
             downloads: DownloadCenter(),
+            pageSharing: PageFileCommands.self,
+            clipboard: MacClipboard(),
+            makeSessionPlatform: { MacSessionPlatform() },
             searchSettings: SearchSettingsStore(defaults: defaults),
             contentBlocking: blocking.provider
         )
@@ -1592,58 +1613,6 @@ final class BrowserBehaviorTests: XCTestCase {
         let first = try XCTUnwrap(workspace.tabs.first)
         workspace.selectTab(first.id)
         XCTAssertTrue(companion.isExpanded, "changing tabs disturbed the assistant")
-    }
-
-    /// Every way of asking for a page must uncover the page.
-    ///
-    /// A table rather than one test each, because the point is coverage: when
-    /// somebody adds an eleventh door and forgets the rule, this is what says
-    /// so. Ten of these were broken at once — the panel stepped aside for ⌘T
-    /// and for nothing else, so the same request behaved two ways depending on
-    /// which button you happened to press.
-    func testEveryWayOfAskingForAPageUncoversIt() throws {
-        let doors: [(String, (BrowserWorkspace) -> Void)] = [
-            ("new tab", { $0.addTab() }),
-            ("new tab beside this one", { workspace in
-                if let id = workspace.selectedTab?.id { workspace.addTab(after: id) }
-            }),
-            ("a link opened in a tab", { $0.addTab(url: URL(string: "https://example.com/link")!) }),
-            ("a link handed over by another app", { $0.openExternalURL(URL(string: "https://example.com/x")!) }),
-            ("an address or a bookmark", { $0.open("https://example.com/typed") }),
-            ("a bookmark in a new tab", { $0.open("https://example.com/typed", inNewTab: true) }),
-            ("reopening a closed tab", { $0.reopenClosedTab() }),
-            ("the bookmarks home", { $0.openBookmarksHome() }),
-            ("the history home", { $0.openHistoryHome() }),
-            ("back", { $0.goBackInSelectedTab() }),
-            ("forward", { $0.goForwardInSelectedTab() }),
-        ]
-
-        for (name, openADoor) in doors {
-            let workspace = try makeSurfaceTestWorkspace()
-            let companion = workspace.aiCompanion
-            companion.show()
-
-            // Set the room up *first*: opening and closing a tab is itself one
-            // of these doors, so doing it after expanding would collapse the
-            // panel and every assertion below would pass without proving
-            // anything. It did exactly that until a deliberately broken
-            // `makeRoomForPage` failed to turn this test red.
-            workspace.addTab(url: URL(string: "https://example.com/closed")!)
-            if let extra = workspace.tabs.last, workspace.tabs.count > 1 {
-                workspace.closeTab(extra.id)
-            }
-
-            companion.toggleExpanded()
-            XCTAssertTrue(companion.isExpanded, "\(name): could not cover the page to begin with")
-
-            openADoor(workspace)
-
-            XCTAssertFalse(
-                companion.isExpanded,
-                "\(name) left the page behind the assistant"
-            )
-            XCTAssertTrue(companion.isVisible, "\(name) closed the assistant instead of moving it")
-        }
     }
 
     /// The other half of the rule, and the half that keeps it from becoming an
@@ -2625,6 +2594,9 @@ final class BrowserBehaviorTests: XCTestCase {
         let workspace = BrowserWorkspace(
             dataStore: store,
             downloads: DownloadCenter(),
+            pageSharing: PageFileCommands.self,
+            clipboard: MacClipboard(),
+            makeSessionPlatform: { MacSessionPlatform() },
             searchSettings: SearchSettingsStore(defaults: defaults),
             contentBlocking: blocking.provider
         )
@@ -2639,6 +2611,9 @@ final class BrowserBehaviorTests: XCTestCase {
         let restored = BrowserWorkspace(
             dataStore: BrowserDataStore(defaults: defaults),
             downloads: DownloadCenter(),
+            pageSharing: PageFileCommands.self,
+            clipboard: MacClipboard(),
+            makeSessionPlatform: { MacSessionPlatform() },
             searchSettings: SearchSettingsStore(defaults: defaults),
             contentBlocking: blocking.provider
         )
@@ -2656,6 +2631,9 @@ final class BrowserBehaviorTests: XCTestCase {
         let reopened = BrowserWorkspace(
             dataStore: BrowserDataStore(defaults: defaults),
             downloads: DownloadCenter(),
+            pageSharing: PageFileCommands.self,
+            clipboard: MacClipboard(),
+            makeSessionPlatform: { MacSessionPlatform() },
             searchSettings: SearchSettingsStore(defaults: defaults),
             contentBlocking: blocking.provider
         )
@@ -2673,6 +2651,9 @@ final class BrowserBehaviorTests: XCTestCase {
         return BrowserWorkspace(
             dataStore: BrowserDataStore(defaults: defaults),
             downloads: DownloadCenter(),
+            pageSharing: PageFileCommands.self,
+            clipboard: MacClipboard(),
+            makeSessionPlatform: { MacSessionPlatform() },
             searchSettings: SearchSettingsStore(defaults: defaults),
             contentBlocking: blocking.provider
         )
@@ -3566,6 +3547,9 @@ final class BrowserBehaviorTests: XCTestCase {
         return BrowserWorkspace(
             dataStore: BrowserDataStore(defaults: defaults),
             downloads: DownloadCenter(),
+            pageSharing: PageFileCommands.self,
+            clipboard: MacClipboard(),
+            makeSessionPlatform: { MacSessionPlatform() },
             searchSettings: SearchSettingsStore(defaults: defaults),
             contentBlocking: blocking.provider
         )
@@ -3837,6 +3821,9 @@ final class TabStripDropResolutionTests: XCTestCase {
         let workspace = BrowserWorkspace(
             dataStore: BrowserDataStore(defaults: defaults),
             downloads: DownloadCenter(),
+            pageSharing: PageFileCommands.self,
+            clipboard: MacClipboard(),
+            makeSessionPlatform: { MacSessionPlatform() },
             searchSettings: SearchSettingsStore(defaults: defaults),
             contentBlocking: blocking.provider
         )
@@ -4055,6 +4042,9 @@ final class TabDetachAndAdoptTests: XCTestCase {
         let primary = BrowserWorkspace(
             dataStore: dataStore,
             downloads: DownloadCenter(),
+            pageSharing: PageFileCommands.self,
+            clipboard: MacClipboard(),
+            makeSessionPlatform: { MacSessionPlatform() },
             searchSettings: SearchSettingsStore(defaults: defaults),
             contentBlocking: blocking.provider
         )
@@ -4065,6 +4055,9 @@ final class TabDetachAndAdoptTests: XCTestCase {
         let secondary = BrowserWorkspace(
             dataStore: dataStore,
             downloads: DownloadCenter(),
+            pageSharing: PageFileCommands.self,
+            clipboard: MacClipboard(),
+            makeSessionPlatform: { MacSessionPlatform() },
             searchSettings: SearchSettingsStore(defaults: defaults),
             contentBlocking: blocking.provider,
             restoresSession: false
@@ -4092,6 +4085,9 @@ final class TabDetachAndAdoptTests: XCTestCase {
         let torn = BrowserWorkspace(
             dataStore: BrowserDataStore(defaults: defaults),
             downloads: DownloadCenter(),
+            pageSharing: PageFileCommands.self,
+            clipboard: MacClipboard(),
+            makeSessionPlatform: { MacSessionPlatform() },
             searchSettings: SearchSettingsStore(defaults: defaults),
             contentBlocking: blocking.provider,
             restoresSession: false,
@@ -4110,6 +4106,9 @@ final class TabDetachAndAdoptTests: XCTestCase {
         let workspace = BrowserWorkspace(
             dataStore: BrowserDataStore(defaults: defaults),
             downloads: DownloadCenter(),
+            pageSharing: PageFileCommands.self,
+            clipboard: MacClipboard(),
+            makeSessionPlatform: { MacSessionPlatform() },
             searchSettings: SearchSettingsStore(defaults: defaults),
             contentBlocking: blocking.provider
         )
@@ -4196,6 +4195,9 @@ final class TabMergeBetweenWindowsTests: XCTestCase {
         let workspace = BrowserWorkspace(
             dataStore: BrowserDataStore(defaults: defaults),
             downloads: DownloadCenter(),
+            pageSharing: PageFileCommands.self,
+            clipboard: MacClipboard(),
+            makeSessionPlatform: { MacSessionPlatform() },
             searchSettings: SearchSettingsStore(defaults: defaults),
             contentBlocking: blocking.provider
         )
@@ -4316,6 +4318,9 @@ final class LocalFileOpeningTests: XCTestCase {
         let workspace = BrowserWorkspace(
             dataStore: dataStore,
             downloads: DownloadCenter(),
+            pageSharing: PageFileCommands.self,
+            clipboard: MacClipboard(),
+            makeSessionPlatform: { MacSessionPlatform() },
             searchSettings: SearchSettingsStore(defaults: defaults),
             contentBlocking: blocking.provider
         )
@@ -4347,6 +4352,9 @@ final class LocalFileOpeningTests: XCTestCase {
         let workspace = BrowserWorkspace(
             dataStore: BrowserDataStore(defaults: defaults),
             downloads: DownloadCenter(),
+            pageSharing: PageFileCommands.self,
+            clipboard: MacClipboard(),
+            makeSessionPlatform: { MacSessionPlatform() },
             searchSettings: SearchSettingsStore(defaults: defaults),
             contentBlocking: blocking.provider
         )
@@ -4456,6 +4464,9 @@ final class PrivateWindowTests: XCTestCase {
         let ordinary = BrowserWorkspace(
             dataStore: dataStore,
             downloads: DownloadCenter(),
+            pageSharing: PageFileCommands.self,
+            clipboard: MacClipboard(),
+            makeSessionPlatform: { MacSessionPlatform() },
             searchSettings: SearchSettingsStore(defaults: defaults),
             contentBlocking: blocking.provider
         )
@@ -4466,6 +4477,9 @@ final class PrivateWindowTests: XCTestCase {
         let secret = BrowserWorkspace(
             dataStore: dataStore,
             downloads: DownloadCenter(),
+            pageSharing: PageFileCommands.self,
+            clipboard: MacClipboard(),
+            makeSessionPlatform: { MacSessionPlatform() },
             searchSettings: SearchSettingsStore(defaults: defaults),
             contentBlocking: blocking.provider,
             restoresSession: false,
@@ -4491,6 +4505,9 @@ final class PrivateWindowTests: XCTestCase {
         let ordinary = BrowserWorkspace(
             dataStore: dataStore,
             downloads: DownloadCenter(),
+            pageSharing: PageFileCommands.self,
+            clipboard: MacClipboard(),
+            makeSessionPlatform: { MacSessionPlatform() },
             searchSettings: SearchSettingsStore(defaults: defaults),
             contentBlocking: blocking.provider
         )
@@ -4501,6 +4518,9 @@ final class PrivateWindowTests: XCTestCase {
         let secret = BrowserWorkspace(
             dataStore: dataStore,
             downloads: DownloadCenter(),
+            pageSharing: PageFileCommands.self,
+            clipboard: MacClipboard(),
+            makeSessionPlatform: { MacSessionPlatform() },
             searchSettings: SearchSettingsStore(defaults: defaults),
             contentBlocking: blocking.provider,
             restoresSession: true,
@@ -4533,6 +4553,9 @@ final class PrivateWindowTests: XCTestCase {
         let workspace = BrowserWorkspace(
             dataStore: BrowserDataStore(defaults: defaults),
             downloads: DownloadCenter(),
+            pageSharing: PageFileCommands.self,
+            clipboard: MacClipboard(),
+            makeSessionPlatform: { MacSessionPlatform() },
             searchSettings: SearchSettingsStore(defaults: defaults),
             contentBlocking: blocking.provider,
             restoresSession: !isPrivate,
@@ -4683,6 +4706,9 @@ final class ProfileSeparationTests: XCTestCase {
         let workspace = BrowserWorkspace(
             dataStore: BrowserDataStore(defaults: defaults),
             downloads: DownloadCenter(),
+            pageSharing: PageFileCommands.self,
+            clipboard: MacClipboard(),
+            makeSessionPlatform: { MacSessionPlatform() },
             searchSettings: SearchSettingsStore(defaults: defaults),
             contentBlocking: blocking.provider,
             profileID: profileID

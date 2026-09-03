@@ -1,4 +1,5 @@
 import AppKit
+import LimeghostShared
 import UniformTypeIdentifiers
 
 /// The File menu's page commands: opening a file from the disk, saving the
@@ -111,5 +112,15 @@ enum PageFileCommands {
         let cleaned = collapsed.components(separatedBy: CharacterSet(charactersIn: "/\\:*?\"<>|")).joined(separator: "-")
         let trimmed = String(cleaned.prefix(80)).trimmingCharacters(in: .whitespaces)
         return trimmed.isEmpty ? "Untitled Page" : trimmed
+    }
+}
+
+extension PageFileCommands: PageSharing {
+    /// `PageSharing`'s requirement. Resolves the same anchor `share(_:from:)`
+    /// already fell back to when no view was given — `NSView` cannot appear
+    /// in `LimeghostShared`, so the shared workspace can no longer hand one
+    /// over, and this is exactly the path it always took from there anyway.
+    static func share(_ url: URL) {
+        share(url, from: NSApp.keyWindow?.contentView)
     }
 }

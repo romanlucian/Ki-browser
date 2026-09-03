@@ -37,4 +37,14 @@ public protocol BrowserSessionPlatform: AnyObject {
     /// value is the observation to retain, or `nil` where the platform needs
     /// none — iOS follows its trait collection without being asked.
     func observeAppearance(_ apply: @escaping () -> Void) -> Any?
+
+    /// Called once, immediately after `BrowserSession` builds its web view.
+    /// The one-time setup only the platform can do lives here — macOS sets
+    /// the web view's starting appearance and turns on trackpad
+    /// pinch-to-zoom, `WKWebView.allowsMagnification`, which does not exist
+    /// on iOS's `WKWebView` at all, so neither can be named from
+    /// `BrowserSession` itself. It is also the one place a platform that
+    /// weakly tracks its own web view — anchoring an alert or a file panel to
+    /// the right window needs one — learns which web view that is.
+    func prepareWebView(_ webView: WKWebView)
 }

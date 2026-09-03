@@ -20,9 +20,9 @@ struct BrowserView: View {
             } else {
                 ContentUnavailableView("No open tab", systemImage: "rectangle.on.rectangle.slash")
             }
-            if workspace.downloads.isShelfVisible {
+            if workspace.downloadCenter.isShelfVisible {
                 Divider()
-                DownloadShelf(center: workspace.downloads)
+                DownloadShelf(center: workspace.downloadCenter)
             }
         }
         .background(LimeghostTheme.bg0)
@@ -74,7 +74,7 @@ private struct BrowserTabContent: View {
                 tab: tab,
                 dataStore: workspace.dataStore,
                 companion: companion,
-                downloads: workspace.downloads,
+                downloads: workspace.downloadCenter,
                 searchSettings: workspace.searchSettings,
                 addressText: $addressText,
                 addressFocused: $addressFocused,

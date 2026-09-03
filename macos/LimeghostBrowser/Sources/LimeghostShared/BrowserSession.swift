@@ -3,16 +3,31 @@ import Combine
 import Foundation
 @preconcurrency import WebKit
 
-/// The one thing `BrowserSession` needs from download handling. `WKDownload`
-/// itself is cross-platform WebKit, but `DownloadCenter` — the object that
-/// actually chooses a destination and tells Finder and Notification Center
-/// about it — is AppKit-heavy (a save panel among other things) and lives in
-/// the app target, well beyond this file's six platform edges. A session only
-/// ever hands a finished download over; `DownloadCenter` already has a method
-/// of exactly this shape, so conforming it costs nothing.
+/// The things `BrowserSession` and `BrowserWorkspace` need from download
+/// handling. `WKDownload` itself is cross-platform WebKit, but `DownloadCenter`
+/// — the object that actually chooses a destination and tells Finder and
+/// Notification Center about it — is AppKit-heavy (a save panel among other
+/// things) and lives in the app target, well beyond this file's six platform
+/// edges. `DownloadCenter` already has a method of exactly each shape here, so
+/// conforming it costs nothing.
 @MainActor
 public protocol DownloadTracking: AnyObject {
+    /// A session hands a finished download over; it never asks for anything
+    /// back.
     func track(_ download: WKDownload, sourceURL: URL?)
+
+    /// Republished so `BrowserWorkspace`'s own observers redraw when a
+    /// download starts, finishes, or its shelf is shown or hidden — the
+    /// download list lives in the app target, but the workspace it belongs to
+    /// does not. The concrete Combine type, not an associated one, so this
+    /// protocol can be used as a value rather than only as a generic
+    /// constraint; `DownloadCenter`'s own `@Published`-synthesized publisher
+    /// already matches it exactly.
+    var objectWillChange: ObservableObjectPublisher { get }
+
+    /// The browsing-data reset: clears in-app download metadata without
+    /// deleting files already saved to disk.
+    func clearAllRecords()
 }
 
 public enum BrowserFailureKind: Equatable {
@@ -213,22 +228,17 @@ public final class BrowserSession: NSObject, ObservableObject {
         // the setting moves a number and never the page.
         webView.pageZoom = pageZoom
         webView.isInspectable = webFeatures?.showsDeveloperFeatures ?? false
-        // The one-time appearance set that used to sit here directly
-        // (`webView.appearance = NSApp.effectiveAppearance`) now happens in
-        // the platform-specific convenience initializer that wraps this one,
-        // once it knows which web view is its own — this initializer runs
-        // before that, and `platform` cannot touch AppKit's `NSAppearance`
-        // from inside `LimeghostShared`.
+        // The one-time appearance set (`webView.appearance =
+        // NSApp.effectiveAppearance` on macOS) and trackpad pinch-to-zoom
+        // (`webView.allowsMagnification = true` — a property that does not
+        // exist on iOS's `WKWebView` at all) cannot be named from this file
+        // regardless of the platform abstraction, so `platform.prepareWebView`
+        // does them instead. It also hands a platform that weakly tracks its
+        // own web view — anchoring an alert or a file panel needs one — the
+        // instance to track, now that one exists.
+        platform.prepareWebView(webView)
         webView.navigationDelegate = self
         webView.uiDelegate = self
-        // `webView.allowsMagnification = true` (trackpad pinch-to-zoom) is not
-        // set here: `WKWebView.allowsMagnification` does not exist on iOS at
-        // all — not merely AppKit, an entirely different, macOS-only WKWebView
-        // property — so this file cannot reference it without failing the iOS
-        // typecheck regardless of platform abstraction. It moved to the same
-        // macOS-only convenience initializer that sets the one-time appearance
-        // (`webView.appearance = NSApp.effectiveAppearance`), for the same
-        // reason: neither can be named from here.
         // Two-finger swipe for back and forward. It is reflexive on a Mac
         // trackpad, and a browser that ignores it reads as broken. Available
         // on iOS too — edge-swipe back/forward is the same affordance there —

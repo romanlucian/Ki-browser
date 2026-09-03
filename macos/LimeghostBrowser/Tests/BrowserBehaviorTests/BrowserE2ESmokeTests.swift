@@ -159,9 +159,17 @@ final class BrowserE2ESmokeTests: XCTestCase {
 
             let dataStore = BrowserDataStore(defaults: defaults)
             let searchSettings = SearchSettingsStore(defaults: defaults)
+            // Captured before it goes into the workspace: `workspace.downloads`
+            // is `DownloadTracking` now, the minimum `BrowserWorkspace` itself
+            // needs, and this test wants the fuller concrete API the same
+            // object still has.
+            let downloadCenter = DownloadCenter()
             let workspace = BrowserWorkspace(
                 dataStore: dataStore,
-                downloads: DownloadCenter(),
+                downloads: downloadCenter,
+                pageSharing: PageFileCommands.self,
+                clipboard: MacClipboard(),
+                makeSessionPlatform: { MacSessionPlatform() },
                 searchSettings: searchSettings
             )
             try require(dataStore.showsBookmarksBar, "bookmarks bar was not visibly enabled by default")
@@ -170,12 +178,12 @@ final class BrowserE2ESmokeTests: XCTestCase {
             dataStore.showsBookmarksBar = true
             try require(BrowserDataStore(defaults: defaults).showsBookmarksBar, "visible bookmarks-bar preference did not persist locally")
             print("PASS bookmarks bar preference: visible by default and show/hide choice persisted locally")
-            try require(workspace.downloads.items.isEmpty, "new download center was not empty")
-            try require(!workspace.downloads.isPanelPresented, "downloads panel started open")
-            workspace.downloads.togglePanel()
-            try require(workspace.downloads.isPanelPresented, "downloads control did not present the panel")
+            try require(downloadCenter.items.isEmpty, "new download center was not empty")
+            try require(!downloadCenter.isPanelPresented, "downloads panel started open")
+            downloadCenter.togglePanel()
+            try require(downloadCenter.isPanelPresented, "downloads control did not present the panel")
             try require(DownloadCenter.emptyStateTitle == "No downloads yet", "downloads empty state was unclear")
-            try require(workspace.downloads.downloadsDirectory?.lastPathComponent == "Downloads", "downloads folder destination was unavailable")
+            try require(downloadCenter.downloadsDirectory?.lastPathComponent == "Downloads", "downloads folder destination was unavailable")
             try require(
                 BrowserSession.isDownloadTransitionError(NSError(domain: "WebKitErrorDomain", code: 102)),
                 "expected WebKit download transition was not recognized"
@@ -184,8 +192,8 @@ final class BrowserE2ESmokeTests: XCTestCase {
                 !BrowserSession.isDownloadTransitionError(NSError(domain: NSURLErrorDomain, code: NSURLErrorCannotConnectToHost)),
                 "ordinary navigation failures were incorrectly hidden as downloads"
             )
-            workspace.downloads.togglePanel()
-            try require(!workspace.downloads.isPanelPresented, "downloads control did not dismiss the panel")
+            downloadCenter.togglePanel()
+            try require(!downloadCenter.isPanelPresented, "downloads control did not dismiss the panel")
             print("PASS downloads: toolbar state, clear empty presentation, Downloads-folder destination, and policy-transition handling succeeded")
             let rootView = BrowserView()
                 .environmentObject(workspace)
@@ -1061,6 +1069,9 @@ final class BrowserE2ESmokeTests: XCTestCase {
             let restored = BrowserWorkspace(
                 dataStore: BrowserDataStore(defaults: defaults),
                 downloads: DownloadCenter(),
+                pageSharing: PageFileCommands.self,
+                clipboard: MacClipboard(),
+                makeSessionPlatform: { MacSessionPlatform() },
                 searchSettings: SearchSettingsStore(defaults: defaults)
             )
             try require(restored.tabs.count == 1, "saved tab session did not restore")

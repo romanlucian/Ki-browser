@@ -254,7 +254,7 @@ struct LimeghostBrowserApp: App {
                 // ⌘R is the most-used key in a browser and ⌘[ / ⌘] are the
                 // macOS history pair. ⇧⌘[ and ⇧⌘] already switch tabs; these
                 // are separate chords and do not collide with them.
-                Button("Show Downloads") { focusedWorkspace?.downloads.isPanelPresented = true }
+                Button("Show Downloads") { focusedWorkspace?.downloadCenter.isPanelPresented = true }
                     .keyboardShortcut("j", modifiers: [.command, .shift])
                 Divider()
                 // Find, zoom, and print all act on the page in front, so they

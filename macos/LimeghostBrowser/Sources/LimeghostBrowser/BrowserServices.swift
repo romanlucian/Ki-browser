@@ -13,6 +13,18 @@ enum BrowserWindowScene {
     static let id = "limeghost-browser"
 }
 
+/// The one piece of AppKit `BrowserTab.copyArticleForAI` needs. Stateless —
+/// `NSPasteboard.general` is the same system pasteboard no matter which
+/// instance reaches it — so a fresh one per workspace costs nothing.
+@MainActor
+final class MacClipboard: ClipboardWriting {
+    func setString(_ string: String) {
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(string, forType: .string)
+    }
+}
+
 /// The parts of the browser that belong to the application rather than to any
 /// one window: bookmarks and history, the download list, the search choice,
 /// the compiled tracker rules, the site-icon cache, and the WebKit switches.
@@ -396,5 +408,49 @@ final class BrowserServices {
     func takeWindowTopLeftAwaitingWindow() -> CGPoint? {
         defer { originAwaitingWindow = nil }
         return originAwaitingWindow
+    }
+}
+
+extension BrowserWorkspace {
+    /// The concrete download list behind `downloads`. `BrowserWorkspace` only
+    /// sees `DownloadTracking` because `DownloadCenter` is AppKit-heavy and
+    /// belongs to this target, not `LimeghostShared` — but every workspace in
+    /// this app is handed the one `BrowserServices` keeps, so the downcast
+    /// always succeeds. The toolbar's download button and the download
+    /// shelf need the fuller type this exposes.
+    var downloadCenter: DownloadCenter {
+        // swiftlint:disable:next force_cast
+        downloads as! DownloadCenter
+    }
+
+    /// A workspace for one window, in one profile. Bookmarks, history, site
+    /// icons, per-site exceptions and logins come from that profile; the
+    /// download list, the search choice and the WebKit switches are shared by
+    /// all of them.
+    convenience init(
+        services: BrowserServices,
+        restoresSession: Bool,
+        adopting: BrowserTab? = nil,
+        isPrivate: Bool = false,
+        profileID: UUID
+    ) {
+        let profile = services.services(for: profileID)
+        self.init(
+            dataStore: profile.dataStore,
+            downloads: services.downloads,
+            pageSharing: PageFileCommands.self,
+            clipboard: MacClipboard(),
+            makeSessionPlatform: { MacSessionPlatform() },
+            searchSettings: services.searchSettings,
+            contentBlocking: profile.contentBlocking,
+            favicons: profile.favicons,
+            webFeatures: services.webFeatures,
+            restoresSession: restoresSession,
+            adopting: adopting,
+            isPrivate: isPrivate,
+            profileID: profileID,
+            websiteDataStore: profile.websiteDataStore
+        )
+        services.register(self)
     }
 }

@@ -1,4 +1,5 @@
 import AppKit
+import LimeghostShared
 import SwiftUI
 
 /// Holds the window the tab strip lives in, so SwiftUI can move it.

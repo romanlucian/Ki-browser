@@ -371,6 +371,13 @@ struct TabStrip: View {
 
     /// One drawn element of the strip. A group contributes its label chip and,
     /// unless it is collapsed, the tabs inside it.
+    ///
+    /// `@MainActor`: `BrowserTab.id` is isolated to the actor its class is
+    /// isolated to, and now that `BrowserTab` lives in a separate module the
+    /// compiler checks that access rather than inferring it away. `StripItem`
+    /// values only ever exist inside this main-actor view's own body, so this
+    /// states what was already true.
+    @MainActor
     private enum StripItem: Identifiable {
         case tab(BrowserTab, group: TabGroupRecord?, isLastInGroup: Bool)
         case groupChip(TabGroupRecord, tabCount: Int, key: String)

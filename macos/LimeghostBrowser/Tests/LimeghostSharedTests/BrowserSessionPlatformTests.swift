@@ -1,4 +1,5 @@
 import XCTest
+import Combine
 import WebKit
 @testable import LimeghostShared
 
@@ -13,6 +14,7 @@ final class RecordingPlatform: BrowserSessionPlatform {
     func chooseFiles(allowsMultiple: Bool, allowsDirectories: Bool) async -> [URL]? { nil }
     func printPage(_ webView: WKWebView) {}
     func observeAppearance(_ apply: @escaping () -> Void) -> Any? { nil }
+    func prepareWebView(_ webView: WKWebView) {}
 }
 
 /// `BrowserSession` also needs something that can take a finished download off
@@ -23,6 +25,8 @@ final class RecordingPlatform: BrowserSessionPlatform {
 @MainActor
 private final class NoOpDownloadTracking: DownloadTracking {
     func track(_ download: WKDownload, sourceURL: URL?) {}
+    let objectWillChange = ObservableObjectPublisher()
+    func clearAllRecords() {}
 }
 
 @MainActor

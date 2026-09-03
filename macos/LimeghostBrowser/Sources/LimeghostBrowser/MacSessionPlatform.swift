@@ -109,6 +109,19 @@ final class MacSessionPlatform: BrowserSessionPlatform {
         }
     }
 
+    /// `BrowserSession.init` calls this once, right after the web view it
+    /// answers for exists. Three things only macOS can do: the weak
+    /// back-reference every other method above reads through `webView`, the
+    /// starting appearance (the ongoing observation above only reacts to a
+    /// *later* change), and trackpad pinch-to-zoom, which is not part of
+    /// `BrowserSessionPlatform` because `WKWebView.allowsMagnification` does
+    /// not exist on iOS's `WKWebView` at all.
+    func prepareWebView(_ webView: WKWebView) {
+        self.webView = webView
+        webView.appearance = NSApp.effectiveAppearance
+        webView.allowsMagnification = true
+    }
+
     private func pageAlert(message: String) -> NSAlert {
         let alert = NSAlert()
         alert.messageText = webView?.url?.host.map { "Message from \($0)" } ?? "Message from this page"
@@ -123,9 +136,11 @@ extension BrowserSession {
     /// parameter list exactly, minus `platform` — `LimeghostShared` cannot
     /// supply a default for that parameter itself, since a default value
     /// would have to name `MacSessionPlatform`, an app-target, macOS-only
-    /// type it cannot see — so every existing call site (which never named
-    /// `platform` to begin with) keeps compiling against this initializer
-    /// unchanged.
+    /// type it cannot see. `BrowserWorkspace` and `BrowserTab` (also
+    /// `LimeghostShared`, as of the workspace's move there) build their own
+    /// `MacSessionPlatform` and call the designated initializer directly for
+    /// the same reason; this convenience initializer remains for callers —
+    /// tests among them — that have no reason to name a platform at all.
     convenience init(
         downloadCenter: DownloadTracking,
         searchSettings: SearchSettingsStore,
@@ -138,9 +153,8 @@ extension BrowserSession {
         initialPageZoom: CGFloat? = nil,
         adoptingPopupConfiguration popupConfiguration: WKWebViewConfiguration? = nil
     ) {
-        let platform = MacSessionPlatform()
         self.init(
-            platform: platform,
+            platform: MacSessionPlatform(),
             downloadCenter: downloadCenter,
             searchSettings: searchSettings,
             initialURL: initialURL,
@@ -152,23 +166,6 @@ extension BrowserSession {
             initialPageZoom: initialPageZoom,
             adoptingPopupConfiguration: popupConfiguration
         )
-        // Only possible now: `self.webView` does not exist until the
-        // designated initializer above has returned.
-        platform.webView = webView
-        // The other half of the one-time appearance set that used to sit
-        // inline in `init` (`webView.appearance = NSApp.effectiveAppearance`,
-        // right beside where the ongoing observation used to register). That
-        // observation still gets registered from inside the designated
-        // initializer itself — it needs no web view to register, only to
-        // react — so this is genuinely the same original code, just now in
-        // two places instead of one line.
-        webView.appearance = NSApp.effectiveAppearance
-        // Trackpad pinch-to-zoom. `WKWebView.allowsMagnification` does not
-        // exist on iOS's WKWebView at all, so it cannot be set from
-        // `LimeghostShared` regardless of the platform abstraction — this is
-        // the one place in the app target that still constructs every
-        // session, so it is also the one place that can set it.
-        webView.allowsMagnification = true
     }
 
     /// `<input type="file">` on macOS. `WKOpenPanelParameters` is only

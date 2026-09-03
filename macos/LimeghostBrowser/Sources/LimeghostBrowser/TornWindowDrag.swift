@@ -1,4 +1,5 @@
 import AppKit
+import LimeghostShared
 
 /// Keeps a freshly torn-off window under the pointer for the rest of the drag
 /// that created it.
