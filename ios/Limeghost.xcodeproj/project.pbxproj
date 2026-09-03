@@ -10,9 +10,13 @@
 		AA0000000000000000000101 /* LimeghostApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000201 /* LimeghostApp.swift */; };
 		AA0000000000000000000102 /* IOSSessionPlatform.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000202 /* IOSSessionPlatform.swift */; };
 		AA0000000000000000000103 /* IOSCollaborators.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000203 /* IOSCollaborators.swift */; };
+		AA0000000000000000000104 /* WorkspaceHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000205 /* WorkspaceHost.swift */; };
+		AA0000000000000000000105 /* WebViewHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000206 /* WebViewHost.swift */; };
+		AA0000000000000000000106 /* BrowserScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000207 /* BrowserScreen.swift */; };
 		AA0000000000000000001101 /* LimeghostShared in Frameworks */ = {isa = PBXBuildFile; productRef = AA0000000000000000001001 /* LimeghostShared */; };
 		AA0000000000000000001102 /* LimeghostCore in Frameworks */ = {isa = PBXBuildFile; productRef = AA0000000000000000001002 /* LimeghostCore */; };
 		AA0000000000000000002101 /* IOSSessionPlatformTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000002201 /* IOSSessionPlatformTests.swift */; };
+		AA0000000000000000002102 /* WorkspaceHostTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000002202 /* WorkspaceHostTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -30,8 +34,12 @@
 		AA0000000000000000000202 /* IOSSessionPlatform.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IOSSessionPlatform.swift; sourceTree = "<group>"; };
 		AA0000000000000000000203 /* IOSCollaborators.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IOSCollaborators.swift; sourceTree = "<group>"; };
 		AA0000000000000000000204 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		AA0000000000000000000205 /* WorkspaceHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceHost.swift; sourceTree = "<group>"; };
+		AA0000000000000000000206 /* WebViewHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebViewHost.swift; sourceTree = "<group>"; };
+		AA0000000000000000000207 /* BrowserScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrowserScreen.swift; sourceTree = "<group>"; };
 		AA0000000000000000000301 /* Limeghost.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Limeghost.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		AA0000000000000000002201 /* IOSSessionPlatformTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IOSSessionPlatformTests.swift; sourceTree = "<group>"; };
+		AA0000000000000000002202 /* WorkspaceHostTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceHostTests.swift; sourceTree = "<group>"; };
 		AA0000000000000000002301 /* LimeghostTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = LimeghostTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -71,6 +79,9 @@
 				AA0000000000000000000202 /* IOSSessionPlatform.swift */,
 				AA0000000000000000000203 /* IOSCollaborators.swift */,
 				AA0000000000000000000204 /* Info.plist */,
+				AA0000000000000000000205 /* WorkspaceHost.swift */,
+				AA0000000000000000000206 /* WebViewHost.swift */,
+				AA0000000000000000000207 /* BrowserScreen.swift */,
 			);
 			path = Sources;
 			sourceTree = "<group>";
@@ -79,6 +90,7 @@
 			isa = PBXGroup;
 			children = (
 				AA0000000000000000002201 /* IOSSessionPlatformTests.swift */,
+				AA0000000000000000002202 /* WorkspaceHostTests.swift */,
 			);
 			path = Tests;
 			sourceTree = "<group>";
@@ -177,6 +189,9 @@
 				AA0000000000000000000101 /* LimeghostApp.swift in Sources */,
 				AA0000000000000000000102 /* IOSSessionPlatform.swift in Sources */,
 				AA0000000000000000000103 /* IOSCollaborators.swift in Sources */,
+				AA0000000000000000000104 /* WorkspaceHost.swift in Sources */,
+				AA0000000000000000000105 /* WebViewHost.swift in Sources */,
+				AA0000000000000000000106 /* BrowserScreen.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -185,6 +200,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				AA0000000000000000002101 /* IOSSessionPlatformTests.swift in Sources */,
+				AA0000000000000000002102 /* WorkspaceHostTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
