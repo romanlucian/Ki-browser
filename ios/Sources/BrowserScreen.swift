@@ -1,10 +1,11 @@
 import SwiftUI
 import LimeghostShared
 
-/// The whole browser, one screen. Task 7 adds the tabs sheet beside this one.
+/// The whole browser, one screen.
 struct BrowserScreen: View {
     @ObservedObject var host: WorkspaceHost
     @State private var isPresentingAddressSheet = false
+    @State private var isPresentingTabSwitcher = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -26,12 +27,17 @@ struct BrowserScreen: View {
                 ),
                 goBack: { host.workspace.goBackInSelectedTab() },
                 openAddress: { isPresentingAddressSheet = true },
-                openTabs: {} // Task 7
+                openTabs: { isPresentingTabSwitcher = true }
             )
         }
         .sheet(isPresented: $isPresentingAddressSheet) {
             AddressSheet(workspace: host.workspace) {
                 isPresentingAddressSheet = false
+            }
+        }
+        .sheet(isPresented: $isPresentingTabSwitcher) {
+            TabSwitcher(workspace: host.workspace) {
+                isPresentingTabSwitcher = false
             }
         }
     }
