@@ -14,11 +14,13 @@
 		AA0000000000000000000105 /* WebViewHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000206 /* WebViewHost.swift */; };
 		AA0000000000000000000106 /* BrowserScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000207 /* BrowserScreen.swift */; };
 		AA0000000000000000000107 /* BottomBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000208 /* BottomBar.swift */; };
+		AA0000000000000000000108 /* AddressSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000209 /* AddressSheet.swift */; };
 		AA0000000000000000001101 /* LimeghostShared in Frameworks */ = {isa = PBXBuildFile; productRef = AA0000000000000000001001 /* LimeghostShared */; };
 		AA0000000000000000001102 /* LimeghostCore in Frameworks */ = {isa = PBXBuildFile; productRef = AA0000000000000000001002 /* LimeghostCore */; };
 		AA0000000000000000002101 /* IOSSessionPlatformTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000002201 /* IOSSessionPlatformTests.swift */; };
 		AA0000000000000000002102 /* WorkspaceHostTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000002202 /* WorkspaceHostTests.swift */; };
 		AA0000000000000000002103 /* BottomBarTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000002203 /* BottomBarTests.swift */; };
+		AA0000000000000000002104 /* AddressSheetTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000002204 /* AddressSheetTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -40,10 +42,12 @@
 		AA0000000000000000000206 /* WebViewHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebViewHost.swift; sourceTree = "<group>"; };
 		AA0000000000000000000207 /* BrowserScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrowserScreen.swift; sourceTree = "<group>"; };
 		AA0000000000000000000208 /* BottomBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BottomBar.swift; sourceTree = "<group>"; };
+		AA0000000000000000000209 /* AddressSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddressSheet.swift; sourceTree = "<group>"; };
 		AA0000000000000000000301 /* Limeghost.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Limeghost.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		AA0000000000000000002201 /* IOSSessionPlatformTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IOSSessionPlatformTests.swift; sourceTree = "<group>"; };
 		AA0000000000000000002202 /* WorkspaceHostTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceHostTests.swift; sourceTree = "<group>"; };
 		AA0000000000000000002203 /* BottomBarTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BottomBarTests.swift; sourceTree = "<group>"; };
+		AA0000000000000000002204 /* AddressSheetTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddressSheetTests.swift; sourceTree = "<group>"; };
 		AA0000000000000000002301 /* LimeghostTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = LimeghostTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -87,6 +91,7 @@
 				AA0000000000000000000206 /* WebViewHost.swift */,
 				AA0000000000000000000207 /* BrowserScreen.swift */,
 				AA0000000000000000000208 /* BottomBar.swift */,
+				AA0000000000000000000209 /* AddressSheet.swift */,
 			);
 			path = Sources;
 			sourceTree = "<group>";
@@ -97,6 +102,7 @@
 				AA0000000000000000002201 /* IOSSessionPlatformTests.swift */,
 				AA0000000000000000002202 /* WorkspaceHostTests.swift */,
 				AA0000000000000000002203 /* BottomBarTests.swift */,
+				AA0000000000000000002204 /* AddressSheetTests.swift */,
 			);
 			path = Tests;
 			sourceTree = "<group>";
@@ -199,6 +205,7 @@
 				AA0000000000000000000105 /* WebViewHost.swift in Sources */,
 				AA0000000000000000000106 /* BrowserScreen.swift in Sources */,
 				AA0000000000000000000107 /* BottomBar.swift in Sources */,
+				AA0000000000000000000108 /* AddressSheet.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -209,6 +216,7 @@
 				AA0000000000000000002101 /* IOSSessionPlatformTests.swift in Sources */,
 				AA0000000000000000002102 /* WorkspaceHostTests.swift in Sources */,
 				AA0000000000000000002103 /* BottomBarTests.swift in Sources */,
+				AA0000000000000000002104 /* AddressSheetTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

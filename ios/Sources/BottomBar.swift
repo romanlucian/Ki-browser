@@ -44,6 +44,12 @@ struct BottomBar: View {
             // button, and arrives with the assistant in Plan 3. A button that
             // did nothing would teach the wrong thing about where it lives.
 
+            // The page menu belongs after the tab button — Reader, Copy for
+            // AI, bookmark this page, find in page, site information and
+            // settings, almost entirely Plan 3's too. Reserved for the same
+            // reason as the toggle above: a menu that opened onto nothing
+            // would teach the wrong thing about where it lives.
+
             Button(action: openTabs) {
                 Text("\(model.tabCount)")
                     .font(.footnote.weight(.semibold))
