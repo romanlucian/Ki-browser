@@ -89,6 +89,14 @@ struct TabSwitcher: View {
                     if model.canReopenClosed {
                         Button("Reopen closed tab") {
                             model.reopenClosedTab()
+                            // A door, the same as adding a tab and selecting
+                            // one: it produces a specific page to look at, so
+                            // the switcher steps aside for it rather than
+                            // leaving somebody staring at the list they just
+                            // acted on. `reopenClosedTab()` already calls
+                            // `makeRoomForPage()` in the shared layer — this
+                            // is only the sheet following that lead.
+                            dismiss()
                         }
                         .padding(.horizontal)
                     }

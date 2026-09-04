@@ -28,18 +28,32 @@ final class TabSwitcherTests: XCTestCase {
     /// `closeTab` makes a replacement when the last one goes.
     func testClosingEveryTabLeavesOneToLookAt() throws {
         let host = try makeHost()
-        for tab in host.workspace.visibleTabs { host.workspace.closeTab(tab.id) }
+        let model = TabSwitcherModel(workspace: host.workspace)
+        let closedIDs = model.rows.map(\.id)
+        for id in closedIDs { model.close(id) }
 
-        XCTAssertFalse(host.workspace.visibleTabs.isEmpty)
+        XCTAssertFalse(model.rows.isEmpty)
+        // Not merely non-empty: the survivor must be the *replacement*, not
+        // one of the tabs just asked to close left behind by a `close` that
+        // silently did nothing.
+        XCTAssertTrue(model.rows.allSatisfy { !closedIDs.contains($0.id) })
     }
 
     /// A closed tab can come back.
     func testAClosedTabCanBeReopened() throws {
         let host = try makeHost()
         host.workspace.addTab(url: URL(string: "https://example.com/")!)
+        let model = TabSwitcherModel(workspace: host.workspace)
         let id = try XCTUnwrap(host.workspace.selectedTabID)
-        host.workspace.closeTab(id)
+        model.close(id)
 
-        XCTAssertTrue(host.workspace.canReopenClosedTab)
+        XCTAssertTrue(model.canReopenClosed)
+
+        model.reopenClosedTab()
+
+        // Reopening consumes the one closed tab remembered above, so nothing
+        // is left to reopen — proof `reopenClosedTab()` actually ran rather
+        // than leaving the closed-tab stack untouched.
+        XCTAssertFalse(model.canReopenClosed)
     }
 }
