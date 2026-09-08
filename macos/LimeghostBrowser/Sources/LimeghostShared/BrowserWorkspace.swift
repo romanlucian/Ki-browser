@@ -636,7 +636,7 @@ public final class BrowserWorkspace: ObservableObject {
     /// One method called from every door that opens one, because there is no
     /// honest single choke point: telling "somebody asked for this" apart from
     /// "the page redirected itself" needs an explicit signal either way. What
-    /// stops an eleventh door forgetting the rule is a test per door, not
+    /// stops a fourteenth door forgetting the rule is a test per door, not
     /// cleverness here.
     ///
     /// Deliberately not called by: selecting a tab that already exists, a
