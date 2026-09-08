@@ -30,13 +30,23 @@ struct AddressSheetModel {
     /// the rest — which is its own deliberate design, not a gap for this
     /// layer to close.
     ///
-    /// The Mac refuses to complete at all in a private tab, so a private
-    /// session is never finished from the history of a normal one
-    /// (`BrowserView.addressSuggestions`). Nothing on the phone can open a
-    /// private tab yet, so there is no state here to guard; whichever task
-    /// adds private browsing has to bring that guard with it.
+    /// **Nothing is completed in a private tab.** Nothing is written there
+    /// either way — a private session is excluded from history — but reading a
+    /// saved history back onto the screen would work against what a private
+    /// tab is for, which is why this is a guard rather than a reliance on
+    /// there being nothing to show. It mirrors the Mac's
+    /// `BrowserView.addressSuggestions` (`BrowserView.swift:752`), and
+    /// `docs/privacy-and-safety.md` states it as a promise, so the two
+    /// platforms are not free to disagree about it.
+    ///
+    /// It was missing for exactly as long as the phone had private tabs. This
+    /// comment used to say there was no state here to guard and that whichever
+    /// task added private browsing had to bring the guard with it; the tab
+    /// switcher added them and did not. A note left for a future task is not a
+    /// guard.
     func suggestions(for typed: String) -> [AddressSuggestion] {
-        AddressCompletion.suggestions(for: typed, in: workspace.dataStore.addressCandidates)
+        guard workspace.selectedTab?.session.isPrivate != true else { return [] }
+        return AddressCompletion.suggestions(for: typed, in: workspace.dataStore.addressCandidates)
     }
 }
 

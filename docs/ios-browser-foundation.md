@@ -16,16 +16,16 @@ Ten source files under `ios/Sources`, plus three compiled in by reference from t
 
 - **Tabs**, held by `BrowserWorkspace` — the Mac's, not a phone-shaped copy of it. `WorkspaceHost` owns the one workspace the scene drives and republishes its changes, because SwiftUI observes the host and the workspace's own `objectWillChange` has to reach it or nothing redraws when a tab opens.
 - **A bottom bar** — back, the address, the tab count — placed along the bottom because that is where a thumb reaches and because the page's own top is worth leaving alone. It shows the host with `www.` trimmed, or "Search or enter a website" when there is nothing to show.
-- **An address sheet** with local-only completion, drawn from bookmarks and history. It submits through `BrowserWorkspace.navigate(_:)` — the door opened in this plan's Task 4 — rather than `open(_:)`, which guards on `WebURLPolicy.validatedURL` and silently refuses a bare host like `example.com`, the commonest thing anybody types. Nothing is sent anywhere while typing; there are no live query suggestions, on this platform or the Mac.
+- **An address sheet** with local-only completion, drawn from bookmarks and history. It submits through `BrowserWorkspace.navigate(_:)` — the door opened in this plan's Task 4 — rather than `open(_:)`, which guards on `WebURLPolicy.validatedURL` and silently refuses a bare host like `example.com`, the commonest thing anybody types. Nothing is sent anywhere while typing; there are no live query suggestions, on this platform or the Mac. **It completes nothing at all in a private tab**, matching `BrowserView.addressSuggestions` on the Mac and the promise `docs/privacy-and-safety.md` already makes: nothing is written in a private tab either way, but reading a saved history back onto the screen would work against what a private tab is for. That guard was missing for as long as the phone had private tabs — the sheet's own comment had left it as a note for whichever task added private browsing, the tab switcher added them, and the note was not a guard. It was found and closed while writing this document, with a test that fails when the guard is removed.
 - **A tab switcher** with ordinary and private tabs kept visibly apart, a new-tab and new-private-tab control per section, per-tab close, and Reopen closed tab.
-- **The AI guide** as the start surface: every new tab opens on it. It is `AIToolStartPage` — the Mac's own view, its own copy, its own catalog — added to the iOS target unchanged. **It does not fit a phone screen; see the release gates below.**
+- **The AI guide** as the start surface: every new tab opens on it. It is `AIToolStartPage` — the Mac's own view, its own copy, its own catalog — added to the iOS target unchanged. **It does not fit a phone screen; see the release gate below.**
 - **Page display** through `WebViewHost`, a `UIViewRepresentable` that hands SwiftUI the web view its `BrowserSession` already owns, keyed on `session.instanceID`. It is the iOS twin of the Mac's `WebView.swift`, and it is very nearly the whole of the difference between the two platforms' page display.
 
 `IOSSessionPlatform` and `IOSCollaborators` implement the platform seams: opening an external scheme, the three JavaScript dialogs, the file picker, printing, appearance, one-time web view setup; the pasteboard; and sharing. Three of `BrowserSessionPlatform`'s eight members do nothing on a phone, and that is the protocol working rather than failing — a platform difference shows up as an implementation that answers "nothing to do", never as a conditional inside the browser.
 
 `ios/Sources/Info.plist` carries `NSAllowsArbitraryLoadsInWebContent` (a browser renders addresses the person chooses, and plenty of the web is still plain `http`; the app's own connections stay under App Transport Security, and it makes almost none), and camera/microphone usage strings for WebKit's own permission prompts. The bundle identifier is `com.zincoo.limeghost` — a new identifier for a new app, unrelated to the Mac's deliberately-preserved `com.clearframe.browser`, which must not be tidied for the reasons in `CLAUDE.md`.
 
-**22 tests** run against the app on a Simulator, covering the session platform, the workspace host, the bottom bar's model, the address sheet's submit and completion, the switcher's private split, and the start surface's two doors.
+**23 tests** run against the app on a Simulator, covering the session platform, the workspace host, the bottom bar's model, the address sheet's submit, its completion and its refusal to complete a private tab, the switcher's private split, and the start surface's two doors.
 
 ## Targets
 
@@ -48,11 +48,7 @@ Ten source files under `ios/Sources`, plus three compiled in by reference from t
 - **Three Mac SwiftUI files compiled into the iOS app by reference** — `AIToolStartPage.swift`, `LimeghostTheme.swift`, `SiteIconView.swift`. They are not copied and not moved: `ios/Limeghost.xcodeproj` lists them under a "Reused from macOS" group with relative paths into `macos/LimeghostBrowser/Sources/LimeghostBrowser/`, so there is one copy of each and the Mac's build is untouched. **They were chosen by measuring that these three, and only these three, typecheck together against the iOS SDK.** That is a real measurement and it is not enough — see the release gate immediately below.
 - **Platform-neutral SwiftUI surfaces, still not moved and still unchecked** — `BookmarksHomePage`, `HistoryHomePage`, `ReaderView`, `LimeghostIconView`, `LimeghostIconPicker`, `ChromeIcons`, `ContentBlockingViews`, `AddressSuggestionsView`. These are *believed* to compile for iOS, and that belief has not been checked with the compiler. Run the typecheck below against this row before a later plan relies on it — and then read the result on a phone-sized screen, which is the lesson of the next section.
 
-## Blocking release gates
-
-Two named items block anybody using this app, and neither is a matter of taste. They are written out with their sites so nobody has to discover them twice.
-
-### The AI guide does not fit a phone
+## The blocking release gate: the AI guide does not fit a phone
 
 **Typechecking is not fitness, and this is the entry that records the difference.** The three reused files were chosen because the compiler accepted them for iOS. The compiler has no opinion about a 402-point-wide screen, and running the app is what uncovered that the guide is unusable there. Nothing about this was visible in a green suite.
 
@@ -62,15 +58,9 @@ Measured at 402pt wide (iPhone 17 Pro, 874pt tall):
 - **The catalog status wraps to three lines**, reading "Catalog / 2026.08. / 24.1". The site is `AIToolStartPage.swift:50-68`: an `HStack` of five items sized at 10.5pt with a `Spacer(minLength: 8)` and a trailing button, laid out for a Mac window's width.
 - **Nothing actionable is above the fold.** The search field and the first task chips sit at the very bottom edge of the screen. A start surface whose whole job is to begin the first minute with a task presents no task.
 
-A container-level fix was investigated and none is clean: the header's shape, not its container, is what fails. This needs either the file edited — which means giving `AIToolStartPage` a width-aware layout that both platforms share — or a seam added so the phone can supply its own header while reusing the catalog below it. **Until that is done, the AI guide is not shippable at phone width**, and since it is the start surface every new tab opens on, that makes the app not shippable to anyone at phone width either. This is a named blocking item, not a polish note.
+A container-level fix was investigated and none is clean: the header's shape, not its container, is what fails. This needs either the file edited — which means giving `AIToolStartPage` a width-aware layout that both platforms share — or a seam added so the phone can supply its own header while reusing the catalog below it. **Until that is done, the AI guide is not shippable at phone width**, and since it is the start surface every new tab opens on, that makes the app not shippable to anyone at phone width either. This is the named blocking item, not a polish note.
 
-### A second blocking item: a private tab completes from ordinary history
-
-`AddressSheetModel.suggestions` (`ios/Sources/AddressSheet.swift`) calls `AddressCompletion.suggestions(for:in:)` unconditionally. The Mac does not: `BrowserView.addressSuggestions` opens with `guard !session.isPrivate`, so a private session is never completed from the history of a normal one. When the address sheet was written there was no way to open a private tab on the phone, and its own comment says so and says the guard has to arrive with whichever task adds private browsing. The tab switcher then added private tabs — `TabSwitcherModel.addTab(isPrivate:)`, reachable from the `+` in the private section — and the guard did not arrive with it.
-
-So today, typing in the address sheet while a private tab is selected offers rows drawn from the ordinary profile's bookmarks and history. Nothing private leaks *into* the store (private visits are still never recorded), but the private tab shows what was browsed outside it, which is precisely the line the Mac draws deliberately. **This must be closed before anybody uses the app**, and it is small: the same `isPrivate` guard on the selected tab, plus a test that opens a private tab and asserts an empty completion. It is recorded here rather than fixed in the same commit that wrote it down, so the fix arrives with its own test and its own review.
-
-Two smaller findings belong beside them, so they are not lost:
+Two smaller findings belong beside it, so they are not lost:
 
 - **The shelf grid overflows arithmetically.** `AIToolStartPage.swift:190` builds a fixed six-column `LazyVGrid` with 12pt spacing; at 402pt minus padding, each column is about 40.3pt, and the marks inside are hard-framed at 44pt (`:475`, `:537`). This is arithmetic, not observation — the grid sits below the fold, so nobody has yet seen what it does there.
 - **History records "Loading…" as the title of every visited page**, so every address-completion row reads "Loading…". The chain: `BrowserSession.refreshState()` (`BrowserSession.swift:712`) falls back to that placeholder when `webView.title` is empty; `didFinish` (`:1040`–`:1056`) calls `refreshState()` and passes `pageTitle` straight to `onCompletedVisit`; and `BrowserDataStore.recordVisit` (`BrowserDataStore.swift:355`–`:358`) drops a repeat of the same URL inside 30 seconds, so a later correction carrying the real title never lands and the placeholder is permanent. **Nothing in that chain is iOS-specific** — it is a WebKit timing race, observed on iOS, in code both platforms share. A follow-up must measure it on both platforms before anyone decides where the fix belongs; assuming it is a phone bug is how it gets fixed in the wrong place.
@@ -91,7 +81,7 @@ From `ios`, for the phone app:
 
 ```bash
 xcodebuild test -scheme Limeghost \
-  -destination 'platform=iOS Simulator,name=iPhone 17 Pro'   # 22 executed, 0 failures
+  -destination 'platform=iOS Simulator,name=iPhone 17 Pro'   # 23 executed, 0 failures
 ```
 
 Read those counts by grepping (`grep -E "^\*\* TEST|Executed [0-9]+ tests"`), never by tailing: the swift-testing banner interleaves after the XCTest summary, so a `tail` can show a passing run's last line as something else entirely.
@@ -183,7 +173,7 @@ Nothing built so far needed it — the shared layer, the app, and both test suit
 - **Default-browser registration** (`com.apple.developer.web-browser`) and **passkeys** (`com.apple.developer.web-browser.public-key-credential`, iOS 17.4+) — both Apple-approved entitlements, neither available unsigned.
 - **Handoff**, and the **App Store** itself.
 
-One purchase unblocks this whole cluster. Nothing here ranks it above work that does not need it — and the two release gates above are the more urgent blockers, since both cost nothing to fix and no amount of Apple money would make an eight-line headline fit or teach a private tab to keep its distance from ordinary history.
+One purchase unblocks this whole cluster. Nothing here ranks it above work that does not need it — and the release gate above is the more urgent blocker of the two, since it costs nothing to fix and no amount of Apple money would make an eight-line headline fit.
 
 ## Device-only checklist, for later plans
 
@@ -198,4 +188,4 @@ There is an app now, so this list is finally runnable — but none of it has bee
 
 ## Honesty
 
-No document may describe iOS activation, retention, or usability as validated. **No observed-user session has been run for this project on either platform**, and on iOS nobody at all — including the founder — has yet used the app on a phone. No claim is made of iOS signing for distribution, notarization, TestFlight participation, or App Store readiness; free provisioning is the entire distribution story, it reaches exactly one device, the founder's own, and its certificate lasts a week. The `ios-simulator` CI job's two commands pass locally against a real Simulator; the job itself has never executed, for the reason given above. The app's start surface does not fit a phone screen, and its address sheet completes a private tab from ordinary history; both are written down above as blocking release gates rather than left as defects somebody might discover twice. If the repository's eventual store build ships under separate commercial terms ([docs/ip-and-ownership.md](ip-and-ownership.md)), that changes distribution terms only; the repository itself stays AGPL-3.0.
+No document may describe iOS activation, retention, or usability as validated. **No observed-user session has been run for this project on either platform**, and on iOS nobody at all — including the founder — has yet used the app on a phone. No claim is made of iOS signing for distribution, notarization, TestFlight participation, or App Store readiness; free provisioning is the entire distribution story, it reaches exactly one device, the founder's own, and its certificate lasts a week. The `ios-simulator` CI job's two commands pass locally against a real Simulator; the job itself has never executed, for the reason given above. The app's start surface does not fit a phone screen, which is written down above as a blocking release gate rather than left as a defect somebody might discover twice. If the repository's eventual store build ships under separate commercial terms ([docs/ip-and-ownership.md](ip-and-ownership.md)), that changes distribution terms only; the repository itself stays AGPL-3.0.
