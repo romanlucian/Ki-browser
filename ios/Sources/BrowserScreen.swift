@@ -41,15 +41,34 @@ struct BrowserScreen: View {
     }
 }
 
-/// The selected tab's own surface: the AI guide (Task 8) while the tab is on
-/// its start page and hasn't been told which one to show but `.aiHome`
-/// (D6's default), or the web view once a page is loading or loaded.
+/// Whether the guide belongs on screen, rather than the web view: only while
+/// the tab is genuinely on its start page — not a page already loading or
+/// loaded — and only when that start page is the AI home.
 ///
-/// The shared layer also loads its own HTML start page into every fresh
-/// tab's web view — `session.loadState == .startPage` is true for that page
-/// too — so this branch *replaces* `WebViewHost` outright rather than
-/// layering the native guide over it; showing both at once is exactly the
-/// bug this gate exists to prevent.
+/// A free function, not an inline `if` in `TabSurface.body`, so a test can
+/// call it directly and check both directions without standing up SwiftUI.
+/// The inline form it replaces was invisible to every test: made unreachable
+/// on purpose, the suite stayed green, so the whole branch could have been
+/// deleted without anything noticing.
+///
+/// Both conditions are load-bearing on their own. `startSurface` is never
+/// reset once a real page loads — iOS has no Home button and no bookmarks or
+/// history home yet to reset it — so `loadState` has to be the deciding vote
+/// for `.content`/`.loading`: without it, a tab opened straight to a URL
+/// (`AddressSheet`, a reopened tab, a tapped guide card) would show the
+/// guide instead of the page just asked for, because `startSurface` is still
+/// `.aiHome`. And `startSurface` still matters for `.startPage`: the shared
+/// layer also loads its own HTML start page into every fresh tab's web view,
+/// which is `.startPage` too, so this function is what keeps that page from
+/// ever showing instead of, or underneath, the native guide.
+func showsGuide(loadState: BrowserLoadState, startSurface: StartSurface) -> Bool {
+    loadState == .startPage && startSurface == .aiHome
+}
+
+/// The selected tab's own surface: the AI guide (Task 8) while `showsGuide`
+/// says so, or the web view otherwise. This branch *replaces* `WebViewHost`
+/// outright rather than layering the native guide over it — showing both at
+/// once is exactly the bug `showsGuide` exists to prevent.
 ///
 /// `@ObservedObject` on `tab` *and* `session`, not only on `host` above:
 /// `startSurface` is published by the tab and `loadState` by the session,
@@ -61,7 +80,14 @@ struct BrowserScreen: View {
 /// `open(_:)` starts the load — the same reason the Mac's own
 /// `BrowserTabContent` observes both rather than relying on the workspace
 /// alone.
-private struct TabSurface: View {
+///
+/// Internal rather than private so a test can build one around a real tab and
+/// read `showsTheGuide`. `showsGuide` on its own only proves the rule; this
+/// property is where the rule meets the two objects it judges, and reading
+/// the wrong one of them — the tab's `loadState` does not exist, the
+/// session's `startSurface` does not either — is a mistake no test of the
+/// pure function could ever see.
+struct TabSurface: View {
     @ObservedObject var tab: BrowserTab
     @ObservedObject var session: BrowserSession
     let workspace: BrowserWorkspace
@@ -72,8 +98,12 @@ private struct TabSurface: View {
         self.workspace = workspace
     }
 
+    var showsTheGuide: Bool {
+        showsGuide(loadState: session.loadState, startSurface: tab.startSurface)
+    }
+
     var body: some View {
-        if session.loadState == .startPage, tab.startSurface == .aiHome {
+        if showsTheGuide {
             StartSurfaceScreen(workspace: workspace)
         } else {
             WebViewHost(session: session)
