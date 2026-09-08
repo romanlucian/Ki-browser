@@ -13,7 +13,7 @@ final class NoDownloads: DownloadTracking {
     func clearAllRecords() {}
 }
 
-/// Nothing to save, export, or share in a door test — none of the eleven
+/// Nothing to save, export, or share in a door test — none of the thirteen
 /// doors touches a page command.
 enum NoPageSharing: PageSharing {
     static func savePage(
@@ -41,10 +41,16 @@ final class WorkspaceDoorTests: XCTestCase {
     /// Every way of asking for a page must uncover the page.
     ///
     /// A table rather than one test each, because the point is coverage: when
-    /// somebody adds an eleventh door and forgets the rule, this is what says
-    /// so. Ten of these were broken at once — the panel stepped aside for ⌘T
-    /// and for nothing else, so the same request behaved two ways depending on
-    /// which button you happened to press.
+    /// somebody adds a fourteenth door and forgets the rule, this is what says
+    /// so. Ten of the eleven doors that existed then were broken at once — the
+    /// panel stepped aside for ⌘T and for nothing else, so the same request
+    /// behaved two ways depending on which button you happened to press.
+    ///
+    /// The counts in this comment are the mechanism, not decoration: it is the
+    /// only place the next author is told to add a row, so a stale number here
+    /// quietly stops teaching that. This branch added "a typed address" and
+    /// left them saying eleven, and "a local file" had never had a row at all
+    /// even though `openLocalFile` has always called `makeRoomForPage()`.
     ///
     /// Moved here from `BrowserBehaviorTests` with `BrowserWorkspace` itself:
     /// the doors are code, not app-target wiring, and the rule they enforce
@@ -65,6 +71,17 @@ final class WorkspaceDoorTests: XCTestCase {
             ("back", { $0.goBackInSelectedTab() }),
             ("forward", { $0.goForwardInSelectedTab() }),
             ("a typed address", { $0.navigate("example.com") }),
+            // The file does not have to exist. `openLocalFile` calls
+            // `makeRoomForPage()` before it hands anything to WebKit, and a
+            // file load that fails does so asynchronously, long after the
+            // assertions below. The path is built from the temporary
+            // directory rather than written as a literal so this row means
+            // the same thing on the Simulator, where /tmp is not the Mac's.
+            ("a local file", {
+                $0.openLocalFile(
+                    FileManager.default.temporaryDirectory.appendingPathComponent("limeghost-door.html")
+                )
+            }),
         ]
 
         for (name, openADoor) in doors {
