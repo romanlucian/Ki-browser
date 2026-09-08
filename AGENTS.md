@@ -74,7 +74,9 @@ Plus `npm test` and `npm run validate` from the root. The smoke suite is `Tests/
 
 The smoke test requires a real logged-in macOS desktop session with WebKit/AppKit services available. A headless or restricted agent sandbox may compile the test and expose the SwiftUI window while blocking WebKit’s content process.
 
-**Verifying `LimeghostShared` for iOS.** Prove portability with the compiler, never with a search for `import AppKit` — `import SwiftUI` re-exports AppKit on macOS, so an import list alone both under- and over-counts what is actually portable; this was measured wrong repeatedly while building the target (see [docs/ios-browser-foundation.md](docs/ios-browser-foundation.md)). This machine has no iOS platform component installed (`xcodebuild -showdestinations` lists iOS under "Ineligible destinations": `iOS 26.5 is not installed`), so a typecheck stands in for a Simulator build locally:
+**Typechecking is not fitness.** A file that compiles for iOS has not been shown to *work* on iOS, and nothing in a green suite says otherwise. The three Mac SwiftUI files the phone app reuses were chosen by measuring that they typecheck against the iOS SDK; running the app is what uncovered that the AI guide — the start surface every new tab opens on — is unusable at 402 points wide, with an eight-line headline that breaks mid-word and nothing actionable above the fold. That is a blocking release gate ([docs/ios-browser-foundation.md](docs/ios-browser-foundation.md)), and the compiler had no opinion about any of it. Run the thing on a phone-sized Simulator; do not report a typecheck as though it were a run.
+
+**Verifying `LimeghostShared` for iOS.** Prove portability with the compiler, never with a search for `import AppKit` — `import SwiftUI` re-exports AppKit on macOS, so an import list alone both under- and over-counts what is actually portable; this was measured wrong repeatedly while building the target (see [docs/ios-browser-foundation.md](docs/ios-browser-foundation.md)). The typecheck below has exactly one job: checking a file that is **not yet in any iOS target**, since SwiftPM cannot build for iOS at all. It is not a substitute for a Simulator run, and it is no longer standing in for one — the iOS 26.5 simulator platform was installed on this machine on September 3, 2026, and `xcodebuild -showdestinations` now lists iOS simulators, iPhone 17 Pro among them, as eligible destinations rather than under "Ineligible destinations".
 
 ```bash
 cd macos/LimeghostBrowser/Sources
@@ -85,13 +87,24 @@ xcrun --sdk iphonesimulator swiftc -typecheck -swift-version 5 \
   -target arm64-apple-ios17.0-simulator -I /tmp/limeghost-ios LimeghostShared/*.swift
 ```
 
-`LimeghostSharedLayer`, a scheme committed at `.swiftpm/xcode/xcshareddata/xcschemes/` (note the `.gitignore` exceptions carved into its blanket `**/.swiftpm/` rule — without them the scheme file is untracked and CI fails on a missing scheme with nothing in the diff to explain why), builds and tests exactly `LimeghostCore` and `LimeghostShared` plus their two test targets. This needed its own scheme because SwiftPM's auto-generated per-*product* schemes (the `LimeghostCore` and `LimeghostShared` entries in `xcodebuild -list`) carry **no test action at all**; only the whole-*package* scheme does, and that one's build action also drags in the AppKit-heavy `LimeghostBrowser` executable and `BrowserBehaviorTests`, neither of which can compile for iOS. Verify it locally with:
+`LimeghostSharedLayer`, a scheme committed at `.swiftpm/xcode/xcshareddata/xcschemes/` (note the `.gitignore` exceptions carved into its blanket `**/.swiftpm/` rule — without them the scheme file is untracked and CI fails on a missing scheme with nothing in the diff to explain why), builds and tests exactly `LimeghostCore` and `LimeghostShared` plus their two test targets. This needed its own scheme because SwiftPM's auto-generated per-*product* schemes (the `LimeghostCore` and `LimeghostShared` entries in `xcodebuild -list`) carry **no test action at all**; only the whole-*package* scheme does, and that one's build action also drags in the AppKit-heavy `LimeghostBrowser` executable and `BrowserBehaviorTests`, neither of which can compile for iOS.
+
+Verify it locally on both destinations, and verify the app itself alongside it. Start at the repository root and run the block top to bottom; the two schemes live in different projects, so every `cd` is written out rather than assumed.
 
 ```bash
+# the shared layer, on both destinations
+cd macos/LimeghostBrowser
 xcodebuild test -scheme LimeghostSharedLayer -destination 'platform=macOS'
+xcodebuild test -scheme LimeghostSharedLayer -destination 'platform=iOS Simulator,name=iPhone 17 Pro'
+
+# the phone app itself
+cd ../../ios
+xcodebuild test -scheme Limeghost -destination 'platform=iOS Simulator,name=iPhone 17 Pro'
 ```
 
-The `ios-simulator` CI job runs this same scheme against a real Simulator on GitHub's macos-15 image, which ships the iOS platform this machine lacks. That job has never been observed to run here — only confirmed to resolve and to pass on `platform=macOS` — so report it that way, never as known-green, until an actual Simulator run has been seen.
+The shared layer runs **249 tests** on both destinations, and the app's own suite runs **24**. Take the 249 from `swift test --list-tests` (229 `LimeghostCoreTests` + 20 `LimeghostSharedTests`; the other 243 of the Mac's 492 are `BrowserBehaviorTests`) and **never from a run's own log**: xcodebuild runs that scheme across parallel workers, which suppresses the `Executed N tests` summary entirely and interleaves the per-case lines, and an interleaved line can be cut mid-name — that is how a correct 249 was once "corrected" to 248. The app's 24 does come from its run, which is not parallelised and prints the summary; read it with `grep -E "^\*\* TEST|Executed [0-9]+ tests"` rather than `tail`, for the same reason the counts above are grepped.
+
+The `ios-simulator` CI job runs the shared-layer scheme, and now the app scheme too, against a Simulator it discovers at runtime on GitHub's macos-15 image. Both commands have been observed passing here against a real iPhone 17 Pro simulator; **the job itself has still never executed**, because `ci.yml` triggers only on push to `main` and on `pull_request`, so a branch push runs nothing. Report the commands as proven and the job as expected, never as known-green. And a passing Simulator run is not a passing *device* run: the Simulator shares the Mac's own libraries and file system, so it cannot show a sandbox, entitlement, or memory-pressure difference. Nothing has been installed on a phone.
 
 From the repository root, validate the retained extension artifact with:
 

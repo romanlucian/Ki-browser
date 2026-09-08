@@ -24,6 +24,36 @@ final class AddressSheetTests: XCTestCase {
         XCTAssertTrue(url.contains("example.com"), url)
     }
 
+    /// Go with nothing typed does nothing, and the guide is still there.
+    ///
+    /// The sheet's field is always empty when it opens, so this is one stray
+    /// tap away at any moment. Without the guard the empty string reaches
+    /// `BrowserSession.navigate`, which resolves it to no URL and sets
+    /// `.failed` — and `showsGuide` wants `.startPage`, while nothing on the
+    /// phone ever resets `startSurface`, so that tab could never show the AI
+    /// home again. The first assertion is the load-bearing precondition: the
+    /// guide has to be on screen before the submit, or the ones after it would
+    /// pass against a tab that was never showing it.
+    ///
+    /// Whitespace is submitted too, because the guard trims before it decides
+    /// and a space is exactly as much of a request as nothing is.
+    func testSubmittingAnEmptyFieldLeavesTheGuideAlone() throws {
+        let host = try makeHost()
+        let tab = try XCTUnwrap(host.workspace.selectedTab)
+        let model = AddressSheetModel(workspace: host.workspace)
+
+        XCTAssertTrue(
+            TabSurface(tab: tab, workspace: host.workspace).showsTheGuide,
+            "the guide has to start on screen, or nothing below proves anything"
+        )
+
+        model.submit("")
+        XCTAssertTrue(TabSurface(tab: tab, workspace: host.workspace).showsTheGuide)
+
+        model.submit("   ")
+        XCTAssertTrue(TabSurface(tab: tab, workspace: host.workspace).showsTheGuide)
+    }
+
     /// Completion offers a search row for anything typed, and nothing else when
     /// this profile has never visited or saved a match. It contacts no
     /// suggestion service and makes no request while typing.

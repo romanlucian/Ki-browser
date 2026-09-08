@@ -15,11 +15,17 @@ final class BottomBarTests: XCTestCase {
         XCTAssertEqual(model.addressLabel, "Search or enter a website")
     }
 
-    /// The tab button carries the count, because on a phone the tabs are not
-    /// otherwise visible.
-    func testTheTabButtonCountsTheTabs() {
-        let model = BottomBarModel(urlString: "https://example.com/", tabCount: 4, canGoBack: true)
-        XCTAssertEqual(model.tabCount, 4)
-        XCTAssertTrue(model.canGoBack)
+    /// An address with no host to pull out is shown exactly as it stands.
+    ///
+    /// This is the third answer `addressLabel` can give and the only one the
+    /// two tests above cannot reach: one has a host, the other is empty and
+    /// gets the invitation instead. What stood here before asserted
+    /// `tabCount == 4` and `canGoBack` straight back out of the memberwise
+    /// initialiser that had just been handed them, so it could only have
+    /// failed if Swift itself had; the count and the flag are carried to the
+    /// view untouched and there is nothing derived about them to check.
+    func testAnAddressWithNoHostIsShownAsItStands() {
+        let model = BottomBarModel(urlString: "about:blank", tabCount: 1, canGoBack: false)
+        XCTAssertEqual(model.addressLabel, "about:blank")
     }
 }

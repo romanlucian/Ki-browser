@@ -19,7 +19,22 @@ struct AddressSheetModel {
     /// here. Not `session.navigate` directly either, which would skip
     /// `makeRoomForPage()` and re-create the hand-applied rule that door was
     /// opened to remove.
+    ///
+    /// **Nothing typed is not a request for anything.** The Mac's field
+    /// arrives holding the address already on screen, so a bare Return there
+    /// reloads the page you are on and means something. The phone's field is
+    /// always empty when the sheet opens — deliberately, for the two reasons
+    /// `AddressSheet.text` records — so the same keypress here hands
+    /// `navigate` an empty string, `BrowserSession.resolve` returns no URL for
+    /// it, and the session settles on `.failed`. That is not `.startPage`,
+    /// which is half of what `showsGuide` requires, and nothing on this
+    /// platform ever puts a tab back on its start page: there is no Home
+    /// button and `startSurface` is never reset. So without this guard the
+    /// first stray tap of Go discards the app's own opening screen for the
+    /// life of that tab, with no way back to it. Doing nothing is the honest
+    /// answer to being asked for nothing.
     func submit(_ text: String) {
+        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         workspace.navigate(text)
     }
 

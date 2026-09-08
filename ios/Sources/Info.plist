@@ -20,10 +20,20 @@
 	<string>1</string>
 	<key>UILaunchScreen</key>
 	<dict/>
+	<!-- False because the architecture cannot serve a second window, and this
+	     matters on iPad, which TARGETED_DEVICE_FAMILY = "1,2" includes.
+	     `LimeghostApp` holds one `@StateObject` workspace for the whole
+	     process, so both scenes would draw the same tab — and `WebViewHost`
+	     hands SwiftUI the web view the session already owns, a view that
+	     cannot be in two places at once and, as that file notes, cannot be
+	     swapped once returned. One window would simply go blank. Tear-off
+	     windows sit under "Not on a phone" in the design spec; saying so here
+	     is better than advertising a capability to the system and letting
+	     somebody discover the blank window. -->
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
-		<true/>
+		<false/>
 	</dict>
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
