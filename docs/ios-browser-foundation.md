@@ -4,7 +4,7 @@
 
 ## What exists, and what does not
 
-There is now an app, and there was not one on September 3. `ios/Limeghost.xcodeproj` builds `Limeghost.app`, a SwiftUI iOS application whose entire browsing model is the Mac's own — the same `BrowserWorkspace`, the same `BrowserSession`, the same stores. It runs on a Simulator and it builds for a device. Nobody has installed it on a phone yet; see **Onto a real iPhone** below, which is a procedure written for the founder rather than a record of something performed.
+There is now an app, and there was not one on September 3. `ios/Limeghost.xcodeproj` builds `Limeghost.app`, a SwiftUI iOS application whose entire browsing model is the Mac's own — the same `BrowserWorkspace`, the same `BrowserSession`, the same stores. It runs on a Simulator, and it compiles for the device SDK — a device *build* stops at signing until a team is selected, so no device build has been produced. Nobody has installed it on a phone yet; see **Onto a real iPhone** below, which is a procedure written for the founder rather than a record of something performed.
 
 Underneath it, unchanged, is the boundary the previous plan built: `macos/LimeghostBrowser/Package.swift` declares a `LimeghostShared` target holding platform-neutral code that needs more than `LimeghostCore`'s Foundation-only layer — `@MainActor`, `WKWebView` types, `ObservableObject` — but none of AppKit, UIKit, or SwiftUI. It holds `BrowserSession` and `BrowserWorkspace` behind platform-seam protocols, the assistant (`AICompanion`), the bookmark/history/preference stores, site icons, connection security, content-blocking and search settings, page find, onboarding, and more: 23 files, moved out of `LimeghostBrowser` rather than rewritten, each carrying its git history forward (`git log --follow` confirms it file by file).
 
@@ -112,7 +112,7 @@ xcodebuild test -scheme LimeghostSharedLayer \
   -destination 'platform=iOS Simulator,name=iPhone 17 Pro'
 ```
 
-Both report `** TEST SUCCEEDED **`. Do not expect an `Executed N tests` line from this scheme: xcodebuild runs it across parallel simulator clones, which suppresses that summary entirely — counting distinct passing cases in its log gives 248, and `** TEST SUCCEEDED **` is the claim worth making. This is `LimeghostCoreTests` plus `LimeghostSharedTests`, the portable half of the 492-test suite. The iOS Simulator destination was first observed passing here on September 3, 2026, with `WorkspaceDoorTests.testEveryWayOfAskingForAPageUncoversIt`, all six `AssistantLayoutTests`, `BrowserSessionPlatformTests` and `FaviconImageCodingTests` each passing on the device. That is the evidence that the shared layer's rules hold on a phone rather than merely compiling for one.
+Both report `** TEST SUCCEEDED **`, and both run **249 tests** — `LimeghostCoreTests` (229) plus `LimeghostSharedTests` (20), the portable half of the 492-test suite; the remaining 243 are `BrowserBehaviorTests`, which is the whole of the difference. **Take that number from `swift test --list-tests` and never from a run's own log.** xcodebuild runs this scheme across parallel workers on both destinations — simulator clones on one, `My Mac - xctest` processes on the other — which suppresses the `Executed N tests` summary entirely and interleaves the per-case lines. An interleaved line can be cut mid-name, so counting distinct names in the log comes up one short; that is how a correct 249 in this file was briefly "corrected" to 248. A count taken from the test *list* cannot be truncated by interleaving, which is the same reason the section above says to grep rather than tail. The iOS Simulator destination was first observed passing here on September 3, 2026, with `WorkspaceDoorTests.testEveryWayOfAskingForAPageUncoversIt`, all six `AssistantLayoutTests`, `BrowserSessionPlatformTests` and `FaviconImageCodingTests` each passing on the device. That is the evidence that the shared layer's rules hold on a phone rather than merely compiling for one.
 
 ## Onto a real iPhone
 
@@ -127,7 +127,16 @@ CODE_SIGN_STYLE = Automatic;
 DEVELOPMENT_TEAM = "";
 ```
 
-The `[sdk=iphonesimulator*]` condition is the whole point. Signing stays off for the Simulator, which is what CI needs — GitHub's runner has no signing identity, and an unconditional `CODE_SIGNING_ALLOWED = NO` was correct there. But an unsigned bundle has nothing for iOS to trust, so the same unconditional setting could never install on hardware. Conditioning it leaves the Simulator path exactly as it was and lets a device build sign normally. `DEVELOPMENT_TEAM` is deliberately empty in the committed file: a team identifier belongs to the person holding the Apple ID and does not belong in a shared repository. Xcode fills it in from whoever is signed in, and that edit stays local.
+The `[sdk=iphonesimulator*]` condition is the whole point. Signing stays off for the Simulator, which is what CI needs — GitHub's runner has no signing identity, and an unconditional `CODE_SIGNING_ALLOWED = NO` was correct there. But an unsigned bundle has nothing for iOS to trust, so the same unconditional setting could never install on hardware. Conditioning it leaves the Simulator path exactly as it was and lets a device build sign normally. `DEVELOPMENT_TEAM` is deliberately empty in the committed file: a team identifier belongs to the person holding the Apple ID and does not belong in a shared repository. **Nothing enforces that, so it is a habit with a check rather than a guarantee.** Picking a team in step 3 makes Xcode write `DEVELOPMENT_TEAM = XXXXXXXXXX;` straight back into the tracked `project.pbxproj`, where a `git add -A` stages it like any other change and the next commit carries it. Before committing, look and put it back:
+
+```bash
+git diff -- ios/Limeghost.xcodeproj/project.pbxproj      # expect no DEVELOPMENT_TEAM line
+git checkout -- ios/Limeghost.xcodeproj/project.pbxproj  # if one appeared
+```
+
+The second command discards *every* change to that file, so make any deliberate project edit in its own step rather than alongside a signing session.
+
+The obvious structural fix does not work: moving the setting into a gitignored `.xcconfig` does not stop Xcode's Signing & Capabilities editor, which writes the pbxproj wherever the value came from. A pre-commit hook would catch it, but a clone installs no hooks. This is stated as what actually happens rather than as an outcome the repository can promise.
 
 That the condition works in both directions was measured, not assumed. The Simulator suite still passes with no identity present, and `xcodebuild build -scheme Limeghost -destination 'generic/platform=iOS'` on this machine now stops with:
 
