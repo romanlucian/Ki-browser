@@ -52,6 +52,20 @@ jobs:
   # build action at all — confirmed locally by reading xcodebuild's own
   # target-dependency-graph output — so they stay AppKit and stay Mac-only,
   # exactly as macos-browser above already exercises them.
+  #
+  # Since Task 9 this job also builds and tests the phone app itself, from the
+  # same discovered simulator, so a change that compiles for the shared layer
+  # and breaks the app is caught here rather than on somebody's device. The app
+  # has no checked-in scheme: `ios/Limeghost.xcodeproj` carries no
+  # xcshareddata/xcschemes at all, and `xcodebuild` autocreates a scheme per
+  # target — verified by running this exact command against a copy holding only
+  # the repository's tracked files, with a clean derived-data path, rather than
+  # assumed, because a missing scheme fails CI with nothing in the diff to
+  # explain it (the same hazard .gitignore's exceptions already guard against
+  # for the shared-layer scheme). Signing stays off for the Simulator through an
+  # `[sdk=iphonesimulator*]` condition in the project, so this runner needs no
+  # identity; a device build signs automatically instead. Both are in
+  # docs/ios-browser-foundation.md.
   ios-simulator:
     runs-on: macos-15
     defaults:
@@ -73,6 +87,14 @@ jobs:
           echo "SIM_UDID=$UDID" >> "$GITHUB_ENV"
       - run: >-
           xcodebuild test -scheme LimeghostSharedLayer
+          -destination "platform=iOS Simulator,id=$SIM_UDID"
+      # The app, on the same simulator this job already found. `working-directory`
+      # overrides the job default above, because the Xcode project lives at
+      # `ios/` while everything else in this job runs from the package.
+      - name: Build and test the iOS app
+        working-directory: ios
+        run: >-
+          xcodebuild test -scheme Limeghost
           -destination "platform=iOS Simulator,id=$SIM_UDID"
 
   cef-contract:
