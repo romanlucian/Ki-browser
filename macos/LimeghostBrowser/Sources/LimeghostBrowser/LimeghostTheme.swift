@@ -38,6 +38,15 @@ enum LimeghostTheme {
     // MARK: - Text
 
     static let textPrimary = Color(hex: 0xf4f4f2)
+    /// Running prose — a card's own sentence, a paragraph somebody reads
+    /// rather than glances at.
+    ///
+    /// Its own tone since September 2, 2026. The AI home was setting body copy
+    /// at `0.76` and supporting text at `0.66`, `0.58`, `0.56` and `0.50`, five
+    /// hand-mixed greys where the app has three; without a named tone for
+    /// "text to actually read", the nearest token was always a little too dim
+    /// and a literal always won.
+    static let textBody = Color.white.opacity(0.78)
     static let textSecondary = Color.white.opacity(0.66)
     static let textTertiary = Color.white.opacity(0.45)
 
@@ -81,10 +90,22 @@ enum LimeghostTheme {
     /// rows are near enough equal. One number so they cannot drift again.
     static let chromeRowHeight: CGFloat = 40
 
+    /// Everything that sits inside a chrome row: the ghost buttons and the
+    /// address pill both.
+    ///
+    /// One number because the row read as lopsided when they differed. At 40
+    /// tall with 28 inside, a control breathes 6 points top and bottom —
+    /// Chrome's omnibox breathes about 7 in a 42-point row, which is the
+    /// rhythm this is matching. Until September 2, 2026 the pill was 32 and
+    /// the buttons beside it 28, so the pill had 4 points of air and its
+    /// neighbours 6, and the whole row looked crowded without it being
+    /// obvious which element was wrong.
+    static let chromeControlHeight: CGFloat = 28
+
     /// The address pill. Drawn as a `Capsule`, so its radius is always half
     /// this — a full pill the way Chrome's omnibox is, rather than a rounded
     /// rectangle that has to be kept in sync with the height by hand.
-    static let addressPillHeight: CGFloat = 32
+    static let addressPillHeight: CGFloat = chromeControlHeight
 
     // MARK: - Radii
 
@@ -116,6 +137,16 @@ enum LimeghostTheme {
     /// since a `Font` value cannot carry tracking.
     static let metaFont = Font.system(size: 10, weight: .semibold, design: .monospaced)
     static let metaTracking: CGFloat = 0.8
+
+    /// Tracked capitals *inside* a card — a recommendation badge, a "BEST FOR"
+    /// label. One step below `metaFont`, because a card is not a page section
+    /// and a label has to leave room for the thing it labels.
+    ///
+    /// These two are the whole set. The AI home had four tracked-caps
+    /// treatments in one file (1.8, 1.1, 0.65, plus a bare 10pt bold) and used
+    /// the app's own `metaFont` for none of them.
+    static let microFont = Font.system(size: 9, weight: .bold, design: .monospaced)
+    static let microTracking: CGFloat = 0.6
 }
 
 extension Color {
@@ -137,7 +168,7 @@ extension Color {
 /// application; it only applies while `isActive` is false, since active
 /// state always uses `onAccent` over an `accent` fill.
 struct GhostButtonStyle: ButtonStyle {
-    var size: CGFloat = 28
+    var size: CGFloat = LimeghostTheme.chromeControlHeight
     var isActive: Bool = false
     var tint: Color = LimeghostTheme.textPrimary
 

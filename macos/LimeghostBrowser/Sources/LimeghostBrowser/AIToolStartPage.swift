@@ -6,6 +6,9 @@ struct AIToolStartPage: View {
     @ObservedObject var store: BrowserDataStore
     let openTool: (AIToolListing) -> Void
     let openSource: (AIToolListing, URL) -> Void
+    /// Opening one of the outside references. Its own door, so it makes room
+    /// for the page like every other door in the app.
+    let openReference: (AIFieldReference) -> Void
 
     @State private var selectedCategory: AIToolCategory?
     @State private var toolSearch = ""
@@ -32,9 +35,11 @@ struct AIToolStartPage: View {
                 VStack(alignment: .leading, spacing: 22) {
                     header
                     catalogStatus
+                    recommendationMethod
                     toolSearchField
                     categoryFilters
                     toolShelf
+                    fieldNotes
                     catalogGrid
                     catalogBoundary
                 }
@@ -49,9 +54,11 @@ struct AIToolStartPage: View {
 
     private var catalogStatus: some View {
         HStack(spacing: 8) {
-            Label("Catalog \(AIToolCatalog.release.version)", systemImage: "checkmark.seal")
-            Text("·")
-            Text("Links and labels checked")
+            // The build identifier ("2026.08.24.1") used to lead this row. It
+            // is a developer's string on a page written for people who do not
+            // have one, and the sentence beside it already makes the freshness
+            // claim in words.
+            Label("Links and labels checked", systemImage: "checkmark.seal")
             Text(
                 AIToolCatalog.release.lastChecked,
                 format: .dateTime.month(.abbreviated).day().year()
@@ -65,32 +72,38 @@ struct AIToolStartPage: View {
             .buttonStyle(.plain)
             .foregroundStyle(LimeghostTheme.accent)
         }
-        .font(.system(size: 10.5, weight: .medium))
-        .foregroundStyle(Color.white.opacity(0.56))
+        .font(.system(size: 11, weight: .medium))
+        .foregroundStyle(LimeghostTheme.textSecondary)
         .padding(.horizontal, 4)
     }
 
     private var header: some View {
         HStack(alignment: .top, spacing: 20) {
             HStack(alignment: .top, spacing: 16) {
-                Text("C")
-                    .font(.system(size: 30, weight: .bold, design: .serif))
-                    .foregroundStyle(LimeghostTheme.accent)
+                // The real mark. A 30-point serif capital C stood here —
+                // Clearframe's initial, left behind by the August 31, 2026
+                // rename — beside a badge claiming the page is an honest guide.
+                // A guard against exactly that had existed since September 1,
+                // but it read `OnboardingView.swift` alone.
+                BrandMark(size: 34)
                     .frame(width: 58, height: 58)
-                    .background(LimeghostTheme.accentDimStrong, in: RoundedRectangle(cornerRadius: 17))
+                    .background(
+                        LimeghostTheme.accentDimStrong,
+                        in: RoundedRectangle(cornerRadius: LimeghostTheme.radius18, style: .continuous)
+                    )
 
                 VStack(alignment: .leading, spacing: 7) {
                     Text("LIMEGHOST GUIDE")
-                        .font(.system(size: 10, weight: .bold))
-                        .tracking(1.8)
+                        .font(LimeghostTheme.metaFont)
+                        .tracking(LimeghostTheme.metaTracking)
                         .foregroundStyle(LimeghostTheme.textSecondary)
                     Text("Choose the right AI\nfor the job.")
                         .font(.system(size: 38, weight: .bold, design: .serif))
                         .tracking(-1.2)
-                        .foregroundStyle(.white)
+                        .foregroundStyle(LimeghostTheme.textPrimary)
                     Text("A small, practical starting point—not a live ranking.")
-                        .font(.callout)
-                        .foregroundStyle(Color.white.opacity(0.66))
+                        .font(.system(size: 13))
+                        .foregroundStyle(LimeghostTheme.textBody)
                 }
             }
 
@@ -98,6 +111,7 @@ struct AIToolStartPage: View {
 
             Label("Local guide · official links", systemImage: "checkmark.shield")
                 .font(.system(size: 11, weight: .semibold))
+                .fixedSize()
                 .foregroundStyle(LimeghostTheme.accent)
                 .padding(.horizontal, 12)
                 .frame(height: 32)
@@ -106,27 +120,17 @@ struct AIToolStartPage: View {
         }
     }
 
+    /// The same field bookmarks and history draw, at this page's width.
+    ///
+    /// It was a private copy: same job, its own height, its own fill, its own
+    /// two hairlines, none of them tokens. A second implementation is how the
+    /// two drift, and this one had already drifted.
     private var toolSearchField: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "magnifyingglass")
-                .foregroundStyle(Color.white.opacity(0.56))
-            TextField("Find an AI tool or task", text: $toolSearch)
-                .textFieldStyle(.plain)
-                .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(.white)
-            if !toolSearch.isEmpty {
-                Button { toolSearch = "" } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .foregroundStyle(Color.white.opacity(0.42))
-                }
-                .buttonStyle(.plain)
-                .help("Clear tool search")
-            }
-        }
-        .padding(.horizontal, 14)
-        .frame(height: 42)
-        .background(Color.white.opacity(0.075), in: RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.white.opacity(0.11)))
+        HomeSearchField(
+            placeholder: "Find an AI tool or task",
+            text: $toolSearch,
+            maximumWidth: .infinity
+        )
     }
 
     private var categoryFilters: some View {
@@ -183,8 +187,8 @@ struct AIToolStartPage: View {
             if !tools.isEmpty {
                 VStack(alignment: .leading, spacing: 10) {
                     Text(isOwnRow ? "YOUR TOOLS" : "GOOD PLACES TO START")
-                        .font(.system(size: 10, weight: .bold))
-                        .tracking(1.8)
+                        .font(LimeghostTheme.metaFont)
+                        .tracking(LimeghostTheme.metaTracking)
                         .foregroundStyle(LimeghostTheme.textSecondary)
                     LazyVGrid(
                         columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 6),
@@ -205,9 +209,93 @@ struct AIToolStartPage: View {
                     }
                 }
                 .padding(20)
-                .background(LimeghostTheme.bg2, in: RoundedRectangle(cornerRadius: 16))
-                .overlay(RoundedRectangle(cornerRadius: 16).stroke(LimeghostTheme.hairline2))
+                .startSurfaceCard()
             }
+        }
+    }
+
+    /// Three dated facts and the places that hold the live numbers.
+    ///
+    /// Deliberately trends and not ranks. A leaderboard position is stale
+    /// within days, and this app only changes when somebody reinstalls it, so
+    /// a rank compiled in here would be a confident lie most of the time —
+    /// which is the judgment layer this product removed on August 30, 2026.
+    /// A growth rate measured over fifteen years is still true next year.
+    ///
+    /// The figures are quoted from Epoch AI under Creative Commons
+    /// Attribution; the credit is the licence, so it is drawn, not optional.
+    @ViewBuilder
+    private var fieldNotes: some View {
+        if selectedCategory == nil && !showsAllTools && toolSearch.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            VStack(alignment: .leading, spacing: 16) {
+                Text("HOW FAST THIS IS MOVING")
+                    .font(LimeghostTheme.metaFont)
+                    .tracking(LimeghostTheme.metaTracking)
+                    .foregroundStyle(LimeghostTheme.textSecondary)
+
+                LazyVGrid(
+                    columns: [GridItem(.adaptive(minimum: 240, maximum: 420), spacing: 16)],
+                    alignment: .leading,
+                    spacing: 16
+                ) {
+                    ForEach(AIFieldNotes.notes) { note in
+                        VStack(alignment: .leading, spacing: 5) {
+                            Text(note.figure)
+                                .font(.system(size: 22, weight: .bold, design: .serif))
+                                .foregroundStyle(LimeghostTheme.accent)
+                            Text(note.measure)
+                                .font(.system(size: 13))
+                                .foregroundStyle(LimeghostTheme.textBody)
+                                .fixedSize(horizontal: false, vertical: true)
+                            Text(note.meaning)
+                                .font(.system(size: 11))
+                                .foregroundStyle(LimeghostTheme.textTertiary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+
+                Divider().overlay(LimeghostTheme.hairline2)
+
+                VStack(alignment: .leading, spacing: 9) {
+                    Text("WHERE THE LIVE NUMBERS ARE")
+                        .font(LimeghostTheme.microFont)
+                        .tracking(LimeghostTheme.microTracking)
+                        .foregroundStyle(LimeghostTheme.textTertiary)
+                    ForEach(AIFieldNotes.references) { reference in
+                        Button { openReference(reference) } label: {
+                            HStack(alignment: .firstTextBaseline, spacing: 7) {
+                                Image(systemName: "arrow.up.right")
+                                    .font(.system(size: 9, weight: .bold))
+                                    .foregroundStyle(LimeghostTheme.accent)
+                                Text(reference.name)
+                                    .font(.system(size: 13, weight: .semibold))
+                                    .foregroundStyle(LimeghostTheme.textPrimary)
+                                Text(reference.summary)
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(LimeghostTheme.textTertiary)
+                                    .lineLimit(1)
+                                Spacer(minLength: 4)
+                            }
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .help("Open \(reference.name) in this tab")
+                    }
+                }
+
+                // Says who measured this and when. Limeghost took none of these
+                // numbers and does not rank anything — the page has to be as
+                // plain about that here as it is about the catalog.
+                Text("Figures published by Epoch AI under CC BY 4.0 and quoted here; checked \(AIFieldNotes.lastChecked.formatted(.dateTime.month(.abbreviated).day().year())). Limeghost does not measure or rank models.")
+                    .font(.caption)
+                    .foregroundStyle(LimeghostTheme.textTertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(20)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .startSurfaceCard()
         }
     }
 
@@ -215,24 +303,22 @@ struct AIToolStartPage: View {
     private var catalogGrid: some View {
         if selectedCategory == nil && !showsAllTools && toolSearch.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             VStack(alignment: .leading, spacing: 8) {
-                Label("Start with what you want to do", systemImage: "arrow.up.circle.fill")
-                    .font(.system(size: 18, weight: .bold, design: .serif))
+                Text("Start with what you want to do")
+                    .font(.system(size: 20, weight: .bold, design: .serif))
+                    .foregroundStyle(LimeghostTheme.textPrimary)
                 Text("Choose one task above. Limeghost will show a small set of useful paths and explain why each may fit.")
-                    .font(.callout)
-                    .foregroundStyle(LimeghostTheme.textSecondary)
+                    .font(.system(size: 13))
+                    .foregroundStyle(LimeghostTheme.textBody)
             }
             .padding(20)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(LimeghostTheme.bg2, in: RoundedRectangle(cornerRadius: 16))
-            .overlay(RoundedRectangle(cornerRadius: 16).stroke(LimeghostTheme.hairline2))
+            .startSurfaceCard()
         } else if visibleTools.isEmpty {
-            ContentUnavailableView(
-                "No matching tools",
-                systemImage: "magnifyingglass",
-                description: Text("Try another task or show All Tools.")
-            )
-            .foregroundStyle(.white)
-            .frame(maxWidth: .infinity, minHeight: 260)
+            // `ContentUnavailableView` was the only system-drawn empty state
+            // in the app — its own icon size, type scale and layout, none of
+            // which `LimeghostTheme` can reach. Bookmarks and history both say
+            // this in the app's own voice.
+            HomeEmptyNote("No tool in this catalog matches “\(toolSearch)”. Try another task, or show All Tools.")
         } else {
             LazyVGrid(
                 columns: [GridItem(.adaptive(minimum: 238, maximum: 340), spacing: 14)],
@@ -251,10 +337,40 @@ struct AIToolStartPage: View {
         }
     }
 
+    /// What "How recommendations work" opens.
+    ///
+    /// It used to live at the very bottom of the page, inside the boundary
+    /// block, while the button that toggles it sits second from the top. With
+    /// the search field, the filters, the tool row and a full grid of cards in
+    /// between, pressing the button appeared to do nothing at all. A
+    /// disclosure has to open where it was asked for.
+    @ViewBuilder
+    private var recommendationMethod: some View {
+        if showsRecommendationMethod {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("How recommendations work")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(LimeghostTheme.textPrimary)
+                Text("Badges apply only to the selected task and this small catalog. They are editor judgments based on a tool’s documented focus, breadth, and broad access path—not Limeghost testing, a universal winner, live price monitoring, or provider payment. The official source beside a badge shows the product page used for its rationale. Reviews are manual and ship with app updates.")
+                    .font(.caption)
+                    .foregroundStyle(LimeghostTheme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text("Free to Try and Paid Plan are broad orientation labels. Limits, accounts, features, regions, and terms can change at any time.")
+                    .font(.caption)
+                    .foregroundStyle(LimeghostTheme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .startSurfaceCard()
+            .transition(.opacity.combined(with: .move(edge: .top)))
+        }
+    }
+
     private var catalogBoundary: some View {
         VStack(alignment: .leading, spacing: 7) {
             Text("Before you open a tool")
-                .font(.system(size: 12, weight: .semibold))
+                .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(LimeghostTheme.textPrimary)
             Text("Limeghost does not rank these services live, share your current page or prompt, or receive payment when you open a card. Each provider controls accounts, plans, country availability, data use, and terms; check its official site before relying on a feature or access hint.")
                 .font(.caption)
@@ -268,28 +384,9 @@ struct AIToolStartPage: View {
                 .font(.caption)
                 .foregroundStyle(LimeghostTheme.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
-
-            if showsRecommendationMethod {
-                Divider().overlay(LimeghostTheme.hairline2)
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("How recommendations work")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(LimeghostTheme.textPrimary)
-                    Text("Badges apply only to the selected task and this small catalog. They are editor judgments based on a tool’s documented focus, breadth, and broad access path—not Limeghost testing, a universal winner, live price monitoring, or provider payment. The official source beside a badge shows the product page used for its rationale. Reviews are manual and ship with app updates.")
-                        .font(.caption)
-                        .foregroundStyle(LimeghostTheme.textSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Text("Free to Try and Paid Plan are broad orientation labels. Limits, accounts, features, regions, and terms can change at any time.")
-                        .font(.caption)
-                        .foregroundStyle(LimeghostTheme.textSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .transition(.opacity.combined(with: .move(edge: .top)))
-            }
         }
         .padding(16)
-        .background(LimeghostTheme.bg2, in: RoundedRectangle(cornerRadius: 13))
-        .overlay(RoundedRectangle(cornerRadius: 13).stroke(LimeghostTheme.hairline1))
+        .startSurfaceCard()
     }
 }
 
@@ -305,9 +402,9 @@ private struct CategoryChip: View {
                 .font(.system(size: 11, weight: .semibold))
                 .padding(.horizontal, 12)
                 .frame(height: 34)
-                .background(selected ? LimeghostTheme.accent : Color.white.opacity(0.065), in: Capsule())
-                .foregroundStyle(selected ? LimeghostTheme.onAccent : Color.white.opacity(0.75))
-                .overlay(Capsule().stroke(selected ? Color.clear : Color.white.opacity(0.09)))
+                .background(selected ? LimeghostTheme.accent : LimeghostTheme.bg2, in: Capsule())
+                .foregroundStyle(selected ? LimeghostTheme.onAccent : LimeghostTheme.textBody)
+                .overlay(Capsule().stroke(selected ? Color.clear : LimeghostTheme.hairline2))
         }
         .buttonStyle(.plain)
     }
@@ -332,15 +429,21 @@ private struct AIToolCard: View {
             .accessibilityLabel("Open \(tool.name), best for \(tool.bestFor)")
             .accessibilityHint("Opens the official website in the current Limeghost tab")
 
-            Divider().overlay(Color.white.opacity(0.08))
+            // Without this the footer follows the text upward and the card's
+            // remaining height falls away underneath it, so four cards in a
+            // row showed their access label at four different heights.
+            Spacer(minLength: 0)
+
+            Divider().overlay(LimeghostTheme.hairline2)
 
             HStack(spacing: 8) {
                 Text(tool.access.rawValue)
-                    .font(.system(size: 9.5, weight: .semibold))
-                    .foregroundStyle(Color.white.opacity(0.56))
+                    .font(LimeghostTheme.microFont)
+                    .tracking(LimeghostTheme.microTracking)
+                    .foregroundStyle(LimeghostTheme.textSecondary)
                     .padding(.horizontal, 8)
                     .frame(height: 23)
-                    .background(Color.white.opacity(0.055), in: Capsule())
+                    .background(LimeghostTheme.bg3, in: Capsule())
 
                 Spacer(minLength: 4)
 
@@ -349,26 +452,25 @@ private struct AIToolCard: View {
                         openSource(recommendation.officialSourceURL)
                     } label: {
                         Label("Official source", systemImage: "arrow.up.right")
-                            .font(.system(size: 9.5, weight: .semibold))
+                            .font(.system(size: 11, weight: .semibold))
                     }
                     .buttonStyle(.plain)
-                    .foregroundStyle(Color.white.opacity(0.58))
+                    .foregroundStyle(LimeghostTheme.textSecondary)
                     .help("Open the official product source for this task recommendation")
                 } else {
                     Button(action: open) {
                         Label("Official site", systemImage: "arrow.up.right")
-                            .font(.system(size: 9.5, weight: .semibold))
+                            .font(.system(size: 11, weight: .semibold))
                     }
                     .buttonStyle(.plain)
-                    .foregroundStyle(Color.white.opacity(0.58))
+                    .foregroundStyle(LimeghostTheme.textSecondary)
                 }
             }
             .padding(.horizontal, 15)
             .padding(.vertical, 10)
         }
         .frame(maxWidth: .infinity, minHeight: recommendation == nil ? 190 : 230, alignment: .topLeading)
-        .background(Color.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.white.opacity(0.1)))
+        .startSurfaceCard()
     }
 
     private var cardContent: some View {
@@ -376,13 +478,14 @@ private struct AIToolCard: View {
             if let recommendation {
                 HStack(spacing: 6) {
                     Text(recommendation.badge.rawValue.uppercased())
-                        .font(.system(size: 8.5, weight: .bold))
-                        .tracking(0.65)
+                        .font(LimeghostTheme.microFont)
+                        .tracking(LimeghostTheme.microTracking)
                     Text("·")
                     Text(recommendation.category.rawValue.uppercased())
-                        .font(.system(size: 8.5, weight: .semibold))
+                        .font(LimeghostTheme.microFont)
+                        .tracking(LimeghostTheme.microTracking)
                 }
-                .foregroundStyle(Color.black.opacity(0.7))
+                .foregroundStyle(LimeghostTheme.bg0)
                 .padding(.horizontal, 8)
                 .frame(height: 22)
                 .background(accent, in: Capsule())
@@ -394,27 +497,27 @@ private struct AIToolCard: View {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(tool.name)
                         .font(.system(size: 15, weight: .bold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(LimeghostTheme.textPrimary)
                     Text("\(tool.maker) · \(tool.kind)")
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundStyle(Color.white.opacity(0.5))
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(LimeghostTheme.textTertiary)
                         .lineLimit(1)
                 }
 
                 Spacer(minLength: 4)
                 Image(systemName: "arrow.up.right")
                     .font(.system(size: 10, weight: .bold))
-                    .foregroundStyle(Color.white.opacity(0.46))
+                    .foregroundStyle(LimeghostTheme.textTertiary)
             }
 
             VStack(alignment: .leading, spacing: 5) {
                 Text(recommendation == nil ? "BEST FOR" : "WHY THIS TASK")
-                    .font(.system(size: 9, weight: .bold))
-                    .tracking(1.1)
+                    .font(LimeghostTheme.microFont)
+                    .tracking(LimeghostTheme.microTracking)
                     .foregroundStyle(accent.opacity(0.9))
                 Text(recommendation?.rationale ?? tool.bestFor)
-                    .font(.system(size: 12))
-                    .foregroundStyle(Color.white.opacity(0.76))
+                    .font(.system(size: 13))
+                    .foregroundStyle(LimeghostTheme.textBody)
                     .lineLimit(3)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -510,7 +613,7 @@ private struct AIToolMonogram: View {
     var body: some View {
         Text(tool.monogram)
             .font(.system(size: size * 0.3, weight: .bold, design: .rounded))
-            .foregroundStyle(Color.black.opacity(0.72))
+            .foregroundStyle(LimeghostTheme.bg0)
             .frame(width: size, height: size)
             .background(accent, in: RoundedRectangle(cornerRadius: 12))
     }
@@ -544,7 +647,7 @@ private struct ShelfToolButton: View {
                 }
                 Text(tool.name)
                     .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(LimeghostTheme.textPrimary)
+                    .foregroundStyle(LimeghostTheme.textBody)
                     .lineLimit(1)
             }
             .frame(maxWidth: .infinity)

@@ -231,17 +231,23 @@ struct BookmarkFolderMenuItems: View {
     let organize: (() -> Void)?
 
     var body: some View {
-        Button(BookmarkMenuCopy.openAll(count: bookmarkCount), action: openAll)
-            .disabled(bookmarkCount == 0)
-        if let openAllInNewWindow {
-            Button(BookmarkMenuCopy.openAll(count: bookmarkCount, in: "new window"), action: openAllInNewWindow)
-                .disabled(bookmarkCount == 0)
+        // Hidden, not greyed out, when there is nothing to open.
+        //
+        // A folder of folders — and the founder has several, Projects holds
+        // nine subfolders and no pages of its own — showed a permanently dead
+        // "Open all (0)" above a wall of submenu arrows. Chrome does not offer
+        // the action at all in that case, and a disabled control that can
+        // never enable is just noise with a keyboard target.
+        if bookmarkCount > 0 {
+            Button(BookmarkMenuCopy.openAll(count: bookmarkCount), action: openAll)
+            if let openAllInNewWindow {
+                Button(BookmarkMenuCopy.openAll(count: bookmarkCount, in: "new window"), action: openAllInNewWindow)
+            }
+            if let openAllInPrivateWindow {
+                Button(BookmarkMenuCopy.openAll(count: bookmarkCount, in: "private window"), action: openAllInPrivateWindow)
+            }
+            Divider()
         }
-        if let openAllInPrivateWindow {
-            Button(BookmarkMenuCopy.openAll(count: bookmarkCount, in: "private window"), action: openAllInPrivateWindow)
-                .disabled(bookmarkCount == 0)
-        }
-        Divider()
         if let currentPage, currentPage.canSave {
             if currentPage.isSaved && currentPage.savedFolderID == folder.id {
                 Button(BookmarkMenuCopy.currentPageAlreadyHere) {}
@@ -254,7 +260,11 @@ struct BookmarkFolderMenuItems: View {
             }
         }
         Button("New subfolder…", action: newSubfolder)
-        Button("Rename…", action: rename)
+        // "Edit folder…", because that is what opens: title, icon and colour.
+        // It was labelled "Rename…", which describes one of the three and is
+        // the reason the icon picker went unnoticed — nobody opens a rename
+        // dialog looking for artwork.
+        Button("Edit folder…", action: rename)
         Divider()
         Button("Delete folder", role: .destructive, action: delete)
         if let organize {

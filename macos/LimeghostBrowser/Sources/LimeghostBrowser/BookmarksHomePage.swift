@@ -19,6 +19,12 @@ struct BookmarksHomePage: View {
 
     @State private var search = ""
     @State private var currentFolderID: UUID?
+    /// Which branches of the sidebar tree are open.
+    ///
+    /// Held here rather than inside a `DisclosureGroup` so the page can open a
+    /// path it did not open itself — picking a folder out of search results has
+    /// to reveal where that folder actually lives.
+    @State private var expandedFolderIDs: Set<UUID> = []
     @State private var editorRequest: BookmarkFolderEditorRequest?
     @State private var bookmarkEditorRequest: BookmarkEditorRequest?
     @State private var pendingDeletion: BookmarkFolderRecord?
@@ -36,7 +42,7 @@ struct BookmarksHomePage: View {
         // counts out of this snapshot instead of walking the tree itself.
         let stats = BookmarksHomeStats(store: store)
         HStack(spacing: 0) {
-            sidebar
+            sidebar(stats: stats)
             Rectangle()
                 .fill(LimeghostTheme.hairline1)
                 .frame(width: 1)
@@ -79,9 +85,9 @@ struct BookmarksHomePage: View {
 
     // MARK: - Sidebar
 
-    private var sidebar: some View {
+    private func sidebar(stats: BookmarksHomeStats) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text("LIBRARY")
+            Text("BOOKMARKS")
                 .font(LimeghostTheme.metaFont)
                 .tracking(LimeghostTheme.metaTracking)
                 .foregroundStyle(LimeghostTheme.textTertiary)
@@ -92,6 +98,9 @@ struct BookmarksHomePage: View {
                 .font(.system(size: 12))
                 .foregroundStyle(LimeghostTheme.textSecondary)
                 .padding(.horizontal, 10)
+                .padding(.bottom, 10)
+
+            folderTree(stats: stats)
 
             Spacer(minLength: 12)
 
@@ -115,9 +124,91 @@ struct BookmarksHomePage: View {
                 .padding(.horizontal, 10)
         }
         .padding(.vertical, 22)
-        .frame(width: 210, alignment: .leading)
+        // Wider than history's 210. The two pages otherwise keep an identical
+        // sidebar on purpose, but this one now holds a tree: at 210 a folder
+        // two levels down loses its name to the truncation before the count.
+        .frame(width: 250, alignment: .leading)
         .frame(maxHeight: .infinity, alignment: .top)
         .background(LimeghostTheme.bg1)
+    }
+
+    /// The hierarchy, where a hierarchy belongs.
+    ///
+    /// This page used to be a drill-down: one folder at a time, a back arrow,
+    /// and — to compensate for having no sense of place — a grid of cards for
+    /// the top level *and* a flat alphabetical list of all 96 folders below it,
+    /// showing the same folders twice under two different counts. Four levels
+    /// deep, the only way to know where you were was to press back and look.
+    ///
+    /// A tree answers that by being one. Collapsed, the founder's collection is
+    /// eleven rows instead of ninety-six.
+    private func folderTree(stats: BookmarksHomeStats) -> some View {
+        let rows = BookmarkTree.rows(
+            folders: store.bookmarkFolders,
+            bookmarks: store.bookmarks,
+            expanded: expandedFolderIDs
+        )
+        return ScrollView {
+            LazyVStack(alignment: .leading, spacing: 1) {
+                BookmarkTreeRowView(
+                    title: "All bookmarks",
+                    depth: 0,
+                    disclosure: .none,
+                    count: nil,
+                    folder: nil,
+                    isSelected: currentFolderID == nil,
+                    select: { currentFolderID = nil },
+                    toggle: {}
+                )
+                ForEach(rows) { row in
+                    BookmarkTreeRowView(
+                        title: row.folder.title,
+                        depth: row.depth,
+                        disclosure: row.hasChildren ? (row.isExpanded ? .open : .closed) : .none,
+                        count: row.directBookmarkCount,
+                        folder: row.folder,
+                        isSelected: currentFolderID == row.folder.id,
+                        select: {
+                            search = ""
+                            currentFolderID = row.folder.id
+                        },
+                        toggle: {
+                            if expandedFolderIDs.contains(row.folder.id) {
+                                expandedFolderIDs.remove(row.folder.id)
+                            } else {
+                                expandedFolderIDs.insert(row.folder.id)
+                            }
+                        },
+                        openAll: { openAll(in: row.folder, stats: stats) },
+                        newSubfolder: {
+                            editorRequest = BookmarkFolderEditorRequest(
+                                folderID: nil,
+                                parentID: row.folder.id,
+                                title: "",
+                                iconID: LimeghostIconCatalog.defaultIconID,
+                                colorID: nil
+                            )
+                        },
+                        edit: { presentRename(row.folder) },
+                        delete: { requestDeletion(row.folder) },
+                        fileDroppedURL: { fileDroppedURL($0, to: row.folder) }
+                    )
+                }
+            }
+            .padding(.horizontal, 6)
+        }
+        .frame(maxHeight: .infinity)
+    }
+
+    /// Opens the branch a folder lives in and selects it.
+    ///
+    /// What a search result has to do: selecting a folder buried three levels
+    /// down would otherwise put the selection inside a collapsed parent, and
+    /// the click would appear to do nothing at all.
+    private func reveal(_ folderID: UUID) {
+        expandedFolderIDs.formUnion(BookmarkTree.ancestors(of: folderID, in: store.bookmarkFolders))
+        search = ""
+        currentFolderID = folderID
     }
 
     private func sidebarActionRow(_ title: String, symbol: String, action: @escaping () -> Void) -> some View {
@@ -148,11 +239,6 @@ struct BookmarksHomePage: View {
                 header(stats: stats)
                 HomeSearchField(placeholder: "Search saved pages and folders", text: $search)
                 folderGrid(stats: stats)
-                // The flat index belongs to the root page; a drill-down
-                // stays about the one folder the reader opened.
-                if currentFolderID == nil {
-                    allFoldersSection(stats: stats)
-                }
                 bookmarkSection(stats: stats)
             }
             .frame(maxWidth: 1_020, alignment: .leading)
@@ -170,17 +256,10 @@ struct BookmarksHomePage: View {
     private func header(stats: BookmarksHomeStats) -> some View {
         let folder = currentFolderID.flatMap { stats.folder(id: $0) }
         return VStack(alignment: .leading, spacing: 8) {
+            if let folder {
+                breadcrumb(to: folder)
+            }
             HStack(spacing: 10) {
-                if let folder {
-                    Button {
-                        currentFolderID = folder.parentID
-                    } label: {
-                        Image(systemName: "chevron.left").font(.system(size: 12, weight: .semibold))
-                    }
-                    .buttonStyle(GhostButtonStyle(size: 26))
-                    .help("Back to the parent folder")
-                    .accessibilityLabel("Back to the parent folder")
-                }
                 Text(headerTitle(folder: folder))
                     .font(.system(size: 25, weight: .bold))
                     .foregroundStyle(LimeghostTheme.textPrimary)
@@ -200,6 +279,29 @@ struct BookmarksHomePage: View {
         }
     }
 
+    /// Root › … › this folder, every step of it a button.
+    ///
+    /// It replaces a single back arrow, which could only ever say "up one".
+    /// The founder's collection runs four levels deep, so getting back to the
+    /// top was three presses and a guess about where you would land.
+    private func breadcrumb(to folder: BookmarkFolderRecord) -> some View {
+        let path = BookmarkTree.path(to: folder.id, in: store.bookmarkFolders)
+        return HStack(spacing: 4) {
+            Button("All bookmarks") { currentFolderID = nil }
+                .buttonStyle(.plain)
+                .foregroundStyle(LimeghostTheme.textTertiary)
+            ForEach(path.dropLast()) { step in
+                Text("›").foregroundStyle(LimeghostTheme.textTertiary)
+                Button(step.title) { reveal(step.id) }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(LimeghostTheme.textTertiary)
+                    .lineLimit(1)
+            }
+        }
+        .font(.system(size: 11))
+        .accessibilityLabel("Path: " + path.map(\.title).joined(separator: ", "))
+    }
+
     private func headerTitle(folder: BookmarkFolderRecord?) -> String {
         guard let folder else { return "Bookmarks" }
         return folder.title
@@ -210,7 +312,11 @@ struct BookmarksHomePage: View {
         guard let folder else {
             return "Folders and saved pages in this Mac user profile. Drop a page link onto a folder to file it."
         }
-        return stats.pathLabel(for: folder.id)
+        let pages = stats.directBookmarkCount(for: folder.id)
+        let folders = stats.folders(in: folder.id).count
+        let pageWord = pages == 1 ? "saved page" : "saved pages"
+        let folderWord = folders == 1 ? "folder" : "folders"
+        return "\(pages) \(pageWord) · \(folders) \(folderWord)"
     }
 
     // MARK: - Folder cards
@@ -225,21 +331,19 @@ struct BookmarksHomePage: View {
         let folders = visibleFolders(stats: stats)
         VStack(alignment: .leading, spacing: 12) {
             HomeSectionTitle(title: isSearching ? "MATCHING FOLDERS" : "FOLDERS", count: folders.count)
-            LazyVGrid(
-                columns: [GridItem(.adaptive(minimum: 178, maximum: 236), spacing: 16, alignment: .top)],
-                alignment: .leading,
-                spacing: 16
-            ) {
+            LazyVStack(spacing: 5) {
                 ForEach(folders) { folder in
-                    BookmarkFolderCard(
+                    BookmarksHomeFolderRow(
                         folder: folder,
-                        counts: stats.counts(for: folder.id),
-                        directBookmarkCount: stats.directBookmarkCount(for: folder.id),
-                        hosts: stats.identityHosts(for: folder.id),
-                        openFolder: {
-                            search = ""
-                            currentFolderID = folder.id
-                        },
+                        // Only while searching. A result is useless without
+                        // where it lives — the old page showed matches as
+                        // cards, which carried no path at all, so finding
+                        // "Etsy Best" told you nothing about which of the two
+                        // folders by that name you had found.
+                        pathLabel: isSearching ? stats.parentPathLabel(for: folder.id) : "",
+                        bookmarkCount: stats.directBookmarkCount(for: folder.id),
+                        subfolderCount: stats.folders(in: folder.id).count,
+                        action: { isSearching ? reveal(folder.id) : select(folder.id) },
                         openAll: { openAll(in: folder, stats: stats) },
                         newSubfolder: {
                             editorRequest = BookmarkFolderEditorRequest(
@@ -247,7 +351,7 @@ struct BookmarksHomePage: View {
                                 parentID: folder.id,
                                 title: "",
                                 iconID: LimeghostIconCatalog.defaultIconID,
-                            colorID: nil,
+                                colorID: nil
                             )
                         },
                         rename: { presentRename(folder) },
@@ -255,22 +359,41 @@ struct BookmarksHomePage: View {
                         fileDroppedURL: { fileDroppedURL($0, to: folder) }
                     )
                 }
-                if !isSearching {
-                    NewFolderCard {
-                        editorRequest = BookmarkFolderEditorRequest(
-                            folderID: nil,
-                            parentID: currentFolderID,
-                            title: "",
-                            iconID: LimeghostIconCatalog.defaultIconID,
-                            colorID: nil,
-                        )
-                    }
-                }
             }
-            if folders.isEmpty && isSearching {
-                HomeEmptyNote("No folder name matches “\(trimmedSearch)”.")
+            if folders.isEmpty {
+                HomeEmptyNote(
+                    isSearching
+                        ? "No folder name matches \u{201C}\(trimmedSearch)\u{201D}."
+                        : "This folder has no folders inside it."
+                )
+            }
+            if !isSearching {
+                Button {
+                    editorRequest = BookmarkFolderEditorRequest(
+                        folderID: nil,
+                        parentID: currentFolderID,
+                        title: "",
+                        iconID: LimeghostIconCatalog.defaultIconID,
+                        colorID: nil
+                    )
+                } label: {
+                    Label("New folder", systemImage: "folder.badge.plus")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(LimeghostTheme.textSecondary)
+                        .padding(.horizontal, 12)
+                        .frame(height: 32)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
             }
         }
+    }
+
+    /// Selects a folder and opens its branch in the tree, so the sidebar and
+    /// the contents pane never disagree about where you are.
+    private func select(_ folderID: UUID) {
+        expandedFolderIDs.formUnion(BookmarkTree.ancestors(of: folderID, in: store.bookmarkFolders))
+        currentFolderID = folderID
     }
 
     // MARK: - Bookmark rows
@@ -319,27 +442,6 @@ struct BookmarksHomePage: View {
         return "This folder has no saved pages yet. Drop a page link onto its card to file one here."
     }
 
-    // MARK: - All folders list
-
-    @ViewBuilder
-    private func allFoldersSection(stats: BookmarksHomeStats) -> some View {
-        if !isSearching && !stats.allFolders.isEmpty {
-            VStack(alignment: .leading, spacing: 12) {
-                HomeSectionTitle(title: "ALL FOLDERS", count: stats.allFolders.count)
-                LazyVStack(spacing: 5) {
-                    ForEach(stats.allFolders) { folder in
-                        BookmarksHomeFolderRow(
-                            folder: folder,
-                            pathLabel: stats.parentPathLabel(for: folder.id),
-                            bookmarkCount: stats.directBookmarkCount(for: folder.id),
-                            subfolderCount: stats.directSubfolderCount(for: folder.id),
-                            action: { currentFolderID = folder.id }
-                        )
-                    }
-                }
-            }
-        }
-    }
 
     /// Opens the folder's own saved pages, each in its own tab.
     private func openAll(in folder: BookmarkFolderRecord, stats: BookmarksHomeStats) {
@@ -495,192 +597,7 @@ private struct BookmarksHomeStats {
     }
 }
 
-/// A folder as a stack of paper: two tilted sheets peeking out behind a
-/// frosted band, the folder's own icon and title below, and the identity
-/// colors of its newest saved pages in the lower-left corner.
-private struct BookmarkFolderCard: View {
-    let folder: BookmarkFolderRecord
-    let counts: BookmarkDescendantCounts
-    /// Saved pages filed directly in this folder — what "Open all" opens.
-    let directBookmarkCount: Int
-    let hosts: [String]
-    let openFolder: () -> Void
-    let openAll: () -> Void
-    let newSubfolder: () -> Void
-    let rename: () -> Void
-    let delete: () -> Void
-    let fileDroppedURL: (URL) -> Bool
 
-    @State private var isHovered = false
-    @State private var isDropTargeted = false
-
-    private var metaLabel: String {
-        let links = counts.bookmarkCount == 1 ? "1 LINK" : "\(counts.bookmarkCount) LINKS"
-        let subfolders = counts.subfolderCount == 1 ? "1 SUBFOLDER" : "\(counts.subfolderCount) SUBFOLDERS"
-        return "\(links) · \(subfolders)"
-    }
-
-    private var accessibilityDescription: String {
-        "\(folder.title) folder, \(counts.bookmarkCount) bookmarks, \(counts.subfolderCount) subfolders"
-    }
-
-    var body: some View {
-        Button(action: openFolder) {
-            VStack(alignment: .leading, spacing: 11) {
-                art
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack(spacing: 7) {
-                        BookmarkFolderIcon(folder: folder, size: LimeghostTheme.siteIconSize).foregroundStyle(LimeghostTheme.textSecondary)
-                        Text(folder.title)
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(LimeghostTheme.textPrimary)
-                            .lineLimit(1)
-                    }
-                    Text(metaLabel)
-                        .font(LimeghostTheme.metaFont)
-                        .tracking(LimeghostTheme.metaTracking)
-                        .foregroundStyle(LimeghostTheme.textTertiary)
-                        .lineLimit(1)
-                }
-            }
-            .padding(12)
-            .frame(maxWidth: .infinity, minHeight: 156, alignment: .topLeading)
-            .background(cardBackground)
-            .overlay(cardBorder)
-            .contentShape(RoundedRectangle(cornerRadius: LimeghostTheme.radius18))
-        }
-        .buttonStyle(.plain)
-        .onHover { isHovered = $0 }
-        .dropDestination(for: URL.self) { urls, _ in
-            guard let url = urls.first else { return false }
-            return fileDroppedURL(url)
-        } isTargeted: { isDropTargeted = $0 }
-        .contextMenu {
-            BookmarkFolderMenuItems(
-                folder: folder,
-                bookmarkCount: directBookmarkCount,
-                currentPage: nil,
-                openAll: openAll,
-                addCurrentPage: {},
-                newSubfolder: newSubfolder,
-                rename: rename,
-                delete: delete,
-                organize: nil
-            )
-        }
-        .help("Open \(folder.title), or drop a page link here to file it in this folder")
-        .accessibilityLabel(accessibilityDescription)
-        .accessibilityHint("Opens the folder. Drop a page link onto it to file that page here.")
-    }
-
-    private var cardBackground: some View {
-        RoundedRectangle(cornerRadius: LimeghostTheme.radius18)
-            .fill(isDropTargeted ? LimeghostTheme.accentDim : (isHovered ? LimeghostTheme.bg3 : LimeghostTheme.bg2))
-    }
-
-    private var cardBorder: some View {
-        RoundedRectangle(cornerRadius: LimeghostTheme.radius18)
-            .stroke(
-                isDropTargeted ? LimeghostTheme.accent : LimeghostTheme.hairline2,
-                lineWidth: isDropTargeted ? 1.5 : 1
-            )
-    }
-
-    private var art: some View {
-        ZStack {
-            paperSheet(tone: 0.07)
-                .rotationEffect(.degrees(-5))
-                .offset(x: -9, y: -7)
-            paperSheet(tone: 0.13)
-                .rotationEffect(.degrees(4))
-                .offset(x: 8, y: -4)
-            frostedBand
-        }
-        .frame(maxWidth: .infinity)
-        .frame(height: 84)
-        .clipShape(RoundedRectangle(cornerRadius: LimeghostTheme.radius14))
-        .overlay(alignment: .bottomLeading) {
-            identityDots
-                .padding(.leading, 9)
-                .padding(.bottom, 9)
-        }
-    }
-
-    private func paperSheet(tone: Double) -> some View {
-        RoundedRectangle(cornerRadius: LimeghostTheme.radius12)
-            .fill(Color.white.opacity(tone))
-            .frame(height: 56)
-            .padding(.horizontal, 20)
-    }
-
-    private var frostedBand: some View {
-        RoundedRectangle(cornerRadius: LimeghostTheme.radius12)
-            .fill(
-                LinearGradient(
-                    colors: [Color.white.opacity(0.13), Color.white.opacity(0.04)],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: LimeghostTheme.radius12)
-                    .stroke(LimeghostTheme.hairline3)
-            )
-            .frame(height: 48)
-            .padding(.horizontal, 7)
-            .offset(y: 18)
-    }
-
-    private var identityDots: some View {
-        HStack(spacing: -5) {
-            ForEach(Array(hosts.enumerated()), id: \.offset) { entry in
-                SiteIconView(host: entry.element)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 4, style: .continuous)
-                            .stroke(LimeghostTheme.bg2, lineWidth: 2)
-                    )
-            }
-        }
-        .accessibilityHidden(true)
-    }
-}
-
-/// The dashed companion card that creates a folder in the level currently
-/// shown, using the same editor sheet as the organizer.
-private struct NewFolderCard: View {
-    let action: () -> Void
-    @State private var isHovered = false
-
-    var body: some View {
-        Button(action: action) {
-            VStack(spacing: 9) {
-                Image(systemName: "folder.badge.plus")
-                    .font(.system(size: 19, weight: .medium))
-                Text("New folder")
-                    .font(.system(size: 12, weight: .semibold))
-            }
-            .foregroundStyle(isHovered ? LimeghostTheme.accent : LimeghostTheme.textSecondary)
-            .frame(maxWidth: .infinity, minHeight: 156)
-            .background(
-                RoundedRectangle(cornerRadius: LimeghostTheme.radius18)
-                    .fill(isHovered ? LimeghostTheme.bg2 : Color.clear)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: LimeghostTheme.radius18)
-                    .stroke(
-                        isHovered ? LimeghostTheme.accent.opacity(0.7) : LimeghostTheme.hairline3,
-                        style: StrokeStyle(lineWidth: 1, dash: [5, 4])
-                    )
-            )
-            .contentShape(RoundedRectangle(cornerRadius: LimeghostTheme.radius18))
-        }
-        .buttonStyle(.plain)
-        .onHover { isHovered = $0 }
-        .help("Create a folder here")
-        .accessibilityLabel("New folder")
-        .accessibilityHint("Creates a folder inside the level currently shown.")
-    }
-}
 
 /// A row in the "ALL FOLDERS" list: the folder, where it sits, its own direct
 /// counts, and a chevron into it.
@@ -690,10 +607,23 @@ private struct BookmarksHomeFolderRow: View {
     let bookmarkCount: Int
     let subfolderCount: Int
     let action: () -> Void
-    @State private var isHovered = false
+    let openAll: () -> Void
+    let newSubfolder: () -> Void
+    let rename: () -> Void
+    let delete: () -> Void
+    let fileDroppedURL: (URL) -> Bool
 
+    @State private var isHovered = false
+    @State private var isDropTargeted = false
+
+    /// Direct children only, and said in words rather than shouted in
+    /// abbreviations. The card this replaced counted the whole branch under
+    /// the same label, so one folder read "39 LINKS · 17 SUBFOLDERS" as a card
+    /// and "0 LINKS · 9 SUBFOLDERS" as a row, on the same screen.
     private var countLabel: String {
-        "\(bookmarkCount) LINKS · \(subfolderCount) SUBFOLDERS"
+        let pages = bookmarkCount == 1 ? "1 page" : "\(bookmarkCount) pages"
+        guard subfolderCount > 0 else { return pages }
+        return "\(pages) · \(subfolderCount == 1 ? "1 folder" : "\(subfolderCount) folders")"
     }
 
     var body: some View {
@@ -725,13 +655,156 @@ private struct BookmarksHomeFolderRow: View {
             .padding(.horizontal, 12)
             .frame(height: 40)
             .background(
-                isHovered ? LimeghostTheme.bg2 : LimeghostTheme.bg1,
+                isDropTargeted
+                    ? LimeghostTheme.accentDim
+                    : (isHovered ? LimeghostTheme.bg2 : LimeghostTheme.bg1),
                 in: RoundedRectangle(cornerRadius: LimeghostTheme.radius10)
             )
+            .overlay {
+                if isDropTargeted {
+                    RoundedRectangle(cornerRadius: LimeghostTheme.radius10)
+                        .stroke(LimeghostTheme.accent, lineWidth: 1.5)
+                }
+            }
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .onHover { isHovered = $0 }
-        .accessibilityLabel("\(folder.title) folder, \(bookmarkCount) bookmarks, \(subfolderCount) subfolders")
+        // Filing by drag survives the move from cards to rows: it was the one
+        // thing the illustration was genuinely a target for.
+        .dropDestination(for: URL.self) { urls, _ in
+            guard let url = urls.first else { return false }
+            return fileDroppedURL(url)
+        } isTargeted: { isDropTargeted = $0 }
+        .contextMenu {
+            BookmarkFolderMenuItems(
+                folder: folder,
+                bookmarkCount: bookmarkCount,
+                currentPage: nil,
+                openAll: openAll,
+                addCurrentPage: {},
+                newSubfolder: newSubfolder,
+                rename: rename,
+                delete: delete,
+                organize: nil
+            )
+        }
+        .help("Open \(folder.title), or drop a page link here to file it in this folder")
+        .accessibilityLabel("\(folder.title) folder, \(countLabel)")
+    }
+}
+
+/// One row of the sidebar tree.
+///
+/// The triangle and the row are separate targets on purpose: pressing the
+/// triangle opens a branch without moving you, pressing the row moves you.
+/// Chrome does the same, and conflating them is how you lose your place by
+/// trying to look ahead.
+private struct BookmarkTreeRowView: View {
+    enum Disclosure { case none, closed, open }
+
+    let title: String
+    let depth: Int
+    let disclosure: Disclosure
+    let count: Int?
+    /// The folder this row stands for, or nil for the "All bookmarks" row,
+    /// which stands for no folder and therefore carries no folder menu.
+    let folder: BookmarkFolderRecord?
+    let isSelected: Bool
+    let select: () -> Void
+    let toggle: () -> Void
+    var openAll: () -> Void = {}
+    var newSubfolder: () -> Void = {}
+    var edit: () -> Void = {}
+    var delete: () -> Void = {}
+    var fileDroppedURL: (URL) -> Bool = { _ in false }
+
+    @State private var isDropTargeted = false
+
+    @State private var isHovered = false
+
+    var body: some View {
+        HStack(spacing: 5) {
+            Group {
+                if disclosure == .none {
+                    Color.clear
+                } else {
+                    Button(action: toggle) {
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 8, weight: .bold))
+                            .foregroundStyle(LimeghostTheme.textTertiary)
+                            .rotationEffect(.degrees(disclosure == .open ? 90 : 0))
+                            .frame(width: 14, height: 20)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(disclosure == .open ? "Collapse \(title)" : "Expand \(title)")
+                }
+            }
+            .frame(width: 14)
+
+            Button(action: select) {
+                HStack(spacing: 6) {
+                    if let folder {
+                        BookmarkFolderIcon(folder: folder, size: 15)
+                            .foregroundStyle(isSelected ? LimeghostTheme.accent : LimeghostTheme.textTertiary)
+                    }
+                    Text(title)
+                        .font(.system(size: 12, weight: isSelected ? .semibold : .regular))
+                        .foregroundStyle(isSelected ? LimeghostTheme.textPrimary : LimeghostTheme.textSecondary)
+                        .lineLimit(1)
+                    Spacer(minLength: 4)
+                    // Direct pages only. The whole-branch number is one
+                    // triangle away, which is the point of a tree.
+                    if let count, count > 0 {
+                        Text("\(count)")
+                            .font(LimeghostTheme.microFont)
+                            .foregroundStyle(LimeghostTheme.textTertiary)
+                    }
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.leading, CGFloat(depth) * 13)
+        .padding(.horizontal, 6)
+        .frame(height: 26)
+        .background(
+            isDropTargeted
+                ? LimeghostTheme.accentDim
+                : (isSelected ? LimeghostTheme.accentDim : (isHovered ? LimeghostTheme.itemHover : Color.clear)),
+            in: RoundedRectangle(cornerRadius: LimeghostTheme.radius6)
+        )
+        .overlay {
+            if isDropTargeted {
+                RoundedRectangle(cornerRadius: LimeghostTheme.radius6)
+                    .stroke(LimeghostTheme.accent, lineWidth: 1.5)
+            }
+        }
+        .onHover { isHovered = $0 }
+        // The tree is a drop target too. A row you can see but cannot drop on
+        // is the more annoying half of a tree — the sidebar is exactly where
+        // you can see the destination while dragging from the pane beside it.
+        .dropDestination(for: URL.self) { urls, _ in
+            guard folder != nil, let url = urls.first else { return false }
+            return fileDroppedURL(url)
+        } isTargeted: { isDropTargeted = folder == nil ? false : $0 }
+        .contextMenu {
+            if let folder {
+                BookmarkFolderMenuItems(
+                    folder: folder,
+                    bookmarkCount: count ?? 0,
+                    currentPage: nil,
+                    openAll: openAll,
+                    addCurrentPage: {},
+                    newSubfolder: newSubfolder,
+                    rename: edit,
+                    delete: delete,
+                    organize: nil
+                )
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
 }

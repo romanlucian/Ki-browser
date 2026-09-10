@@ -339,14 +339,7 @@ struct TabStrip: View {
     /// join that window.
     static var stripHeight: CGFloat { topInset + TabStripMetrics.chipHeight }
 
-    /// 6 rather than 7 since September 2, 2026: the strip is 40 to match the
-    /// toolbar and the bookmarks bar, and a 34pt chip has to fill it.
-    private static let topInset: CGFloat = 6
-
-    /// The inset, for the test that checks the strip lands on the same height
-    /// as the toolbar and the bookmarks bar. Exposed rather than duplicated in
-    /// the test, so a change here is what the test reads.
-    static var topInsetForTests: CGFloat { topInset }
+    private static var topInset: CGFloat { TabStripMetrics.topInset }
     private static let horizontalInset: CGFloat = 12
     /// Chip height plus the clearance a group's tint needs above it.
     private static let stripItemBand = TabStripMetrics.chipHeight + TabStripMetrics.groupEnclosureLift

@@ -52,6 +52,12 @@ struct HistoryHomePage: View {
                     HomeSearchField(placeholder: "Search history", text: $search)
                     visitGroups
                 }
+                // Capped like the bookmarks home. Without this, history's rows
+                // stretched the full width of the window while its sidebar —
+                // pixel-identical to bookmarks' — stayed put, so ⌘⌥B → ⌘Y
+                // re-flowed the content of two pages built to be two views of
+                // one app.
+                .frame(maxWidth: 1_020, alignment: .leading)
                 .padding(.horizontal, 30)
                 .padding(.vertical, 26)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -114,7 +120,11 @@ struct HistoryHomePage: View {
             .padding(.horizontal, 10)
         }
         .padding(.vertical, 22)
-        .frame(width: 210, alignment: .leading)
+        // Matches the bookmarks sidebar. The two pages are two views of one
+        // app and their sidebars were pixel-identical until the bookmarks tree
+        // needed the width; a 40-point jump when switching ⌘⌥B → ⌘Y is exactly
+        // the drift keeping them identical was meant to prevent.
+        .frame(width: 250, alignment: .leading)
         .frame(maxHeight: .infinity, alignment: .top)
         .background(LimeghostTheme.bg1)
     }
@@ -199,6 +209,7 @@ struct HistoryEntryRow: View {
                     if let detail {
                         Text(detail)
                             .font(LimeghostTheme.metaFont)
+                            .tracking(LimeghostTheme.metaTracking)
                             .foregroundStyle(LimeghostTheme.textTertiary)
                             .frame(width: 58, alignment: .leading)
                     }

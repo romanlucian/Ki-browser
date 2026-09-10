@@ -19,6 +19,14 @@ enum TabStripMetrics {
     /// One band for both chip states so every chip's bottom edge lands exactly
     /// on the toolbar below.
     static let chipHeight: CGFloat = 34
+    /// The gap above a chip inside the strip. 6 so that inset plus chip lands
+    /// on `LimeghostTheme.chromeRowHeight`.
+    static let topInset: CGFloat = 6
+
+    /// Where a tab chip's middle sits, measured down from the top of the
+    /// window. The line the traffic lights are aligned to — see
+    /// `WindowCaptureView.alignTrafficLights`.
+    static let chipCentreFromWindowTop: CGFloat = topInset + chipHeight / 2
     static let spacing: CGFloat = 4
     static let maximumTabWidth: CGFloat = 200
     /// Icon plus close button plus padding: the narrowest a tab can be and

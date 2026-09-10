@@ -242,6 +242,12 @@ private struct BrowserTabContent: View {
                         addressText = sourceURL.absoluteString
                         workspace.makeRoomForPage()
                         session.load(sourceURL, displayName: "\(tool.name) source")
+                    },
+                    openReference: { reference in
+                        addressFocused = false
+                        addressText = reference.url.absoluteString
+                        workspace.makeRoomForPage()
+                        session.load(reference.url, displayName: reference.name)
                     }
                 )
             case .bookmarksHome:

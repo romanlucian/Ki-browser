@@ -10,7 +10,14 @@ import SwiftUI
 /// folder names reads as an even run of labels instead of a sparse grid.
 @MainActor
 enum BookmarkBarMetrics {
-    static let itemHeight: CGFloat = 22
+    /// 26 since September 2, 2026, from 22.
+    ///
+    /// A bookmark chip is a label rather than a control, so it stays a touch
+    /// smaller than the 28 the toolbar's buttons and pill use — but at 22 it
+    /// had 9 points of air in a 40-point row against the toolbar's 6, and the
+    /// bar read as a different rhythm sitting under it. At 26 it breathes 7,
+    /// which is what Chrome's own bookmark items do.
+    static let itemHeight: CGFloat = 26
     /// The bar itself. Items are shorter than this so they read as chips, but
     /// they must still take the whole height for pointing: a strip of bar
     /// above and below each one that swallowed clicks meant a right-click near
@@ -797,8 +804,9 @@ private struct BookmarkFolderMenuContents: View {
             }
         }
         Divider()
-        Button(BookmarkMenuCopy.openAll(count: bookmarks.count)) { actions.openAll(folder) }
-            .disabled(bookmarks.isEmpty)
+        if !bookmarks.isEmpty {
+            Button(BookmarkMenuCopy.openAll(count: bookmarks.count)) { actions.openAll(folder) }
+        }
         Button("New subfolder…") { actions.newSubfolder(folder.id) }
     }
 }
