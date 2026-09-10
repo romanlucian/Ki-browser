@@ -10,6 +10,25 @@ Dates are commit dates. Test counts are the totals at the end of each period, ve
 
 ## Unreleased
 
+### Week of September 10–16, 2026
+
+**The Mac's uncommitted week, committed, and the two platforms on one line again**
+
+- Three sittings of Mac work from September 2–3 had been installed then and never committed. They became three commits, split by hunk. Each was tested alone in a clean copy of its own tree, at 477, 480 and 487 tests.
+  - `ded3b37`: the traffic lights sit on the tab chips' centre line, and the chrome's controls share one height.
+  - `c357511`: the AI home's repairs. They bring the real mark instead of Clearframe's "C", one opaque card surface, theme tokens throughout, and three dated trends quoted from Epoch AI under CC BY 4.0.
+  - `d26e6d4`: the bookmarks home becomes a tree, and the page is named the Bookmark Manager.
+- `feature/ios-pocket-browser` merged them (`49988cd`). One file conflicted as text; the other eight files both sides touched merged on their own.
+- **The merge broke the phone without a single failing test anywhere.** `c357511` made `AIToolStartPage.swift`, which the iPhone app compiles by reference, depend on five things the iOS target lacked: `BrandMark`, `HomeSearchField`, `HomeEmptyNote`, `startSurfaceCard()` and a new `openReference` argument. `2718108` gives the phone all five:
+  - `StartSurfaceChrome.swift` joins its build by reference.
+  - `BrandMark` moves to a file of its own. It decodes with ImageIO and asks each app where its artwork lives, and the phone's bundle now carries the image.
+  - The guide's third door goes through `workspace.open(_:)`.
+
+  Each of the three new phone tests was watched failing first.
+- **The phone's release gate got worse, as measured on the simulator.** The same Mac commit gave the guide's "Local guide · official links" badge `.fixedSize()`, which is right for the Mac. At 402pt the badge keeps its full width, and the headline beside it now breaks almost letter by letter; the search field is pushed off screen. The merge improved two things there: the real mark and the removed build string.
+- A rule, now in `AGENTS.md` and `CLAUDE.md`: a change to any file the phone compiles by reference, or to `LimeghostCore` or `LimeghostShared`, runs the phone's suite too.
+- 503 Mac tests, 2 skipped, 0 failures; 27 iOS tests, 0 failures. `LimeghostSharedLayer` (256 tests) passes on the iPhone simulator and on the Mac. Nothing has been installed on a phone, and no observed-user session has been run on either platform.
+
 ### Week of September 3–9, 2026
 
 **A browser on the phone, and an honest account of how far it reaches**
