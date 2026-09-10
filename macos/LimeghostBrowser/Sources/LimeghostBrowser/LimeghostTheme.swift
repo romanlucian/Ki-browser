@@ -81,10 +81,22 @@ enum LimeghostTheme {
     /// rows are near enough equal. One number so they cannot drift again.
     static let chromeRowHeight: CGFloat = 40
 
+    /// Everything that sits inside a chrome row: the ghost buttons and the
+    /// address pill both.
+    ///
+    /// One number because the row read as lopsided when they differed. At 40
+    /// tall with 28 inside, a control breathes 6 points top and bottom —
+    /// Chrome's omnibox breathes about 7 in a 42-point row, which is the
+    /// rhythm this is matching. Until September 2, 2026 the pill was 32 and
+    /// the buttons beside it 28, so the pill had 4 points of air and its
+    /// neighbours 6, and the whole row looked crowded without it being
+    /// obvious which element was wrong.
+    static let chromeControlHeight: CGFloat = 28
+
     /// The address pill. Drawn as a `Capsule`, so its radius is always half
     /// this — a full pill the way Chrome's omnibox is, rather than a rounded
     /// rectangle that has to be kept in sync with the height by hand.
-    static let addressPillHeight: CGFloat = 32
+    static let addressPillHeight: CGFloat = chromeControlHeight
 
     // MARK: - Radii
 
@@ -137,7 +149,7 @@ extension Color {
 /// application; it only applies while `isActive` is false, since active
 /// state always uses `onAccent` over an `accent` fill.
 struct GhostButtonStyle: ButtonStyle {
-    var size: CGFloat = 28
+    var size: CGFloat = LimeghostTheme.chromeControlHeight
     var isActive: Bool = false
     var tint: Color = LimeghostTheme.textPrimary
 

@@ -51,9 +51,67 @@ final class WindowCaptureView: NSView {
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
+    /// Drops the traffic lights onto the tab chips' own centre line.
+    ///
+    /// AppKit centres them in its 32-point `NSTitlebarView`, which puts them
+    /// 16 points below the top of the window. A 34-point chip bottom-aligned
+    /// under a 6-point inset centres at 23. Seven points apart is enough to
+    /// read as three dots floating above the tabs rather than sitting in the
+    /// row with them — which is exactly what it looked like.
+    ///
+    /// The buttons are moved rather than the title bar grown. Measured before
+    /// writing this: the container is 32 tall, does not clip its subviews, and
+    /// a 14-point button lands at y = 2, well inside it — so the dots stay
+    /// drawable *and* clickable. Growing the bar instead would have widened
+    /// the band AppKit treats as a title bar, and the strip already fights
+    /// that band for its drag gesture.
+    ///
+    /// Skipped in full screen, where the buttons belong to the menu-bar
+    /// overlay and are not ours to place.
+    func alignTrafficLights() {
+        guard let window, !window.styleMask.contains(.fullScreen) else { return }
+        for kind in [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton] {
+            guard let button = window.standardWindowButton(kind),
+                  let container = button.superview else { continue }
+            let target = container.frame.height
+                - TabStripMetrics.chipCentreFromWindowTop
+                - button.frame.height / 2
+            // Only when it has actually moved: setting a frame inside the
+            // title bar's own layout pass is how a repositioning loop starts.
+            guard abs(button.frame.origin.y - target) > 0.5 else { continue }
+            button.setFrameOrigin(NSPoint(x: button.frame.origin.x, y: target))
+        }
+    }
+
+    /// AppKit lays the title bar out again on a resize and on both full-screen
+    /// transitions, putting the buttons back each time.
+    private func observeTitleBarLayout() {
+        guard let window, titleBarObservers.isEmpty else { return }
+        let centre = NotificationCenter.default
+        for name: NSNotification.Name in [
+            NSWindow.didResizeNotification,
+            NSWindow.didEnterFullScreenNotification,
+            NSWindow.didExitFullScreenNotification,
+        ] {
+            titleBarObservers.append(
+                centre.addObserver(forName: name, object: window, queue: .main) { [weak self] _ in
+                    MainActor.assumeIsolated { self?.alignTrafficLights() }
+                }
+            )
+        }
+    }
+
+    private var titleBarObservers: [NSObjectProtocol] = []
+
+    deinit {
+        titleBarObservers.forEach(NotificationCenter.default.removeObserver)
+    }
+
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         holder.window = window
+        alignTrafficLights()
+        observeTitleBarLayout()
         // The single switch that stops AppKit dragging the window off a tab.
         window?.isMovable = false
         BrowserServices.shared.registerWindow(window, for: workspace)

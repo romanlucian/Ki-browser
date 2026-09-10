@@ -1072,7 +1072,7 @@ final class BrowserBehaviorTests: XCTestCase {
         // The tab strip is its inset plus a chip, and has to land on the same
         // number rather than merely being close to it.
         XCTAssertEqual(
-            TabStripMetrics.chipHeight + TabStrip.topInsetForTests,
+            TabStripMetrics.chipHeight + TabStripMetrics.topInset,
             LimeghostTheme.chromeRowHeight,
             "the tab strip no longer matches the toolbar"
         )
@@ -1083,6 +1083,26 @@ final class BrowserBehaviorTests: XCTestCase {
             LimeghostTheme.addressPillHeight,
             LimeghostTheme.chromeRowHeight,
             "the address pill has to fit inside its row"
+        )
+
+        // Everything in a chrome row breathes the same amount.
+        //
+        // The rows were equalised first and the chrome still read as
+        // lopsided, because the pill was 32 where its neighbouring buttons
+        // were 28 — four points of air against six, in the busiest row on
+        // screen. Nothing failed; it just looked crowded, and it took a
+        // side-by-side against Chrome to name which element was wrong.
+        let controlAir = LimeghostTheme.chromeRowHeight - LimeghostTheme.chromeControlHeight
+        XCTAssertEqual(
+            LimeghostTheme.addressPillHeight,
+            LimeghostTheme.chromeControlHeight,
+            "the address pill and the buttons beside it must be one height"
+        )
+        let bookmarkAir = BookmarkBarMetrics.barHeight - BookmarkBarMetrics.itemHeight
+        XCTAssertLessThanOrEqual(
+            abs(bookmarkAir - controlAir),
+            2,
+            "the bookmarks bar's rhythm has drifted from the toolbar's"
         )
     }
 
@@ -1142,6 +1162,52 @@ final class BrowserBehaviorTests: XCTestCase {
         // glyph of the one that does not.
         XCTAssertNotEqual(ConnectionSecurity.secure.chromeIcon, ConnectionSecurity.notSecure.chromeIcon)
         XCTAssertNotEqual(ConnectionSecurity.secure.chromeIcon, ConnectionSecurity.mixedContent.chromeIcon)
+    }
+
+    /// The traffic lights land on the tab chips' centre line, and stay inside
+    /// the view that has to hit-test them.
+    ///
+    /// AppKit centres them 16 points below the window top; a chip centres at
+    /// 23. Nudging the buttons is only safe while the target stays within the
+    /// title bar's own bounds — a button pushed outside still *draws*, because
+    /// that view does not clip, but stops receiving clicks. A close button
+    /// that looks right and cannot be pressed is the worst outcome here, so
+    /// the containment is asserted rather than assumed.
+    @MainActor
+    func testTheTrafficLightsLandOnTheTabChipsCentreLine() throws {
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 900, height: 600),
+            styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
+            backing: .buffered,
+            defer: false
+        )
+        window.titlebarAppearsTransparent = true
+        window.titleVisibility = .hidden
+        // A window built in a test is owned by ARC, and AppKit's default is to
+        // release it again on close — which is a double free and a signal 11
+        // partway through the suite. This bit the window-teardown tests too.
+        window.isReleasedWhenClosed = false
+        window.layoutIfNeeded()
+        defer { window.close() }
+
+        let button = try XCTUnwrap(window.standardWindowButton(.closeButton))
+        let container = try XCTUnwrap(button.superview)
+
+        let target = container.frame.height
+            - TabStripMetrics.chipCentreFromWindowTop
+            - button.frame.height / 2
+
+        XCTAssertGreaterThanOrEqual(target, 0, "the button would sit below its container and stop taking clicks")
+        XCTAssertLessThanOrEqual(
+            target + button.frame.height,
+            container.frame.height,
+            "the button would sit above its container and stop taking clicks"
+        )
+
+        // And it really is the chips' line, not a number that happens to fit.
+        let centreBelowWindowTop = container.frame.height - (target + button.frame.height / 2)
+        XCTAssertEqual(centreBelowWindowTop, TabStripMetrics.chipCentreFromWindowTop, accuracy: 0.01)
+        XCTAssertEqual(TabStripMetrics.chipCentreFromWindowTop, TabStripMetrics.topInset + TabStripMetrics.chipHeight / 2)
     }
 
     func testTheBrandMarkIsActuallyInTheAppBundle() {
@@ -2203,7 +2269,7 @@ final class BrowserBehaviorTests: XCTestCase {
         // September 2, 2026. Read from the theme rather than pinned here, so
         // the three cannot drift apart again without a test saying so.
         XCTAssertEqual(BookmarkBarMetrics.barHeight, LimeghostTheme.chromeRowHeight)
-        XCTAssertEqual(BookmarkBarMetrics.itemHeight, 22)
+        XCTAssertEqual(BookmarkBarMetrics.itemHeight, 26)
     }
 
     func testBookmarksBarItemsHugTheirOwnNameAndCapLongOnes() {
