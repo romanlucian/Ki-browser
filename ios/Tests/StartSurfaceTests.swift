@@ -1,4 +1,5 @@
 import XCTest
+import SwiftUI
 import LimeghostCore
 @testable import Limeghost
 @testable import LimeghostShared
@@ -206,5 +207,40 @@ final class StartSurfaceTests: XCTestCase {
             BrandMark.isAvailable,
             "the phone's app bundle has no Limeghost mark, so the guide's header is an empty tile"
         )
+    }
+
+    // MARK: - The header at a phone's width
+
+    /// The guide's header has to fit a phone's first screen.
+    ///
+    /// Until September 10 the phone drew the Mac's one-row header: the mark,
+    /// the headline and a fixed-width badge side by side. That left the
+    /// headline a column so narrow it broke "Choose" into "Ch / oo / se" and
+    /// ran past the bottom of the screen, on the simulator and on a real
+    /// iPhone alike. The break this catches is that arrangement coming back at
+    /// any phone width.
+    ///
+    /// The widths are the page's content widths: the screen less the page's
+    /// 30-point margins. They run from the smallest supported iPhone (375
+    /// points) through a 17 Pro (402) to a 13 Pro Max (428). The limit, 280
+    /// points, is less than half of that smallest iPhone's 667-point screen,
+    /// which leaves room for the search field and the first tasks.
+    func testTheGuidesHeaderFitsAPhonesFirstScreen() throws {
+        for screenWidth in [375.0, 402.0, 428.0] {
+            let height = try renderedHeight(of: AIToolStartPage.Header(), width: screenWidth - 60)
+            XCTAssertLessThan(
+                height,
+                280,
+                "on a \(Int(screenWidth))-point screen the guide's header is \(Int(height)) points tall"
+            )
+        }
+    }
+
+    /// How tall a view draws at a given width, measured by rendering it.
+    private func renderedHeight<Content: View>(of view: Content, width: CGFloat) throws -> CGFloat {
+        let renderer = ImageRenderer(content: view.frame(width: width))
+        renderer.scale = 1
+        let image = try XCTUnwrap(renderer.cgImage, "the view did not render")
+        return CGFloat(image.height)
     }
 }

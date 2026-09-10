@@ -52,7 +52,29 @@ struct AIToolStartPage: View {
         .accessibilityLabel("Limeghost AI tool guide")
     }
 
+    /// When the catalog was last checked, and the way into how it recommends.
+    ///
+    /// One row wherever one row fits. On a phone it did not fit: the label
+    /// wrapped into two lines beside a stranded date. There the link to the
+    /// method drops to a line of its own instead.
     private var catalogStatus: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 8) {
+                catalogChecked
+                Spacer(minLength: 8)
+                recommendationMethodButton
+            }
+            VStack(alignment: .leading, spacing: 6) {
+                catalogChecked
+                recommendationMethodButton
+            }
+        }
+        .font(.system(size: 11, weight: .medium))
+        .foregroundStyle(LimeghostTheme.textSecondary)
+        .padding(.horizontal, 4)
+    }
+
+    private var catalogChecked: some View {
         HStack(spacing: 8) {
             // The build identifier ("2026.08.24.1") used to lead this row. It
             // is a developer's string on a page written for people who do not
@@ -63,52 +85,114 @@ struct AIToolStartPage: View {
                 AIToolCatalog.release.lastChecked,
                 format: .dateTime.month(.abbreviated).day().year()
             )
-            Spacer(minLength: 8)
-            Button("How recommendations work") {
-                withAnimation(.easeInOut(duration: 0.16)) {
-                    showsRecommendationMethod.toggle()
-                }
-            }
-            .buttonStyle(.plain)
-            .foregroundStyle(LimeghostTheme.accent)
         }
-        .font(.system(size: 11, weight: .medium))
-        .foregroundStyle(LimeghostTheme.textSecondary)
-        .padding(.horizontal, 4)
     }
 
-    private var header: some View {
-        HStack(alignment: .top, spacing: 20) {
-            HStack(alignment: .top, spacing: 16) {
-                // The real mark. A 30-point serif capital C stood here —
-                // Clearframe's initial, left behind by the August 31, 2026
-                // rename — beside a badge claiming the page is an honest guide.
-                // A guard against exactly that had existed since September 1,
-                // but it read `OnboardingView.swift` alone.
-                BrandMark(size: 34)
-                    .frame(width: 58, height: 58)
-                    .background(
-                        LimeghostTheme.accentDimStrong,
-                        in: RoundedRectangle(cornerRadius: LimeghostTheme.radius18, style: .continuous)
-                    )
-
-                VStack(alignment: .leading, spacing: 7) {
-                    Text("LIMEGHOST GUIDE")
-                        .font(LimeghostTheme.metaFont)
-                        .tracking(LimeghostTheme.metaTracking)
-                        .foregroundStyle(LimeghostTheme.textSecondary)
-                    Text("Choose the right AI\nfor the job.")
-                        .font(.system(size: 38, weight: .bold, design: .serif))
-                        .tracking(-1.2)
-                        .foregroundStyle(LimeghostTheme.textPrimary)
-                    Text("A small, practical starting point—not a live ranking.")
-                        .font(.system(size: 13))
-                        .foregroundStyle(LimeghostTheme.textBody)
-                }
+    private var recommendationMethodButton: some View {
+        Button("How recommendations work") {
+            withAnimation(.easeInOut(duration: 0.16)) {
+                showsRecommendationMethod.toggle()
             }
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(LimeghostTheme.accent)
+    }
 
-            Spacer(minLength: 12)
+    private var header: some View { Header() }
 
+    /// The guide's header: the mark, the eyebrow and headline, the page's
+    /// one-line promise, and the badge.
+    ///
+    /// Its own type so a test can render it at a chosen width. Whether it
+    /// fits a phone can be seen no other way: it typechecks at every width.
+    struct Header: View {
+        var body: some View {
+            // The same four things in two arrangements, and the first that fits
+            // the width it is given wins: the Mac's one row wherever one row
+            // fits, stacked anywhere narrower. Chosen by width rather than by
+            // platform, so a narrow Mac page beside the assistant stacks too.
+            // The one row is exactly what it was before September 10, and
+            // `testTheGuidesHeaderKeepsOneRowAtTheMacsWidths` holds the Mac to it.
+            ViewThatFits(in: .horizontal) {
+                oneRow
+                stacked
+            }
+        }
+
+        /// The Mac's arrangement: the mark and the words, with the badge at
+        /// the far end of the row.
+        private var oneRow: some View {
+            HStack(alignment: .top, spacing: 20) {
+                HStack(alignment: .top, spacing: 16) {
+                    mark(size: 34, tile: 58, cornerRadius: LimeghostTheme.radius18)
+
+                    VStack(alignment: .leading, spacing: 7) {
+                        eyebrow
+                        headline("Choose the right AI\nfor the job.", size: 38, tracking: -1.2)
+                        promise
+                    }
+                }
+
+                Spacer(minLength: 12)
+
+                badge
+            }
+        }
+
+        /// A phone's arrangement. The badge cannot sit beside the words there.
+        /// It does not shrink, so it took the width the headline needed and
+        /// left the headline a column a letter or two wide: "Ch / oo / se".
+        /// Stacked, every line gets the full width, and the headline wraps
+        /// where the words allow rather than at a fixed break.
+        private var stacked: some View {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(spacing: 12) {
+                    mark(size: 26, tile: 44, cornerRadius: LimeghostTheme.radius14)
+                    eyebrow
+                }
+                VStack(alignment: .leading, spacing: 7) {
+                    headline("Choose the right AI for the job.", size: 30, tracking: -0.8)
+                    promise
+                }
+                badge
+            }
+        }
+
+        /// The real mark. A 30-point serif capital C stood here: Clearframe's
+        /// initial, left behind by the August 31, 2026 rename, beside a badge
+        /// claiming the page is an honest guide. A guard against exactly that
+        /// had existed since September 1, but it read `OnboardingView.swift`
+        /// alone.
+        private func mark(size: CGFloat, tile: CGFloat, cornerRadius: CGFloat) -> some View {
+            BrandMark(size: size)
+                .frame(width: tile, height: tile)
+                .background(
+                    LimeghostTheme.accentDimStrong,
+                    in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                )
+        }
+
+        private var eyebrow: some View {
+            Text("LIMEGHOST GUIDE")
+                .font(LimeghostTheme.metaFont)
+                .tracking(LimeghostTheme.metaTracking)
+                .foregroundStyle(LimeghostTheme.textSecondary)
+        }
+
+        private func headline(_ text: LocalizedStringKey, size: CGFloat, tracking: CGFloat) -> some View {
+            Text(text)
+                .font(.system(size: size, weight: .bold, design: .serif))
+                .tracking(tracking)
+                .foregroundStyle(LimeghostTheme.textPrimary)
+        }
+
+        private var promise: some View {
+            Text("A small, practical starting point—not a live ranking.")
+                .font(.system(size: 13))
+                .foregroundStyle(LimeghostTheme.textBody)
+        }
+
+        private var badge: some View {
             Label("Local guide · official links", systemImage: "checkmark.shield")
                 .font(.system(size: 11, weight: .semibold))
                 .fixedSize()
@@ -190,26 +274,39 @@ struct AIToolStartPage: View {
                         .font(LimeghostTheme.metaFont)
                         .tracking(LimeghostTheme.metaTracking)
                         .foregroundStyle(LimeghostTheme.textSecondary)
-                    LazyVGrid(
-                        columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 6),
-                        spacing: 12
-                    ) {
-                        ForEach(tools) { tool in
-                            ShelfToolButton(
-                                tool: tool,
-                                isPinned: store.aiToolShelf.isPinned(tool.id),
-                                canManage: isOwnRow,
-                                open: { openTool(tool) },
-                                togglePin: {
-                                    store.setAIToolPinned(tool.id, pinned: !store.aiToolShelf.isPinned(tool.id))
-                                },
-                                remove: { store.removeAITool(tool.id) }
-                            )
-                        }
+                    // Six across wherever six fit, three across on a phone. At a
+                    // phone's width six columns came to about 40 points each,
+                    // narrower than the 44-point mark inside them.
+                    ViewThatFits(in: .horizontal) {
+                        shelfGrid(tools, isOwnRow: isOwnRow, columns: 6)
+                        shelfGrid(tools, isOwnRow: isOwnRow, columns: 3)
                     }
                 }
                 .padding(20)
                 .startSurfaceCard()
+            }
+        }
+    }
+
+    /// The row's grid. Each column has to hold a 44-point mark and a short
+    /// name, so no column may be narrower than 56 points. That minimum is
+    /// also what lets the row above tell whether six columns fit.
+    private func shelfGrid(_ tools: [AIToolListing], isOwnRow: Bool, columns: Int) -> some View {
+        LazyVGrid(
+            columns: Array(repeating: GridItem(.flexible(minimum: 56), spacing: 12), count: columns),
+            spacing: 12
+        ) {
+            ForEach(tools) { tool in
+                ShelfToolButton(
+                    tool: tool,
+                    isPinned: store.aiToolShelf.isPinned(tool.id),
+                    canManage: isOwnRow,
+                    open: { openTool(tool) },
+                    togglePin: {
+                        store.setAIToolPinned(tool.id, pinned: !store.aiToolShelf.isPinned(tool.id))
+                    },
+                    remove: { store.removeAITool(tool.id) }
+                )
             }
         }
     }

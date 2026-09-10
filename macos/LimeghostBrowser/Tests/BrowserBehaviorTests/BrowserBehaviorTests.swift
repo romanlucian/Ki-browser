@@ -867,6 +867,34 @@ final class BrowserBehaviorTests: XCTestCase {
         )
     }
 
+    /// The guide's header keeps the Mac's one-row arrangement wherever that
+    /// fits.
+    ///
+    /// Since September 10 the header chooses between the Mac's one-row
+    /// arrangement and a stacked one that a phone needs, by whether the one
+    /// row fits the width it is given. The break this catches is the choice
+    /// flipping where one row fits, which would stack the Mac's header for no
+    /// reason. Once the page is wide enough the header must stop changing
+    /// shape, and it must be shorter than the header a phone gets.
+    @MainActor
+    func testTheGuidesHeaderKeepsOneRowAtTheMacsWidths() throws {
+        let typicalMac = try renderedHeight(of: AIToolStartPage.Header(), width: 900)
+        let widerStill = try renderedHeight(of: AIToolStartPage.Header(), width: 1_600)
+        let phone = try renderedHeight(of: AIToolStartPage.Header(), width: 368)
+
+        XCTAssertEqual(typicalMac, widerStill, "the header changed shape between two widths where one row fits")
+        XCTAssertLessThan(typicalMac, phone, "the Mac is drawing the header a phone gets")
+    }
+
+    /// How tall a view draws at a given width, measured by rendering it.
+    @MainActor
+    private func renderedHeight<Content: View>(of view: Content, width: CGFloat) throws -> CGFloat {
+        let renderer = ImageRenderer(content: view.frame(width: width))
+        renderer.scale = 1
+        let image = try XCTUnwrap(renderer.cgImage, "the view did not render")
+        return CGFloat(image.height)
+    }
+
     /// A profile saved before avatars existed has to keep working.
     ///
     /// `iconID` and `pictureFileName` were added on September 1, 2026. They are
