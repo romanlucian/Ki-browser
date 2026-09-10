@@ -803,8 +803,9 @@ private struct BookmarkFolderMenuContents: View {
             }
         }
         Divider()
-        Button(BookmarkMenuCopy.openAll(count: bookmarks.count)) { actions.openAll(folder) }
-            .disabled(bookmarks.isEmpty)
+        if !bookmarks.isEmpty {
+            Button(BookmarkMenuCopy.openAll(count: bookmarks.count)) { actions.openAll(folder) }
+        }
         Button("New subfolder…") { actions.newSubfolder(folder.id) }
     }
 }

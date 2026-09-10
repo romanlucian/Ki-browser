@@ -178,7 +178,12 @@ struct LimeghostBrowserApp: App {
                     .keyboardShortcut("d", modifiers: [.command])
                 Button("New Bookmark Folder…") { focusedWorkspace?.requestNewBookmarkFolder() }
                 Divider()
-                Button("Show All Bookmarks") { focusedWorkspace?.requestBookmarkLibrary() }
+                // Named for what it opens. It said "Show All Bookmarks", which
+                // reads as "list them" rather than "the place you organise
+                // them" — and the page it opens announced itself as "LIBRARY",
+                // a word that appeared exactly once in the whole app and in no
+                // menu at all. Both now say the same thing.
+                Button("Bookmark Manager") { focusedWorkspace?.requestBookmarkLibrary() }
                     .keyboardShortcut("b", modifiers: [.command, .option])
                 Button("Toggle Bookmarks Bar") { dataStore.showsBookmarksBar.toggle() }
                     .keyboardShortcut("b", modifiers: [.command, .shift])
