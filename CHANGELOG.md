@@ -32,7 +32,11 @@ Dates are commit dates. Test counts are the totals at the end of each period, ve
   - Free provisioning allows three self-installed apps per phone. The slots were taken, and the install succeeded once one was freed.
   - The app ran as `com.zincoo.limeghost.dev`, with the team passed on the command line so the project file never records one.
   - The seven-day certificate expires September 17.
-- 503 Mac tests, 2 skipped, 0 failures; 27 iOS tests, 0 failures. `LimeghostSharedLayer` (256 tests) passes on the iPhone simulator and on the Mac. No observed-user session has been run on either platform.
+- **The phone's release gate is fixed** (`2801f94`).
+  - The guide's header holds the same four things in two arrangements and takes the first that fits: the Mac's one row where it fits, stacked anywhere narrower. The status line and the tool row follow the same rule.
+  - `testTheGuidesHeaderFitsAPhonesFirstScreen` failed at 2,076, 1,304 and 631 points on three iPhone widths before the fix, and holds the header under 280 now.
+  - A pixel comparison found the Mac's header unchanged, within rendering noise.
+- 504 Mac tests, 2 skipped, 0 failures; 28 iOS tests, 0 failures. `LimeghostSharedLayer` (256 tests) passes on the iPhone simulator and on the Mac. No observed-user session has been run on either platform.
 
 ### Week of September 3–9, 2026
 
