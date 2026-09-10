@@ -17,9 +17,13 @@
 		AA0000000000000000000108 /* AddressSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000209 /* AddressSheet.swift */; };
 		AA0000000000000000000109 /* TabSwitcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000020A /* TabSwitcher.swift */; };
 		AA000000000000000000010A /* StartSurfaceScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000020B /* StartSurfaceScreen.swift */; };
+		AA000000000000000000010B /* IOSBrandMarkArtwork.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000020C /* IOSBrandMarkArtwork.swift */; };
 		AA0000000000000000000671 /* AIToolStartPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000661 /* AIToolStartPage.swift */; };
 		AA0000000000000000000672 /* LimeghostTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000662 /* LimeghostTheme.swift */; };
 		AA0000000000000000000673 /* SiteIconView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000663 /* SiteIconView.swift */; };
+		AA0000000000000000000674 /* StartSurfaceChrome.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000664 /* StartSurfaceChrome.swift */; };
+		AA0000000000000000000675 /* BrandMark.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000665 /* BrandMark.swift */; };
+		AA0000000000000000000676 /* limeghost-mark-small.png in Resources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000666 /* limeghost-mark-small.png */; };
 		AA0000000000000000001101 /* LimeghostShared in Frameworks */ = {isa = PBXBuildFile; productRef = AA0000000000000000001001 /* LimeghostShared */; };
 		AA0000000000000000001102 /* LimeghostCore in Frameworks */ = {isa = PBXBuildFile; productRef = AA0000000000000000001002 /* LimeghostCore */; };
 		AA0000000000000000002101 /* IOSSessionPlatformTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000002201 /* IOSSessionPlatformTests.swift */; };
@@ -52,9 +56,13 @@
 		AA0000000000000000000209 /* AddressSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddressSheet.swift; sourceTree = "<group>"; };
 		AA000000000000000000020A /* TabSwitcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TabSwitcher.swift; sourceTree = "<group>"; };
 		AA000000000000000000020B /* StartSurfaceScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StartSurfaceScreen.swift; sourceTree = "<group>"; };
+		AA000000000000000000020C /* IOSBrandMarkArtwork.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IOSBrandMarkArtwork.swift; sourceTree = "<group>"; };
 		AA0000000000000000000661 /* AIToolStartPage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "../macos/LimeghostBrowser/Sources/LimeghostBrowser/AIToolStartPage.swift"; sourceTree = "<group>"; };
 		AA0000000000000000000662 /* LimeghostTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "../macos/LimeghostBrowser/Sources/LimeghostBrowser/LimeghostTheme.swift"; sourceTree = "<group>"; };
 		AA0000000000000000000663 /* SiteIconView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "../macos/LimeghostBrowser/Sources/LimeghostBrowser/SiteIconView.swift"; sourceTree = "<group>"; };
+		AA0000000000000000000664 /* StartSurfaceChrome.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "../macos/LimeghostBrowser/Sources/LimeghostBrowser/StartSurfaceChrome.swift"; sourceTree = "<group>"; };
+		AA0000000000000000000665 /* BrandMark.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "../macos/LimeghostBrowser/Sources/LimeghostBrowser/BrandMark.swift"; sourceTree = "<group>"; };
+		AA0000000000000000000666 /* limeghost-mark-small.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "../macos/LimeghostBrowser/Sources/LimeghostBrowser/Resources/limeghost-mark-small.png"; sourceTree = "<group>"; };
 		AA0000000000000000000301 /* Limeghost.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Limeghost.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		AA0000000000000000002201 /* IOSSessionPlatformTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IOSSessionPlatformTests.swift; sourceTree = "<group>"; };
 		AA0000000000000000002202 /* WorkspaceHostTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceHostTests.swift; sourceTree = "<group>"; };
@@ -109,6 +117,7 @@
 				AA0000000000000000000209 /* AddressSheet.swift */,
 				AA000000000000000000020A /* TabSwitcher.swift */,
 				AA000000000000000000020B /* StartSurfaceScreen.swift */,
+				AA000000000000000000020C /* IOSBrandMarkArtwork.swift */,
 			);
 			path = Sources;
 			sourceTree = "<group>";
@@ -141,13 +150,21 @@
 				AA0000000000000000000661 /* AIToolStartPage.swift */,
 				AA0000000000000000000662 /* LimeghostTheme.swift */,
 				AA0000000000000000000663 /* SiteIconView.swift */,
+				AA0000000000000000000664 /* StartSurfaceChrome.swift */,
+				AA0000000000000000000665 /* BrandMark.swift */,
+				AA0000000000000000000666 /* limeghost-mark-small.png */,
 			);
-			/* No `path`: these three file references already carry the full
+			/* No `path`: these file references already carry the full
 			   relative path from this group's own location, which — since this
 			   group itself sets none and so inherits its parent's, and the main
 			   group is the project directory — is `ios/`. Task 8 measured that
-			   these three, and only these three, typecheck together for the iOS
-			   SDK; the Mac's own copies are untouched. */
+			   the first three typecheck together for the iOS SDK. On September
+			   10, 2026 the Mac's AI-home repairs made the guide depend on
+			   `StartSurfaceChrome.swift` and `BrandMark.swift`, so both joined
+			   the phone's build, which is what checks them. The small mark's
+			   artwork joined with them, copied into the app bundle for
+			   `BrandMark` to find. The Mac's own copies are untouched: these
+			   are references, not duplicates. */
 			name = "Reused from macOS";
 			sourceTree = "<group>";
 		};
@@ -160,6 +177,7 @@
 			buildPhases = (
 				AA0000000000000000000A01 /* Sources */,
 				AA0000000000000000000401 /* Frameworks */,
+				AA0000000000000000000A02 /* Resources */,
 			);
 			buildRules = (
 			);
@@ -228,6 +246,17 @@
 		};
 /* End PBXProject section */
 
+/* Begin PBXResourcesBuildPhase section */
+		AA0000000000000000000A02 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				AA0000000000000000000676 /* limeghost-mark-small.png in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
 /* Begin PBXSourcesBuildPhase section */
 		AA0000000000000000000A01 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
@@ -243,9 +272,12 @@
 				AA0000000000000000000108 /* AddressSheet.swift in Sources */,
 				AA0000000000000000000109 /* TabSwitcher.swift in Sources */,
 				AA000000000000000000010A /* StartSurfaceScreen.swift in Sources */,
+				AA000000000000000000010B /* IOSBrandMarkArtwork.swift in Sources */,
 				AA0000000000000000000671 /* AIToolStartPage.swift in Sources */,
 				AA0000000000000000000672 /* LimeghostTheme.swift in Sources */,
 				AA0000000000000000000673 /* SiteIconView.swift in Sources */,
+				AA0000000000000000000674 /* StartSurfaceChrome.swift in Sources */,
+				AA0000000000000000000675 /* BrandMark.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

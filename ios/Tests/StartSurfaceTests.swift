@@ -16,6 +16,17 @@ final class StartSurfaceTests: XCTestCase {
         return WorkspaceHost.forTesting(defaults: defaults)
     }
 
+    /// A stand-in reference with a literal address, so a door's expected
+    /// page never depends on the list the door is being checked against.
+    private func exampleReference() throws -> AIFieldReference {
+        AIFieldReference(
+            id: "example",
+            name: "Example",
+            summary: "A stand-in for a place that holds live numbers.",
+            url: try XCTUnwrap(URL(string: "https://example.com/live-numbers"))
+        )
+    }
+
     // MARK: - The gate (`showsGuide`)
 
     /// The ordinary state of a fresh tab: still on its start page, still the
@@ -68,7 +79,7 @@ final class StartSurfaceTests: XCTestCase {
         XCTAssertFalse(TabSurface(tab: tab, workspace: host.workspace).showsTheGuide)
     }
 
-    // MARK: - The doors (`StartSurfaceScreen.openTool`/`openSource`)
+    // MARK: - The doors (`StartSurfaceScreen.openTool`/`openSource`/`openReference`)
 
     /// Opening a tool loads its official URL, synchronously, in the current
     /// tab — the same pattern
@@ -128,6 +139,43 @@ final class StartSurfaceTests: XCTestCase {
         XCTAssertFalse(host.workspace.dataStore.aiToolShelf.toolIDs.contains(tool.id))
     }
 
+    /// The field notes' outside references are the guide's third door. The
+    /// Mac added them to the shared page on September 2, and the phone
+    /// compiles that page, so the phone has to give it a way to open them.
+    ///
+    /// The break this catches is a door that compiles and does nothing. An
+    /// empty `openReference` satisfies the page's initialiser and leaves the
+    /// tab where it was, and nobody would notice until they tapped a link.
+    func testOpeningAReferenceLoadsItsURL() throws {
+        let host = try makeHost()
+        let screen = StartSurfaceScreen(workspace: host.workspace)
+
+        screen.openReference(try exampleReference())
+
+        XCTAssertEqual(host.workspace.selectedTab?.session.currentURLString, "https://example.com/live-numbers")
+    }
+
+    /// A reference is a request for a page, so it must uncover the page. That
+    /// is the rule `CLAUDE.md` holds every door to, and the one
+    /// `WorkspaceDoorTests` checks for the workspace's own methods.
+    ///
+    /// The break this catches is a door that loads its page by reaching past
+    /// the workspace, straight into a session load. The page then arrives
+    /// behind an assistant that is still filling the screen. The phone draws
+    /// no assistant yet, which is exactly why nothing on screen would show it.
+    func testOpeningAReferenceUncoversThePage() throws {
+        let host = try makeHost()
+        let screen = StartSurfaceScreen(workspace: host.workspace)
+        let companion = host.workspace.aiCompanion
+        companion.show()
+        companion.toggleExpanded()
+        XCTAssertTrue(companion.isExpanded, "could not cover the page to begin with")
+
+        screen.openReference(try exampleReference())
+
+        XCTAssertFalse(companion.isExpanded, "a reference opened its page behind the assistant")
+    }
+
     // MARK: - The catalogue
 
     /// The catalogue is bundled, not fetched: showing the guide makes no
@@ -141,5 +189,22 @@ final class StartSurfaceTests: XCTestCase {
     /// worth holding — every tool `filtered` could ever surface is local.
     func testTheCatalogueIsLocalAndNonEmpty() {
         XCTAssertFalse(AIToolCatalog.filtered(category: nil, query: "").isEmpty)
+    }
+
+    // MARK: - The mark
+
+    /// The guide's header draws the Limeghost mark, and on the phone that
+    /// needs the artwork inside the phone's own app bundle.
+    ///
+    /// The break this catches is a phone build without the image. `BrandMark`
+    /// draws nothing when its artwork is missing and raises no error, so the
+    /// header would ship with an empty green tile. The Mac guards its own
+    /// bundle with `testTheBrandMarkIsActuallyInTheAppBundle`. This is the
+    /// phone's half, because the two apps carry their resources separately.
+    func testTheGuidesMarkIsInThePhonesOwnBundle() {
+        XCTAssertTrue(
+            BrandMark.isAvailable,
+            "the phone's app bundle has no Limeghost mark, so the guide's header is an empty tile"
+        )
     }
 }

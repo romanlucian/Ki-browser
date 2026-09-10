@@ -7,16 +7,18 @@ import SwiftUI
 ///
 /// `AIToolStartPage` is the Mac's own view — the design, the copy, the
 /// catalog grid — added to this target unchanged rather than rewritten
-/// (Task 8): it, `LimeghostTheme` and `SiteIconView` typecheck together
-/// against the iOS SDK as they stand. This wrapper only supplies what that
-/// view asks for and wires its two doors to the workspace every other phone
-/// screen already goes through.
+/// (Task 8). It compiles here together with the Mac files it depends on:
+/// `LimeghostTheme` and `SiteIconView` from the start, and since September
+/// 10, 2026 `StartSurfaceChrome` and `BrandMark`, which the Mac's AI-home
+/// repairs made it need. This wrapper only supplies what that view asks for
+/// and wires its doors to the workspace every other phone screen already
+/// goes through.
 ///
-/// `openTool`/`openSource` are named methods, not inline closures. The
-/// inline closures they replace were invisible to every test: emptied out,
-/// the suite stayed green, so a door could have stopped opening anything
-/// without a single failure. A named method is a value a test can call
-/// directly and check the result of, like any other method here.
+/// The doors are named methods, not inline closures. The inline closures
+/// they replace were invisible to every test: emptied out, the suite stayed
+/// green, so a door could have stopped opening anything without a single
+/// failure. A named method is a value a test can call directly and check
+/// the result of, like any other method here.
 @MainActor
 struct StartSurfaceScreen: View {
     let workspace: BrowserWorkspace
@@ -25,17 +27,18 @@ struct StartSurfaceScreen: View {
         AIToolStartPage(
             store: workspace.dataStore,
             openTool: openTool,
-            openSource: openSource
+            openSource: openSource,
+            openReference: openReference
         )
     }
 
-    /// Both closures are doors: `CLAUDE.md` names an AI-guide card among the
-    /// ways of asking for a page, so both go through `open(_:)`, which calls
-    /// `makeRoomForPage()` before loading — never a session load directly,
-    /// which would skip it. `tool.officialURL` is already an absolute https
-    /// address, exactly what `open(_:)` accepts, so there is no reason to
-    /// reach for `navigate(_:)` here — that door exists for what a person
-    /// *types*.
+    /// All three closures are doors: `CLAUDE.md` names an AI-guide card among
+    /// the ways of asking for a page, so all three go through `open(_:)`,
+    /// which calls `makeRoomForPage()` before loading — never a session load
+    /// directly, which would skip it. `tool.officialURL` is already an
+    /// absolute https address, exactly what `open(_:)` accepts, so there is
+    /// no reason to reach for `navigate(_:)` here — that door exists for what
+    /// a person *types*.
     ///
     /// Records the open first, matching the Mac's own order
     /// (`BrowserView.swift`'s `stateOverlay`, the `.aiHome` case): opening a
@@ -55,5 +58,14 @@ struct StartSurfaceScreen: View {
     /// `recordAIToolOpen` call of its own.
     func openSource(_ tool: AIToolListing, _ url: URL) {
         workspace.open(url.absoluteString)
+    }
+
+    /// One of the field notes' references: a place that holds the live
+    /// numbers the guide deliberately does not copy. Like a source link, it
+    /// records nothing, because a reference is not a tool somebody chose to
+    /// open. The Mac's version is the `openReference` closure in
+    /// `BrowserView`, which loads the same address after making room itself.
+    func openReference(_ reference: AIFieldReference) {
+        workspace.open(reference.url.absoluteString)
     }
 }
