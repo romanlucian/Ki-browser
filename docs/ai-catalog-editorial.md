@@ -49,6 +49,22 @@ The catalog names other companies' products and links to their official sites. T
 
 **Objections received:** none as of August 25, 2026.
 
+## Field notes: trends, never ranks
+
+`AIFieldNotes` puts three figures and three outbound links on the AI home. It follows one rule, and the rule is the whole reason it is allowed to exist: **a trend, never a rank.**
+
+A rank ("Model X is best today") is stale within days. Limeghost ships as a bundled app with no auto-updater, so a rank compiled into it would be a confident lie for most of its life — and ranking models is the judgment layer removed on August 30, 2026 for exactly that class of reason. A rate measured over fifteen years is still true next year, was measured by somebody who published their method, and is useful to a person deciding whether to pay for a tool this month.
+
+Rules for anything added here:
+
+- **Quote, do not compute.** The figure must appear in the source's own words. Limeghost measures nothing about models and must never imply it does.
+- **The licence must permit reuse, and the credit is the licence.** Current figures are Epoch AI's, published under Creative Commons Attribution — "free to use, distribute, and reproduce provided the source and authors are credited." The attribution is drawn on the page, not left to a settings screen. Do not add a figure whose source forbids redistribution or restricts commercial use; Stanford's AI Index is linked rather than quoted for this reason, as its report carries a No-Derivatives term that has not been cleared for redrawing its charts.
+- **Nothing live.** No fetch, no API key, no server. The AI home makes zero network requests and that is a property worth more than freshness. Live numbers are linked to, never copied in.
+- **Dated in the app.** `AIFieldNotes.lastChecked` is set by hand when a human has re-opened every source. A missed review shows an older date rather than a fresher-looking lie, the same way the catalog's checked date behaves.
+- **Three or so, not a dashboard.** This is orientation on a page about choosing a tool, not a statistics product.
+
+Reviewed on the same weekly cadence as the catalog. Sources last checked September 2, 2026.
+
 ## Future secure remote-update design
 
 A remote catalog may be useful after Limeghost has release infrastructure, but it must fail closed and carry data only—never executable Swift, JavaScript, HTML, prompts, or WebKit configuration. A production design should use:

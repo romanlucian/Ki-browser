@@ -933,6 +933,35 @@ final class BrowserBehaviorTests: XCTestCase {
         )
     }
 
+    /// The AI home must not draw the retired company's initial either.
+    ///
+    /// This guard existed from September 1, 2026 — but it read one file, and
+    /// the AI home was not it. So the introduction was repaired and the page
+    /// every new tab opens went on showing a 58-point serif "C" for Clearframe
+    /// beside a badge that says "Local guide · official links", on the one
+    /// screen whose whole argument is that it is honest about itself.
+    ///
+    /// `BrandMark` loads the real artwork and is already drawn at three sizes
+    /// elsewhere, so there was never anything to build — only something to
+    /// notice.
+    func testTheAIHomeDrawsTheBrandMarkAndNotTheRetiredInitial() throws {
+        let source = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Sources/LimeghostBrowser/AIToolStartPage.swift")
+        let text = try String(contentsOf: source, encoding: .utf8)
+
+        XCTAssertFalse(
+            text.contains("Text(\"C\")"),
+            "the AI home is drawing the Clearframe letter instead of the mark"
+        )
+        XCTAssertTrue(
+            text.contains("BrandMark("),
+            "the AI home no longer draws the brand mark at all"
+        )
+    }
+
     /// A profile saved before avatars existed has to keep working.
     ///
     /// `iconID` and `pictureFileName` were added on September 1, 2026. They are
@@ -1142,6 +1171,61 @@ final class BrowserBehaviorTests: XCTestCase {
         let inactive = luminance(LimeghostTheme.tabChip)
         XCTAssertGreaterThan(inactive, well)
         XCTAssertLessThan(inactive, plane)
+    }
+
+    /// A card on a start surface must not change colour with the page behind it.
+    ///
+    /// The AI home drew its tool cards as `Color.white.opacity(0.07)` over a
+    /// gradient running `bg0` → `bg1`. That is alpha arithmetic against a
+    /// moving background, so the same card was two different surfaces
+    /// depending on where it sat: composited over `bg0` it came out at 30,
+    /// *darker* than the `bg1` plane a card must float above; over `bg1` it
+    /// came out at 57, level with `bg3`, the address pill — the most raised
+    /// surface in the app. No opacity value fixes that, because the target is
+    /// fixed and the background is not.
+    ///
+    /// What makes it worth a test rather than a comment: the same page already
+    /// used the flat token correctly in three other places, so the wrong
+    /// mechanism sat beside the right one and looked deliberate.
+    @MainActor
+    func testAStartSurfaceCardCannotChangeColourWithThePageBehindIt() throws {
+        func luminance(_ color: NSColor) -> Double {
+            0.2126 * Double(color.redComponent)
+          + 0.7152 * Double(color.greenComponent)
+          + 0.0722 * Double(color.blueComponent)
+        }
+        /// What the eye actually receives: the fill composited onto whatever
+        /// the page is painting behind it.
+        func composited(_ fill: Color, over background: Color) throws -> Double {
+            let f = try XCTUnwrap(NSColor(fill).usingColorSpace(.sRGB))
+            let b = try XCTUnwrap(NSColor(background).usingColorSpace(.sRGB))
+            let a = Double(f.alphaComponent)
+            let mix = NSColor(
+                srgbRed: f.redComponent * a + b.redComponent * (1 - a),
+                green: f.greenComponent * a + b.greenComponent * (1 - a),
+                blue: f.blueComponent * a + b.blueComponent * (1 - a),
+                alpha: 1
+            )
+            return luminance(mix)
+        }
+
+        // The two ends of the gradient the AI home paints behind its cards.
+        let overBase  = try composited(StartSurfaceChrome.cardFill, over: LimeghostTheme.bg0)
+        let overPlane = try composited(StartSurfaceChrome.cardFill, over: LimeghostTheme.bg1)
+
+        XCTAssertEqual(
+            overBase,
+            overPlane,
+            accuracy: 0.0001,
+            "a start-surface card changes colour depending on where it sits on the page"
+        )
+
+        // And it has to land where a card belongs on the scale the chrome
+        // already climbs: above the plane, below the raised pill.
+        let plane = luminance(try XCTUnwrap(NSColor(LimeghostTheme.bg1).usingColorSpace(.sRGB)))
+        let pill  = luminance(try XCTUnwrap(NSColor(LimeghostTheme.bg3).usingColorSpace(.sRGB)))
+        XCTAssertGreaterThan(overBase, plane, "a card must read as floating above the plane, not sunk below it")
+        XCTAssertLessThan(overBase, pill, "a card must not be as raised as the address pill")
     }
 
     /// Every connection state has a drawing in the chrome set.
@@ -1656,6 +1740,54 @@ final class BrowserBehaviorTests: XCTestCase {
                 "\(name) left the page behind the assistant"
             )
             XCTAssertTrue(companion.isVisible, "\(name) closed the assistant instead of moving it")
+        }
+    }
+
+    /// The AI home's own doors have to make room too.
+    ///
+    /// `testEveryWayOfAskingForAPageUncoversIt` walks the doors that are
+    /// methods on `BrowserWorkspace`. The AI home's are not: they are closures
+    /// handed to `AIToolStartPage` from `BrowserView`, so nothing reached them
+    /// and nothing checked them — including the two that shipped before this,
+    /// which happened to be correct. CLAUDE.md names "an AI-guide card" as one
+    /// of the doors that must call `makeRoomForPage()`, and a rule that half
+    /// the doors are checked against is the inconsistent version the file
+    /// warns is worse than either whole one.
+    ///
+    /// Read from source, because a closure passed into a SwiftUI initialiser
+    /// cannot be invoked from a test without standing up the whole view.
+    func testTheAIHomesOwnDoorsAlsoMakeRoomForThePage() throws {
+        let source = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Sources/LimeghostBrowser/BrowserView.swift")
+        let text = try String(contentsOf: source, encoding: .utf8)
+
+        let start = try XCTUnwrap(text.range(of: "AIToolStartPage("), "the AI home is no longer built here")
+        let end = try XCTUnwrap(
+            text.range(of: "case .bookmarksHome", range: start.upperBound..<text.endIndex),
+            "could not find the end of the AI home's construction"
+        )
+        let construction = String(text[start.upperBound..<end.lowerBound])
+
+        // Every closure the page can open a page through.
+        let doors = ["openTool:", "openSource:", "openReference:"]
+        for (index, door) in doors.enumerated() {
+            let doorStart = try XCTUnwrap(
+                construction.range(of: door),
+                "the AI home no longer has a \(door) door — if it was renamed, rename it here too"
+            )
+            // Up to the next door, or the end of the construction.
+            let nextStart = index + 1 < doors.count
+                ? construction.range(of: doors[index + 1])?.lowerBound
+                : nil
+            let body = String(construction[doorStart.upperBound..<(nextStart ?? construction.endIndex)])
+
+            XCTAssertTrue(
+                body.contains("makeRoomForPage()"),
+                "\(door) opens a page without making room for it, so it would open behind the assistant"
+            )
         }
     }
 

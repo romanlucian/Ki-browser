@@ -13,6 +13,10 @@ enum StartSurfaceChrome {}
 struct HomeSearchField: View {
     let placeholder: String
     @Binding var text: String
+    /// How wide the field is allowed to grow. Bookmarks and history keep it
+    /// beside their own content at 440; the AI home lets it run the width of
+    /// the page, where finding a tool is the page's whole purpose.
+    var maximumWidth: CGFloat = 440
 
     var body: some View {
         HStack(spacing: 9) {
@@ -33,7 +37,7 @@ struct HomeSearchField: View {
         }
         .padding(.horizontal, 13)
         .frame(height: 34)
-        .frame(maxWidth: 440)
+        .frame(maxWidth: maximumWidth)
         .background(LimeghostTheme.bg1, in: RoundedRectangle(cornerRadius: LimeghostTheme.radius10))
         .overlay(
             RoundedRectangle(cornerRadius: LimeghostTheme.radius10)
@@ -80,5 +84,46 @@ struct HomeEmptyNote: View {
             .padding(.horizontal, 14)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(LimeghostTheme.bg1, in: RoundedRectangle(cornerRadius: LimeghostTheme.radius12))
+    }
+}
+
+extension StartSurfaceChrome {
+    /// The fill every card on a start surface takes.
+    ///
+    /// Opaque on purpose, and a test enforces it. The AI home drew its tool
+    /// cards as `Color.white.opacity(0.07)` over a background gradient running
+    /// `bg0` → `bg1`, which is alpha arithmetic against a moving surface:
+    /// composited over `bg0` the card landed at 30 — *darker* than the `bg1`
+    /// plane it was supposed to float above — and over `bg1` at 57, level with
+    /// `bg3`, the address pill and the most raised surface in the app. One
+    /// literal, two contradictory results, and no opacity value could ever
+    /// land it on `bg2` where a card belongs.
+    ///
+    /// The same page already had this right in three other places, which is
+    /// what made it hard to see: the tool row, the start card and the boundary
+    /// block all used the flat token.
+    static let cardFill = LimeghostTheme.bg2
+
+    /// The hairline around a card. One value, so the page's three cards stop
+    /// disagreeing about their own edge.
+    static let cardStroke = LimeghostTheme.hairline2
+
+    /// One radius for a start-surface card. The AI home used 16, 16 and 13 for
+    /// the same role on one screen.
+    static let cardRadius = LimeghostTheme.radius14
+}
+
+extension View {
+    /// A card on a start surface: one fill, one hairline, one radius.
+    func startSurfaceCard() -> some View {
+        self
+            .background(
+                StartSurfaceChrome.cardFill,
+                in: RoundedRectangle(cornerRadius: StartSurfaceChrome.cardRadius, style: .continuous)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: StartSurfaceChrome.cardRadius, style: .continuous)
+                    .stroke(StartSurfaceChrome.cardStroke)
+            )
     }
 }

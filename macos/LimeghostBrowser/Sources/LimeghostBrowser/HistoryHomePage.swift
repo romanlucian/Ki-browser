@@ -51,6 +51,12 @@ struct HistoryHomePage: View {
                     HomeSearchField(placeholder: "Search history", text: $search)
                     visitGroups
                 }
+                // Capped like the bookmarks home. Without this, history's rows
+                // stretched the full width of the window while its sidebar —
+                // pixel-identical to bookmarks' — stayed put, so ⌘⌥B → ⌘Y
+                // re-flowed the content of two pages built to be two views of
+                // one app.
+                .frame(maxWidth: 1_020, alignment: .leading)
                 .padding(.horizontal, 30)
                 .padding(.vertical, 26)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -198,6 +204,7 @@ struct HistoryEntryRow: View {
                     if let detail {
                         Text(detail)
                             .font(LimeghostTheme.metaFont)
+                            .tracking(LimeghostTheme.metaTracking)
                             .foregroundStyle(LimeghostTheme.textTertiary)
                             .frame(width: 58, alignment: .leading)
                     }
