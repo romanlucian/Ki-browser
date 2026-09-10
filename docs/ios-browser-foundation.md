@@ -4,7 +4,7 @@
 
 ## What exists, and what does not
 
-There is now an app, and there was not one on September 3. `ios/Limeghost.xcodeproj` builds `Limeghost.app`, a SwiftUI iOS application whose entire browsing model is the Mac's own — the same `BrowserWorkspace`, the same `BrowserSession`, the same stores. It runs on a Simulator, and it compiles for the device SDK — a device *build* stops at signing until a team is selected, so no device build has been produced. Nobody has installed it on a phone yet; see **Onto a real iPhone** below, which is a procedure written for the founder rather than a record of something performed.
+There is now an app, and there was not one on September 3. `ios/Limeghost.xcodeproj` builds `Limeghost.app`, a SwiftUI iOS application whose entire browsing model is the Mac's own — the same `BrowserWorkspace`, the same `BrowserSession`, the same stores. It runs on a Simulator and, since September 10, 2026, on a real iPhone: the founder's own, installed by cable under free provisioning. A device build needs a signing team, and the committed project names none. The build that reached the phone got the founder's free Personal Team on the command line, so the project file still names no team. **Onto a real iPhone** below records what that took.
 
 Underneath it, unchanged, is the boundary the previous plan built: `macos/LimeghostBrowser/Package.swift` declares a `LimeghostShared` target holding platform-neutral code that needs more than `LimeghostCore`'s Foundation-only layer — `@MainActor`, `WKWebView` types, `ObservableObject` — but none of AppKit, UIKit, or SwiftUI. It holds `BrowserSession` and `BrowserWorkspace` behind platform-seam protocols, the assistant (`AICompanion`), the bookmark/history/preference stores, site icons, connection security, content-blocking and search settings, page find, onboarding, and more: 23 files, moved out of `LimeghostBrowser` rather than rewritten, each carrying its git history forward (`git log --follow` confirms it file by file).
 
@@ -120,7 +120,14 @@ Both report `** TEST SUCCEEDED **`, and both run **256 tests** — `LimeghostCor
 
 ## Onto a real iPhone
 
-**None of what follows has been performed.** It cannot be automated: it needs an Apple ID signed in to Xcode and a physical phone connected to the Mac. It is written down here so the founder can do it, and so nobody reading this file mistakes a procedure for a record.
+**Performed once, on September 10, 2026**, on the founder's iPhone 13 Pro Max (iOS 18.7.8). It needs an Apple ID signed in to Xcode and a physical phone. Four things happened that the steps below did not predict, and each is recorded so the next install is quick:
+
+- **Wi-Fi did not work the first time.** The phone was on the same network and announced itself for wireless development, but CoreDevice could not connect to it (`CoreDeviceError 4000`). A cable worked at once. Whether Wi-Fi works now that the phone has been connected by cable is untested.
+- **Free provisioning allows three self-installed apps per phone, and other sideloading tools share them.** The install was refused with *"This device has reached the maximum number of installed apps using a free developer profile"* until a slot was freed. A phone that already runs apps signed with the same free Apple ID, through a sideloading tool for example, has fewer free slots than it appears to.
+- **The bundle identifier was `com.zincoo.limeghost.dev`, not `com.zincoo.limeghost`.** A free Personal Team that registers an identifier can keep it reserved, and the real one will be wanted later by a paid team for the App Store. The suffix was passed on the command line, and nothing in the project changed.
+- **The team was passed on the command line too.** That settles the worry below about `DEVELOPMENT_TEAM` landing in the tracked project file: `xcodebuild -project ios/Limeghost.xcodeproj -scheme Limeghost -destination 'generic/platform=iOS' -allowProvisioningUpdates DEVELOPMENT_TEAM=<team> PRODUCT_BUNDLE_IDENTIFIER=com.zincoo.limeghost.dev build`, then `xcrun devicectl device install app` and `xcrun devicectl device process launch`. Nothing touches `project.pbxproj`, so there is nothing to put back.
+
+The first launch was refused until the developer was trusted on the phone, exactly as step 7 below says. The certificate lasts seven days; this one expires on September 17, 2026.
 
 Signing is arranged in the project so that both destinations work without editing anything. `ios/Limeghost.xcodeproj` sets, on both the app and the test target:
 
@@ -190,7 +197,7 @@ One purchase unblocks this whole cluster. Nothing here ranks it above work that 
 
 ## Device-only checklist, for later plans
 
-There is an app now, so this list is finally runnable — but none of it has been run, because nothing has been installed on a phone. From spec §9.8:
+There is an app now, and since September 10 it has been on a phone, so this list is finally runnable. None of it has been run yet. From spec §9.8:
 
 - **The swipe-down-to-dismiss gesture** on the full-screen assistant overlay (spec §5.1/§5.3) — a Simulator does not reproduce a real swipe convincingly. The assistant does not exist in the app yet, so this waits on the later plan that builds it.
 - **Password AutoFill inside a provider's sign-in**, offering iCloud Keychain or the person's password manager inside `WKWebView` — something the Mac app cannot do today at all (spec §1.2), and behavior the Simulator's own AutoFill state does not always mirror a device's.
@@ -201,4 +208,4 @@ There is an app now, so this list is finally runnable — but none of it has bee
 
 ## Honesty
 
-No document may describe iOS activation, retention, or usability as validated. **No observed-user session has been run for this project on either platform**, and on iOS nobody at all — including the founder — has yet used the app on a phone. No claim is made of iOS signing for distribution, notarization, TestFlight participation, or App Store readiness; free provisioning is the entire distribution story, it reaches exactly one device, the founder's own, and its certificate lasts a week. The `ios-simulator` CI job's two commands pass locally against a real Simulator; the job itself has never executed, for the reason given above. The app's start surface does not fit a phone screen, which is written down above as a blocking release gate rather than left as a defect somebody might discover twice. If the repository's eventual store build ships under separate commercial terms ([docs/ip-and-ownership.md](ip-and-ownership.md)), that changes distribution terms only; the repository itself stays AGPL-3.0.
+No document may describe iOS activation, retention, or usability as validated. **No observed-user session has been run for this project on either platform**, and on iOS the only person to have used the app on a phone is the founder, who installed it on September 10, 2026. That is dogfooding, not an observed-user session. No claim is made of iOS signing for distribution, notarization, TestFlight participation, or App Store readiness; free provisioning is the entire distribution story, it reaches exactly one device, the founder's own, and its certificate lasts a week. The `ios-simulator` CI job's two commands pass locally against a real Simulator; the job itself has never executed, for the reason given above. The app's start surface does not fit a phone screen, which is written down above as a blocking release gate rather than left as a defect somebody might discover twice. If the repository's eventual store build ships under separate commercial terms ([docs/ip-and-ownership.md](ip-and-ownership.md)), that changes distribution terms only; the repository itself stays AGPL-3.0.

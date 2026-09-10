@@ -27,7 +27,12 @@ Dates are commit dates. Test counts are the totals at the end of each period, ve
   Each of the three new phone tests was watched failing first.
 - **The phone's release gate got worse, as measured on the simulator.** The same Mac commit gave the guide's "Local guide · official links" badge `.fixedSize()`, which is right for the Mac. At 402pt the badge keeps its full width, and the headline beside it now breaks almost letter by letter; the search field is pushed off screen. The merge improved two things there: the real mark and the removed build string.
 - A rule, now in `AGENTS.md` and `CLAUDE.md`: a change to any file the phone compiles by reference, or to `LimeghostCore` or `LimeghostShared`, runs the phone's suite too.
-- 503 Mac tests, 2 skipped, 0 failures; 27 iOS tests, 0 failures. `LimeghostSharedLayer` (256 tests) passes on the iPhone simulator and on the Mac. Nothing has been installed on a phone, and no observed-user session has been run on either platform.
+- **First install on a real iPhone**: the founder's own, on September 10.
+  - Wi-Fi could not connect (`CoreDeviceError 4000`); a cable worked.
+  - Free provisioning allows three self-installed apps per phone. The slots were taken, and the install succeeded once one was freed.
+  - The app ran as `com.zincoo.limeghost.dev`, with the team passed on the command line so the project file never records one.
+  - The seven-day certificate expires September 17.
+- 503 Mac tests, 2 skipped, 0 failures; 27 iOS tests, 0 failures. `LimeghostSharedLayer` (256 tests) passes on the iPhone simulator and on the Mac. No observed-user session has been run on either platform.
 
 ### Week of September 3–9, 2026
 
