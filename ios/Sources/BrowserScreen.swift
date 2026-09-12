@@ -21,7 +21,11 @@ struct BrowserScreen: View {
                 }
             }
 
-            bottomBar
+            if let tab = host.workspace.selectedTab {
+                BottomChrome(find: tab.find, bar: bottomBar)
+            } else {
+                bottomBar
+            }
         }
         .sheet(isPresented: $isPresentingAddressSheet) {
             AddressSheet(workspace: host.workspace) {
@@ -64,6 +68,24 @@ struct BrowserScreen: View {
         guard let item = menu.didDismiss() else { return }
         let actions = PageMenuActions(workspace: host.workspace)
         Task { await actions.perform(item) }
+    }
+}
+
+/// The bar along the bottom, or the find bar in its place while finding.
+///
+/// Its own view, so it can observe the tab's find controller. `BrowserScreen`
+/// observes the workspace, and a tab's `find` changes without the workspace
+/// hearing of it — the same reason `TabSurface` observes its tab and session.
+struct BottomChrome: View {
+    @ObservedObject var find: PageFindController
+    let bar: BottomBar
+
+    var body: some View {
+        if find.isPresented {
+            FindBar(find: find)
+        } else {
+            bar
+        }
     }
 }
 
