@@ -16,6 +16,7 @@ struct BrowserScreen: View {
             Group {
                 if let tab = host.workspace.selectedTab {
                     TabSurface(tab: tab, workspace: host.workspace)
+                        .overlay(alignment: .bottom) { NoticeLayer(session: tab.session) }
                 } else {
                     Color.clear
                 }
@@ -150,6 +151,12 @@ struct TabSurface: View {
         showsGuide(loadState: session.loadState, startSurface: tab.startSurface)
     }
 
+    /// Reader covers the page while an article is open. Never over the guide,
+    /// which is not a page.
+    var showsTheReader: Bool {
+        !showsTheGuide && tab.readerArticle != nil
+    }
+
     var body: some View {
         if showsTheGuide {
             StartSurfaceScreen(workspace: workspace)
@@ -157,6 +164,19 @@ struct TabSurface: View {
             WebViewHost(session: session)
                 .id(session.instanceID)
                 .ignoresSafeArea(edges: .bottom)
+                // Over the page rather than instead of it: the web view stays
+                // mounted, so closing Reader shows the page exactly as it was.
+                .overlay {
+                    if showsTheReader, let article = tab.readerArticle {
+                        ReaderView(
+                            article: article,
+                            copy: { tab.copyArticleForAI(article) },
+                            close: { tab.readerArticle = nil },
+                            headerStyle: .touch
+                        )
+                        .transition(.opacity)
+                    }
+                }
         }
     }
 }

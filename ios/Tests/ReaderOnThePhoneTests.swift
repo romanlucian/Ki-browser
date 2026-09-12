@@ -23,6 +23,39 @@ final class ReaderOnThePhoneTests: XCTestCase {
         )))
     }
 
+    /// A suite of its own, emptied afterwards, as `StartSurfaceTests.makeHost()` does.
+    private func makeHost() throws -> WorkspaceHost {
+        let suiteName = "clearframe.iosReader.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        addTeardownBlock { defaults.removePersistentDomain(forName: suiteName) }
+        return WorkspaceHost.forTesting(defaults: defaults)
+    }
+
+    // MARK: - Over the page
+
+    /// While an article is open, Reader covers the page. The web view stays
+    /// mounted underneath it.
+    func testReaderCoversThePageWhileAnArticleIsOpen() throws {
+        let host = try makeHost()
+        let tab = try XCTUnwrap(host.workspace.selectedTab)
+        host.workspace.open("https://example.com/")
+        XCTAssertFalse(TabSurface(tab: tab, workspace: host.workspace).showsTheReader)
+
+        tab.readerArticle = try article()
+
+        XCTAssertTrue(TabSurface(tab: tab, workspace: host.workspace).showsTheReader)
+    }
+
+    /// The guide is not a page, and Reader never covers it.
+    func testReaderNeverCoversTheGuide() throws {
+        let host = try makeHost()
+        let tab = try XCTUnwrap(host.workspace.selectedTab)
+
+        tab.readerArticle = try article()
+
+        XCTAssertFalse(TabSurface(tab: tab, workspace: host.workspace).showsTheReader)
+    }
+
     // MARK: - The header
 
     /// Reader's header on a phone is two rows of 44 points, the smallest

@@ -20,6 +20,7 @@
 		AA000000000000000000010B /* IOSBrandMarkArtwork.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000020C /* IOSBrandMarkArtwork.swift */; };
 		AA000000000000000000010C /* PageMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000020D /* PageMenu.swift */; };
 		AA000000000000000000010D /* FindBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000020E /* FindBar.swift */; };
+		AA000000000000000000010E /* NoticeBanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000020F /* NoticeBanner.swift */; };
 		AA0000000000000000000671 /* AIToolStartPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000661 /* AIToolStartPage.swift */; };
 		AA0000000000000000000672 /* LimeghostTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000662 /* LimeghostTheme.swift */; };
 		AA0000000000000000000673 /* SiteIconView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000663 /* SiteIconView.swift */; };
@@ -65,6 +66,7 @@
 		AA000000000000000000020C /* IOSBrandMarkArtwork.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IOSBrandMarkArtwork.swift; sourceTree = "<group>"; };
 		AA000000000000000000020D /* PageMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PageMenu.swift; sourceTree = "<group>"; };
 		AA000000000000000000020E /* FindBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FindBar.swift; sourceTree = "<group>"; };
+		AA000000000000000000020F /* NoticeBanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoticeBanner.swift; sourceTree = "<group>"; };
 		AA0000000000000000000661 /* AIToolStartPage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "../macos/LimeghostBrowser/Sources/LimeghostBrowser/AIToolStartPage.swift"; sourceTree = "<group>"; };
 		AA0000000000000000000662 /* LimeghostTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "../macos/LimeghostBrowser/Sources/LimeghostBrowser/LimeghostTheme.swift"; sourceTree = "<group>"; };
 		AA0000000000000000000663 /* SiteIconView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "../macos/LimeghostBrowser/Sources/LimeghostBrowser/SiteIconView.swift"; sourceTree = "<group>"; };
@@ -132,6 +134,7 @@
 				AA000000000000000000020C /* IOSBrandMarkArtwork.swift */,
 				AA000000000000000000020D /* PageMenu.swift */,
 				AA000000000000000000020E /* FindBar.swift */,
+				AA000000000000000000020F /* NoticeBanner.swift */,
 			);
 			path = Sources;
 			sourceTree = "<group>";
@@ -295,6 +298,7 @@
 				AA000000000000000000010B /* IOSBrandMarkArtwork.swift in Sources */,
 				AA000000000000000000010C /* PageMenu.swift in Sources */,
 				AA000000000000000000010D /* FindBar.swift in Sources */,
+				AA000000000000000000010E /* NoticeBanner.swift in Sources */,
 				AA0000000000000000000671 /* AIToolStartPage.swift in Sources */,
 				AA0000000000000000000672 /* LimeghostTheme.swift in Sources */,
 				AA0000000000000000000673 /* SiteIconView.swift in Sources */,
