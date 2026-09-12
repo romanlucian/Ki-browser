@@ -16,13 +16,14 @@ struct BottomBarModel {
     }
 }
 
-/// Back, the address, the tabs and a menu — within a thumb's reach, along the
-/// bottom so the page's own top is left alone.
+/// Back, the address, the tabs and the page menu — within a thumb's reach,
+/// along the bottom so the page's own top is left alone.
 struct BottomBar: View {
     let model: BottomBarModel
     let goBack: () -> Void
     let openAddress: () -> Void
     let openTabs: () -> Void
+    let openMenu: () -> Void
 
     var body: some View {
         HStack(spacing: 16) {
@@ -44,12 +45,6 @@ struct BottomBar: View {
             // button, and arrives with the assistant in Plan 3. A button that
             // did nothing would teach the wrong thing about where it lives.
 
-            // The page menu belongs after the tab button — Reader, Copy for
-            // AI, bookmark this page, find in page, site information and
-            // settings, almost entirely Plan 3's too. Reserved for the same
-            // reason as the toggle above: a menu that opened onto nothing
-            // would teach the wrong thing about where it lives.
-
             Button(action: openTabs) {
                 Text("\(model.tabCount)")
                     .font(.footnote.weight(.semibold))
@@ -57,6 +52,15 @@ struct BottomBar: View {
                     .overlay(RoundedRectangle(cornerRadius: 6).stroke(lineWidth: 1.5))
             }
             .accessibilityLabel("Tabs, \(model.tabCount) open")
+
+            // The page menu. Its touch area is 44 points wide and as tall as
+            // the address pill: the glyph alone is a target a finger misses.
+            Button(action: openMenu) {
+                Image(systemName: "ellipsis")
+                    .frame(width: 44, height: 38)
+                    .contentShape(Rectangle())
+            }
+            .accessibilityLabel("Menu")
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 8)

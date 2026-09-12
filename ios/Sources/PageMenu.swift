@@ -87,6 +87,33 @@ extension PageMenuModel {
     }
 }
 
+/// The menu's one rule about timing: a row closes the sheet first, and acts
+/// once the sheet has gone. `IOSPageSharing.share` presents the system's share
+/// sheet from the window's root view controller, which cannot present anything
+/// while this sheet is still up. The find bar's keyboard and Reader want a
+/// clear screen too.
+struct PageMenuPresentation {
+    var isPresented = false
+    private(set) var chosen: PageMenuItem?
+
+    mutating func open() {
+        chosen = nil
+        isPresented = true
+    }
+
+    /// A row was tapped: remember it, and close.
+    mutating func choose(_ item: PageMenuItem) {
+        chosen = item
+        isPresented = false
+    }
+
+    /// The sheet has gone. Hands back the row to act on, once.
+    mutating func didDismiss() -> PageMenuItem? {
+        defer { chosen = nil }
+        return chosen
+    }
+}
+
 /// What each row does, as named methods rather than closures in the view, so
 /// a test can call them. An inline closure is invisible to tests, which is the
 /// lesson `StartSurfaceScreen.openTool` recorded.
@@ -129,5 +156,119 @@ struct PageMenuActions {
         let isSaved = workspace.dataStore.isBookmarked(address)
         guard isSaved != wasSaved else { return }
         tab.session.showPageNotice(isSaved ? "Bookmark added." : "Bookmark removed.")
+    }
+}
+
+/// The page menu: two large buttons, then two cards of rows, on the plane's
+/// colour. Every row closes the sheet; `PageMenuPresentation` runs it after.
+struct PageMenu: View {
+    let model: PageMenuModel
+    let choose: (PageMenuItem) -> Void
+    /// The height the rows need, reported up so the sheet opens exactly that
+    /// tall. At half height, the last rows would open below the fold.
+    @Binding var height: CGFloat
+
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 0) {
+                HStack(spacing: 12) {
+                    tile(.reader)
+                    tile(.copyForAI)
+                }
+                card([.reload, .forward, .newTab, .newPrivateTab])
+                    .padding(.top, 20)
+                card([.bookmark, .find, .share, .desktopSite])
+                    .padding(.top, 16)
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 24)
+            .padding(.bottom, 16)
+            .background(
+                GeometryReader { proxy in
+                    Color.clear.preference(key: PageMenuHeightKey.self, value: proxy.size.height)
+                }
+            )
+        }
+        .scrollBounceBehavior(.basedOnSize)
+        .onPreferenceChange(PageMenuHeightKey.self) { height = $0 }
+    }
+
+    /// One of the two large buttons: Reader, and Copy for AI, always labelled.
+    private func tile(_ item: PageMenuItem) -> some View {
+        let enabled = model.isEnabled(item)
+        return Button { choose(item) } label: {
+            VStack(spacing: 8) {
+                Image(systemName: model.symbol(item))
+                    .font(.system(size: 22))
+                    .foregroundStyle(enabled ? LimeghostTheme.accent : LimeghostTheme.textTertiary)
+                Text(model.title(item))
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(enabled ? LimeghostTheme.textPrimary : LimeghostTheme.textTertiary)
+            }
+            .frame(maxWidth: .infinity, minHeight: 84)
+            .background(
+                LimeghostTheme.bg2,
+                in: RoundedRectangle(cornerRadius: LimeghostTheme.radius12, style: .continuous)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: LimeghostTheme.radius12, style: .continuous)
+                    .stroke(LimeghostTheme.hairline2)
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(!enabled)
+    }
+
+    private func card(_ items: [PageMenuItem]) -> some View {
+        VStack(spacing: 0) {
+            ForEach(Array(items.enumerated()), id: \.element) { index, item in
+                if index > 0 {
+                    Rectangle()
+                        .fill(LimeghostTheme.hairline2)
+                        .frame(height: 1)
+                        .padding(.leading, 16)
+                }
+                row(item)
+            }
+        }
+        .background(
+            LimeghostTheme.bg2,
+            in: RoundedRectangle(cornerRadius: LimeghostTheme.radius12, style: .continuous)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: LimeghostTheme.radius12, style: .continuous)
+                .stroke(LimeghostTheme.hairline2)
+        )
+    }
+
+    private func row(_ item: PageMenuItem) -> some View {
+        let enabled = model.isEnabled(item)
+        return Button { choose(item) } label: {
+            HStack(spacing: 12) {
+                Text(model.title(item))
+                    .font(.body)
+                    .foregroundStyle(enabled ? LimeghostTheme.textPrimary : LimeghostTheme.textTertiary)
+                Spacer(minLength: 12)
+                Image(systemName: model.symbol(item))
+                    .font(.system(size: 17))
+                    .foregroundStyle(enabled ? LimeghostTheme.textSecondary : LimeghostTheme.textTertiary)
+            }
+            .padding(.horizontal, 16)
+            .frame(minHeight: 48)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(!enabled)
+    }
+}
+
+/// The menu's content height, carried from inside the scroll view up to the
+/// sheet's detent.
+private struct PageMenuHeightKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
     }
 }

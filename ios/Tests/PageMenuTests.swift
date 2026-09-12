@@ -164,4 +164,40 @@ final class PageMenuTests: XCTestCase {
             "There is no web page in this tab to copy."
         )
     }
+
+    // MARK: - When a row acts
+
+    /// A tapped row closes the sheet and waits: it runs once the sheet has
+    /// gone. Share is why. It presents the system's sheet from the window's
+    /// root view controller, which cannot present anything while this one is
+    /// still up.
+    func testARowClosesTheSheetBeforeItActs() {
+        var presentation = PageMenuPresentation()
+        presentation.open()
+        XCTAssertTrue(presentation.isPresented)
+
+        presentation.choose(.share)
+
+        XCTAssertFalse(presentation.isPresented)
+        XCTAssertEqual(presentation.didDismiss(), .share)
+    }
+
+    /// A row runs once. The sheet closing again later runs nothing.
+    func testARowActsOnlyOnce() {
+        var presentation = PageMenuPresentation()
+        presentation.open()
+        presentation.choose(.reload)
+        _ = presentation.didDismiss()
+
+        XCTAssertNil(presentation.didDismiss())
+    }
+
+    /// Swiping the sheet away chooses nothing, and runs nothing.
+    func testSwipingTheSheetAwayRunsNothing() {
+        var presentation = PageMenuPresentation()
+        presentation.open()
+        presentation.isPresented = false
+
+        XCTAssertNil(presentation.didDismiss())
+    }
 }

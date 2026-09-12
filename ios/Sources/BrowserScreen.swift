@@ -6,6 +6,10 @@ struct BrowserScreen: View {
     @ObservedObject var host: WorkspaceHost
     @State private var isPresentingAddressSheet = false
     @State private var isPresentingTabSwitcher = false
+    @State private var menu = PageMenuPresentation()
+    /// The page menu's measured height; see `PageMenu.height`. It starts near
+    /// the real value, so the first opening hardly moves.
+    @State private var menuHeight: CGFloat = 540
 
     var body: some View {
         VStack(spacing: 0) {
@@ -17,16 +21,7 @@ struct BrowserScreen: View {
                 }
             }
 
-            BottomBar(
-                model: BottomBarModel(
-                    urlString: host.workspace.selectedTab?.session.currentURLString ?? "",
-                    tabCount: host.workspace.visibleTabs.count,
-                    canGoBack: host.workspace.canGoBackInSelectedTab
-                ),
-                goBack: { host.workspace.goBackInSelectedTab() },
-                openAddress: { isPresentingAddressSheet = true },
-                openTabs: { isPresentingTabSwitcher = true }
-            )
+            bottomBar
         }
         .sheet(isPresented: $isPresentingAddressSheet) {
             AddressSheet(workspace: host.workspace) {
@@ -38,6 +33,37 @@ struct BrowserScreen: View {
                 isPresentingTabSwitcher = false
             }
         }
+        .sheet(isPresented: $menu.isPresented, onDismiss: runChosenMenuItem) {
+            PageMenu(
+                model: PageMenuModel(workspace: host.workspace),
+                choose: { menu.choose($0) },
+                height: $menuHeight
+            )
+            .presentationDetents([.height(menuHeight)])
+            .presentationDragIndicator(.visible)
+            .presentationBackground(LimeghostTheme.bg1)
+        }
+    }
+
+    private var bottomBar: BottomBar {
+        BottomBar(
+            model: BottomBarModel(
+                urlString: host.workspace.selectedTab?.session.currentURLString ?? "",
+                tabCount: host.workspace.visibleTabs.count,
+                canGoBack: host.workspace.canGoBackInSelectedTab
+            ),
+            goBack: { host.workspace.goBackInSelectedTab() },
+            openAddress: { isPresentingAddressSheet = true },
+            openTabs: { isPresentingTabSwitcher = true },
+            openMenu: { menu.open() }
+        )
+    }
+
+    /// Runs the row the menu closed for, now that the sheet has gone.
+    private func runChosenMenuItem() {
+        guard let item = menu.didDismiss() else { return }
+        let actions = PageMenuActions(workspace: host.workspace)
+        Task { await actions.perform(item) }
     }
 }
 
