@@ -707,16 +707,22 @@ public final class BrowserWorkspace: ObservableObject {
     /// Prefers the article already on screen: while Reader is open, copying
     /// must produce the words being read rather than a second extraction of a
     /// page whose script may have changed it since.
-    public func copySelectedPageForAI() async {
-        guard let tab = selectedTab else { return }
+    ///
+    /// Returns the article it copied, or nil when nothing was copied and
+    /// `readCurrentPage` has already said why. The phone's menu uses the
+    /// article to confirm the copy in words; the Mac's command discards it.
+    @discardableResult
+    public func copySelectedPageForAI() async -> ReaderArticle? {
+        guard let tab = selectedTab else { return nil }
         let article: ReaderArticle?
         if let open = tab.readerArticle {
             article = open
         } else {
             article = await tab.readCurrentPage(verb: "copy")
         }
-        guard let article else { return }
+        guard let article else { return nil }
         tab.copyArticleForAI(article)
+        return article
     }
 
     public func selectTab(_ id: UUID) {
@@ -1483,6 +1489,13 @@ public final class BrowserWorkspace: ObservableObject {
     public func goForwardInSelectedTab() {
         makeRoomForPage()
         selectedTab?.session.goForward()
+    }
+
+    /// Request Desktop Site and Request Mobile Site, from the phone's page
+    /// menu. The Mac has no such command: it already gets desktop pages.
+    public func toggleDesktopSiteInSelectedTab() {
+        guard let session = selectedTab?.session else { return }
+        session.setPrefersDesktopSite(!session.prefersDesktopSite)
     }
 
     public func requestAddressFocusForAppActivation() {

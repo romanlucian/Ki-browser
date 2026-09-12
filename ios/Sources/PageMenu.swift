@@ -86,3 +86,48 @@ extension PageMenuModel {
         )
     }
 }
+
+/// What each row does, as named methods rather than closures in the view, so
+/// a test can call them. An inline closure is invisible to tests, which is the
+/// lesson `StartSurfaceScreen.openTool` recorded.
+@MainActor
+struct PageMenuActions {
+    let workspace: BrowserWorkspace
+
+    func perform(_ item: PageMenuItem) async {
+        switch item {
+        case .reader: await workspace.toggleReaderInSelectedTab()
+        case .copyForAI: await copyForAI()
+        case .reload: workspace.reloadSelectedTab()
+        case .forward: workspace.goForwardInSelectedTab()
+        case .newTab: workspace.addTab()
+        case .newPrivateTab: workspace.addTab(isPrivate: true)
+        case .bookmark: toggleBookmark()
+        case .find: workspace.findInSelectedTab()
+        case .share: workspace.shareSelectedPage()
+        case .desktopSite: workspace.toggleDesktopSiteInSelectedTab()
+        }
+    }
+
+    /// The menu closes as it copies, so the phone says what went onto the
+    /// clipboard. A copy that did not happen has already said why, through
+    /// `readCurrentPage`, and gets no confirmation on top.
+    func copyForAI() async {
+        guard let article = await workspace.copySelectedPageForAI() else { return }
+        workspace.selectedTab?.session.showPageNotice(article.copyConfirmation)
+    }
+
+    /// The shared toggle says nothing, and the phone has no star to show the
+    /// change, so the phone says it in words. It says only what actually
+    /// changed, read from the store before and after: an address the store
+    /// refuses changes nothing and is claimed as nothing.
+    func toggleBookmark() {
+        guard let tab = workspace.selectedTab else { return }
+        let address = tab.session.currentURLString
+        let wasSaved = workspace.dataStore.isBookmarked(address)
+        workspace.toggleBookmarkForSelectedTab()
+        let isSaved = workspace.dataStore.isBookmarked(address)
+        guard isSaved != wasSaved else { return }
+        tab.session.showPageNotice(isSaved ? "Bookmark added." : "Bookmark removed.")
+    }
+}

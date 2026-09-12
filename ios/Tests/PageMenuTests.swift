@@ -92,4 +92,76 @@ final class PageMenuTests: XCTestCase {
         XCTAssertFalse(onAPage.prefersDesktopSite)
         XCTAssertFalse(onAPage.isReaderOpen)
     }
+
+    // MARK: - What the rows do
+
+    /// New Private Tab puts a private tab in front, through the workspace's
+    /// own door.
+    func testNewPrivateTabPutsAPrivateTabInFront() async throws {
+        let host = try makeHost()
+        await PageMenuActions(workspace: host.workspace).perform(.newPrivateTab)
+        XCTAssertEqual(host.workspace.selectedTab?.isPrivate, true)
+    }
+
+    /// Add Bookmark saves the page and says so. The phone has no star to show it.
+    func testAddBookmarkSavesThePageAndSaysSo() async throws {
+        let host = try makeHost()
+        host.workspace.open("https://example.com/")
+
+        await PageMenuActions(workspace: host.workspace).perform(.bookmark)
+
+        XCTAssertTrue(host.workspace.dataStore.isBookmarked("https://example.com/"))
+        XCTAssertEqual(host.workspace.selectedTab?.session.pageNotice, "Bookmark added.")
+    }
+
+    /// The same row on a saved page removes it, and says that instead.
+    func testRemoveBookmarkRemovesItAndSaysSo() async throws {
+        let host = try makeHost()
+        host.workspace.open("https://example.com/")
+        let actions = PageMenuActions(workspace: host.workspace)
+
+        await actions.perform(.bookmark)
+        await actions.perform(.bookmark)
+
+        XCTAssertFalse(host.workspace.dataStore.isBookmarked("https://example.com/"))
+        XCTAssertEqual(host.workspace.selectedTab?.session.pageNotice, "Bookmark removed.")
+    }
+
+    /// Request Desktop Site turns the switch on in the tab in front, and the
+    /// same row turns it off again.
+    func testRequestDesktopSiteTurnsTheTabsSwitchOnAndOff() async throws {
+        let host = try makeHost()
+        host.workspace.open("https://example.com/")
+        let actions = PageMenuActions(workspace: host.workspace)
+
+        await actions.perform(.desktopSite)
+        XCTAssertEqual(host.workspace.selectedTab?.session.prefersDesktopSite, true)
+
+        await actions.perform(.desktopSite)
+        XCTAssertEqual(host.workspace.selectedTab?.session.prefersDesktopSite, false)
+    }
+
+    /// Find in Page opens the find bar.
+    func testFindInPageOpensTheFindBar() async throws {
+        let host = try makeHost()
+        host.workspace.open("https://example.com/")
+
+        await PageMenuActions(workspace: host.workspace).perform(.find)
+
+        XCTAssertEqual(host.workspace.selectedTab?.find.isPresented, true)
+    }
+
+    /// Nothing copied, nothing confirmed. A tab with no page cannot be copied,
+    /// and `readCurrentPage` has already said why. A confirmation on top would
+    /// claim a copy that never happened.
+    func testACopyThatDidNotHappenIsNotConfirmed() async throws {
+        let host = try makeHost()
+
+        await PageMenuActions(workspace: host.workspace).perform(.copyForAI)
+
+        XCTAssertEqual(
+            host.workspace.selectedTab?.session.pageNotice,
+            "There is no web page in this tab to copy."
+        )
+    }
 }

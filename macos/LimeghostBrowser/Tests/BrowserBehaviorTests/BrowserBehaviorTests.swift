@@ -533,6 +533,33 @@ final class BrowserBehaviorTests: XCTestCase {
         )
     }
 
+    /// The phone's menu closes as it copies, so the phone confirms each copy in
+    /// words. A doubtful copy says exactly what the Mac's own notice says. A
+    /// clean one says how much went onto the clipboard, and claims nothing
+    /// about the text that it cannot back.
+    func testCopyConfirmationSaysWhatWasCopied() throws {
+        func page(confidence: Double?) -> PageSnapshot {
+            PageSnapshot(
+                title: "Title",
+                url: "https://example.org/a",
+                hostname: "example.org",
+                scheme: "https",
+                language: "en",
+                text: "A sentence with enough words in it to be read as a page of prose rather than a fragment.",
+                wordCount: 18,
+                hasPasswordField: false,
+                formActions: [],
+                extractionConfidence: confidence
+            )
+        }
+
+        let confident = try XCTUnwrap(ReaderArticle(page: page(confidence: 0.9)))
+        XCTAssertEqual(confident.copyConfirmation, "Copied \(confident.words) words.")
+
+        let noArticle = try XCTUnwrap(ReaderArticle(page: page(confidence: 0)))
+        XCTAssertEqual(noArticle.copyConfirmation, noArticle.copyNotice)
+    }
+
     /// Page actions that read a document belong only where there is one.
     func testOnlyALoadedPageOffersToBeRead() {
         XCTAssertTrue(BrowserLoadState.content.showsLoadedPage)

@@ -61,6 +61,16 @@ public struct ReaderArticle: Equatable {
         return nil
     }
 
+    /// What the phone says after Copy for AI from its menu. The menu closes as
+    /// it copies, and iOS says nothing when an app writes to the clipboard, so
+    /// without a sentence there is no sign the copy happened. A doubtful copy
+    /// keeps `copyNotice`'s words. A clean one says how much was copied. The
+    /// Mac shows `copyNotice` alone, and deliberately says nothing about a
+    /// clean copy.
+    public var copyConfirmation: String {
+        copyNotice ?? "Copied \(words) words."
+    }
+
     /// The same fact as `copyNotice`, phrased to stand on its own in Reader's
     /// header rather than to follow a word count.
     public var extractionWarning: String? {
