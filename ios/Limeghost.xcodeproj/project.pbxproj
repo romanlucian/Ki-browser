@@ -18,6 +18,7 @@
 		AA0000000000000000000109 /* TabSwitcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000020A /* TabSwitcher.swift */; };
 		AA000000000000000000010A /* StartSurfaceScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000020B /* StartSurfaceScreen.swift */; };
 		AA000000000000000000010B /* IOSBrandMarkArtwork.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000020C /* IOSBrandMarkArtwork.swift */; };
+		AA000000000000000000010C /* PageMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000020D /* PageMenu.swift */; };
 		AA0000000000000000000671 /* AIToolStartPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000661 /* AIToolStartPage.swift */; };
 		AA0000000000000000000672 /* LimeghostTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000662 /* LimeghostTheme.swift */; };
 		AA0000000000000000000673 /* SiteIconView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000663 /* SiteIconView.swift */; };
@@ -34,6 +35,7 @@
 		AA0000000000000000002105 /* TabSwitcherTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000002205 /* TabSwitcherTests.swift */; };
 		AA0000000000000000002106 /* StartSurfaceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000002206 /* StartSurfaceTests.swift */; };
 		AA0000000000000000002107 /* ReaderOnThePhoneTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000002207 /* ReaderOnThePhoneTests.swift */; };
+		AA0000000000000000002108 /* PageMenuTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000002208 /* PageMenuTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -59,6 +61,7 @@
 		AA000000000000000000020A /* TabSwitcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TabSwitcher.swift; sourceTree = "<group>"; };
 		AA000000000000000000020B /* StartSurfaceScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StartSurfaceScreen.swift; sourceTree = "<group>"; };
 		AA000000000000000000020C /* IOSBrandMarkArtwork.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IOSBrandMarkArtwork.swift; sourceTree = "<group>"; };
+		AA000000000000000000020D /* PageMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PageMenu.swift; sourceTree = "<group>"; };
 		AA0000000000000000000661 /* AIToolStartPage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "../macos/LimeghostBrowser/Sources/LimeghostBrowser/AIToolStartPage.swift"; sourceTree = "<group>"; };
 		AA0000000000000000000662 /* LimeghostTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "../macos/LimeghostBrowser/Sources/LimeghostBrowser/LimeghostTheme.swift"; sourceTree = "<group>"; };
 		AA0000000000000000000663 /* SiteIconView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "../macos/LimeghostBrowser/Sources/LimeghostBrowser/SiteIconView.swift"; sourceTree = "<group>"; };
@@ -74,6 +77,7 @@
 		AA0000000000000000002205 /* TabSwitcherTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TabSwitcherTests.swift; sourceTree = "<group>"; };
 		AA0000000000000000002206 /* StartSurfaceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StartSurfaceTests.swift; sourceTree = "<group>"; };
 		AA0000000000000000002207 /* ReaderOnThePhoneTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderOnThePhoneTests.swift; sourceTree = "<group>"; };
+		AA0000000000000000002208 /* PageMenuTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PageMenuTests.swift; sourceTree = "<group>"; };
 		AA0000000000000000002301 /* LimeghostTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = LimeghostTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -122,6 +126,7 @@
 				AA000000000000000000020A /* TabSwitcher.swift */,
 				AA000000000000000000020B /* StartSurfaceScreen.swift */,
 				AA000000000000000000020C /* IOSBrandMarkArtwork.swift */,
+				AA000000000000000000020D /* PageMenu.swift */,
 			);
 			path = Sources;
 			sourceTree = "<group>";
@@ -136,6 +141,7 @@
 				AA0000000000000000002205 /* TabSwitcherTests.swift */,
 				AA0000000000000000002206 /* StartSurfaceTests.swift */,
 				AA0000000000000000002207 /* ReaderOnThePhoneTests.swift */,
+				AA0000000000000000002208 /* PageMenuTests.swift */,
 			);
 			path = Tests;
 			sourceTree = "<group>";
@@ -281,6 +287,7 @@
 				AA0000000000000000000109 /* TabSwitcher.swift in Sources */,
 				AA000000000000000000010A /* StartSurfaceScreen.swift in Sources */,
 				AA000000000000000000010B /* IOSBrandMarkArtwork.swift in Sources */,
+				AA000000000000000000010C /* PageMenu.swift in Sources */,
 				AA0000000000000000000671 /* AIToolStartPage.swift in Sources */,
 				AA0000000000000000000672 /* LimeghostTheme.swift in Sources */,
 				AA0000000000000000000673 /* SiteIconView.swift in Sources */,
@@ -301,6 +308,7 @@
 				AA0000000000000000002105 /* TabSwitcherTests.swift in Sources */,
 				AA0000000000000000002106 /* StartSurfaceTests.swift in Sources */,
 				AA0000000000000000002107 /* ReaderOnThePhoneTests.swift in Sources */,
+				AA0000000000000000002108 /* PageMenuTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

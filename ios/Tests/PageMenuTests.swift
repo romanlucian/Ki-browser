@@ -1,0 +1,95 @@
+import XCTest
+import LimeghostCore
+@testable import Limeghost
+@testable import LimeghostShared
+
+@MainActor
+final class PageMenuTests: XCTestCase {
+    /// A suite of its own, emptied afterwards, for the reason
+    /// `StartSurfaceTests.makeHost()` gives: these tests run inside the app.
+    private func makeHost() throws -> WorkspaceHost {
+        let suiteName = "clearframe.iosPageMenu.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        addTeardownBlock { defaults.removePersistentDomain(forName: suiteName) }
+        return WorkspaceHost.forTesting(defaults: defaults)
+    }
+
+    /// A model on a page, with nothing else true, unless a test says otherwise.
+    private func model(
+        hasPage: Bool = true,
+        canGoForward: Bool = false,
+        isBookmarked: Bool = false,
+        prefersDesktopSite: Bool = false,
+        isReaderOpen: Bool = false
+    ) -> PageMenuModel {
+        PageMenuModel(
+            hasPage: hasPage,
+            canGoForward: canGoForward,
+            isBookmarked: isBookmarked,
+            prefersDesktopSite: prefersDesktopSite,
+            isReaderOpen: isReaderOpen
+        )
+    }
+
+    // MARK: - What the menu offers
+
+    /// On the AI guide there is no page to act on. Only the two rows that
+    /// open a new tab work. The rest stay in place, greyed, and light up
+    /// when a page opens.
+    func testOnTheGuideOnlyTheNewTabRowsWork() {
+        let guide = model(hasPage: false)
+        XCTAssertEqual(PageMenuItem.allCases.filter(guide.isEnabled), [.newTab, .newPrivateTab])
+    }
+
+    /// On a page every row works except Forward, while there is nowhere to
+    /// go forward to.
+    func testOnAPageEverythingWorksButForward() {
+        let page = model()
+        XCTAssertEqual(PageMenuItem.allCases.filter { !page.isEnabled($0) }, [.forward])
+    }
+
+    /// Forward follows the tab: back on the guide, the page to go forward to
+    /// is still there.
+    func testForwardFollowsTheTab() {
+        XCTAssertTrue(model(canGoForward: true).isEnabled(.forward))
+        XCTAssertTrue(model(hasPage: false, canGoForward: true).isEnabled(.forward))
+    }
+
+    /// Find in Page searches the page, and Reader covers it, so a match would
+    /// be highlighted where nobody can see it. Reader itself stays available,
+    /// to be closed.
+    func testFindWaitsWhileReaderCoversThePage() {
+        let reading = model(isReaderOpen: true)
+        XCTAssertFalse(reading.isEnabled(.find))
+        XCTAssertTrue(reading.isEnabled(.reader))
+    }
+
+    /// The labels that change say what a tap will do next.
+    func testTheLabelsSayWhatATapWillDoNext() {
+        XCTAssertEqual(model().title(.bookmark), "Add Bookmark")
+        XCTAssertEqual(model(isBookmarked: true).title(.bookmark), "Remove Bookmark")
+        XCTAssertEqual(model(isBookmarked: true).symbol(.bookmark), "star.fill")
+
+        XCTAssertEqual(model().title(.desktopSite), "Request Desktop Site")
+        XCTAssertEqual(model(prefersDesktopSite: true).title(.desktopSite), "Request Mobile Site")
+        XCTAssertEqual(model(prefersDesktopSite: true).symbol(.desktopSite), "iphone")
+
+        XCTAssertEqual(model().title(.reader), "Reader")
+        XCTAssertEqual(model(isReaderOpen: true).title(.reader), "Close Reader")
+    }
+
+    /// The model reads the tab in front, not a copy of it.
+    func testTheModelReadsTheTabInFront() throws {
+        let host = try makeHost()
+        XCTAssertFalse(PageMenuModel(workspace: host.workspace).hasPage, "a fresh tab is on the guide, with no page")
+
+        host.workspace.open("https://example.com/")
+        host.workspace.toggleBookmarkForSelectedTab()
+        let onAPage = PageMenuModel(workspace: host.workspace)
+
+        XCTAssertTrue(onAPage.hasPage)
+        XCTAssertTrue(onAPage.isBookmarked)
+        XCTAssertFalse(onAPage.prefersDesktopSite)
+        XCTAssertFalse(onAPage.isReaderOpen)
+    }
+}
