@@ -115,6 +115,11 @@ public final class BrowserSession: NSObject, ObservableObject {
     /// extractor was unsure, or the page is a list rather than an article. Silence
     /// is the normal case: a notice that appears every time is one nobody reads.
     @Published public private(set) var pageNotice: String?
+    /// Whether this tab asks sites for their desktop version: the phone's
+    /// Request Desktop Site. Per tab, and for this run only. Nothing saves it,
+    /// so a restored tab loads the ordinary version. The Mac never turns it
+    /// on, because a Mac already gets desktop pages.
+    @Published public private(set) var prefersDesktopSite = false
     /// How the connection to the current page actually stands, from the scheme
     /// *and* from WebKit's own report of whether everything on the page arrived
     /// encrypted. Published so the address chip and the site information
@@ -426,6 +431,17 @@ public final class BrowserSession: NSObject, ObservableObject {
     public func reload() {
         if isShowingStartPage { showStartPage() } else { webView.reload() }
     }
+
+    /// Request Desktop Site and Request Mobile Site. Reloads, because the page
+    /// on screen was fetched as the other version. The reload is a navigation,
+    /// so it passes `decidePolicyFor`, which is where the switch is read. Not
+    /// a door: it is the same page, asked for again.
+    public func setPrefersDesktopSite(_ prefersDesktop: Bool) {
+        guard prefersDesktop != prefersDesktopSite else { return }
+        prefersDesktopSite = prefersDesktop
+        reload()
+    }
+
     public func stopLoading() {
         webView.stopLoading()
         isLoading = false
@@ -989,6 +1005,59 @@ public final class BrowserSession: NSObject, ObservableObject {
     """#
 }
 
+extension BrowserSession {
+    /// What to do with a navigation WebKit is about to start: the page-load
+    /// hook's decision, apart from WebKit, so each branch can be tested with
+    /// plain values.
+    enum NavigationActionDecision: Equatable {
+        /// A link that asks to be saved rather than shown.
+        case download
+        /// A link aimed at a new window.
+        case openInNewTab(URL?)
+        /// Back onto this tab's own start page.
+        case restoreStartSurface
+        /// A main-frame address that is not a web page.
+        case unsupported(URL)
+        /// Let it load. `mainFrameURL` is the address when this is the page
+        /// itself, and nil for a frame inside it.
+        case allow(mainFrameURL: URL?)
+    }
+
+    /// The decision `webView(_:decidePolicyFor:preferences:decisionHandler:)`
+    /// carries out, as a pure function of the four facts it reads.
+    ///
+    /// Downloads are asked about first, deliberately. `<a download
+    /// href="blob:…">` is how a web app hands over a CSV or a PDF it built in
+    /// the page, and a blob: or data: address is not a navigable web URL.
+    /// Judging the scheme before asking WebKit what the link is for would
+    /// refuse the file the user just asked to save.
+    ///
+    /// `targetFrameIsMain` is nil when the link has no target frame, which is
+    /// a request for a new window.
+    static func decide(
+        shouldPerformDownload: Bool,
+        targetFrameIsMain: Bool?,
+        url: URL?
+    ) -> NavigationActionDecision {
+        if shouldPerformDownload { return .download }
+        guard let targetFrameIsMain else { return .openInNewTab(url) }
+        guard targetFrameIsMain, let url else { return .allow(mainFrameURL: nil) }
+        guard let safeURL = WebURLPolicy.validatedURL(url) else {
+            // Every tab opens on `loadHTMLString`, so its first back-forward
+            // entry is `about:blank`. Going back onto that entry is a return
+            // to this tab's start surface, not a link Limeghost cannot open.
+            return isStartSurfaceURL(url) ? .restoreStartSurface : .unsupported(url)
+        }
+        return .allow(mainFrameURL: safeURL)
+    }
+
+    /// Asks the site for its desktop version while the switch is on, and
+    /// otherwise leaves WebKit's preferences exactly as they came in.
+    static func applyContentMode(prefersDesktopSite: Bool, to preferences: WKWebpagePreferences) {
+        if prefersDesktopSite { preferences.preferredContentMode = .desktop }
+    }
+}
+
 extension BrowserSession: WKNavigationDelegate {
     public func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
         // A provisional navigation that starts now is by definition the newest,
@@ -1116,49 +1185,42 @@ extension BrowserSession: WKNavigationDelegate {
         handleFailure(error, navigation: navigation)
     }
 
+    /// WebKit asks this, and never the older form without `preferences`, once
+    /// a delegate answers it (`WKNavigationDelegate.h`). The decision itself
+    /// is `decide(…)`; this carries it out and hands WebKit its preferences
+    /// back, with the desktop switch applied.
     public func webView(
         _ webView: WKWebView,
         decidePolicyFor navigationAction: WKNavigationAction,
-        decisionHandler: @escaping (WKNavigationActionPolicy) -> Void
+        preferences: WKWebpagePreferences,
+        decisionHandler: @escaping (WKNavigationActionPolicy, WKWebpagePreferences) -> Void
     ) {
-        // Asked first, deliberately. `<a download href="blob:…">` is how a web
-        // app hands over a CSV or a PDF it built in the page, and a blob: or
-        // data: address is not a navigable web URL. Judging the scheme before
-        // asking WebKit what the link is for would refuse the file the user
-        // just asked to save.
-        if navigationAction.shouldPerformDownload {
-            decisionHandler(.download)
-            return
-        }
-        if navigationAction.targetFrame == nil {
-            requestNewTab(for: navigationAction.request.url)
-            decisionHandler(.cancel)
-            return
-        }
-        if navigationAction.targetFrame?.isMainFrame == true,
-           let url = navigationAction.request.url,
-           WebURLPolicy.validatedURL(url) == nil {
-            if Self.isStartSurfaceURL(url) {
-                // Every tab opens on `loadHTMLString`, so its first
-                // back-forward entry is `about:blank`. Going back onto that
-                // entry is a return to this tab's start surface, not a link
-                // Limeghost cannot open: let WebKit restore the document it
-                // already holds and put the chrome back on the start state.
-                adoptStartPageEntry()
-                decisionHandler(.allow)
-                return
-            }
+        Self.applyContentMode(prefersDesktopSite: prefersDesktopSite, to: preferences)
+        switch Self.decide(
+            shouldPerformDownload: navigationAction.shouldPerformDownload,
+            targetFrameIsMain: navigationAction.targetFrame?.isMainFrame,
+            url: navigationAction.request.url
+        ) {
+        case .download:
+            decisionHandler(.download, preferences)
+        case .openInNewTab(let url):
+            requestNewTab(for: url)
+            decisionHandler(.cancel, preferences)
+        case .restoreStartSurface:
+            // Let WebKit restore the document it already holds, and put the
+            // chrome back on the start state.
+            adoptStartPageEntry()
+            decisionHandler(.allow, preferences)
+        case .unsupported(let url):
             handleUnsupportedLink(url)
-            decisionHandler(.cancel)
-            return
+            decisionHandler(.cancel, preferences)
+        case .allow(let mainFrameURL):
+            if let mainFrameURL {
+                isShowingStartPage = false
+                lastRequestedURL = mainFrameURL
+            }
+            decisionHandler(.allow, preferences)
         }
-        if navigationAction.targetFrame?.isMainFrame == true,
-           let url = navigationAction.request.url,
-           let safeURL = WebURLPolicy.validatedURL(url) {
-            isShowingStartPage = false
-            lastRequestedURL = safeURL
-        }
-        decisionHandler(.allow)
     }
 
     public func webView(
