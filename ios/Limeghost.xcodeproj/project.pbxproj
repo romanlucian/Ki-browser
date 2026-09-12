@@ -23,6 +23,7 @@
 		AA0000000000000000000673 /* SiteIconView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000663 /* SiteIconView.swift */; };
 		AA0000000000000000000674 /* StartSurfaceChrome.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000664 /* StartSurfaceChrome.swift */; };
 		AA0000000000000000000675 /* BrandMark.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000665 /* BrandMark.swift */; };
+		AA0000000000000000000677 /* ReaderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000667 /* ReaderView.swift */; };
 		AA0000000000000000000676 /* limeghost-mark-small.png in Resources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000666 /* limeghost-mark-small.png */; };
 		AA0000000000000000001101 /* LimeghostShared in Frameworks */ = {isa = PBXBuildFile; productRef = AA0000000000000000001001 /* LimeghostShared */; };
 		AA0000000000000000001102 /* LimeghostCore in Frameworks */ = {isa = PBXBuildFile; productRef = AA0000000000000000001002 /* LimeghostCore */; };
@@ -32,6 +33,7 @@
 		AA0000000000000000002104 /* AddressSheetTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000002204 /* AddressSheetTests.swift */; };
 		AA0000000000000000002105 /* TabSwitcherTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000002205 /* TabSwitcherTests.swift */; };
 		AA0000000000000000002106 /* StartSurfaceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000002206 /* StartSurfaceTests.swift */; };
+		AA0000000000000000002107 /* ReaderOnThePhoneTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000002207 /* ReaderOnThePhoneTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -63,6 +65,7 @@
 		AA0000000000000000000664 /* StartSurfaceChrome.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "../macos/LimeghostBrowser/Sources/LimeghostBrowser/StartSurfaceChrome.swift"; sourceTree = "<group>"; };
 		AA0000000000000000000665 /* BrandMark.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "../macos/LimeghostBrowser/Sources/LimeghostBrowser/BrandMark.swift"; sourceTree = "<group>"; };
 		AA0000000000000000000666 /* limeghost-mark-small.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "../macos/LimeghostBrowser/Sources/LimeghostBrowser/Resources/limeghost-mark-small.png"; sourceTree = "<group>"; };
+		AA0000000000000000000667 /* ReaderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "../macos/LimeghostBrowser/Sources/LimeghostBrowser/ReaderView.swift"; sourceTree = "<group>"; };
 		AA0000000000000000000301 /* Limeghost.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Limeghost.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		AA0000000000000000002201 /* IOSSessionPlatformTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IOSSessionPlatformTests.swift; sourceTree = "<group>"; };
 		AA0000000000000000002202 /* WorkspaceHostTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceHostTests.swift; sourceTree = "<group>"; };
@@ -70,6 +73,7 @@
 		AA0000000000000000002204 /* AddressSheetTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddressSheetTests.swift; sourceTree = "<group>"; };
 		AA0000000000000000002205 /* TabSwitcherTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TabSwitcherTests.swift; sourceTree = "<group>"; };
 		AA0000000000000000002206 /* StartSurfaceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StartSurfaceTests.swift; sourceTree = "<group>"; };
+		AA0000000000000000002207 /* ReaderOnThePhoneTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderOnThePhoneTests.swift; sourceTree = "<group>"; };
 		AA0000000000000000002301 /* LimeghostTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = LimeghostTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -131,6 +135,7 @@
 				AA0000000000000000002204 /* AddressSheetTests.swift */,
 				AA0000000000000000002205 /* TabSwitcherTests.swift */,
 				AA0000000000000000002206 /* StartSurfaceTests.swift */,
+				AA0000000000000000002207 /* ReaderOnThePhoneTests.swift */,
 			);
 			path = Tests;
 			sourceTree = "<group>";
@@ -152,6 +157,7 @@
 				AA0000000000000000000663 /* SiteIconView.swift */,
 				AA0000000000000000000664 /* StartSurfaceChrome.swift */,
 				AA0000000000000000000665 /* BrandMark.swift */,
+				AA0000000000000000000667 /* ReaderView.swift */,
 				AA0000000000000000000666 /* limeghost-mark-small.png */,
 			);
 			/* No `path`: these file references already carry the full
@@ -163,7 +169,9 @@
 			   `StartSurfaceChrome.swift` and `BrandMark.swift`, so both joined
 			   the phone's build, which is what checks them. The small mark's
 			   artwork joined with them, copied into the app bundle for
-			   `BrandMark` to find. The Mac's own copies are untouched: these
+			   `BrandMark` to find. The page menu brought Reader to the phone, so
+			   `ReaderView.swift` joined too, and the phone asks for its touch
+			   header by name. The Mac's own copies are untouched: these
 			   are references, not duplicates. */
 			name = "Reused from macOS";
 			sourceTree = "<group>";
@@ -278,6 +286,7 @@
 				AA0000000000000000000673 /* SiteIconView.swift in Sources */,
 				AA0000000000000000000674 /* StartSurfaceChrome.swift in Sources */,
 				AA0000000000000000000675 /* BrandMark.swift in Sources */,
+				AA0000000000000000000677 /* ReaderView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -291,6 +300,7 @@
 				AA0000000000000000002104 /* AddressSheetTests.swift in Sources */,
 				AA0000000000000000002105 /* TabSwitcherTests.swift in Sources */,
 				AA0000000000000000002106 /* StartSurfaceTests.swift in Sources */,
+				AA0000000000000000002107 /* ReaderOnThePhoneTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

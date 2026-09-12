@@ -499,6 +499,40 @@ final class BrowserBehaviorTests: XCTestCase {
         XCTAssertNil(confident.copyNotice)
     }
 
+    /// Reader's header keeps the Mac's one row wherever the Mac draws it.
+    ///
+    /// The header has a second arrangement, two rows a finger can use, which
+    /// the phone asks for by name. The break this catches is the Mac drawing
+    /// the phone's rows, which would make its header grow for no reason. The
+    /// pointer row must be the same height at two Mac widths, and shorter
+    /// than the touch rows.
+    func testReadersHeaderKeepsItsOneRowOnTheMac() throws {
+        let article = try XCTUnwrap(ReaderArticle(page: PageSnapshot(
+            title: "Title",
+            url: "https://example.org/a",
+            hostname: "example.org",
+            scheme: "https",
+            language: "en",
+            text: "A sentence with enough words in it to be read as a page of prose rather than a fragment.",
+            wordCount: 18,
+            hasPasswordField: false,
+            formActions: [],
+            extractionConfidence: 0.9
+        )))
+        let pointer = ReaderView.Header(article: article, style: .pointer, copy: {}, close: {})
+        let touch = ReaderView.Header(article: article, style: .touch, copy: {}, close: {})
+
+        let typicalMac = try renderedHeight(of: pointer, width: 900)
+        let widerStill = try renderedHeight(of: pointer, width: 1_600)
+
+        XCTAssertEqual(typicalMac, widerStill, "the Mac's Reader header changed shape between two widths")
+        XCTAssertLessThan(
+            typicalMac,
+            try renderedHeight(of: touch, width: 900),
+            "the Mac is drawing the phone's header"
+        )
+    }
+
     /// Page actions that read a document belong only where there is one.
     func testOnlyALoadedPageOffersToBeRead() {
         XCTAssertTrue(BrowserLoadState.content.showsLoadedPage)
