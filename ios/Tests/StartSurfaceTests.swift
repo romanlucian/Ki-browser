@@ -162,19 +162,24 @@ final class StartSurfaceTests: XCTestCase {
     ///
     /// The break this catches is a door that loads its page by reaching past
     /// the workspace, straight into a session load. The page then arrives
-    /// behind an assistant that is still filling the screen. The phone draws
-    /// no assistant yet, which is exactly why nothing on screen would show it.
+    /// behind an assistant that is still covering it.
+    ///
+    /// On the phone the assistant covers the page whenever it is open, and a
+    /// door makes it leave: `WorkspaceHost` tells the companion this screen
+    /// never shares room with the page. So "uncovered" is the assistant no
+    /// longer showing. This test watched `isExpanded` until September 13,
+    /// 2026, from when the phone's companion still believed it could share
+    /// the screen and a door only un-expanded it.
     func testOpeningAReferenceUncoversThePage() throws {
         let host = try makeHost()
         let screen = StartSurfaceScreen(workspace: host.workspace)
         let companion = host.workspace.aiCompanion
         companion.show()
-        companion.toggleExpanded()
-        XCTAssertTrue(companion.isExpanded, "could not cover the page to begin with")
+        XCTAssertTrue(companion.isVisible, "could not cover the page to begin with")
 
         screen.openReference(try exampleReference())
 
-        XCTAssertFalse(companion.isExpanded, "a reference opened its page behind the assistant")
+        XCTAssertFalse(companion.isVisible, "a reference opened its page behind the assistant")
     }
 
     // MARK: - The catalogue
