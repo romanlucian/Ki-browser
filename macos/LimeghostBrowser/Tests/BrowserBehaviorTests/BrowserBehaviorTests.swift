@@ -1271,9 +1271,10 @@ final class BrowserBehaviorTests: XCTestCase {
         let button = try XCTUnwrap(window.standardWindowButton(.closeButton))
         let container = try XCTUnwrap(button.superview)
 
-        let target = container.frame.height
-            - TabStripMetrics.chipCentreFromWindowTop
-            - button.frame.height / 2
+        let target = TabStripMetrics.trafficLightOrigin(
+            containerHeight: container.frame.height,
+            buttonHeight: button.frame.height
+        )
 
         XCTAssertGreaterThanOrEqual(target, 0, "the button would sit below its container and stop taking clicks")
         XCTAssertLessThanOrEqual(
@@ -1282,10 +1283,41 @@ final class BrowserBehaviorTests: XCTestCase {
             "the button would sit above its container and stop taking clicks"
         )
 
-        // And it really is the chips' line, not a number that happens to fit.
-        let centreBelowWindowTop = container.frame.height - (target + button.frame.height / 2)
-        XCTAssertEqual(centreBelowWindowTop, TabStripMetrics.chipCentreFromWindowTop, accuracy: 0.01)
+        // And it really is the chips' line wherever that line fits inside the
+        // title bar this OS draws, rather than a number that happens to fit.
+        // Where it does not fit, the button sits as low as the bar allows;
+        // `testTheTrafficLightsStayInsideAShortTitleBar` pins that case, since
+        // a real window can only ever show the title bar of the OS it runs on.
+        let onTheLine = container.frame.height - TabStripMetrics.chipCentreFromWindowTop - button.frame.height / 2
+        if onTheLine >= 0 {
+            let centreBelowWindowTop = container.frame.height - (target + button.frame.height / 2)
+            XCTAssertEqual(centreBelowWindowTop, TabStripMetrics.chipCentreFromWindowTop, accuracy: 0.01)
+        } else {
+            XCTAssertEqual(target, 0, accuracy: 0.01, "a title bar too short for the line puts the button at its bottom")
+        }
         XCTAssertEqual(TabStripMetrics.chipCentreFromWindowTop, TabStripMetrics.topInset + TabStripMetrics.chipHeight / 2)
+    }
+
+    /// Where the traffic lights go in a title bar of any height.
+    ///
+    /// The chips' centre line is 23 points down. A 14-point button centred on
+    /// it needs a title bar at least 30 tall. macOS 26 draws one 32 tall, which
+    /// is what the placement was measured against; macOS 15 draws 27, so there
+    /// the line lies below the title bar and the intent cannot be met. The rule
+    /// is then: on the line where the line fits, and as low as the bar allows
+    /// where it does not — never outside it, because AppKit delivers no clicks
+    /// to a view beyond its superview's bounds.
+    ///
+    /// Found by CI on macOS 15, eleven days after the placement shipped with
+    /// every local test green. The real-window test above sees only the OS it
+    /// runs on; this one sees both.
+    func testTheTrafficLightsStayInsideAShortTitleBar() {
+        // macOS 26: 32 − 23 − 7 = 2, on the line.
+        XCTAssertEqual(TabStripMetrics.trafficLightOrigin(containerHeight: 32, buttonHeight: 14), 2)
+        // macOS 15: the line would put it at −3; the bottom of the bar instead.
+        XCTAssertEqual(TabStripMetrics.trafficLightOrigin(containerHeight: 27, buttonHeight: 14), 0)
+        // A tall bar keeps the line rather than drifting upward.
+        XCTAssertEqual(TabStripMetrics.trafficLightOrigin(containerHeight: 60, buttonHeight: 14), 30)
     }
 
     func testTheBrandMarkIsActuallyInTheAppBundle() {

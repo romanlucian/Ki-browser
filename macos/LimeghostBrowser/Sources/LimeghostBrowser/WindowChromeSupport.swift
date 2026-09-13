@@ -63,7 +63,11 @@ final class WindowCaptureView: NSView {
     /// The buttons are moved rather than the title bar grown. Measured before
     /// writing this: the container is 32 tall, does not clip its subviews, and
     /// a 14-point button lands at y = 2, well inside it — so the dots stay
-    /// drawable *and* clickable. Growing the bar instead would have widened
+    /// drawable *and* clickable. That measurement was macOS 26's: macOS 15
+    /// draws the container 27 tall, where the line would put the button at
+    /// y = −3, hanging out of its superview where AppKit delivers no clicks,
+    /// so `TabStripMetrics.trafficLightOrigin` clamps it to the bar's bottom
+    /// there instead. Growing the bar instead would have widened
     /// the band AppKit treats as a title bar, and the strip already fights
     /// that band for its drag gesture.
     ///
@@ -74,9 +78,10 @@ final class WindowCaptureView: NSView {
         for kind in [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton] {
             guard let button = window.standardWindowButton(kind),
                   let container = button.superview else { continue }
-            let target = container.frame.height
-                - TabStripMetrics.chipCentreFromWindowTop
-                - button.frame.height / 2
+            let target = TabStripMetrics.trafficLightOrigin(
+                containerHeight: container.frame.height,
+                buttonHeight: button.frame.height
+            )
             // Only when it has actually moved: setting a frame inside the
             // title bar's own layout pass is how a repositioning loop starts.
             guard abs(button.frame.origin.y - target) > 0.5 else { continue }

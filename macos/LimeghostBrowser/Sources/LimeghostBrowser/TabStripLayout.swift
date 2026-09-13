@@ -27,6 +27,25 @@ enum TabStripMetrics {
     /// window. The line the traffic lights are aligned to — see
     /// `WindowCaptureView.alignTrafficLights`.
     static let chipCentreFromWindowTop: CGFloat = topInset + chipHeight / 2
+
+    /// The traffic lights' origin inside the title bar's own container, for a
+    /// container of any height.
+    ///
+    /// On the chips' centre line where that line fits inside the container,
+    /// and as low as the container allows where it does not — never outside
+    /// it, because AppKit delivers no clicks to a view beyond its superview's
+    /// bounds. The line fits when the container is at least
+    /// `chipCentreFromWindowTop + buttonHeight / 2` tall: 30 for a 14-point
+    /// button. macOS 26 draws the container 32 tall, which is what the
+    /// placement was measured against. macOS 15 draws it 27, and until
+    /// September 13, 2026 the buttons there were set 3 points below it —
+    /// found by CI the first time it ran on that OS, with every local test
+    /// green, because a real window can only show the title bar of the OS it
+    /// runs on.
+    static func trafficLightOrigin(containerHeight: CGFloat, buttonHeight: CGFloat) -> CGFloat {
+        let onTheLine = containerHeight - chipCentreFromWindowTop - buttonHeight / 2
+        return max(0, min(onTheLine, containerHeight - buttonHeight))
+    }
     static let spacing: CGFloat = 4
     static let maximumTabWidth: CGFloat = 200
     /// Icon plus close button plus padding: the narrowest a tab can be and

@@ -22,6 +22,11 @@ Dates are commit dates. Test counts are the totals at the end of each period, ve
 - The page-load hook is now `BrowserSession.decide(…)`, a pure function tested branch by branch on both platforms — no test reached those branches before. Its delegate answers WebKit's `preferences:` form of the policy question, which is what carries the phone's per-tab Request Desktop Site. The Mac never turns that on, so its navigations are unchanged.
 - Tests: the Mac 516, up from 504; `LimeghostSharedLayer` 266 on both destinations, up from 256; the phone 50, up from 28.
 
+**The traffic lights stay inside the title bar on macOS 14 and 15**
+
+- The chips' centre line needs a title bar at least 30 points tall; macOS 26 draws 32 and macOS 15 draws 27, so on macOS 14 and 15 the buttons had been set 3 points below their container since September 2 — hanging out of the superview, where AppKit delivers no clicks. Found by CI the first time it ran on macOS 15, with every local test green. `TabStripMetrics.trafficLightOrigin` now keeps them on the line where it fits and at the bar's bottom where it does not, and a test pins both.
+- CI's `ios-simulator` job picks the newest iOS runtime rather than the first iPhone in dictionary order, and prints its choice, so a failure there names its own environment.
+
 **The Mac's uncommitted week, committed, and the two platforms on one line again**
 
 - Three sittings of Mac work from September 2–3 had been installed then and never committed. They became three commits, split by hunk. Each was tested alone in a clean copy of its own tree, at 477, 480 and 487 tests.
