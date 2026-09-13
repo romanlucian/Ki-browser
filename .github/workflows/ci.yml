@@ -80,11 +80,34 @@ jobs:
       # Never a hard-coded simulator name or OS version: this runner's image
       # ships different runtimes than a developer's machine, so the device is
       # discovered here and the destination below is built from its UDID.
-      - name: Pick an available iOS simulator
+      # The newest iOS runtime wins, and the choice is printed. The first run
+      # of this job took the first iPhone in dictionary order — whatever that
+      # happened to be — and failed to load the shared test bundle
+      # (`libswiftWebKit.dylib`) without the log ever saying which runtime it
+      # had chosen. A failure that names its environment can be reasoned
+      # about; one that does not is a guess.
+      - name: Pick the newest available iOS simulator
         run: |
-          UDID=$(xcrun simctl list devices available --json \
-            | python3 -c "import json,sys;d=json.load(sys.stdin)['devices'];print(next(v['udid'] for k in d for v in d[k] if 'iPhone' in v['name']))")
-          echo "SIM_UDID=$UDID" >> "$GITHUB_ENV"
+          python3 - <<'PY' >> "$GITHUB_ENV"
+          import json, subprocess
+          listing = subprocess.check_output(["xcrun", "simctl", "list", "devices", "available", "--json"])
+          devices = json.loads(listing)["devices"]
+          def version(runtime):
+              tail = runtime.rsplit("iOS-", 1)[-1]
+              return tuple(int(part) for part in tail.split("-") if part.isdigit())
+          candidates = sorted(
+              (version(runtime), device["name"], device["udid"], runtime)
+              for runtime, phones in devices.items() if ".iOS-" in runtime
+              for device in phones if device["name"].startswith("iPhone")
+          )
+          if not candidates:
+              raise SystemExit("no available iPhone simulator on this runner")
+          _, name, udid, runtime = candidates[-1]
+          print(f"SIM_UDID={udid}")
+          print(f"SIM_NAME={name}")
+          print(f"SIM_RUNTIME={runtime}")
+          PY
+          grep '^SIM_' "$GITHUB_ENV"
       - run: >-
           xcodebuild test -scheme LimeghostSharedLayer
           -destination "platform=iOS Simulator,id=$SIM_UDID"
