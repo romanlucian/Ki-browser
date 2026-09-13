@@ -21,12 +21,13 @@ struct BottomBarModel {
     }
 }
 
-/// Back, the address, the tabs and the page menu — within a thumb's reach,
+/// Back, the address, your assistant, the tabs and the page menu — within a thumb's reach,
 /// along the bottom so the page's own top is left alone.
 struct BottomBar: View {
     let model: BottomBarModel
     let goBack: () -> Void
     let openAddress: () -> Void
+    let toggleAssistant: () -> Void
     let openTabs: () -> Void
     let openMenu: () -> Void
 
@@ -46,9 +47,24 @@ struct BottomBar: View {
             }
             .accessibilityLabel("Address")
 
-            // The assistant toggle belongs here, immediately left of the tab
-            // button, and arrives with the assistant in Plan 3. A button that
-            // did nothing would teach the wrong thing about where it lives.
+            // Your own assistant, lit while it is open, as the Mac's toolbar
+            // button is. Unlit it takes the bar's tint, like its neighbours,
+            // until the phone's look is designed.
+            Button(action: toggleAssistant) {
+                Image(systemName: "bubble.left.and.bubble.right")
+                    .font(.system(size: 17))
+                    .foregroundStyle(
+                        model.isAssistantOpen ? AnyShapeStyle(LimeghostTheme.onAccent) : AnyShapeStyle(TintShapeStyle())
+                    )
+                    .frame(width: 38, height: 38)
+                    .background(
+                        model.isAssistantOpen ? LimeghostTheme.accent : Color.clear,
+                        in: RoundedRectangle(cornerRadius: LimeghostTheme.radius8)
+                    )
+                    .frame(width: 44, height: 38)
+                    .contentShape(Rectangle())
+            }
+            .accessibilityLabel(model.assistantLabel)
 
             Button(action: openTabs) {
                 Text("\(model.tabCount)")

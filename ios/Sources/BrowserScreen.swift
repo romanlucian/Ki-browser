@@ -10,21 +10,35 @@ struct BrowserScreen: View {
     /// The page menu's measured height; see `PageMenu.height`. It starts near
     /// the real value, so the first opening hardly moves.
     @State private var menuHeight: CGFloat = 540
+    @StateObject private var keyboard = KeyboardObserver()
 
     var body: some View {
         VStack(spacing: 0) {
-            Group {
-                if let tab = host.workspace.selectedTab {
-                    TabSurface(tab: tab, workspace: host.workspace)
-                        .overlay(alignment: .bottom) { NoticeLayer(session: tab.session) }
-                } else {
-                    Color.clear
+            // The page and the assistant share one place: the assistant layer
+            // is always here, drawing nothing while hidden, never in a sheet.
+            ZStack {
+                Group {
+                    if let tab = host.workspace.selectedTab {
+                        TabSurface(tab: tab, workspace: host.workspace)
+                    } else {
+                        Color.clear
+                    }
+                }
+                AssistantLayer(companion: host.workspace.aiCompanion)
+            }
+            .overlay(alignment: .bottom) {
+                if noticePlacement == .overThePage, let tab = host.workspace.selectedTab {
+                    NoticeLayer(session: tab.session)
                 }
             }
 
+            if noticePlacement == .aboveTheBar, let tab = host.workspace.selectedTab {
+                NoticeLayer(session: tab.session, placement: .aboveTheBar)
+            }
+
             if let tab = host.workspace.selectedTab {
-                BottomChrome(find: tab.find, bar: bottomBar)
-            } else {
+                BottomChrome(find: tab.find, keyboard: keyboard, bar: bottomBar)
+            } else if !keyboard.isUp {
                 bottomBar
             }
         }
@@ -67,13 +81,19 @@ struct BrowserScreen: View {
             model: BottomBarModel(
                 urlString: host.workspace.selectedTab?.session.currentURLString ?? "",
                 tabCount: host.workspace.visibleTabs.count,
-                canGoBack: host.workspace.canGoBackInSelectedTab
+                canGoBack: host.workspace.canGoBackInSelectedTab,
+                isAssistantOpen: host.workspace.aiCompanion.isVisible
             ),
             goBack: { host.workspace.goBackInSelectedTab() },
             openAddress: { isPresentingAddressSheet = true },
+            toggleAssistant: { host.workspace.aiCompanion.toggle() },
             openTabs: { isPresentingTabSwitcher = true },
             openMenu: { menu.open() }
         )
+    }
+
+    private var noticePlacement: NoticePlacement {
+        .forAssistant(isOpen: host.workspace.aiCompanion.isVisible)
     }
 
     /// Runs the row the menu closed for, now that the sheet has gone.
@@ -109,20 +129,22 @@ enum BottomChromeContent: Equatable {
     }
 }
 
-/// The bar along the bottom, or the find bar in its place while finding.
+/// The find bar, the bar, or nothing while typing (`BottomChromeContent`).
 ///
-/// Its own view, so it can observe the tab's find controller. `BrowserScreen`
-/// observes the workspace, and a tab's `find` changes without the workspace
-/// hearing of it — the same reason `TabSurface` observes its tab and session.
+/// Its own view, so it can observe the tab's find controller and the
+/// keyboard. `BrowserScreen` observes the workspace, and a tab's `find`
+/// changes without the workspace hearing of it — the same reason `TabSurface`
+/// observes its tab and session.
 struct BottomChrome: View {
     @ObservedObject var find: PageFindController
+    @ObservedObject var keyboard: KeyboardObserver
     let bar: BottomBar
 
     var body: some View {
-        if find.isPresented {
-            FindBar(find: find)
-        } else {
-            bar
+        switch BottomChromeContent.showing(isFinding: find.isPresented, keyboardIsUp: keyboard.isUp) {
+        case .findBar: FindBar(find: find)
+        case .bar: bar
+        case .nothing: EmptyView()
         }
     }
 }

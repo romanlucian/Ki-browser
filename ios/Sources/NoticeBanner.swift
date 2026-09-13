@@ -40,11 +40,13 @@ struct NoticeBanner: View {
 /// observe the session, whose notices the workspace never hears about.
 struct NoticeLayer: View {
     @ObservedObject var session: BrowserSession
+    var placement: NoticePlacement = .overThePage
 
     var body: some View {
         VStack {
             if let notice = session.pageNotice {
                 NoticeBanner(message: notice) { session.dismissPageNotice() }
+                    .padding(.top, placement == .aboveTheBar ? 8 : 0)
                     .padding(.bottom, 12)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
