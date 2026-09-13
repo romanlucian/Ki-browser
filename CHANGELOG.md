@@ -12,6 +12,16 @@ Dates are commit dates. Test counts are the totals at the end of each period, ve
 
 ### Week of September 10–16, 2026
 
+**The phone gets Bookmarks and History**
+
+- Two rows in a third card of the page menu open sheets over the page. Bookmarks has folders to tap into, in the store's order; a search across every folder; Open in New Tab, Rename…, Move to…, delete by swipe or menu; and New Folder. History has visits by day, search, delete, and Clear History, which asks first and names this device rather than the Mac. Designed on September 13; the spec is `docs/superpowers/specs/2026-09-13-ios-bookmarks-history-design.md`.
+- Both open pages through the workspace's existing `open(_:)` and `open(_:inNewTab:)`. The phone added no door.
+- A folder holding anything asks before it is deleted, in the Mac's words, and its bookmarks move up a level rather than going with it. Choosing a new bookmark's folder, which the page menu left for this step, is Move to….
+- `BookmarksHomeSearch` and `HistoryHomeSearch` moved out of the Mac's two page files into `LimeghostCore`, with their tests, so both platforms search through one copy.
+- The phone never handed its captured site icons to its views, so every site icon it drew was the fallback square, the AI guide's included. It does now.
+- `LimeghostIconView.swift` is the seventh Mac file the phone compiles by reference. It compiled for iOS unchanged.
+- Tests: the Mac 517, the same total, with two moved from `BrowserBehaviorTests` to `LimeghostCoreTests`; `LimeghostSharedLayer` 268, up from 266; the phone 73, up from 50.
+
 **The phone gets its page menu**
 
 - A `•••` sheet in the bottom bar: Reader and Copy for AI as two large buttons, then Reload, Forward, New Tab, New Private Tab, Add Bookmark, Find in Page, Share and Request Desktop Site. On the AI guide the page rows are greyed and the two new-tab rows still work. Designed with the founder on September 11–12; the spec and a design canvas are in `docs/superpowers/specs/2026-09-12-ios-page-menu-design.md`.
