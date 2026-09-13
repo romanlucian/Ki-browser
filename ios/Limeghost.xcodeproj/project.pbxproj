@@ -22,12 +22,15 @@
 		AA000000000000000000010D /* FindBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000020E /* FindBar.swift */; };
 		AA000000000000000000010E /* NoticeBanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000020F /* NoticeBanner.swift */; };
 		AA0000000000000000000110 /* BookmarksSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000211 /* BookmarksSheet.swift */; };
+		AA000000000000000000010F /* SheetLook.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000210 /* SheetLook.swift */; };
+		AA0000000000000000000111 /* BookmarkMovePicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000212 /* BookmarkMovePicker.swift */; };
 		AA0000000000000000000671 /* AIToolStartPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000661 /* AIToolStartPage.swift */; };
 		AA0000000000000000000672 /* LimeghostTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000662 /* LimeghostTheme.swift */; };
 		AA0000000000000000000673 /* SiteIconView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000663 /* SiteIconView.swift */; };
 		AA0000000000000000000674 /* StartSurfaceChrome.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000664 /* StartSurfaceChrome.swift */; };
 		AA0000000000000000000675 /* BrandMark.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000665 /* BrandMark.swift */; };
 		AA0000000000000000000677 /* ReaderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000667 /* ReaderView.swift */; };
+		AA0000000000000000000678 /* LimeghostIconView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000668 /* LimeghostIconView.swift */; };
 		AA0000000000000000000676 /* limeghost-mark-small.png in Resources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000666 /* limeghost-mark-small.png */; };
 		AA0000000000000000001101 /* LimeghostShared in Frameworks */ = {isa = PBXBuildFile; productRef = AA0000000000000000001001 /* LimeghostShared */; };
 		AA0000000000000000001102 /* LimeghostCore in Frameworks */ = {isa = PBXBuildFile; productRef = AA0000000000000000001002 /* LimeghostCore */; };
@@ -41,6 +44,7 @@
 		AA0000000000000000002108 /* PageMenuTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000002208 /* PageMenuTests.swift */; };
 		AA0000000000000000002109 /* FindBarTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000002209 /* FindBarTests.swift */; };
 		AA000000000000000000210A /* BookmarksSheetTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000220A /* BookmarksSheetTests.swift */; };
+		AA000000000000000000210B /* BookmarkMovePickerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000220B /* BookmarkMovePickerTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -70,6 +74,8 @@
 		AA000000000000000000020E /* FindBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FindBar.swift; sourceTree = "<group>"; };
 		AA000000000000000000020F /* NoticeBanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoticeBanner.swift; sourceTree = "<group>"; };
 		AA0000000000000000000211 /* BookmarksSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookmarksSheet.swift; sourceTree = "<group>"; };
+		AA0000000000000000000210 /* SheetLook.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SheetLook.swift; sourceTree = "<group>"; };
+		AA0000000000000000000212 /* BookmarkMovePicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookmarkMovePicker.swift; sourceTree = "<group>"; };
 		AA0000000000000000000661 /* AIToolStartPage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "../macos/LimeghostBrowser/Sources/LimeghostBrowser/AIToolStartPage.swift"; sourceTree = "<group>"; };
 		AA0000000000000000000662 /* LimeghostTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "../macos/LimeghostBrowser/Sources/LimeghostBrowser/LimeghostTheme.swift"; sourceTree = "<group>"; };
 		AA0000000000000000000663 /* SiteIconView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "../macos/LimeghostBrowser/Sources/LimeghostBrowser/SiteIconView.swift"; sourceTree = "<group>"; };
@@ -77,6 +83,7 @@
 		AA0000000000000000000665 /* BrandMark.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "../macos/LimeghostBrowser/Sources/LimeghostBrowser/BrandMark.swift"; sourceTree = "<group>"; };
 		AA0000000000000000000666 /* limeghost-mark-small.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "../macos/LimeghostBrowser/Sources/LimeghostBrowser/Resources/limeghost-mark-small.png"; sourceTree = "<group>"; };
 		AA0000000000000000000667 /* ReaderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "../macos/LimeghostBrowser/Sources/LimeghostBrowser/ReaderView.swift"; sourceTree = "<group>"; };
+		AA0000000000000000000668 /* LimeghostIconView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "../macos/LimeghostBrowser/Sources/LimeghostBrowser/LimeghostIconView.swift"; sourceTree = "<group>"; };
 		AA0000000000000000000301 /* Limeghost.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Limeghost.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		AA0000000000000000002201 /* IOSSessionPlatformTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IOSSessionPlatformTests.swift; sourceTree = "<group>"; };
 		AA0000000000000000002202 /* WorkspaceHostTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceHostTests.swift; sourceTree = "<group>"; };
@@ -88,6 +95,7 @@
 		AA0000000000000000002208 /* PageMenuTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PageMenuTests.swift; sourceTree = "<group>"; };
 		AA0000000000000000002209 /* FindBarTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FindBarTests.swift; sourceTree = "<group>"; };
 		AA000000000000000000220A /* BookmarksSheetTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookmarksSheetTests.swift; sourceTree = "<group>"; };
+		AA000000000000000000220B /* BookmarkMovePickerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookmarkMovePickerTests.swift; sourceTree = "<group>"; };
 		AA0000000000000000002301 /* LimeghostTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = LimeghostTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -140,6 +148,8 @@
 				AA000000000000000000020E /* FindBar.swift */,
 				AA000000000000000000020F /* NoticeBanner.swift */,
 				AA0000000000000000000211 /* BookmarksSheet.swift */,
+				AA0000000000000000000210 /* SheetLook.swift */,
+				AA0000000000000000000212 /* BookmarkMovePicker.swift */,
 			);
 			path = Sources;
 			sourceTree = "<group>";
@@ -157,6 +167,7 @@
 				AA0000000000000000002208 /* PageMenuTests.swift */,
 				AA0000000000000000002209 /* FindBarTests.swift */,
 				AA000000000000000000220A /* BookmarksSheetTests.swift */,
+				AA000000000000000000220B /* BookmarkMovePickerTests.swift */,
 			);
 			path = Tests;
 			sourceTree = "<group>";
@@ -179,6 +190,7 @@
 				AA0000000000000000000664 /* StartSurfaceChrome.swift */,
 				AA0000000000000000000665 /* BrandMark.swift */,
 				AA0000000000000000000667 /* ReaderView.swift */,
+				AA0000000000000000000668 /* LimeghostIconView.swift */,
 				AA0000000000000000000666 /* limeghost-mark-small.png */,
 			);
 			/* No `path`: these file references already carry the full
@@ -192,8 +204,9 @@
 			   artwork joined with them, copied into the app bundle for
 			   `BrandMark` to find. The page menu brought Reader to the phone, so
 			   `ReaderView.swift` joined too, and the phone asks for its touch
-			   header by name. The Mac's own copies are untouched: these
-			   are references, not duplicates. */
+			   header by name. Bookmarks brought folders to the phone, so
+			   `LimeghostIconView.swift` joined to draw them. The Mac's own
+			   copies are untouched: these are references, not duplicates. */
 			name = "Reused from macOS";
 			sourceTree = "<group>";
 		};
@@ -306,12 +319,15 @@
 				AA000000000000000000010D /* FindBar.swift in Sources */,
 				AA000000000000000000010E /* NoticeBanner.swift in Sources */,
 				AA0000000000000000000110 /* BookmarksSheet.swift in Sources */,
+				AA000000000000000000010F /* SheetLook.swift in Sources */,
+				AA0000000000000000000111 /* BookmarkMovePicker.swift in Sources */,
 				AA0000000000000000000671 /* AIToolStartPage.swift in Sources */,
 				AA0000000000000000000672 /* LimeghostTheme.swift in Sources */,
 				AA0000000000000000000673 /* SiteIconView.swift in Sources */,
 				AA0000000000000000000674 /* StartSurfaceChrome.swift in Sources */,
 				AA0000000000000000000675 /* BrandMark.swift in Sources */,
 				AA0000000000000000000677 /* ReaderView.swift in Sources */,
+				AA0000000000000000000678 /* LimeghostIconView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -329,6 +345,7 @@
 				AA0000000000000000002108 /* PageMenuTests.swift in Sources */,
 				AA0000000000000000002109 /* FindBarTests.swift in Sources */,
 				AA000000000000000000210A /* BookmarksSheetTests.swift in Sources */,
+				AA000000000000000000210B /* BookmarkMovePickerTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
