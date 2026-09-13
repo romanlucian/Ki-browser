@@ -17,9 +17,17 @@ public enum BrowserUserAgent {
     /// WebKit's own build token, stable across recent Safari releases.
     public static let safariBuild = "605.1.15"
 
-    /// Used only when Safari cannot be read — a restricted sandbox, or a Mac
-    /// without it. Keep it recent when this file is touched.
-    static let fallbackSafariVersion = "26.5"
+    /// Used when Safari cannot be read: always on a phone, which has no
+    /// Safari.app to read, and on a Mac only in a restricted sandbox. On iOS
+    /// Safari ships with the system, so the system's version is Safari's; it
+    /// used to be a fixed "26.5" whatever the phone ran.
+    static var fallbackSafariVersion: String {
+        fallbackVersion(for: ProcessInfo.processInfo.operatingSystemVersion)
+    }
+
+    static func fallbackVersion(for system: OperatingSystemVersion) -> String {
+        "\(system.majorVersion).\(system.minorVersion)"
+    }
 
     private static let safariInfoPlist = "/Applications/Safari.app/Contents/Info.plist"
 
