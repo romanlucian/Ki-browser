@@ -84,6 +84,31 @@ struct BrowserScreen: View {
     }
 }
 
+/// Where a page notice goes. Over the page while the assistant is closed, as
+/// always. While it is open, in its own strip above the bar: floating over the
+/// assistant, the banner landed exactly on the provider's message box, the one
+/// place a person taps to paste. It is never put under the provider's header,
+/// where "Copied 812 words." could read as the provider having received them.
+enum NoticePlacement: Equatable {
+    case overThePage, aboveTheBar
+
+    static func forAssistant(isOpen: Bool) -> NoticePlacement {
+        isOpen ? .aboveTheBar : .overThePage
+    }
+}
+
+/// What sits along the bottom: the find bar while finding, which needs the
+/// keyboard; nothing while anything else is typed, as Safari's bar steps
+/// aside, so a conversation keeps the room; the bar the rest of the time.
+enum BottomChromeContent: Equatable {
+    case findBar, bar, nothing
+
+    static func showing(isFinding: Bool, keyboardIsUp: Bool) -> BottomChromeContent {
+        if isFinding { return .findBar }
+        return keyboardIsUp ? .nothing : .bar
+    }
+}
+
 /// The bar along the bottom, or the find bar in its place while finding.
 ///
 /// Its own view, so it can observe the tab's find controller. `BrowserScreen`

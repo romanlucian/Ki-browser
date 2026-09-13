@@ -25,6 +25,8 @@
 		AA000000000000000000010F /* SheetLook.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000210 /* SheetLook.swift */; };
 		AA0000000000000000000111 /* BookmarkMovePicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000212 /* BookmarkMovePicker.swift */; };
 		AA0000000000000000000112 /* HistorySheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000213 /* HistorySheet.swift */; };
+		AA0000000000000000000113 /* AssistantLayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000214 /* AssistantLayer.swift */; };
+		AA0000000000000000000114 /* KeyboardObserver.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000215 /* KeyboardObserver.swift */; };
 		AA0000000000000000000671 /* AIToolStartPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000661 /* AIToolStartPage.swift */; };
 		AA0000000000000000000672 /* LimeghostTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000662 /* LimeghostTheme.swift */; };
 		AA0000000000000000000673 /* SiteIconView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000663 /* SiteIconView.swift */; };
@@ -80,6 +82,8 @@
 		AA0000000000000000000210 /* SheetLook.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SheetLook.swift; sourceTree = "<group>"; };
 		AA0000000000000000000212 /* BookmarkMovePicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookmarkMovePicker.swift; sourceTree = "<group>"; };
 		AA0000000000000000000213 /* HistorySheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistorySheet.swift; sourceTree = "<group>"; };
+		AA0000000000000000000214 /* AssistantLayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssistantLayer.swift; sourceTree = "<group>"; };
+		AA0000000000000000000215 /* KeyboardObserver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardObserver.swift; sourceTree = "<group>"; };
 		AA0000000000000000000661 /* AIToolStartPage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "../macos/LimeghostBrowser/Sources/LimeghostBrowser/AIToolStartPage.swift"; sourceTree = "<group>"; };
 		AA0000000000000000000662 /* LimeghostTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "../macos/LimeghostBrowser/Sources/LimeghostBrowser/LimeghostTheme.swift"; sourceTree = "<group>"; };
 		AA0000000000000000000663 /* SiteIconView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "../macos/LimeghostBrowser/Sources/LimeghostBrowser/SiteIconView.swift"; sourceTree = "<group>"; };
@@ -157,6 +161,8 @@
 				AA0000000000000000000210 /* SheetLook.swift */,
 				AA0000000000000000000212 /* BookmarkMovePicker.swift */,
 				AA0000000000000000000213 /* HistorySheet.swift */,
+				AA0000000000000000000214 /* AssistantLayer.swift */,
+				AA0000000000000000000215 /* KeyboardObserver.swift */,
 			);
 			path = Sources;
 			sourceTree = "<group>";
@@ -331,6 +337,8 @@
 				AA000000000000000000010F /* SheetLook.swift in Sources */,
 				AA0000000000000000000111 /* BookmarkMovePicker.swift in Sources */,
 				AA0000000000000000000112 /* HistorySheet.swift in Sources */,
+				AA0000000000000000000113 /* AssistantLayer.swift in Sources */,
+				AA0000000000000000000114 /* KeyboardObserver.swift in Sources */,
 				AA0000000000000000000671 /* AIToolStartPage.swift in Sources */,
 				AA0000000000000000000672 /* LimeghostTheme.swift in Sources */,
 				AA0000000000000000000673 /* SiteIconView.swift in Sources */,

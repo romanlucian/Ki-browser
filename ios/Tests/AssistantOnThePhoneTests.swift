@@ -79,4 +79,43 @@ final class AssistantOnThePhoneTests: XCTestCase {
         XCTAssertNotNil(companion.popup)
         XCTAssertEqual(host.workspace.visibleTabs.count, tabsBefore)
     }
+
+    // MARK: - Layout rules
+
+    /// A small drag leaves the assistant where it is; a long or a flung one
+    /// closes it; dragging up never does.
+    func testSwipingDownFarOrFastClosesTheAssistant() {
+        XCTAssertFalse(AssistantDismissal.closes(translation: 40, predictedEnd: 90))
+        XCTAssertTrue(AssistantDismissal.closes(translation: 130, predictedEnd: 140))
+        XCTAssertTrue(AssistantDismissal.closes(translation: 60, predictedEnd: 320))
+        XCTAssertFalse(AssistantDismissal.closes(translation: -50, predictedEnd: -200))
+    }
+
+    /// While the assistant is open, a notice gets its own strip above the bar.
+    /// Floating over the assistant, it landed on the provider's message box.
+    func testANoticeNeverCoversTheAssistant() {
+        XCTAssertEqual(NoticePlacement.forAssistant(isOpen: false), .overThePage)
+        XCTAssertEqual(NoticePlacement.forAssistant(isOpen: true), .aboveTheBar)
+    }
+
+    /// The find bar stays while finding, because it needs the keyboard. The
+    /// bar steps aside while anything else is typed, as Safari's does.
+    func testTheBarStepsAsideWhileTyping() {
+        XCTAssertEqual(BottomChromeContent.showing(isFinding: false, keyboardIsUp: false), .bar)
+        XCTAssertEqual(BottomChromeContent.showing(isFinding: false, keyboardIsUp: true), .nothing)
+        XCTAssertEqual(BottomChromeContent.showing(isFinding: true, keyboardIsUp: true), .findBar)
+    }
+
+    /// The observer follows the system's own keyboard notifications.
+    func testTheKeyboardObserverFollowsTheSystem() {
+        let center = NotificationCenter()
+        let keyboard = KeyboardObserver(center: center)
+        XCTAssertFalse(keyboard.isUp)
+
+        center.post(name: UIResponder.keyboardWillShowNotification, object: nil)
+        XCTAssertTrue(keyboard.isUp)
+
+        center.post(name: UIResponder.keyboardWillHideNotification, object: nil)
+        XCTAssertFalse(keyboard.isUp)
+    }
 }
