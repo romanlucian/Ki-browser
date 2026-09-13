@@ -487,27 +487,6 @@ struct BookmarksHomePage: View {
     }
 }
 
-/// Pure filters behind the bookmarks-home search field, kept separate from the
-/// view so their behavior is directly testable. Matching mirrors the organizer:
-/// case-insensitive `contains` on the page title and web address, plus the
-/// folder title.
-enum BookmarksHomeSearch {
-    static func folders(_ folders: [BookmarkFolderRecord], matching query: String) -> [BookmarkFolderRecord] {
-        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return folders }
-        return folders.filter { $0.title.localizedCaseInsensitiveContains(trimmed) }
-    }
-
-    static func bookmarks(_ bookmarks: [BookmarkRecord], matching query: String) -> [BookmarkRecord] {
-        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return bookmarks }
-        return bookmarks.filter {
-            $0.title.localizedCaseInsensitiveContains(trimmed)
-                || $0.url.localizedCaseInsensitiveContains(trimmed)
-        }
-    }
-}
-
 /// One render pass' worth of derived bookmark data. Built once at the top of
 /// `BookmarksHomePage.body`: the rolled-up descendant counts come from a single
 /// `LimeghostCore` pass, and the per-parent groupings replace the store's

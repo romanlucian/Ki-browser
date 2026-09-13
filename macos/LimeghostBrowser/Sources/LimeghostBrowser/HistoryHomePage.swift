@@ -180,18 +180,6 @@ struct HistoryHomePage: View {
     }
 }
 
-/// Filtering history by what was typed. Pure and static so it can be tested
-/// without a view.
-enum HistoryHomeSearch {
-    static func visits(_ visits: [HistoryRecord], matching search: String) -> [HistoryRecord] {
-        let trimmed = search.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return visits }
-        return visits.filter {
-            $0.title.localizedCaseInsensitiveContains(trimmed) || $0.url.localizedCaseInsensitiveContains(trimmed)
-        }
-    }
-}
-
 /// One stored visit. Opening it is the whole row, so the target is the width
 /// of the list rather than the length of the title.
 struct HistoryEntryRow: View {
