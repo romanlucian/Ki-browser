@@ -48,6 +48,18 @@ struct BrowserScreen: View {
             .presentationDragIndicator(.visible)
             .presentationBackground(LimeghostTheme.bg1)
         }
+        .sheet(item: $menu.destination) { destination in
+            switch destination {
+            case .bookmarks:
+                BookmarksSheet(workspace: host.workspace) { menu.destination = nil }
+            case .history:
+                HistorySheet(workspace: host.workspace) { menu.destination = nil }
+            }
+        }
+        // Handed down once, as the Mac's `BrowserView` does, so every site icon
+        // on the phone draws what a visit captured rather than its fallback
+        // square: the guide's, and both lists'. The phone had never done this.
+        .environment(\.faviconStore, host.workspace.favicons)
     }
 
     private var bottomBar: BottomBar {
@@ -100,16 +112,17 @@ struct BottomChrome: View {
 /// on purpose, the suite stayed green, so the whole branch could have been
 /// deleted without anything noticing.
 ///
-/// Both conditions are load-bearing on their own. `startSurface` is never
-/// reset once a real page loads — iOS has no Home button and no bookmarks or
-/// history home yet to reset it — so `loadState` has to be the deciding vote
-/// for `.content`/`.loading`: without it, a tab opened straight to a URL
-/// (`AddressSheet`, a reopened tab, a tapped guide card) would show the
-/// guide instead of the page just asked for, because `startSurface` is still
-/// `.aiHome`. And `startSurface` still matters for `.startPage`: the shared
-/// layer also loads its own HTML start page into every fresh tab's web view,
-/// which is `.startPage` too, so this function is what keeps that page from
-/// ever showing instead of, or underneath, the native guide.
+/// Both conditions are load-bearing on their own. `startSurface` is never reset
+/// once a real page loads — iOS has no Home button, and its Bookmarks and
+/// History are sheets rather than start surfaces, so nothing resets it — so
+/// `loadState` has to be the deciding vote for `.content`/`.loading`: without
+/// it, a tab opened straight to a URL (`AddressSheet`, a reopened tab, a tapped
+/// guide card) would show the guide instead of the page just asked for, because
+/// `startSurface` is still `.aiHome`. And `startSurface` still matters for
+/// `.startPage`: the shared layer also loads its own HTML start page into every
+/// fresh tab's web view, which is `.startPage` too, so this function is what
+/// keeps that page from ever showing instead of, or underneath, the native
+/// guide.
 func showsGuide(loadState: BrowserLoadState, startSurface: StartSurface) -> Bool {
     loadState == .startPage && startSurface == .aiHome
 }

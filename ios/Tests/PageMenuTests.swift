@@ -33,12 +33,12 @@ final class PageMenuTests: XCTestCase {
 
     // MARK: - What the menu offers
 
-    /// On the AI guide there is no page to act on. Only the two rows that
-    /// open a new tab work. The rest stay in place, greyed, and light up
-    /// when a page opens.
-    func testOnTheGuideOnlyTheNewTabRowsWork() {
+    /// On the AI guide there is no page to act on. The rows that need no page
+    /// work: the two that open a new tab, and the two that open a list. The
+    /// rest stay in place, greyed, and light up when a page opens.
+    func testOnTheGuideOnlyTheRowsThatNeedNoPageWork() {
         let guide = model(hasPage: false)
-        XCTAssertEqual(PageMenuItem.allCases.filter(guide.isEnabled), [.newTab, .newPrivateTab])
+        XCTAssertEqual(PageMenuItem.allCases.filter(guide.isEnabled), [.newTab, .newPrivateTab, .bookmarks, .history])
     }
 
     /// On a page every row works except Forward, while there is nowhere to
@@ -76,6 +76,14 @@ final class PageMenuTests: XCTestCase {
 
         XCTAssertEqual(model().title(.reader), "Reader")
         XCTAssertEqual(model(isReaderOpen: true).title(.reader), "Close Reader")
+    }
+
+    /// The two list rows say where they go.
+    func testTheListRowsSayWhereTheyGo() {
+        XCTAssertEqual(model().title(.bookmarks), "Bookmarks")
+        XCTAssertEqual(model().symbol(.bookmarks), "book")
+        XCTAssertEqual(model().title(.history), "History")
+        XCTAssertEqual(model().symbol(.history), "clock")
     }
 
     /// The model reads the tab in front, not a copy of it.
@@ -199,5 +207,42 @@ final class PageMenuTests: XCTestCase {
         presentation.isPresented = false
 
         XCTAssertNil(presentation.didDismiss())
+    }
+
+    /// Bookmarks is a sheet of its own, and SwiftUI presents one sheet at a
+    /// time. Choosing it closes the menu, and Bookmarks opens only once the
+    /// menu has gone. There is nothing left to run.
+    func testChoosingBookmarksOpensItOnceTheMenuHasGone() {
+        var presentation = PageMenuPresentation()
+        presentation.open()
+        presentation.choose(.bookmarks)
+
+        XCTAssertFalse(presentation.isPresented)
+        XCTAssertNil(presentation.destination, "not while the menu is still closing")
+        XCTAssertNil(presentation.didDismiss(), "a list is opened, not run")
+        XCTAssertEqual(presentation.destination, .bookmarks)
+    }
+
+    /// History likewise.
+    func testChoosingHistoryOpensItOnceTheMenuHasGone() {
+        var presentation = PageMenuPresentation()
+        presentation.open()
+        presentation.choose(.history)
+
+        XCTAssertNil(presentation.destination)
+        XCTAssertNil(presentation.didDismiss())
+        XCTAssertEqual(presentation.destination, .history)
+    }
+
+    /// Every other row runs as before and opens no list.
+    func testEveryOtherRowRunsAndOpensNoList() {
+        for item in PageMenuItem.allCases where item != .bookmarks && item != .history {
+            var presentation = PageMenuPresentation()
+            presentation.open()
+            presentation.choose(item)
+
+            XCTAssertEqual(presentation.didDismiss(), item)
+            XCTAssertNil(presentation.destination, "\(item) opened a list")
+        }
     }
 }

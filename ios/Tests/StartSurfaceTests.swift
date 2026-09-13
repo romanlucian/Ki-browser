@@ -39,14 +39,14 @@ final class StartSurfaceTests: XCTestCase {
         XCTAssertTrue(showsGuide(loadState: .startPage, startSurface: .aiHome))
     }
 
-    /// The case nothing else guards. `startSurface` is never reset once a
-    /// real page loads — iOS has no Home button and no bookmarks or history
-    /// home yet to reset it — so a tab can easily be `.content` while
-    /// `startSurface` is still `.aiHome`. If the gate read `startSurface`
-    /// alone, a tab opened straight to a URL would show the guide instead of
-    /// the page just asked for — which is the rule in `CLAUDE.md` that asking
-    /// for a page uncovers the page, broken on the surface built to honour it.
-    /// Nothing guarded this before.
+    /// The case nothing else guards. `startSurface` is never reset once a real
+    /// page loads — iOS has no Home button, and its Bookmarks and History are
+    /// sheets rather than start surfaces, so nothing resets it — so a tab can
+    /// easily be `.content` while `startSurface` is still `.aiHome`. If the
+    /// gate read `startSurface` alone, a tab opened straight to a URL would
+    /// show the guide instead of the page just asked for — which is the rule in
+    /// `CLAUDE.md` that asking for a page uncovers the page, broken on the
+    /// surface built to honour it. Nothing guarded this before.
     func testTheGateHidesTheGuideOnceAPageIsLoaded() {
         XCTAssertFalse(showsGuide(loadState: .content, startSurface: .aiHome))
     }

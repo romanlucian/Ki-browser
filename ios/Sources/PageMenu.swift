@@ -2,11 +2,12 @@ import LimeghostShared
 import SwiftUI
 
 /// Everything the page menu offers, in the order it shows them: the two large
-/// buttons, then the two cards.
+/// buttons, then the three cards.
 enum PageMenuItem: CaseIterable, Hashable {
     case reader, copyForAI
     case reload, forward, newTab, newPrivateTab
     case bookmark, find, share, desktopSite
+    case bookmarks, history
 }
 
 /// What the menu shows, apart from how it draws, so a test can read it without
@@ -21,7 +22,7 @@ struct PageMenuModel: Equatable {
 
     func isEnabled(_ item: PageMenuItem) -> Bool {
         switch item {
-        case .newTab, .newPrivateTab:
+        case .newTab, .newPrivateTab, .bookmarks, .history:
             return true
         case .forward:
             return canGoForward
@@ -49,6 +50,8 @@ struct PageMenuModel: Equatable {
         case .find: return "Find in Page"
         case .share: return "Share"
         case .desktopSite: return prefersDesktopSite ? "Request Mobile Site" : "Request Desktop Site"
+        case .bookmarks: return "Bookmarks"
+        case .history: return "History"
         }
     }
 
@@ -66,6 +69,8 @@ struct PageMenuModel: Equatable {
         case .find: return "magnifyingglass"
         case .share: return "square.and.arrow.up"
         case .desktopSite: return prefersDesktopSite ? "iphone" : "desktopcomputer"
+        case .bookmarks: return "book"
+        case .history: return "clock"
         }
     }
 }
@@ -92,9 +97,20 @@ extension PageMenuModel {
 /// sheet from the window's root view controller, which cannot present anything
 /// while this sheet is still up. The find bar's keyboard and Reader want a
 /// clear screen too.
+/// The two rows that open a list over the page rather than act on it.
+enum PageMenuDestination: Identifiable {
+    case bookmarks, history
+
+    var id: Self { self }
+}
+
 struct PageMenuPresentation {
     var isPresented = false
     private(set) var chosen: PageMenuItem?
+    /// Bookmarks or History, open over the page. Set only once the menu has
+    /// gone, because SwiftUI presents one sheet at a time; the list's sheet
+    /// clears it again when it closes.
+    var destination: PageMenuDestination?
 
     mutating func open() {
         chosen = nil
@@ -107,10 +123,21 @@ struct PageMenuPresentation {
         isPresented = false
     }
 
-    /// The sheet has gone. Hands back the row to act on, once.
+    /// The sheet has gone. Hands back the row to act on, once. Bookmarks and
+    /// History are lists rather than actions: those open instead, and nothing
+    /// is handed back.
     mutating func didDismiss() -> PageMenuItem? {
         defer { chosen = nil }
-        return chosen
+        switch chosen {
+        case .bookmarks?:
+            destination = .bookmarks
+            return nil
+        case .history?:
+            destination = .history
+            return nil
+        default:
+            return chosen
+        }
     }
 }
 
@@ -133,6 +160,7 @@ struct PageMenuActions {
         case .find: workspace.findInSelectedTab()
         case .share: workspace.shareSelectedPage()
         case .desktopSite: workspace.toggleDesktopSiteInSelectedTab()
+        case .bookmarks, .history: break // Lists, which `PageMenuPresentation` opens.
         }
     }
 
@@ -159,7 +187,7 @@ struct PageMenuActions {
     }
 }
 
-/// The page menu: two large buttons, then two cards of rows, on the plane's
+/// The page menu: two large buttons, then three cards of rows, on the plane's
 /// colour. Every row closes the sheet; `PageMenuPresentation` runs it after.
 struct PageMenu: View {
     let model: PageMenuModel
@@ -178,6 +206,8 @@ struct PageMenu: View {
                 card([.reload, .forward, .newTab, .newPrivateTab])
                     .padding(.top, 20)
                 card([.bookmark, .find, .share, .desktopSite])
+                    .padding(.top, 16)
+                card([.bookmarks, .history])
                     .padding(.top, 16)
             }
             .padding(.horizontal, 16)
