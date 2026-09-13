@@ -33,6 +33,11 @@ public final class AICompanion: ObservableObject {
     /// the two I am using" needs, and it is also exactly what Compare shows.
     static let maximumLiveSessions = 2
 
+    /// How soon after an automatic reopen a page that ends again is left
+    /// showing its failure: a page that dies as it loads would otherwise
+    /// reload forever.
+    static let automaticReopenInterval: TimeInterval = 30
+
     @Published public private(set) var isVisible = false
     /// Filling the window rather than sharing it with the page.
     @Published public private(set) var isExpanded = false
@@ -67,6 +72,11 @@ public final class AICompanion: ObservableObject {
     /// never set this: a window someone widens should not resurrect a panel
     /// they deliberately shut.
     private var hiddenBecauseThereWasNoRoom = false
+    /// Assistants whose page process ended while they were hidden. Each
+    /// reopens its conversation when it is next shown.
+    private var awaitingReopen: Set<String> = []
+    private var lastAutomaticReopen: [String: Date] = [:]
+    private let now: () -> Date
 
     public var isComparing: Bool { comparisonTool != nil }
 
@@ -78,11 +88,13 @@ public final class AICompanion: ObservableObject {
     public init(
         tool: AIToolListing,
         makeSession: @escaping (AIToolListing, URL) -> BrowserSession,
-        rememberChoice: @escaping (String) -> Void
+        rememberChoice: @escaping (String) -> Void,
+        now: @escaping () -> Date = { Date() }
     ) {
         self.tool = tool
         self.makeSession = makeSession
         self.rememberChoice = rememberChoice
+        self.now = now
     }
 
     public func session(for tool: AIToolListing) -> BrowserSession? { live[tool.id] }
@@ -220,6 +232,7 @@ public final class AICompanion: ObservableObject {
         live.values.forEach { $0.teardown() }
         live = [:]
         recency = []
+        awaitingReopen = []
         isVisible = false
     }
 
@@ -253,10 +266,42 @@ public final class AICompanion: ObservableObject {
     private func load(_ choice: AIToolListing) {
         touch(choice.id)
         if live[choice.id] == nil {
-            live[choice.id] = makeSession(choice, parked[choice.id] ?? choice.officialURL)
+            let session = makeSession(choice, parked[choice.id] ?? choice.officialURL)
+            session.onWebContentProcessTerminated = { [weak self] in
+                self?.pageEnded(for: choice.id)
+            }
+            live[choice.id] = session
             parked[choice.id] = nil
+        } else if awaitingReopen.contains(choice.id) {
+            reopen(choice.id)
         }
         evictBeyondLimit()
+    }
+
+    /// WebKit ended an assistant's page, as iOS routinely does to an app in
+    /// the background. On screen it reopens now; hidden, when next shown.
+    private func pageEnded(for id: String) {
+        if let last = lastAutomaticReopen[id], now().timeIntervalSince(last) < Self.automaticReopenInterval {
+            return
+        }
+        if isVisible, shown.contains(id) {
+            reopen(id)
+        } else {
+            awaitingReopen.insert(id)
+        }
+    }
+
+    /// Reopens the conversation's own address, the way a parked assistant is
+    /// reopened, rather than starting a new one.
+    private func reopen(_ id: String) {
+        awaitingReopen.remove(id)
+        guard let session = live[id] else { return }
+        let listing = [tool, comparisonTool].compactMap { $0 }.first(where: { $0.id == id })
+            ?? Self.choices.first(where: { $0.id == id })
+        let conversation = URL(string: session.currentURLString).flatMap { $0.scheme?.hasPrefix("http") == true ? $0 : nil }
+        guard let address = conversation ?? listing?.officialURL else { return }
+        lastAutomaticReopen[id] = now()
+        session.load(address)
     }
 
     private func evictBeyondLimit() {
@@ -275,6 +320,7 @@ public final class AICompanion: ObservableObject {
             session.teardown()
             live[id] = nil
             recency.removeAll { $0 == id }
+            awaitingReopen.remove(id)
         }
     }
 }

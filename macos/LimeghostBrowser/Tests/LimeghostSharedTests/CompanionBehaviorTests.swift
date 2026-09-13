@@ -327,6 +327,85 @@ final class CompanionBehaviorTests: XCTestCase {
         XCTAssertNil(companion.popup)
     }
 
+    /// iOS ends the page process of an app in the background. An assistant on
+    /// screen reopens its conversation's own address instead of going blank.
+    func testAnAssistantOnScreenWhosePageEndedReopensItsConversation() throws {
+        let companion = try makeCompanion()
+        companion.show()
+        let session = try XCTUnwrap(companion.session)
+        let address = session.currentURLString
+
+        session.webViewWebContentProcessDidTerminate(session.webView)
+
+        XCTAssertEqual(session.loadState, .loading, "the assistant stayed on its failure")
+        XCTAssertEqual(session.currentURLString, address)
+    }
+
+    /// A hidden assistant is not reloaded where nobody can see it: it reopens
+    /// when it is shown, and keeps its session.
+    func testAHiddenAssistantWhosePageEndedReopensWhenShown() throws {
+        let companion = try makeCompanion()
+        companion.show()
+        let session = try XCTUnwrap(companion.session)
+        companion.hide()
+
+        session.webViewWebContentProcessDidTerminate(session.webView)
+        guard case .failed = session.loadState else {
+            return XCTFail("a hidden assistant was reloaded at once")
+        }
+
+        companion.show()
+
+        XCTAssertEqual(session.loadState, .loading)
+        XCTAssertTrue(companion.session === session, "showing it started a new conversation")
+    }
+
+    /// A page that ends again straight after being reopened is left showing
+    /// its failure; one that ends again later is reopened again.
+    func testAPageThatKeepsEndingIsNotReopenedForever() throws {
+        var clock = Date(timeIntervalSince1970: 1_000_000)
+        let companion = try makeCompanion(now: { clock })
+        companion.show()
+        let session = try XCTUnwrap(companion.session)
+
+        session.webViewWebContentProcessDidTerminate(session.webView)
+        XCTAssertEqual(session.loadState, .loading, "the first ending was not reopened")
+
+        clock.addTimeInterval(5)
+        session.webViewWebContentProcessDidTerminate(session.webView)
+        guard case .failed = session.loadState else {
+            return XCTFail("a page ending again at once was reopened again")
+        }
+
+        clock.addTimeInterval(AICompanion.automaticReopenInterval)
+        session.webViewWebContentProcessDidTerminate(session.webView)
+        XCTAssertEqual(session.loadState, .loading, "a page that ended again much later was left on its failure")
+    }
+
+    /// A companion on its own, with sessions that load nothing real and a
+    /// clock the test controls.
+    private func makeCompanion(now: @escaping () -> Date = { Date() }) throws -> AICompanion {
+        let suiteName = "clearframe.companionRecovery.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        addTeardownBlock { TestSuiteCleanup.destroy(suiteName, defaults: defaults) }
+        let search = SearchSettingsStore(defaults: defaults)
+        let companion = AICompanion(
+            tool: try XCTUnwrap(AICompanion.choices.first),
+            makeSession: { _, url in
+                BrowserSession(
+                    platform: RecordingPlatform(),
+                    downloadCenter: NoDownloads(),
+                    searchSettings: search,
+                    initialURL: url
+                )
+            },
+            rememberChoice: { _ in },
+            now: now
+        )
+        addTeardownBlock { companion.teardown() }
+        return companion
+    }
+
     private func makeSurfaceTestWorkspace(assistantPopups: AssistantPopupPlacement = .tab) throws -> BrowserWorkspace {
         let suiteName = "clearframe.companionSurface.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))

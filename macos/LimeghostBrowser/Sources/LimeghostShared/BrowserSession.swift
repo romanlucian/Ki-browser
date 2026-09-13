@@ -137,6 +137,10 @@ public final class BrowserSession: NSObject, ObservableObject {
     /// that has finished. Only a host showing such windows somewhere it can
     /// take them away sets this; a tab ignores the request, as it always has.
     public var onRequestClose: (() -> Void)?
+    /// WebKit ended this page's process. The session records the failure
+    /// itself; this tells whoever can do better than show it, like the
+    /// assistant, which reopens its conversation.
+    public var onWebContentProcessTerminated: (() -> Void)?
     /// How a `mailto:`/`tel:` link reaches the app that owns it. Injectable so
     /// the smoke suite can prove the page survives the hand-off without
     /// launching the tester's mail client. Defaults to `platform.openExternal`,
@@ -584,6 +588,7 @@ public final class BrowserSession: NSObject, ObservableObject {
         onRequestPopupWebView = nil
         onCompletedVisit = nil
         onRequestClose = nil
+        onWebContentProcessTerminated = nil
         webView.navigationDelegate = nil
         webView.uiDelegate = nil
         contentBlocking?.unregister(webView)
@@ -1180,6 +1185,7 @@ extension BrowserSession: WKNavigationDelegate {
                 retryable: true
             )
         )
+        onWebContentProcessTerminated?()
     }
 
     public func webView(
