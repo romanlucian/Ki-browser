@@ -46,6 +46,10 @@ public final class AICompanion: ObservableObject {
 
     /// Loaded assistants, keyed by tool. Never larger than `maximumLiveSessions`.
     @Published public private(set) var live: [String: BrowserSession] = [:]
+    /// A window the assistant's page opened, shown over it: a provider's
+    /// sign-in, in practice. Only a host asking for `.overAssistant` ever
+    /// sets this; on the Mac such windows are tabs.
+    @Published public private(set) var popup: BrowserSession?
     /// Most recently used first. Decides what is dropped when a third arrives.
     private var recency: [String] = []
     /// Where a dropped assistant's conversation was, so returning reopens it
@@ -98,10 +102,12 @@ public final class AICompanion: ObservableObject {
     }
 
     /// Closed by the person. Deliberate, so widening the window later must not
-    /// bring it back.
+    /// bring it back. Its window goes with it: a sign-in belongs to the
+    /// assistant it was opened from.
     func hide() {
         hiddenBecauseThereWasNoRoom = false
         isVisible = false
+        dismissPopup()
     }
 
     /// The view reporting how much room this window has.
@@ -196,6 +202,7 @@ public final class AICompanion: ObservableObject {
         guard isVisible else { return }
         stopComparing()
         guard canShareWindow else {
+            dismissPopup()
             // No layout shows both, so shrinking would reveal nothing. Sliding
             // away is the only thing that uncovers the page. The toolbar button
             // is the way back — it is already on screen, unlike a shortcut —
@@ -209,10 +216,29 @@ public final class AICompanion: ObservableObject {
     }
 
     public func teardown() {
+        dismissPopup()
         live.values.forEach { $0.teardown() }
         live = [:]
         recency = []
         isVisible = false
+    }
+
+    // MARK: - Windows the assistant opens
+
+    /// Shows a window the assistant's page opened, over the assistant. One at
+    /// a time: a second replaces the first. It goes away when it closes itself.
+    public func presentPopup(_ session: BrowserSession) {
+        dismissPopup()
+        session.onRequestClose = { [weak self, weak session] in
+            guard let self, let session, self.popup === session else { return }
+            self.dismissPopup()
+        }
+        popup = session
+    }
+
+    public func dismissPopup() {
+        popup?.teardown()
+        popup = nil
     }
 
     // MARK: - Keeping two

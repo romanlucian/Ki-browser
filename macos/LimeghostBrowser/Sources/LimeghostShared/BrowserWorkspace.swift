@@ -368,6 +368,8 @@ public final class BrowserWorkspace: ObservableObject {
     /// The assistant beside the page. One per window; see `AICompanion`.
     public let aiCompanion: AICompanion
     private var aiCompanionSubscription: AnyCancellable?
+    /// Where a window the assistant's page opens is shown.
+    private let assistantPopups: AssistantPopupPlacement
 
     public init(
         dataStore: BrowserDataStore? = nil,
@@ -388,11 +390,15 @@ public final class BrowserWorkspace: ObservableObject {
         adopting: BrowserTab? = nil,
         isPrivate: Bool = false,
         profileID: UUID = BrowserProfileRecord.defaultID,
-        websiteDataStore: WKWebsiteDataStore? = nil
+        websiteDataStore: WKWebsiteDataStore? = nil,
+        /// The Mac keeps the default, a tab. The phone, where the assistant
+        /// covers the page, asks for `.overAssistant`.
+        assistantPopups: AssistantPopupPlacement = .tab
     ) {
         self.profileID = profileID
         self.websiteDataStore = websiteDataStore
         self.isPrivate = isPrivate
+        self.assistantPopups = assistantPopups
         self.persistsSession = restoresSession && !isPrivate
         let resolvedDataStore = dataStore ?? BrowserDataStore()
         let resolvedDownloads = downloads
@@ -457,7 +463,7 @@ public final class BrowserWorkspace: ObservableObject {
                     self?.addTab(url: url, isPrivate: self?.isPrivate ?? false)
                 }
                 session.onRequestPopupWebView = { [weak self] configuration in
-                    self?.adoptPopupTab(configuration: configuration, isPrivate: self?.isPrivate ?? false)
+                    self?.openAssistantPopup(configuration: configuration)
                 }
             }
         }
@@ -1224,6 +1230,34 @@ public final class BrowserWorkspace: ObservableObject {
     /// view back to WebKit. The tab must adopt that exact instance: it is what
     /// keeps `window.opener` connected, so a popup sign-in can report its
     /// result to the page that opened it instead of finishing in a dead end.
+    /// A window the assistant's page opened: a tab where there is room to see
+    /// one, or over the assistant where the assistant covers the page. Either
+    /// way it adopts WebKit's configuration, which keeps `window.opener`
+    /// connected so a sign-in can report back to the page that started it.
+    private func openAssistantPopup(configuration: WKWebViewConfiguration) -> WKWebView {
+        switch assistantPopups {
+        case .tab:
+            return adoptPopupTab(configuration: configuration, isPrivate: isPrivate)
+        case .overAssistant:
+            let popup = BrowserSession(
+                platform: makeSessionPlatform(),
+                downloadCenter: downloads,
+                searchSettings: searchSettings,
+                isPrivate: isPrivate,
+                contentBlocking: contentBlocking,
+                favicons: favicons,
+                adoptingPopupConfiguration: configuration
+            )
+            // A link inside it still belongs in a tab, like any link from the
+            // assistant.
+            popup.onRequestNewTab = { [weak self] url in
+                self?.addTab(url: url, isPrivate: self?.isPrivate ?? false)
+            }
+            aiCompanion.presentPopup(popup)
+            return popup.webView
+        }
+    }
+
     private func adoptPopupTab(configuration: WKWebViewConfiguration, isPrivate: Bool) -> WKWebView {
         let tab = BrowserTab(
             downloadCenter: downloads,

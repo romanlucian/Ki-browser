@@ -133,6 +133,10 @@ public final class BrowserSession: NSObject, ObservableObject {
     /// `window.opener` connected to the page that opened it.
     public var onRequestPopupWebView: ((WKWebViewConfiguration) -> WKWebView?)?
     public var onCompletedVisit: ((String, String) -> Void)?
+    /// A page calling `window.close()` on itself: in practice, a sign-in window
+    /// that has finished. Only a host showing such windows somewhere it can
+    /// take them away sets this; a tab ignores the request, as it always has.
+    public var onRequestClose: (() -> Void)?
     /// How a `mailto:`/`tel:` link reaches the app that owns it. Injectable so
     /// the smoke suite can prove the page survives the hand-off without
     /// launching the tester's mail client. Defaults to `platform.openExternal`,
@@ -579,6 +583,7 @@ public final class BrowserSession: NSObject, ObservableObject {
         onRequestNewTab = nil
         onRequestPopupWebView = nil
         onCompletedVisit = nil
+        onRequestClose = nil
         webView.navigationDelegate = nil
         webView.uiDelegate = nil
         contentBlocking?.unregister(webView)
@@ -1273,6 +1278,10 @@ extension BrowserSession: WKUIDelegate {
         // drop the popup silently.
         requestNewTab(for: navigationAction.request.url)
         return nil
+    }
+
+    public func webViewDidClose(_ webView: WKWebView) {
+        onRequestClose?()
     }
 
     // `webView(_:runOpenPanelWith:initiatedByFrame:completionHandler:)` — the

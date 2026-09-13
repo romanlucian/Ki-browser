@@ -268,7 +268,66 @@ final class CompanionBehaviorTests: XCTestCase {
         )
     }
 
-    private func makeSurfaceTestWorkspace() throws -> BrowserWorkspace {
+    /// The Mac's behaviour, pinned: a window the assistant's page opens
+    /// becomes a tab, and the companion holds nothing over itself.
+    func testAWindowTheAssistantOpensIsATabByDefault() throws {
+        let workspace = try makeSurfaceTestWorkspace()
+        let companion = workspace.aiCompanion
+        companion.show()
+        let assistant = try XCTUnwrap(companion.session)
+        let tabsBefore = workspace.tabs.count
+
+        let returned = assistant.onRequestPopupWebView?(WKWebViewConfiguration())
+
+        XCTAssertEqual(workspace.tabs.count, tabsBefore + 1)
+        XCTAssertTrue(returned === workspace.tabs.last?.session.webView)
+        XCTAssertNil(companion.popup)
+    }
+
+    /// Where the assistant covers the page, the window is shown over it: no
+    /// tab appears behind the assistant, and WebKit drives the popup's own
+    /// web view, which keeps `window.opener` connected.
+    func testWhenAskedAWindowTheAssistantOpensIsShownOverIt() throws {
+        let workspace = try makeSurfaceTestWorkspace(assistantPopups: .overAssistant)
+        let companion = workspace.aiCompanion
+        companion.show()
+        let assistant = try XCTUnwrap(companion.session)
+        let tabsBefore = workspace.tabs.count
+
+        let returned = assistant.onRequestPopupWebView?(WKWebViewConfiguration())
+
+        XCTAssertEqual(workspace.tabs.count, tabsBefore, "the sign-in opened a tab behind the assistant")
+        let popup = try XCTUnwrap(companion.popup)
+        XCTAssertTrue(returned === popup.webView)
+    }
+
+    /// A sign-in window that closes itself when it is done goes away.
+    func testAWindowThatClosesItselfLeaves() throws {
+        let workspace = try makeSurfaceTestWorkspace(assistantPopups: .overAssistant)
+        let companion = workspace.aiCompanion
+        companion.show()
+        _ = try XCTUnwrap(companion.session).onRequestPopupWebView?(WKWebViewConfiguration())
+        let popup = try XCTUnwrap(companion.popup)
+
+        popup.webViewDidClose(popup.webView)
+
+        XCTAssertNil(companion.popup)
+    }
+
+    /// The window belongs to the assistant, so closing the assistant closes it.
+    func testClosingTheAssistantClosesItsWindow() throws {
+        let workspace = try makeSurfaceTestWorkspace(assistantPopups: .overAssistant)
+        let companion = workspace.aiCompanion
+        companion.show()
+        _ = try XCTUnwrap(companion.session).onRequestPopupWebView?(WKWebViewConfiguration())
+        XCTAssertNotNil(companion.popup)
+
+        companion.closeColumn(companion.tool)
+
+        XCTAssertNil(companion.popup)
+    }
+
+    private func makeSurfaceTestWorkspace(assistantPopups: AssistantPopupPlacement = .tab) throws -> BrowserWorkspace {
         let suiteName = "clearframe.companionSurface.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
         addTeardownBlock { TestSuiteCleanup.destroy(suiteName, defaults: defaults) }
@@ -281,7 +340,8 @@ final class CompanionBehaviorTests: XCTestCase {
             clipboard: NoClipboard(),
             makeSessionPlatform: { RecordingPlatform() },
             searchSettings: SearchSettingsStore(defaults: defaults),
-            contentBlocking: blocking.provider
+            contentBlocking: blocking.provider,
+            assistantPopups: assistantPopups
         )
     }
 
