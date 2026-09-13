@@ -6,6 +6,11 @@ struct BottomBarModel {
     let urlString: String
     let tabCount: Int
     let canGoBack: Bool
+    /// Lit while the assistant is open, as the Mac's toolbar button is.
+    var isAssistantOpen: Bool = false
+
+    /// What the button does next, for VoiceOver, as the menu's labels say.
+    var assistantLabel: String { isAssistantOpen ? "Hide Assistant" : "Show Assistant" }
 
     /// The host, or an invitation.
     var addressLabel: String {

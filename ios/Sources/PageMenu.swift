@@ -150,18 +150,30 @@ struct PageMenuActions {
 
     func perform(_ item: PageMenuItem) async {
         switch item {
-        case .reader: await workspace.toggleReaderInSelectedTab()
+        case .reader: await openOrCloseReader()
         case .copyForAI: await copyForAI()
         case .reload: workspace.reloadSelectedTab()
         case .forward: workspace.goForwardInSelectedTab()
         case .newTab: workspace.addTab()
         case .newPrivateTab: workspace.addTab(isPrivate: true)
         case .bookmark: toggleBookmark()
-        case .find: workspace.findInSelectedTab()
+        case .find:
+            // Find highlights a match on the page, which the assistant covers.
+            workspace.aiCompanion.makeRoomForPage()
+            workspace.findInSelectedTab()
         case .share: workspace.shareSelectedPage()
         case .desktopSite: workspace.toggleDesktopSiteInSelectedTab()
         case .bookmarks, .history: break // Lists, which `PageMenuPresentation` opens.
         }
+    }
+
+    /// Reader shows the page's text, which the assistant would be covering,
+    /// so opening it uncovers the page first. Closing it asks for nothing.
+    func openOrCloseReader() async {
+        if workspace.selectedTab?.readerArticle == nil {
+            workspace.aiCompanion.makeRoomForPage()
+        }
+        await workspace.toggleReaderInSelectedTab()
     }
 
     /// The menu closes as it copies, so the phone says what went onto the

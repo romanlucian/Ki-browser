@@ -28,4 +28,13 @@ final class BottomBarTests: XCTestCase {
         let model = BottomBarModel(urlString: "about:blank", tabCount: 1, canGoBack: false)
         XCTAssertEqual(model.addressLabel, "about:blank")
     }
+
+    /// The assistant button says what a tap will do next, as the menu's labels do.
+    func testTheAssistantButtonSaysWhatATapWillDo() {
+        XCTAssertEqual(BottomBarModel(urlString: "", tabCount: 1, canGoBack: false).assistantLabel, "Show Assistant")
+        XCTAssertEqual(
+            BottomBarModel(urlString: "", tabCount: 1, canGoBack: false, isAssistantOpen: true).assistantLabel,
+            "Hide Assistant"
+        )
+    }
 }

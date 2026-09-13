@@ -47,6 +47,7 @@
 		AA000000000000000000210A /* BookmarksSheetTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000220A /* BookmarksSheetTests.swift */; };
 		AA000000000000000000210B /* BookmarkMovePickerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000220B /* BookmarkMovePickerTests.swift */; };
 		AA000000000000000000210C /* HistorySheetTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000220C /* HistorySheetTests.swift */; };
+		AA000000000000000000210D /* AssistantOnThePhoneTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000220D /* AssistantOnThePhoneTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -100,6 +101,7 @@
 		AA000000000000000000220A /* BookmarksSheetTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookmarksSheetTests.swift; sourceTree = "<group>"; };
 		AA000000000000000000220B /* BookmarkMovePickerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookmarkMovePickerTests.swift; sourceTree = "<group>"; };
 		AA000000000000000000220C /* HistorySheetTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistorySheetTests.swift; sourceTree = "<group>"; };
+		AA000000000000000000220D /* AssistantOnThePhoneTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssistantOnThePhoneTests.swift; sourceTree = "<group>"; };
 		AA0000000000000000002301 /* LimeghostTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = LimeghostTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -174,6 +176,7 @@
 				AA000000000000000000220A /* BookmarksSheetTests.swift */,
 				AA000000000000000000220B /* BookmarkMovePickerTests.swift */,
 				AA000000000000000000220C /* HistorySheetTests.swift */,
+				AA000000000000000000220D /* AssistantOnThePhoneTests.swift */,
 			);
 			path = Tests;
 			sourceTree = "<group>";
@@ -354,6 +357,7 @@
 				AA000000000000000000210A /* BookmarksSheetTests.swift in Sources */,
 				AA000000000000000000210B /* BookmarkMovePickerTests.swift in Sources */,
 				AA000000000000000000210C /* HistorySheetTests.swift in Sources */,
+				AA000000000000000000210D /* AssistantOnThePhoneTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
