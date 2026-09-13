@@ -24,6 +24,7 @@
 		AA0000000000000000000110 /* BookmarksSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000211 /* BookmarksSheet.swift */; };
 		AA000000000000000000010F /* SheetLook.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000210 /* SheetLook.swift */; };
 		AA0000000000000000000111 /* BookmarkMovePicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000212 /* BookmarkMovePicker.swift */; };
+		AA0000000000000000000112 /* HistorySheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000213 /* HistorySheet.swift */; };
 		AA0000000000000000000671 /* AIToolStartPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000661 /* AIToolStartPage.swift */; };
 		AA0000000000000000000672 /* LimeghostTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000662 /* LimeghostTheme.swift */; };
 		AA0000000000000000000673 /* SiteIconView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000663 /* SiteIconView.swift */; };
@@ -45,6 +46,7 @@
 		AA0000000000000000002109 /* FindBarTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000002209 /* FindBarTests.swift */; };
 		AA000000000000000000210A /* BookmarksSheetTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000220A /* BookmarksSheetTests.swift */; };
 		AA000000000000000000210B /* BookmarkMovePickerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000220B /* BookmarkMovePickerTests.swift */; };
+		AA000000000000000000210C /* HistorySheetTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000220C /* HistorySheetTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -76,6 +78,7 @@
 		AA0000000000000000000211 /* BookmarksSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookmarksSheet.swift; sourceTree = "<group>"; };
 		AA0000000000000000000210 /* SheetLook.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SheetLook.swift; sourceTree = "<group>"; };
 		AA0000000000000000000212 /* BookmarkMovePicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookmarkMovePicker.swift; sourceTree = "<group>"; };
+		AA0000000000000000000213 /* HistorySheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistorySheet.swift; sourceTree = "<group>"; };
 		AA0000000000000000000661 /* AIToolStartPage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "../macos/LimeghostBrowser/Sources/LimeghostBrowser/AIToolStartPage.swift"; sourceTree = "<group>"; };
 		AA0000000000000000000662 /* LimeghostTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "../macos/LimeghostBrowser/Sources/LimeghostBrowser/LimeghostTheme.swift"; sourceTree = "<group>"; };
 		AA0000000000000000000663 /* SiteIconView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "../macos/LimeghostBrowser/Sources/LimeghostBrowser/SiteIconView.swift"; sourceTree = "<group>"; };
@@ -96,6 +99,7 @@
 		AA0000000000000000002209 /* FindBarTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FindBarTests.swift; sourceTree = "<group>"; };
 		AA000000000000000000220A /* BookmarksSheetTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookmarksSheetTests.swift; sourceTree = "<group>"; };
 		AA000000000000000000220B /* BookmarkMovePickerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookmarkMovePickerTests.swift; sourceTree = "<group>"; };
+		AA000000000000000000220C /* HistorySheetTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistorySheetTests.swift; sourceTree = "<group>"; };
 		AA0000000000000000002301 /* LimeghostTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = LimeghostTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -150,6 +154,7 @@
 				AA0000000000000000000211 /* BookmarksSheet.swift */,
 				AA0000000000000000000210 /* SheetLook.swift */,
 				AA0000000000000000000212 /* BookmarkMovePicker.swift */,
+				AA0000000000000000000213 /* HistorySheet.swift */,
 			);
 			path = Sources;
 			sourceTree = "<group>";
@@ -168,6 +173,7 @@
 				AA0000000000000000002209 /* FindBarTests.swift */,
 				AA000000000000000000220A /* BookmarksSheetTests.swift */,
 				AA000000000000000000220B /* BookmarkMovePickerTests.swift */,
+				AA000000000000000000220C /* HistorySheetTests.swift */,
 			);
 			path = Tests;
 			sourceTree = "<group>";
@@ -321,6 +327,7 @@
 				AA0000000000000000000110 /* BookmarksSheet.swift in Sources */,
 				AA000000000000000000010F /* SheetLook.swift in Sources */,
 				AA0000000000000000000111 /* BookmarkMovePicker.swift in Sources */,
+				AA0000000000000000000112 /* HistorySheet.swift in Sources */,
 				AA0000000000000000000671 /* AIToolStartPage.swift in Sources */,
 				AA0000000000000000000672 /* LimeghostTheme.swift in Sources */,
 				AA0000000000000000000673 /* SiteIconView.swift in Sources */,
@@ -346,6 +353,7 @@
 				AA0000000000000000002109 /* FindBarTests.swift in Sources */,
 				AA000000000000000000210A /* BookmarksSheetTests.swift in Sources */,
 				AA000000000000000000210B /* BookmarkMovePickerTests.swift in Sources */,
+				AA000000000000000000210C /* HistorySheetTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
