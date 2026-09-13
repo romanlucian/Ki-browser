@@ -12,6 +12,17 @@ Dates are commit dates. Test counts are the totals at the end of each period, ve
 
 ### Week of September 10–16, 2026
 
+**The phone gets your own assistant**
+
+- A button in the bottom bar, lit while open, opens the person's own ChatGPT, Claude, Gemini, Le Chat or Grok over the page, on their own account. It has a grabber, a header with the assistant's menu, "your own account" and ×, and a swipe down to close. It is one layer in one place in the view tree, never a sheet. Designed on September 13 with a design canvas; the spec is `docs/superpowers/specs/2026-09-13-ios-assistant-design.md`.
+- Every door makes it leave, and the button brings it back with the conversation still loaded. Reader and Find in Page from the menu make it leave too.
+- A sign-in window a provider's page opens appears over the assistant instead of as a tab hidden behind it, and closes itself after signing in. `BrowserWorkspace` takes an `AssistantPopupPlacement` from its host; the Mac keeps tabs.
+- A provider page that WebKit ended reopens its conversation: at once on screen, on the next show when hidden, and not again within 30 seconds. The Mac's assistant gets this too.
+- The bar steps aside while the keyboard is up, and a page notice moves to its own strip above the bar while the assistant is open. The design canvas showed the banner landing on the provider's message box.
+- The phone told websites it was Safari 26.5 on any iOS, a number that stands in for a Mac's. It now claims the version its own iOS carries.
+- A test pushed with the assistant's model was left failing for one commit. It still watched the old "un-expand" proxy, and was fixed in the next.
+- Tests: the Mac 525, up from 517; `LimeghostSharedLayer` 276, up from 268; the phone 83, up from 73. **Sign-in inside the phone's web view is untested.**
+
 **The phone gets Bookmarks and History**
 
 - Two rows in a third card of the page menu open sheets over the page. Bookmarks has folders to tap into, in the store's order; a search across every folder; Open in New Tab, Rename…, Move to…, delete by swipe or menu; and New Folder. History has visits by day, search, delete, and Clear History, which asks first and names this device rather than the Mac. Designed on September 13; the spec is `docs/superpowers/specs/2026-09-13-ios-bookmarks-history-design.md`.

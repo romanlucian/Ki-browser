@@ -112,6 +112,8 @@ One scene, one `BrowserWorkspace`, the selected tab's web view filling the scree
 
 ## 5. The assistant on a phone
 
+*Amended September 13, 2026:* built as a thin phone layer over the shared `AICompanion` rather than the Mac's `AICompanionPanel`, with §5.2's docked iPad and §5.5's persistence and memory-warning eviction deferred; see [2026-09-13-ios-assistant-design.md](2026-09-13-ios-assistant-design.md), §8.
+
 ### 5.1 "Sheet" is the look, not the implementation
 
 A SwiftUI `.sheet` presents its content in a separate hosting hierarchy, which re-parents the `WebView` — the destroy-and-rebuild `CLAUDE.md` records shipping Compare as a header above a blank rectangle. So the phone assistant is the Mac's own overlay: the one `AICompanionPanel` in the one `ZStack`, rendered at full width, with a grabber, rounded top and a swipe-down gesture. It is `fillsWindow` drawn on a compact width.
