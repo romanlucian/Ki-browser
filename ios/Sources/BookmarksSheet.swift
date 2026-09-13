@@ -149,3 +149,261 @@ enum BookmarkNameEdit {
         }
     }
 }
+
+/// Bookmarks, over the page: the top level, the folders beneath it, and a
+/// search across all of them. Opened from the page menu. A bookmark opens and
+/// the sheet closes; a folder opens on a screen of its own.
+struct BookmarksSheet: View {
+    let workspace: BrowserWorkspace
+    let dismiss: () -> Void
+
+    @State private var query = ""
+
+    var body: some View {
+        NavigationStack {
+            BookmarkFolderScreen(workspace: workspace, folderID: nil, query: query, close: dismiss)
+                .searchable(
+                    text: $query,
+                    placement: .navigationBarDrawer(displayMode: .always),
+                    prompt: "Search bookmarks"
+                )
+                .navigationDestination(for: UUID.self) { folderID in
+                    BookmarkFolderScreen(workspace: workspace, folderID: folderID, query: "", close: dismiss)
+                }
+        }
+        .limeghostListSheet()
+    }
+}
+
+/// One folder's list, or, at the top while something is typed, the matches
+/// from every folder, with everything a row can do.
+struct BookmarkFolderScreen: View {
+    @ObservedObject private var store: BrowserDataStore
+    private let workspace: BrowserWorkspace
+    /// Nil is the top level.
+    private let folderID: UUID?
+    /// What the search field holds. Only the top screen has one.
+    private let query: String
+    private let close: () -> Void
+
+    @State private var nameEdit: BookmarkNameEdit?
+    @State private var typedName = ""
+    @State private var folderToConfirm: BookmarkFolderRecord?
+    @State private var bookmarkToMove: BookmarkRecord?
+
+    init(workspace: BrowserWorkspace, folderID: UUID?, query: String, close: @escaping () -> Void) {
+        self.store = workspace.dataStore
+        self.workspace = workspace
+        self.folderID = folderID
+        self.query = query
+        self.close = close
+    }
+
+    private var model: BookmarksModel { BookmarksModel(workspace: workspace) }
+
+    private var isSearching: Bool {
+        !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    var body: some View {
+        let folders = isSearching ? model.folders(matching: query) : model.folders(in: folderID)
+        let bookmarks = isSearching ? model.bookmarks(matching: query) : model.bookmarks(in: folderID)
+
+        List {
+            if isSearching {
+                if !folders.isEmpty {
+                    Section("Folders") {
+                        ForEach(folders) { folderRow($0) }
+                    }
+                }
+                if !bookmarks.isEmpty {
+                    Section("Bookmarks") {
+                        ForEach(bookmarks) { bookmarkRow($0) }
+                    }
+                }
+            } else {
+                ForEach(folders) { folderRow($0) }
+                ForEach(bookmarks) { bookmarkRow($0) }
+            }
+        }
+        .listStyle(.insetGrouped)
+        .scrollContentBackground(.hidden)
+        .overlay {
+            if folders.isEmpty && bookmarks.isEmpty {
+                emptyState
+            }
+        }
+        .navigationTitle(model.title(of: folderID))
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .confirmationAction) {
+                Button("Done", action: close)
+            }
+            ToolbarItem(placement: .bottomBar) {
+                Button {
+                    beginNaming(.newFolder(parentID: folderID))
+                } label: {
+                    Label("New Folder", systemImage: "folder.badge.plus")
+                        .labelStyle(.titleAndIcon)
+                }
+            }
+        }
+        .alert(nameEdit?.title ?? "", isPresented: isNaming, presenting: nameEdit) { edit in
+            TextField("Name", text: $typedName)
+            Button("Cancel", role: .cancel) {}
+            Button(edit.confirmLabel) { edit.commit(typedName, with: model) }
+        }
+        .alert("Delete folder?", isPresented: isConfirmingDeletion, presenting: folderToConfirm) { folder in
+            Button("Delete Folder", role: .destructive) { model.delete(folder) }
+            Button("Cancel", role: .cancel) {}
+        } message: { folder in
+            Text(Self.deletionMessage(for: folder))
+        }
+        .sheet(item: $bookmarkToMove) { bookmark in
+            BookmarkMovePicker(
+                destinations: BookmarkDestinations.rows(folders: store.bookmarkFolders),
+                currentFolderID: bookmark.folderID
+            ) { destination in
+                model.move(bookmark, to: destination)
+            }
+        }
+    }
+
+    private func folderRow(_ folder: BookmarkFolderRecord) -> some View {
+        NavigationLink(value: folder.id) {
+            HStack(spacing: 12) {
+                BookmarkFolderIcon(folder: folder)
+                Text(folder.title)
+                    .foregroundStyle(LimeghostTheme.textPrimary)
+                    .lineLimit(1)
+            }
+        }
+        .listRowBackground(LimeghostTheme.bg2)
+        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+            // Not `role: .destructive`: a destructive swipe button animates its
+            // row away at once, before a folder that asks first has its answer.
+            Button {
+                requestDeletion(folder)
+            } label: {
+                Label("Delete", systemImage: "trash")
+            }
+            .tint(.red)
+        }
+        .contextMenu {
+            Button {
+                beginNaming(.renameFolder(folder))
+            } label: {
+                Label("Rename…", systemImage: "pencil")
+            }
+            Divider()
+            Button(role: .destructive) {
+                requestDeletion(folder)
+            } label: {
+                Label("Delete Folder", systemImage: "trash")
+            }
+        }
+    }
+
+    private func bookmarkRow(_ bookmark: BookmarkRecord) -> some View {
+        Button {
+            model.open(bookmark)
+            close()
+        } label: {
+            HStack(spacing: 12) {
+                SiteIconView(urlString: bookmark.url)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(bookmark.title)
+                        .foregroundStyle(LimeghostTheme.textPrimary)
+                        .lineLimit(1)
+                    Text(URL(string: bookmark.url)?.host ?? bookmark.url)
+                        .font(.caption)
+                        .foregroundStyle(LimeghostTheme.textTertiary)
+                        .lineLimit(1)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .listRowBackground(LimeghostTheme.bg2)
+        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+            Button(role: .destructive) {
+                model.delete(bookmark)
+            } label: {
+                Label("Delete", systemImage: "trash")
+            }
+        }
+        .contextMenu {
+            Button {
+                model.open(bookmark, inNewTab: true)
+                close()
+            } label: {
+                Label("Open in New Tab", systemImage: "plus.square.on.square")
+            }
+            Button {
+                beginNaming(.renameBookmark(bookmark))
+            } label: {
+                Label("Rename…", systemImage: "pencil")
+            }
+            Button {
+                bookmarkToMove = bookmark
+            } label: {
+                Label("Move to…", systemImage: "folder")
+            }
+            Divider()
+            Button(role: .destructive) {
+                model.delete(bookmark)
+            } label: {
+                Label("Delete Bookmark", systemImage: "trash")
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var emptyState: some View {
+        if isSearching {
+            ContentUnavailableView.search(text: query)
+        } else if folderID == nil {
+            ContentUnavailableView(
+                "No Bookmarks Yet",
+                systemImage: "book",
+                description: Text("Add Bookmark in the menu saves the page you're on.")
+            )
+        } else {
+            ContentUnavailableView(
+                "This Folder Is Empty",
+                systemImage: "folder",
+                description: Text("To file a bookmark here, touch and hold it, then choose Move to…")
+            )
+        }
+    }
+
+    private var isNaming: Binding<Bool> {
+        Binding(get: { nameEdit != nil }, set: { if !$0 { nameEdit = nil } })
+    }
+
+    private var isConfirmingDeletion: Binding<Bool> {
+        Binding(get: { folderToConfirm != nil }, set: { if !$0 { folderToConfirm = nil } })
+    }
+
+    /// The field starts from the current name for a rename, and empty for a
+    /// new folder.
+    private func beginNaming(_ edit: BookmarkNameEdit) {
+        typedName = edit.startingName
+        nameEdit = edit
+    }
+
+    /// An empty folder goes at once. One holding anything asks first.
+    private func requestDeletion(_ folder: BookmarkFolderRecord) {
+        if model.deletingAsksFirst(folder) {
+            folderToConfirm = folder
+        } else {
+            model.delete(folder)
+        }
+    }
+
+    /// The Mac's words for the same question, in `BookmarksHomePage`. Built
+    /// as a `String`, so a folder name is never read as Markdown.
+    private static func deletionMessage(for folder: BookmarkFolderRecord) -> String {
+        "\(folder.title) contains saved items. Its bookmarks and subfolders will move to the parent folder; nothing will be deleted."
+    }
+}
