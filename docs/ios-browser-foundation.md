@@ -140,7 +140,9 @@ Both report `** TEST SUCCEEDED **`, and both run **266 tests** — `LimeghostCor
 - **The bundle identifier was `com.zincoo.limeghost.dev`, not `com.zincoo.limeghost`.** A free Personal Team that registers an identifier can keep it reserved, and the real one will be wanted later by a paid team for the App Store. The suffix was passed on the command line, and nothing in the project changed.
 - **The team was passed on the command line too.** That settles the worry below about `DEVELOPMENT_TEAM` landing in the tracked project file: `xcodebuild -project ios/Limeghost.xcodeproj -scheme Limeghost -destination 'generic/platform=iOS' -allowProvisioningUpdates DEVELOPMENT_TEAM=<team> PRODUCT_BUNDLE_IDENTIFIER=com.zincoo.limeghost.dev build`, then `xcrun devicectl device install app` and `xcrun devicectl device process launch`. Nothing touches `project.pbxproj`, so there is nothing to put back.
 
-The first launch was refused until the developer was trusted on the phone, exactly as step 7 below says. The certificate lasts seven days; this one expires on September 17, 2026.
+The first launch was refused until the developer was trusted on the phone, exactly as step 7 below says. The certificate lasts seven days.
+
+**Performed a second time on September 13, 2026**, to put the page menu on the same phone. None of the four surprises above recurred: the cable was already the route, the free slot was still held by the previous install, the identifier and team were passed on the command line again, and no fresh trust was needed. `xcodebuild … build`, `xcrun devicectl device install app`, `xcrun devicectl device process launch` — the last of those reported `Launched application with com.zincoo.limeghost.dev bundle identifier.` One thing did block it first: the phone must be unlocked, or the install fails at `kAMDMobileImageMounterDeviceLocked`, which reads as a signing failure and is not one. That certificate expires on September 20, 2026.
 
 Signing is arranged in the project so that both destinations work without editing anything. `ios/Limeghost.xcodeproj` sets, on both the app and the test target:
 
