@@ -12,6 +12,16 @@ Dates are commit dates. Test counts are the totals at the end of each period, ve
 
 ### Week of September 10–16, 2026
 
+**The phone gets its page menu**
+
+- A `•••` sheet in the bottom bar: Reader and Copy for AI as two large buttons, then Reload, Forward, New Tab, New Private Tab, Add Bookmark, Find in Page, Share and Request Desktop Site. On the AI guide the page rows are greyed and the two new-tab rows still work. Designed with the founder on September 11–12; the spec and a design canvas are in `docs/superpowers/specs/2026-09-12-ios-page-menu-design.md`.
+- The sheet opens as tall as its rows. At the half-screen detent first designed, Share and Request Desktop Site would have opened below the fold on a 13 Pro Max, and most of the second card on an SE.
+- Reader on the phone is the Mac's own `ReaderView`, now compiled by both apps, with a two-row header a finger can use. The Mac keeps its single row and a test holds it there — drawing the phone's rows on the Mac fails it at 39 points against 39.
+- Copy for AI confirms each copy on the phone in words, because the menu closes as it copies and iOS shows nothing when an app writes to the clipboard. The Mac still says nothing about a clean copy, on purpose.
+- Find in Page says “No results” or nothing at all. The first conversation about this menu promised “3 of 12”; WebKit reports no count, so none is shown.
+- The page-load hook is now `BrowserSession.decide(…)`, a pure function tested branch by branch on both platforms — no test reached those branches before. Its delegate answers WebKit's `preferences:` form of the policy question, which is what carries the phone's per-tab Request Desktop Site. The Mac never turns that on, so its navigations are unchanged.
+- Tests: the Mac 516, up from 504; `LimeghostSharedLayer` 266 on both destinations, up from 256; the phone 50, up from 28.
+
 **The Mac's uncommitted week, committed, and the two platforms on one line again**
 
 - Three sittings of Mac work from September 2–3 had been installed then and never committed. They became three commits, split by hunk. Each was tested alone in a clean copy of its own tree, at 477, 480 and 487 tests.
