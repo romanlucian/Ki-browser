@@ -13,7 +13,7 @@ final class NoDownloads: DownloadTracking {
     func clearAllRecords() {}
 }
 
-/// Nothing to save, export, or share in a door test — none of the thirteen
+/// Nothing to save, export, or share in a door test — none of the fourteen
 /// doors touches a page command.
 enum NoPageSharing: PageSharing {
     static func savePage(
@@ -41,8 +41,10 @@ final class WorkspaceDoorTests: XCTestCase {
     /// Every way of asking for a page must uncover the page.
     ///
     /// A table rather than one test each, because the point is coverage: when
-    /// somebody adds a fourteenth door and forgets the rule, this is what says
-    /// so. Ten of the eleven doors that existed then were broken at once — the
+    /// somebody adds a fifteenth door and forgets the rule, this is what says
+    /// so. "A new tab in a group" was the fourteenth, found without a row and
+    /// without the rule on September 22, 2026. Ten of the eleven doors that
+    /// existed at the start were broken at once — the
     /// panel stepped aside for ⌘T and for nothing else, so the same request
     /// behaved two ways depending on which button you happened to press.
     ///
@@ -71,6 +73,12 @@ final class WorkspaceDoorTests: XCTestCase {
             ("back", { $0.goBackInSelectedTab() }),
             ("forward", { $0.goForwardInSelectedTab() }),
             ("a typed address", { $0.navigate("example.com") }),
+            // ⌘T inside a group, from the group's own menu. It opened a tab
+            // and selected it like ⌘T does, and left the page behind the
+            // assistant, which ⌘T does not.
+            ("a new tab in a group", { workspace in
+                if let group = workspace.createGroupForSelectedTab() { workspace.addTab(toGroup: group.id) }
+            }),
             // The file does not have to exist. `openLocalFile` calls
             // `makeRoomForPage()` before it hands anything to WebKit, and a
             // file load that fails does so asynchronously, long after the

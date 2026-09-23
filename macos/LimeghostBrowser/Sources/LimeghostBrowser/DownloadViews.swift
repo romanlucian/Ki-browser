@@ -1,9 +1,13 @@
 import LimeghostCore
+import LimeghostShared
 import Foundation
 import SwiftUI
 
 struct DownloadsPopover: View {
     @ObservedObject var center: DownloadCenter
+    /// Whether files are asked about or saved straight to a folder, which the
+    /// empty state's small print has to agree with.
+    @ObservedObject private var preferences = BrowserPreferences.shared
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -29,7 +33,7 @@ struct DownloadsPopover: View {
                         .font(.callout)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
-                    Text("Limeghost asks where to save every file and does not keep permanent download history yet.")
+                    Text(DownloadCenter.emptyStateFootnote(asksWhereToSave: preferences.asksWhereToSave))
                         .font(.caption2)
                         .foregroundStyle(.tertiary)
                         .multilineTextAlignment(.center)

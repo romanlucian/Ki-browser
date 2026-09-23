@@ -173,8 +173,31 @@ public final class BrowserDataStore: ObservableObject {
     /// of twelve restored tabs would otherwise mean twelve page loads nobody
     /// asked for, competing for the network on the slowest minute of the day.
     /// The tabs and their icons are there either way.
+    ///
+    /// Read and written here, in this profile's own suite, for the reason
+    /// `startupBehaviour` is: Settings once bound it to the standard suite,
+    /// which only the original profile reads.
     public var reloadsRestoredTabs: Bool {
-        defaults.bool(forKey: reloadRestoredTabsKey)
+        get { defaults.bool(forKey: reloadRestoredTabsKey) }
+        set {
+            objectWillChange.send()
+            defaults.set(newValue, forKey: reloadRestoredTabsKey)
+        }
+    }
+
+    /// Whether this profile records the pages it visits. Switching it off
+    /// stops recording and erases nothing: removing what is stored is Clear
+    /// History, a separate and confirmed action.
+    ///
+    /// This profile's own, like `reloadsRestoredTabs`. Bound to the standard
+    /// suite, the switch did nothing in any profile but the original, and
+    /// visits went on being recorded after somebody turned it off.
+    public var savesHistory: Bool {
+        get { defaults.bool(forKey: saveHistoryKey) }
+        set {
+            objectWillChange.send()
+            defaults.set(newValue, forKey: saveHistoryKey)
+        }
     }
 
     public func loadWorkspace() -> BrowserWorkspaceSnapshot? {
@@ -214,15 +237,9 @@ public final class BrowserDataStore: ObservableObject {
         let normalizedURL = safeURL.absoluteString
         var collection = bookmarkCollection
         let existing = bookmarks.first { $0.url == normalizedURL }
-        let proposedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        let normalizedProposedTitle = proposedTitle
-            .lowercased()
-            .replacingOccurrences(of: "…", with: "...")
-        let usableTitle = ["loading", "loading...", "new tab"]
-            .contains(normalizedProposedTitle) ? nil : proposedTitle.nilIfEmpty
         let bookmark = BookmarkRecord(
             id: existing?.id ?? UUID(),
-            title: usableTitle ?? existing?.title ?? safeURL.host ?? normalizedURL,
+            title: Self.usableTitle(title) ?? existing?.title ?? safeURL.host ?? normalizedURL,
             url: normalizedURL,
             createdAt: existing?.createdAt ?? Date(),
             folderID: folderID
@@ -260,22 +277,39 @@ public final class BrowserDataStore: ObservableObject {
         guard let safeURL = BookmarkURLPolicy.validatedURL(url) else { return }
         let normalizedURL = safeURL.absoluteString
         var collection = bookmarkCollection
-        if let bookmark = bookmarks.first(where: { $0.url == normalizedURL }) {
-            collection.removeBookmark(id: bookmark.id)
+        let removing = bookmarks.first(where: { $0.url == normalizedURL })
+        if let removing {
+            collection.removeBookmark(id: removing.id)
         } else {
             collection.addBookmark(BookmarkRecord(
-                title: title.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty ?? normalizedURL,
+                title: Self.usableTitle(title) ?? safeURL.host ?? normalizedURL,
                 url: normalizedURL,
                 folderID: nil
             ))
         }
         apply(collection)
+        if removing != nil { forgetPreviousValue(forKey: bookmarksKey) }
+    }
+
+    /// What a tab was called is not always a title: while a page is on its
+    /// way the tab reads "Loading…", "Opening ChatGPT…" or "New Tab", and a
+    /// bookmark saved at that moment kept the placeholder for good. `nil`
+    /// means "no title worth keeping", and the caller names the bookmark by
+    /// its site instead.
+    static func usableTitle(_ proposed: String) -> String? {
+        let trimmed = proposed.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        let folded = trimmed.lowercased().replacingOccurrences(of: "…", with: "...")
+        if ["loading", "loading...", "new tab"].contains(folded) { return nil }
+        if folded.hasPrefix("opening "), folded.hasSuffix("...") { return nil }
+        return trimmed
     }
 
     public func removeBookmark(_ bookmark: BookmarkRecord) {
         var collection = bookmarkCollection
         collection.removeBookmark(id: bookmark.id)
         apply(collection)
+        if !isBatchingWrites { forgetPreviousValue(forKey: bookmarksKey) }
     }
 
     /// Saves an edited bookmark name and address. Returns `false` — and writes
@@ -355,7 +389,15 @@ public final class BrowserDataStore: ObservableObject {
     public func recordVisit(title: String, url: String, at date: Date = Date()) {
         guard defaults.bool(forKey: saveHistoryKey) else { return }
         guard BookmarkURLPolicy.validatedURL(url) != nil else { return }
-        if history.first?.url == url, date.timeIntervalSince(history.first?.visitedAt ?? .distantPast) < 30 {
+        if let latest = history.first, latest.url == url, date.timeIntervalSince(latest.visitedAt) < 30 {
+            // The same visit again — a reload, or the page naming itself after
+            // it finished. Not a second visit, but a better title is kept: a
+            // page that sets its title from a script was otherwise remembered
+            // under whatever it was called before it had one.
+            let refined = title.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !refined.isEmpty, refined != latest.title else { return }
+            history[0] = HistoryRecord(id: latest.id, title: refined, url: latest.url, visitedAt: latest.visitedAt)
+            save(history, key: historyKey)
             return
         }
         history.insert(
@@ -375,6 +417,7 @@ public final class BrowserDataStore: ObservableObject {
     public func removeHistory(_ item: HistoryRecord) {
         history.removeAll { $0.id == item.id }
         save(history, key: historyKey)
+        forgetPreviousValue(forKey: historyKey)
     }
 
     public func clearHistory() {
@@ -517,6 +560,19 @@ public final class BrowserDataStore: ObservableObject {
         // Renaming one bookmark used to re-encode every folder as well.
         if bookmarksChanged { save(bookmarks, key: bookmarksKey) }
         if foldersChanged { save(bookmarkFolders, key: bookmarkFoldersKey) }
+    }
+
+    /// After somebody deletes something, the backup must not be the one place
+    /// it survives. `save` keeps the value *before* each write as the
+    /// last-known-good copy — right for recovery, wrong for a deletion, which
+    /// then lingered on disk until the next unrelated write. The value just
+    /// written is known good, so it becomes the backup too.
+    private func forgetPreviousValue(forKey key: String) {
+        if let current = defaults.data(forKey: key) {
+            defaults.set(current, forKey: Self.backupKey(for: key))
+        } else {
+            defaults.removeObject(forKey: Self.backupKey(for: key))
+        }
     }
 
     private func removeStoredValue(forKey key: String) {

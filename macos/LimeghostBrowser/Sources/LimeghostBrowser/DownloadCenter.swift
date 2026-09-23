@@ -37,8 +37,49 @@ struct DownloadItem: Identifiable, Equatable {
 
 @MainActor
 final class DownloadCenter: NSObject, ObservableObject {
+    /// The name a server suggested, as a file name and nothing more.
+    ///
+    /// Worked out from the string alone. `URL(fileURLWithPath:)` did this
+    /// before, and it resolves a relative name against the process's working
+    /// directory: `..`, `.` and an empty name came back as the names of
+    /// folders on the Mac — launched from Finder, `/`, which names the
+    /// Downloads folder itself. A leading dot would hide the file in Finder,
+    /// and a download nobody can see reads as one that never happened.
+    static func safeFilename(for suggested: String) -> String {
+        let lastComponent = suggested
+            .split(whereSeparator: { $0 == "/" || $0 == "\\" })
+            .last
+            .map(String.init) ?? ""
+        var name = String(String.UnicodeScalarView(
+            lastComponent.unicodeScalars.filter { !CharacterSet.controlCharacters.contains($0) }
+        ))
+        name = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        while name.hasPrefix(".") { name.removeFirst() }
+        name = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        return name.isEmpty ? "Download" : name
+    }
+
+    /// Whether the save panel's Replace may remove what is at `url` to make
+    /// room. Replace is consent to replace a *file*: a folder at the chosen
+    /// path is never removed, whatever name brought the panel there.
+    static func isReplaceableFile(_ url: URL) -> Bool {
+        guard let values = try? url.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey]) else {
+            return false
+        }
+        return values.isDirectory != true || values.isSymbolicLink == true
+    }
+
+    /// The small print under an empty Downloads panel. It said Limeghost
+    /// "asks where to save every file" even after Settings sent downloads
+    /// straight to a folder.
+    static func emptyStateFootnote(asksWhereToSave: Bool) -> String {
+        asksWhereToSave
+            ? "Limeghost asks where to save every file and does not keep permanent download history yet."
+            : "Files go straight to the folder chosen in Settings → Downloads. Limeghost does not keep permanent download history yet."
+    }
+
     static let emptyStateTitle = "No downloads yet"
-    static let emptyStateMessage = "Downloads from this session appear here after you choose where to save them."
+    static let emptyStateMessage = "Downloads from this session appear here."
 
     @Published private(set) var items: [DownloadItem] = []
     @Published var isShelfVisible = false
@@ -173,7 +214,7 @@ extension DownloadCenter: WKDownloadDelegate {
             return
         }
 
-        let safeFilename = URL(fileURLWithPath: suggestedFilename).lastPathComponent.nilIfEmpty ?? "Download"
+        let safeFilename = Self.safeFilename(for: suggestedFilename)
 
         // Settings → Downloads can send files straight to a folder. It answers
         // nil when the person still wants to be asked, and also when the folder
@@ -225,6 +266,16 @@ extension DownloadCenter: WKDownloadDelegate {
                 // ends the transfer as Failed. The file the user agreed to
                 // replace is removed here, after that consent and nowhere else.
                 if FileManager.default.fileExists(atPath: destination.path) {
+                    // A folder is never removed to make room, whatever the
+                    // panel resolved the name to.
+                    guard Self.isReplaceableFile(destination) else {
+                        self.update(id) {
+                            $0.status = .failed("\(destination.lastPathComponent) is a folder, so Limeghost did not replace it.")
+                        }
+                        self.removeTracking(download, id: id)
+                        completionHandler(nil)
+                        return
+                    }
                     do {
                         try FileManager.default.removeItem(at: destination)
                     } catch {

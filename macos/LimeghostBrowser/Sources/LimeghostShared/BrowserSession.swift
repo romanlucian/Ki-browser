@@ -28,6 +28,54 @@ public protocol DownloadTracking: AnyObject {
     /// The browsing-data reset: clears in-app download metadata without
     /// deleting files already saved to disk.
     func clearAllRecords()
+
+    /// Whether this collaborator can save a file at all. The phone's cannot
+    /// yet, and a session told so stops a download and says so rather than
+    /// handing it somewhere it silently disappears.
+    var acceptsDownloads: Bool { get }
+}
+
+extension DownloadTracking {
+    public var acceptsDownloads: Bool { true }
+}
+
+/// Keeps a page from locking somebody out with dialogs.
+///
+/// `alert()`, `confirm()` and `prompt()` each have to be answered before
+/// anything else can be used, so a page that asks in a loop held the whole
+/// browser, and a relaunch restored the page and the loop with it. From a
+/// site's second dialog on, the person is offered a way to stop them; once
+/// taken, that site's dialogs are answered as a dismissal would answer them,
+/// without being shown. One per tab, held by its platform, which is where the
+/// dialogs are drawn.
+public struct PageDialogGuard {
+    private var host: String?
+    private var shownForHost = 0
+    private var silencedHost: String?
+
+    public init() {}
+
+    /// Whether dialogs from `host` are to be answered unseen.
+    public func isSilenced(host: String?) -> Bool {
+        guard let host else { return false }
+        return host == silencedHost
+    }
+
+    /// Records a dialog about to be shown, and says whether to offer a way to
+    /// stop this site's dialogs. A tab that moves to another site starts
+    /// counting again.
+    public mutating func willShow(host: String?) -> Bool {
+        if host != self.host {
+            self.host = host
+            shownForHost = 0
+        }
+        shownForHost += 1
+        return shownForHost >= 2
+    }
+
+    public mutating func silence(host: String?) {
+        silencedHost = host
+    }
 }
 
 public enum BrowserFailureKind: Equatable {
@@ -128,6 +176,8 @@ public final class BrowserSession: NSObject, ObservableObject {
 
     /// `nil` opens an empty tab: a popup script may set the location later.
     public var onRequestNewTab: ((URL?) -> Void)?
+    /// A link somebody asked to open behind the page they are reading.
+    public var onRequestBackgroundTab: ((URL) -> Void)?
     /// Builds the tab a `window.open()` popup will live in and returns the web
     /// view that tab adopted, so WebKit can drive that exact instance and keep
     /// `window.opener` connected to the page that opened it.
@@ -216,7 +266,11 @@ public final class BrowserSession: NSObject, ObservableObject {
                 ? .nonPersistent()
                 : (websiteDataStore ?? .default())
             // Ask for the page Safari would get: same engine, same capabilities.
-            configuration.applicationNameForUserAgent = BrowserUserAgent.applicationName
+            // Built from the name WebKit already gave this configuration, which
+            // on an iPhone is the `Mobile/…` token and on a Mac is nothing.
+            configuration.applicationNameForUserAgent = BrowserUserAgent.applicationName(
+                platformDefault: configuration.applicationNameForUserAgent
+            )
             configuration.preferences.isElementFullscreenEnabled = true
             // Where a host is known to support HTTPS, take it. This upgrades
             // the navigation only; it is not a promise that every subresource
@@ -436,8 +490,19 @@ public final class BrowserSession: NSObject, ObservableObject {
 
     public func goBack() { webView.goBack() }
     public func goForward() { webView.goForward() }
+    /// ⌘R, and the phone's Reload.
+    ///
+    /// After a failed load WebKit still holds the document from *before* it,
+    /// so `webView.reload()` reloaded that one and the address that failed was
+    /// never asked for again. On a failure, Reload is a retry.
     public func reload() {
-        if isShowingStartPage { showStartPage() } else { webView.reload() }
+        if isShowingStartPage {
+            showStartPage()
+        } else if case .failed = loadState {
+            retry()
+        } else {
+            webView.reload()
+        }
     }
 
     /// Request Desktop Site and Request Mobile Site. Reloads, because the page
@@ -585,6 +650,7 @@ public final class BrowserSession: NSObject, ObservableObject {
         linkNoticeTask = nil
         linkNotice = nil
         onRequestNewTab = nil
+        onRequestBackgroundTab = nil
         onRequestPopupWebView = nil
         onCompletedVisit = nil
         onRequestClose = nil
@@ -656,7 +722,7 @@ public final class BrowserSession: NSObject, ObservableObject {
 
         webView.publisher(for: \.title)
             .receive(on: RunLoop.main)
-            .sink { [weak self] _ in self?.refreshState() }
+            .sink { [weak self] _ in self?.pageTitleDidChange() }
             .store(in: &webViewSubscriptions)
 
         webView.publisher(for: \.url)
@@ -734,12 +800,36 @@ public final class BrowserSession: NSObject, ObservableObject {
             pageTitle = "New Tab"
         } else if !hasCommittedNavigation, let navigationDisplayName {
             pageTitle = "Opening \(navigationDisplayName)…"
+        } else if let title = webView.title?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty {
+            pageTitle = title
+        } else if hasCommittedNavigation, let activeURL {
+            // A document is on screen and names itself nothing — plain text, an
+            // image, a page that sets its title later. "Loading…" here stayed
+            // for good: on the tab, in history, and in every completion row
+            // built from history.
+            pageTitle = Self.untitledPageName(for: activeURL)
         } else {
-            pageTitle = webView.title?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty ?? "Loading…"
+            pageTitle = "Loading…"
         }
         canGoBack = webView.canGoBack
         canGoForward = webView.canGoForward
         refreshConnectionSecurity()
+    }
+
+    /// Whether the visit recorded when this page finished was recorded under
+    /// its address because the page had not named itself yet. The first real
+    /// title to arrive afterwards replaces it, once.
+    private var visitIsWaitingForATitle = false
+
+    /// A page naming itself after it finished, which scripts routinely do.
+    private func pageTitleDidChange() {
+        refreshState()
+        guard visitIsWaitingForATitle, !isLoading, hasCommittedNavigation, !isShowingStartPage,
+              webView.title?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty != nil,
+              !currentURLString.isEmpty
+        else { return }
+        visitIsWaitingForATitle = false
+        onCompletedVisit?(pageTitle, currentURLString)
     }
 
     private func handleFailure(_ error: Error, navigation: WKNavigation?) {
@@ -819,12 +909,42 @@ public final class BrowserSession: NSObject, ObservableObject {
         }
 
         if !input.contains(" ") && (input.contains(".") || input.hasPrefix("localhost")) {
-            return WebURLPolicy.validatedURL("https://\(input)")
+            let scheme = Self.isLocalMachine(typed: input) ? "http" : "https"
+            return WebURLPolicy.validatedURL("\(scheme)://\(input)")
         }
 
         return searchSettings.searchURL(for: input)
     }
 
+    /// A machine on this network rather than a website: an IP address,
+    /// `localhost`, or a `.local` name. A router's page, a printer's, a
+    /// development server almost never serve https, so asking for it made
+    /// every one of them fail; every browser opens these typed addresses over
+    /// http, and Chrome keeps them out of its HTTPS upgrades for this reason.
+    static func isLocalMachine(typed input: String) -> Bool {
+        guard let host = URLComponents(string: "http://\(input)")?.host?.lowercased(), !host.isEmpty else {
+            return false
+        }
+        if host == "localhost" || host.hasSuffix(".localhost") || host.hasSuffix(".local") { return true }
+        // An IPv6 literal: `URLComponents` hands its host back unbracketed.
+        if host.contains(":") { return true }
+        let octets = host.split(separator: ".", omittingEmptySubsequences: false)
+        return octets.count == 4 && octets.allSatisfy { octet in
+            !octet.isEmpty && octet.count <= 3 && octet.allSatisfy(\.isASCII)
+                && Int(octet).map { (0...255).contains($0) } == true
+        }
+    }
+
+    /// The document every tab holds under its native start surface.
+    ///
+    /// Empty on purpose. The AI guide, bookmarks and history are drawn by the
+    /// app over it, so on a start surface nobody sees it — but it is
+    /// uncovered while a new tab loads its first page, around the Mac's
+    /// progress card and with nothing at all over it on the phone. It used to
+    /// be a page of its own from before the guide existed: the Clearframe "C",
+    /// a ⇧⌘C hint a phone has no key for, and "the bar above" on a phone whose
+    /// bar is below. A blank page in the system's own light or dark is the one
+    /// thing that is right on every platform in that moment.
     private static let startPageHTML = #"""
     <!doctype html>
     <html lang="en">
@@ -832,26 +952,12 @@ public final class BrowserSession: NSObject, ObservableObject {
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <style>
-          :root { color-scheme: light dark; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
-          body { align-items:center; background:#f5f5f7; color:#141417; display:flex; min-height:100vh; margin:0; }
-          main { margin:auto; max-width:620px; padding:48px; text-align:center; }
-          .mark { align-items:center; background:#123c2e; border-radius:28px 8px 28px 8px; color:#66db7d; display:flex; font:700 56px Georgia,serif; height:110px; justify-content:center; margin:0 auto 34px; width:110px; }
-          .eyebrow { color:#1f6e4f; font-size:11px; font-weight:800; letter-spacing:.15em; }
-          h1 { font:700 clamp(38px,6vw,64px)/.98 Georgia,serif; letter-spacing:-.045em; margin:12px 0 20px; }
-          p { color:#5c6360; font-size:17px; line-height:1.6; }
-          .hint { background:#fff; border:1px solid #e2e3e1; border-radius:14px; box-shadow:0 12px 40px rgba(10,14,12,.07); font-size:14px; margin-top:30px; padding:16px; }
-          @media (prefers-color-scheme: dark) { body { background:#0b0b0e; color:#f4f4f2; } .eyebrow{color:#66db7d}.hint{background:#15151a;border-color:rgba(255,255,255,.08)} }
+          :root { color-scheme: light dark; }
+          body { background: #f5f5f7; margin: 0; min-height: 100vh; }
+          @media (prefers-color-scheme: dark) { body { background: #0b0b0e; } }
         </style>
       </head>
-      <body>
-        <main>
-          <div class="mark">C</div>
-          <div class="eyebrow">LIMEGHOST BROWSER</div>
-          <h1>Browse first.<br>Hand it over when you want to.</h1>
-          <p>Enter a web address or search in the bar above. When a page is worth asking about, copy its readable text for the AI you already use.</p>
-          <div class="hint">Press <strong>⇧⌘C</strong> to copy a page. Nothing is sent anywhere by Limeghost.</div>
-        </main>
-      </body>
+      <body></body>
     </html>
     """#
 
@@ -990,7 +1096,17 @@ public final class BrowserSession: NSObject, ObservableObject {
       // than nothing at all. `extractionConfidence` says this happened.
       const bodyText = (document.body.innerText || '').split('\n').map(clean).filter(Boolean).join('\n');
       const usedFallback = blocks.length < 2;
-      const text = (usedFallback ? bodyText : blocks.join('\n')).slice(0, 48000);
+      // At most 48,000 UTF-16 code units, and never half a character. A cut
+      // between the two halves of a surrogate pair (any emoji, many CJK
+      // characters) leaves a lone surrogate that the bridge back to Swift
+      // cannot carry, and the whole read failed on such a page.
+      const whole = usedFallback ? bodyText : blocks.join('\n');
+      let end = Math.min(whole.length, 48000);
+      if (end < whole.length) {
+        const unit = whole.charCodeAt(end - 1);
+        if (unit >= 0xD800 && unit <= 0xDBFF) end -= 1;
+      }
+      const text = whole.slice(0, end);
 
       const readingUnits = text.match(/[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]|[\p{L}\p{M}\p{N}]+/gu) || [];
       const actions = [...document.forms]
@@ -1024,6 +1140,8 @@ extension BrowserSession {
         case download
         /// A link aimed at a new window.
         case openInNewTab(URL?)
+        /// A link somebody asked to open behind the page.
+        case openInBackgroundTab(URL)
         /// Back onto this tab's own start page.
         case restoreStartSurface
         /// A main-frame address that is not a web page.
@@ -1044,12 +1162,25 @@ extension BrowserSession {
     ///
     /// `targetFrameIsMain` is nil when the link has no target frame, which is
     /// a request for a new window.
+    ///
+    /// `newTabPlacement` is what the click itself asked for — ⌘-click or a
+    /// middle click for a tab behind this one, ⇧⌘-click for one in front —
+    /// as the platform read it. It applies to the page, never to a frame
+    /// inside it, and only to an address this browser opens.
     static func decide(
         shouldPerformDownload: Bool,
         targetFrameIsMain: Bool?,
-        url: URL?
+        url: URL?,
+        newTabPlacement: NewTabPlacement? = nil
     ) -> NavigationActionDecision {
         if shouldPerformDownload { return .download }
+        if let newTabPlacement, targetFrameIsMain != false,
+           let url, let safeURL = WebURLPolicy.validatedURL(url) {
+            switch newTabPlacement {
+            case .background: return .openInBackgroundTab(safeURL)
+            case .foreground: return .openInNewTab(safeURL)
+            }
+        }
         guard let targetFrameIsMain else { return .openInNewTab(url) }
         guard targetFrameIsMain, let url else { return .allow(mainFrameURL: nil) }
         guard let safeURL = WebURLPolicy.validatedURL(url) else {
@@ -1059,6 +1190,17 @@ extension BrowserSession {
             return isStartSurfaceURL(url) ? .restoreStartSurface : .unsupported(url)
         }
         return .allow(mainFrameURL: safeURL)
+    }
+
+    /// What a page that names itself nothing is called: its host without
+    /// `www.`, and its path — `example.com/docs/notes.txt` — the way Chrome
+    /// titles such a tab. A local file is its file name.
+    static func untitledPageName(for url: URL) -> String {
+        if url.isFileURL { return url.lastPathComponent }
+        let host = IdentityColor.normalizedHost(url.host ?? "")
+        let path = url.path == "/" ? "" : url.path
+        let name = host + path
+        return name.isEmpty ? url.absoluteString : name
     }
 
     /// Asks the site for its desktop version while the switch is on, and
@@ -1082,6 +1224,8 @@ extension BrowserSession: WKNavigationDelegate {
         navigationOriginURL = lastRequestedURL ?? webView.url.flatMap(WebURLPolicy.validatedURL)
         isLoading = true
         hasCommittedNavigation = false
+        // A late title belongs to the page that finished, not to this one.
+        visitIsWaitingForATitle = false
         // A notice about a link Limeghost declined belongs to the page it was
         // declined on; the next page starts without it.
         dismissLinkNotice()
@@ -1132,6 +1276,7 @@ extension BrowserSession: WKNavigationDelegate {
         } else {
             loadState = .content
             if !currentURLString.isEmpty {
+                visitIsWaitingForATitle = webView.title?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty == nil
                 onCompletedVisit?(pageTitle, currentURLString)
             }
             captureSiteIcon()
@@ -1210,12 +1355,16 @@ extension BrowserSession: WKNavigationDelegate {
         switch Self.decide(
             shouldPerformDownload: navigationAction.shouldPerformDownload,
             targetFrameIsMain: navigationAction.targetFrame?.isMainFrame,
-            url: navigationAction.request.url
+            url: navigationAction.request.url,
+            newTabPlacement: platform.newTabPlacement(for: navigationAction)
         ) {
         case .download:
             decisionHandler(.download, preferences)
         case .openInNewTab(let url):
             requestNewTab(for: url)
+            decisionHandler(.cancel, preferences)
+        case .openInBackgroundTab(let url):
+            onRequestBackgroundTab?(url)
             decisionHandler(.cancel, preferences)
         case .restoreStartSurface:
             // Let WebKit restore the document it already holds, and put the
@@ -1247,7 +1396,7 @@ extension BrowserSession: WKNavigationDelegate {
         navigationAction: WKNavigationAction,
         didBecome download: WKDownload
     ) {
-        downloadCenter.track(download, sourceURL: navigationAction.request.url)
+        receive(download, from: navigationAction.request.url)
     }
 
     public func webView(
@@ -1255,7 +1404,19 @@ extension BrowserSession: WKNavigationDelegate {
         navigationResponse: WKNavigationResponse,
         didBecome download: WKDownload
     ) {
-        downloadCenter.track(download, sourceURL: navigationResponse.response.url)
+        receive(download, from: navigationResponse.response.url)
+    }
+
+    /// Where a file the page hands over goes. Where nothing can save it — the
+    /// phone, for now — it is stopped and said, not dropped: tapping a link to
+    /// a file used to do nothing at all there, no page, no error, no word.
+    private func receive(_ download: WKDownload, from url: URL?) {
+        guard downloadCenter.acceptsDownloads else {
+            download.cancel { _ in }
+            showPageNotice("This file was not downloaded: Limeghost cannot save files on this device yet.")
+            return
+        }
+        downloadCenter.track(download, sourceURL: url)
     }
 }
 

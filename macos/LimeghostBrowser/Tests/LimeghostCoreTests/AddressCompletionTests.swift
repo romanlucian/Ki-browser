@@ -427,6 +427,24 @@ final class AddressCompletionTests: XCTestCase {
         )
     }
 
+    /// A name spelled with its own punctuation finds the page that spells it
+    /// the same way. Titles are split into words at every non-letter, so
+    /// "Node.js" is stored as "node" and "js"; the typed term was only split at
+    /// spaces, and no single word begins with "node.js". The address could not
+    /// rescue it either, since `nodejs.org` has no dot there. Typed with a
+    /// space it was found; typed the way it is written, never.
+    func testANameTypedWithItsOwnPunctuationFindsItsTitle() {
+        let candidates = [
+            titled("https://nodejs.org/en", "Node.js — Run JavaScript Everywhere", bookmarked: true),
+            titled("https://example.com/js", "Unrelated scripts page")
+        ]
+
+        let rows = AddressCompletion.suggestions(for: "node.js", in: candidates)
+            .filter { $0.kind != .search }
+
+        XCTAssertEqual(rows.map(\.url), ["nodejs.org/en"])
+    }
+
     /// A phrase is still a search, whatever it matches.
     func testAPhraseAlwaysKeepsItsSearchRow() {
         let candidates = [titled("https://example.com/r/42", "Garlic Chilli Oil Recipe")]

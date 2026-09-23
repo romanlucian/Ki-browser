@@ -33,8 +33,21 @@ public enum BrowserUserAgent {
 
     /// Appended to `WKWebView`'s default user agent, which already carries the
     /// platform and `AppleWebKit/` build.
-    public static var applicationName: String {
-        "Version/\(installedSafariVersion) Safari/\(safariBuild)"
+    ///
+    /// Setting a configuration's application name *replaces* the one WebKit
+    /// gave it, and on an iPhone that one is the `Mobile/…` token. Dropping it
+    /// made the phone announce itself without "Mobile", and sites that choose
+    /// their layout by looking for "Mobi" — the check MDN recommends — sent it
+    /// their desktop pages. So the platform's own token is passed in and kept,
+    /// where Safari keeps it: after the version. A Mac has none.
+    public static func applicationName(platformDefault: String?) -> String {
+        applicationName(platformDefault: platformDefault, safariVersion: installedSafariVersion)
+    }
+
+    static func applicationName(platformDefault: String?, safariVersion: String) -> String {
+        let platformToken = platformDefault?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let middle = platformToken.isEmpty ? "" : "\(platformToken) "
+        return "Version/\(safariVersion) \(middle)Safari/\(safariBuild)"
     }
 
     public static var installedSafariVersion: String {

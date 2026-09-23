@@ -508,18 +508,34 @@ public struct BookmarkCollection: Codable, Equatable, Sendable {
 
     /// Deletes only the folder record. Direct bookmarks and subfolders move to its
     /// parent so a folder operation never silently destroys saved pages.
+    ///
+    /// What it held joins the *end* of the parent, in the order it had inside
+    /// the folder, and the parent is renumbered from zero. The records used to
+    /// keep the positions they had inside the deleted folder, which collided
+    /// with the parent's own numbering and interleaved the two lists.
     public mutating func deleteFolderPreservingContents(id: UUID) {
         guard let folder = folder(id: id) else { return }
-        // One timestamp for everything this deletion actually moves: they were
-        // all reparented by the same action, at the same moment.
+        let destination = folder.parentID
+        // One timestamp for everything this deletion changes: it all moved
+        // because of the same action, at the same moment.
         let reparentedAt = Date()
-        for index in bookmarks.indices where bookmarks[index].folderID == id {
-            bookmarks[index].folderID = folder.parentID
-            bookmarks[index].modifiedAt = reparentedAt
+
+        let bookmarkOrder = bookmarks(in: destination) + bookmarks(in: id)
+        for (offset, record) in bookmarkOrder.enumerated() {
+            guard let slot = bookmarks.firstIndex(where: { $0.id == record.id }) else { continue }
+            guard bookmarks[slot].folderID != destination || bookmarks[slot].position != offset else { continue }
+            bookmarks[slot].folderID = destination
+            bookmarks[slot].position = offset
+            bookmarks[slot].modifiedAt = reparentedAt
         }
-        for index in folders.indices where folders[index].parentID == id {
-            folders[index].parentID = folder.parentID
-            folders[index].modifiedAt = reparentedAt
+
+        let folderOrder = folders(in: destination).filter { $0.id != id } + folders(in: id)
+        for (offset, record) in folderOrder.enumerated() {
+            guard let slot = folders.firstIndex(where: { $0.id == record.id }) else { continue }
+            guard folders[slot].parentID != destination || folders[slot].position != offset else { continue }
+            folders[slot].parentID = destination
+            folders[slot].position = offset
+            folders[slot].modifiedAt = reparentedAt
         }
         folders.removeAll { $0.id == id }
     }
@@ -572,6 +588,7 @@ public struct BookmarkCollection: Codable, Equatable, Sendable {
             url: normalizedURL,
             createdAt: existing.createdAt,
             folderID: existing.folderID,
+            position: existing.position,
             modifiedAt: Date()
         )
         bookmarks.removeAll { $0.id != updated.id && $0.url == normalizedURL }

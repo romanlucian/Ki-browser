@@ -72,6 +72,102 @@ final class NavigationPolicyTests: XCTestCase {
         )
     }
 
+    // MARK: - A link somebody asked to open in a tab of its own
+
+    /// ⌘-click (and a middle click) on a link opens it in a tab behind the one
+    /// being read, in every Mac browser. Limeghost loaded it over the page
+    /// instead, losing the reader's place.
+    func testALinkAskedForInABackgroundTabOpensThere() {
+        XCTAssertEqual(
+            BrowserSession.decide(
+                shouldPerformDownload: false, targetFrameIsMain: true, url: page, newTabPlacement: .background
+            ),
+            .openInBackgroundTab(page)
+        )
+    }
+
+    /// ⇧⌘-click asks for the new tab in front.
+    func testALinkAskedForInAForegroundTabOpensInANewTab() {
+        XCTAssertEqual(
+            BrowserSession.decide(
+                shouldPerformDownload: false, targetFrameIsMain: true, url: page, newTabPlacement: .foreground
+            ),
+            .openInNewTab(page)
+        )
+    }
+
+    /// A `target="_blank"` link ⌘-clicked goes behind too, like any other.
+    func testANewWindowLinkAskedForInTheBackgroundOpensThere() {
+        XCTAssertEqual(
+            BrowserSession.decide(
+                shouldPerformDownload: false, targetFrameIsMain: nil, url: page, newTabPlacement: .background
+            ),
+            .openInBackgroundTab(page)
+        )
+    }
+
+    /// Saving still comes first: a ⌘-clicked download link is a download.
+    func testADownloadIsStillADownloadWhateverKeysAreHeld() {
+        let file = URL(string: "blob:https://example.com/5f0c")!
+        XCTAssertEqual(
+            BrowserSession.decide(
+                shouldPerformDownload: true, targetFrameIsMain: true, url: file, newTabPlacement: .background
+            ),
+            .download
+        )
+    }
+
+    /// Holding a key does not make a non-web address a web page.
+    func testAnAddressThatIsNotAWebPageIsUnsupportedWhateverKeysAreHeld() {
+        let script = URL(string: "javascript:alert(1)")!
+        XCTAssertEqual(
+            BrowserSession.decide(
+                shouldPerformDownload: false, targetFrameIsMain: true, url: script, newTabPlacement: .background
+            ),
+            .unsupported(script)
+        )
+    }
+
+    /// Only the page itself: a modifier held over a frame's own navigation
+    /// is not a request for a tab.
+    func testAFrameInsideThePageIsNeverSentToATab() {
+        let frame = URL(string: "https://ads.example/frame")!
+        XCTAssertEqual(
+            BrowserSession.decide(
+                shouldPerformDownload: false, targetFrameIsMain: false, url: frame, newTabPlacement: .background
+            ),
+            .allow(mainFrameURL: nil)
+        )
+    }
+
+    /// A tab opened behind the page is not a request to see it: the
+    /// selection stays, and the assistant stays exactly where it was.
+    func testABackgroundTabOpensWithoutTakingTheWindow() throws {
+        let workspace = try IsolatedWorkspace.make(for: self).workspace
+        let companion = workspace.aiCompanion
+        companion.show()
+        companion.toggleExpanded()
+        let reading = try XCTUnwrap(workspace.selectedTab)
+
+        reading.session.onRequestBackgroundTab?(URL(string: "https://example.com/behind")!)
+
+        XCTAssertEqual(workspace.tabs.count, 2, "no tab was opened")
+        XCTAssertEqual(workspace.selectedTabID, reading.id, "the page being read lost the window")
+        XCTAssertTrue(companion.isExpanded, "the assistant moved for a tab nobody asked to see")
+        XCTAssertEqual(workspace.tabs.last?.session.currentURLString, "https://example.com/behind")
+    }
+
+    /// Behind a private tab, the new tab is private.
+    func testABackgroundTabFromAPrivateTabIsPrivate() throws {
+        let workspace = try IsolatedWorkspace.make(for: self, isPrivate: true).workspace
+        let reading = try XCTUnwrap(workspace.selectedTab)
+
+        reading.session.onRequestBackgroundTab?(URL(string: "https://example.com/behind")!)
+
+        XCTAssertEqual(workspace.tabs.count, 2)
+        XCTAssertTrue(workspace.tabs.allSatisfy(\.isPrivate))
+    }
+
     // MARK: - The question WebKit asks
 
     /// WebKit asks the variant of the policy question that carries

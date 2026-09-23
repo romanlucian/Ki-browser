@@ -28,27 +28,44 @@ final class MacSessionPlatform: BrowserSessionPlatform {
         NSWorkspace.shared.open(url)
     }
 
+    /// This tab's record of which site asked how often; see `PageDialogGuard`.
+    /// The dialogs below are app-modal, so a page asking in a loop held every
+    /// window until it was stopped.
+    private var dialogs = PageDialogGuard()
+
     func presentAlert(message: String) async {
-        let alert = pageAlert(message: message)
+        guard let alert = pageAlert(message: message) else { return }
         alert.addButton(withTitle: "OK")
-        alert.runModal()
+        run(alert)
     }
 
     func presentConfirm(message: String) async -> Bool {
-        let alert = pageAlert(message: message)
+        guard let alert = pageAlert(message: message) else { return false }
         alert.addButton(withTitle: "OK")
         alert.addButton(withTitle: "Cancel")
-        return alert.runModal() == .alertFirstButtonReturn
+        return run(alert) == .alertFirstButtonReturn
     }
 
     func presentPrompt(message: String, defaultText: String?) async -> String? {
-        let alert = pageAlert(message: message)
+        guard let alert = pageAlert(message: message) else { return nil }
         let field = NSTextField(string: defaultText ?? "")
         field.frame = NSRect(x: 0, y: 0, width: 320, height: 24)
         alert.accessoryView = field
         alert.addButton(withTitle: "OK")
         alert.addButton(withTitle: "Cancel")
-        return alert.runModal() == .alertFirstButtonReturn ? field.stringValue : nil
+        return run(alert) == .alertFirstButtonReturn ? field.stringValue : nil
+    }
+
+    /// Shows a page's dialog, and remembers if the person asked for no more
+    /// from this site.
+    @discardableResult
+    private func run(_ alert: NSAlert) -> NSApplication.ModalResponse {
+        let host = webView?.url?.host
+        let response = alert.runModal()
+        if alert.showsSuppressionButton, alert.suppressionButton?.state == .on {
+            dialogs.silence(host: host)
+        }
+        return response
     }
 
     /// `<input type="file">`. This is the live macOS path: `BrowserSession
@@ -115,6 +132,20 @@ final class MacSessionPlatform: BrowserSessionPlatform {
         }
     }
 
+    /// What every Mac browser reads from a click on a link: ⌘ or the middle
+    /// button opens it in a tab behind the page, and ⇧ with either brings
+    /// that tab to the front. Only a link somebody clicked — a script or a
+    /// form navigating while ⌘ happens to be held stays where it is, and a
+    /// form's data would not survive being moved to another tab anyway.
+    ///
+    /// AppKit's own conventions: `buttonNumber` 2 is the middle button.
+    func newTabPlacement(for action: WKNavigationAction) -> NewTabPlacement? {
+        guard action.navigationType == .linkActivated else { return nil }
+        let flags = action.modifierFlags
+        guard flags.contains(.command) || action.buttonNumber == 2 else { return nil }
+        return flags.contains(.shift) ? .foreground : .background
+    }
+
     /// `BrowserSession.init` calls this once, right after the web view it
     /// answers for exists. Three things only macOS can do: the weak
     /// back-reference every other method above reads through `webView`, the
@@ -128,11 +159,19 @@ final class MacSessionPlatform: BrowserSessionPlatform {
         webView.allowsMagnification = true
     }
 
-    private func pageAlert(message: String) -> NSAlert {
+    /// The dialog for a page's message, or nil when the person has asked for
+    /// no more from this site — the caller then answers as a dismissal would.
+    private func pageAlert(message: String) -> NSAlert? {
+        let host = webView?.url?.host
+        guard !dialogs.isSilenced(host: host) else { return nil }
         let alert = NSAlert()
-        alert.messageText = webView?.url?.host.map { "Message from \($0)" } ?? "Message from this page"
+        alert.messageText = host.map { "Message from \($0)" } ?? "Message from this page"
         alert.informativeText = String(message.prefix(4_000))
         alert.alertStyle = .informational
+        if dialogs.willShow(host: host) {
+            alert.showsSuppressionButton = true
+            alert.suppressionButton?.title = "Don’t allow more dialogs from this site"
+        }
         return alert
     }
 }

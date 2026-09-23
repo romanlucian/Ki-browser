@@ -150,9 +150,11 @@ final class CompanionBehaviorTests: XCTestCase {
             searchSettings: SearchSettingsStore(defaults: defaults)
         )
         defer { ordinary.teardown() }
+        // Built from the name WebKit gives a fresh configuration on this
+        // platform — the phone's `Mobile/…` token, or nothing on a Mac.
         XCTAssertEqual(
             ordinary.webView.configuration.applicationNameForUserAgent,
-            BrowserUserAgent.applicationName
+            BrowserUserAgent.applicationName(platformDefault: WKWebViewConfiguration().applicationNameForUserAgent)
         )
     }
 

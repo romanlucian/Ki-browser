@@ -91,7 +91,12 @@ enum TabStripMetrics {
         let gaps = spacing * CGFloat(tabCount - 1)
         let flexibleWidth = availableWidth - reservedWidth - gaps
         let selectedWeight = hasSelectedTab ? selectedTabPriority : 1
-        let shares = CGFloat(tabCount - (hasSelectedTab ? 1 : 0)) + selectedWeight
+        // One share per tab, the selected one counting for its priority. With
+        // no unpinned tab selected — a pinned one is — every tab is one share;
+        // adding the selected weight on top split the width one share too many.
+        let shares = hasSelectedTab
+            ? CGFloat(tabCount - 1) + selectedTabPriority
+            : CGFloat(tabCount)
 
         var unselected = flexibleWidth / shares
         var selected = unselected * selectedWeight

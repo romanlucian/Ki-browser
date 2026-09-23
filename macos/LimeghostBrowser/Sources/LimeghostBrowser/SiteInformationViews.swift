@@ -211,7 +211,24 @@ private struct SiteInformationPopover: View {
     let host: String
     let dismiss: () -> Void
 
-    @StateObject private var siteData = SiteDataInventory()
+    /// What this page's own store holds: its profile's, or a private tab's
+    /// ephemeral one. It read `.default()` once, so in a private window the
+    /// panel listed the person's saved cookies for the site and Remove deleted
+    /// them, and in a second profile it showed and removed the first one's.
+    @StateObject private var siteData: SiteDataInventory
+
+    init(
+        session: BrowserSession,
+        contentBlocking: ContentRuleListProvider,
+        host: String,
+        dismiss: @escaping () -> Void
+    ) {
+        _session = ObservedObject(wrappedValue: session)
+        _contentBlocking = ObservedObject(wrappedValue: contentBlocking)
+        self.host = host
+        self.dismiss = dismiss
+        _siteData = StateObject(wrappedValue: SiteDataInventory(for: session))
+    }
     @State private var storedKinds: [SiteDataKind]?
     @State private var risk: RiskAssessment?
     @State private var isCheckingRisk = false

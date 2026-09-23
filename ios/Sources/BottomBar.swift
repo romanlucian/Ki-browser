@@ -1,3 +1,4 @@
+import LimeghostShared
 import SwiftUI
 
 /// What the bar shows, separate from how it draws, so a test can assert it
@@ -21,6 +22,36 @@ struct BottomBarModel {
     }
 }
 
+/// How much of the address pill's outline an arriving page covers: a sliver
+/// the moment a load starts, the page's own progress after that, and nothing
+/// once it is done. The phone showed nothing at all while a page loaded — a
+/// tap on Go, then silence. The Mac draws its progress the same way, on the
+/// pill's own outline (`BrowserView`), so the two agree.
+enum AddressProgress {
+    static func fraction(isLoading: Bool, estimated: Double) -> Double? {
+        guard isLoading else { return nil }
+        return min(1, max(0.02, estimated))
+    }
+}
+
+/// The outline itself. Its own view so it can observe the session, whose
+/// progress the workspace never hears about.
+struct AddressProgressOutline: View {
+    @ObservedObject var session: BrowserSession
+
+    var body: some View {
+        let fraction = AddressProgress.fraction(isLoading: session.isLoading, estimated: session.estimatedProgress)
+        Capsule()
+            .trim(from: 0, to: fraction ?? 1)
+            .stroke(LimeghostTheme.accent, style: StrokeStyle(lineWidth: 2, lineCap: .round))
+            .opacity(fraction == nil ? 0 : 1)
+            .animation(.easeOut(duration: 0.22), value: session.estimatedProgress)
+            .animation(.easeOut(duration: 0.35), value: session.isLoading)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+    }
+}
+
 /// Back, the address, your assistant, the tabs and the page menu — within a thumb's reach,
 /// along the bottom so the page's own top is left alone.
 struct BottomBar: View {
@@ -30,6 +61,8 @@ struct BottomBar: View {
     let toggleAssistant: () -> Void
     let openTabs: () -> Void
     let openMenu: () -> Void
+    /// The tab in front, whose loading the pill's outline follows.
+    var session: BrowserSession? = nil
 
     var body: some View {
         HStack(spacing: 16) {
@@ -43,6 +76,11 @@ struct BottomBar: View {
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 8)
                     .background(Capsule().fill(.quaternary))
+                    .overlay {
+                        if let session {
+                            AddressProgressOutline(session: session)
+                        }
+                    }
                     .foregroundStyle(.primary)
             }
             .accessibilityLabel("Address")

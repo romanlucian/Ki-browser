@@ -350,6 +350,9 @@ final class BrowserServices {
         self.searchSettings = searchSettings ?? SearchSettingsStore()
         self.webFeatures = webFeatures ?? WebFeatureSettingsStore()
         self.profiles = profiles ?? ProfileStore()
+        // Before any window exists: finish erasing any profile a previous run
+        // deleted but could not wholly remove while its windows held it.
+        ProfileStorage.finishErasures()
     }
 
     /// The first workspace to ask takes the saved session; later ones start

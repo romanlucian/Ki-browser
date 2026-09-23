@@ -161,6 +161,168 @@
           "Remote-access request"
         ]
       }
+    },
+    {
+      "id": "an-accented-letter-is-part-of-the-word",
+      "page": {
+        "title": "an-accented-letter-is-part-of-the-word",
+        "url": "https://example.org/an-accented-letter-is-part-of-the-word",
+        "hostname": "example.org",
+        "scheme": "https",
+        "language": "fr",
+        "text": "Logiciels supportés : TeamViewer et AnyDesk. Une fois installé, le technicien vous contactera.",
+        "wordCount": 0,
+        "hasPasswordField": false,
+        "formActions": []
+      },
+      "expected": {
+        "score": 0,
+        "level": "Low",
+        "signalTitles": []
+      }
+    },
+    {
+      "id": "a-remote-term-inside-a-longer-word-is-not-the-term",
+      "page": {
+        "title": "a-remote-term-inside-a-longer-word-is-not-the-term",
+        "url": "https://example.org/a-remote-term-inside-a-longer-word-is-not-the-term",
+        "hostname": "example.org",
+        "scheme": "https",
+        "language": "en",
+        "text": "Download our remote accessibility checklist now to verify your account settings.",
+        "wordCount": 0,
+        "hasPasswordField": false,
+        "formActions": []
+      },
+      "expected": {
+        "score": 0,
+        "level": "Low",
+        "signalTitles": []
+      }
+    },
+    {
+      "id": "the-window-around-a-remote-term-counts-characters",
+      "page": {
+        "title": "the-window-around-a-remote-term-counts-characters",
+        "url": "https://example.org/the-window-around-a-remote-term-counts-characters",
+        "hostname": "example.org",
+        "scheme": "https",
+        "language": "en",
+        "text": "TeamViewer 😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀 install it now for your account.",
+        "wordCount": 0,
+        "hasPasswordField": false,
+        "formActions": []
+      },
+      "expected": {
+        "score": 20,
+        "level": "Caution",
+        "signalTitles": [
+          "Remote-access request"
+        ]
+      }
+    },
+    {
+      "id": "a-phrase-inside-a-longer-word-is-not-the-phrase",
+      "page": {
+        "title": "a-phrase-inside-a-longer-word-is-not-the-phrase",
+        "url": "https://example.org/a-phrase-inside-a-longer-word-is-not-the-phrase",
+        "hostname": "example.org",
+        "scheme": "https",
+        "language": "en",
+        "text": "If the alarm sounds, contact immediately the building manager.",
+        "wordCount": 0,
+        "hasPasswordField": false,
+        "formActions": []
+      },
+      "expected": {
+        "score": 0,
+        "level": "Low",
+        "signalTitles": []
+      }
+    },
+    {
+      "id": "sending-crypto-is-hard-to-reverse-payment-language",
+      "page": {
+        "title": "sending-crypto-is-hard-to-reverse-payment-language",
+        "url": "https://example.org/sending-crypto-is-hard-to-reverse-payment-language",
+        "hostname": "example.org",
+        "scheme": "https",
+        "language": "en",
+        "text": "To release the parcel, send bitcoin to the address below.",
+        "wordCount": 0,
+        "hasPasswordField": false,
+        "formActions": []
+      },
+      "expected": {
+        "score": 18,
+        "level": "Low",
+        "signalTitles": [
+          "Hard-to-reverse payment language"
+        ]
+      }
+    },
+    {
+      "id": "a-financial-promise-with-or-without-a-hyphen",
+      "page": {
+        "title": "a-financial-promise-with-or-without-a-hyphen",
+        "url": "https://example.org/a-financial-promise-with-or-without-a-hyphen",
+        "hostname": "example.org",
+        "scheme": "https",
+        "language": "en",
+        "text": "A risk free investment with guaranteed monthly income.",
+        "wordCount": 0,
+        "hasPasswordField": false,
+        "formActions": []
+      },
+      "expected": {
+        "score": 25,
+        "level": "Caution",
+        "signalTitles": [
+          "Implausible financial promise"
+        ]
+      }
+    },
+    {
+      "id": "an-account-threat-in-the-present-tense",
+      "page": {
+        "title": "an-account-threat-in-the-present-tense",
+        "url": "https://example.org/an-account-threat-in-the-present-tense",
+        "hostname": "example.org",
+        "scheme": "https",
+        "language": "en",
+        "text": "Your account is suspended until you confirm your details.",
+        "wordCount": 0,
+        "hasPasswordField": false,
+        "formActions": []
+      },
+      "expected": {
+        "score": 10,
+        "level": "Low",
+        "signalTitles": [
+          "Urgency or account-threat language"
+        ]
+      }
+    },
+    {
+      "id": "a-plural-is-still-the-phrase",
+      "page": {
+        "title": "a-plural-is-still-the-phrase",
+        "url": "https://example.org/a-plural-is-still-the-phrase",
+        "hostname": "example.org",
+        "scheme": "https",
+        "language": "en",
+        "text": "Pay the release fee with gift cards from any store.",
+        "wordCount": 0,
+        "hasPasswordField": false,
+        "formActions": []
+      },
+      "expected": {
+        "score": 18,
+        "level": "Low",
+        "signalTitles": [
+          "Hard-to-reverse payment language"
+        ]
+      }
     }
   ],
   "readingTimeCases": [
@@ -435,6 +597,21 @@
         "wordCount": 36,
         "hasPasswordField": false,
         "formActions": []
+      }
+    }
+  ],
+  "riskWindowCases": [
+    {
+      "id": "the-scan-window-counts-characters-not-code-units",
+      "repeat": "😀",
+      "count": 20000,
+      "suffix": " guaranteed returns",
+      "expected": {
+        "score": 25,
+        "level": "Caution",
+        "signalTitles": [
+          "Implausible financial promise"
+        ]
       }
     }
   ]

@@ -31,14 +31,7 @@ public enum RiskAnalyzer {
             add(15, "A form sends data to another site", "That can be normal for payments, but confirm the destination before submitting.")
         }
 
-        let patterns: [(terms: [String], points: Int, title: String, detail: String)] = [
-            (["seed phrase", "recovery phrase", "private key"], 35, "Requests a wallet secret", "Legitimate support should never ask for a seed phrase or private key."),
-            (["gift card", "wire transfer", "pay in bitcoin", "pay in crypto"], 18, "Hard-to-reverse payment language", "Gift cards, wire transfers, and crypto payments are common in scams."),
-            (["guaranteed returns", "double your money", "risk-free investment"], 25, "Implausible financial promise", "Guaranteed or risk-free returns are a serious warning sign."),
-            (["act immediately", "act now", "final warning", "account will be suspended"], 10, "Urgency or account-threat language", "Pressure to act immediately can prevent careful checking.")
-        ]
-
-        for pattern in patterns where pattern.terms.contains(where: lowerText.contains) {
+        for pattern in riskPhrases where pattern.expression.firstMatch(in: lowerText, range: whole(lowerText)) != nil {
             add(pattern.points, pattern.title, pattern.detail)
         }
         if containsContextualRemoteAccessRequest(lowerText) {
@@ -101,42 +94,106 @@ public enum RiskAnalyzer {
         }
     }
 
+    // MARK: - Terms
+
+    /// A term is whole when no letter or number touches either end of it.
+    /// Never `\b`: ICU's and JavaScript's disagree about accented letters, and
+    /// `src/core/analyzer.js` must read every page exactly as this does. The
+    /// scam phrases are bounded at the start only, so "contact immediately" is
+    /// not "act immediately" while "gift cards" is still "gift card".
+    private static let boundStart = "(?<![\\p{L}\\p{N}])"
+    private static let boundEnd = "(?![\\p{L}\\p{N}])"
+
+    private static func expression(_ terms: [String], wholeWords: Bool) -> NSRegularExpression {
+        let alternatives = terms.map(NSRegularExpression.escapedPattern(for:)).joined(separator: "|")
+        let pattern = boundStart + "(?:" + alternatives + ")" + (wholeWords ? boundEnd : "")
+        // The terms are fixed literals, escaped above; a pattern that failed to
+        // compile would be a programming error caught by the shared contract.
+        // swiftlint:disable:next force_try
+        return try! NSRegularExpression(pattern: pattern)
+    }
+
+    private static func whole(_ text: String) -> NSRange {
+        NSRange(text.startIndex..<text.endIndex, in: text)
+    }
+
+    /// The same lists, in the same order, as the JavaScript runtime. They had
+    /// drifted: only JavaScript knew "send bitcoin", "risk free investment"
+    /// and "account is suspended".
+    private static let riskPhrases: [(expression: NSRegularExpression, points: Int, title: String, detail: String)] = [
+        (
+            expression(["seed phrase", "recovery phrase", "private key"], wholeWords: false),
+            35, "Requests a wallet secret", "Legitimate support should never ask for a seed phrase or private key."
+        ),
+        (
+            expression(["gift card", "wire transfer", "pay in bitcoin", "pay in crypto", "send bitcoin", "send crypto"], wholeWords: false),
+            18, "Hard-to-reverse payment language", "Gift cards, wire transfers, and crypto payments are common in scams."
+        ),
+        (
+            expression(["guaranteed returns", "double your money", "risk-free investment", "risk free investment"], wholeWords: false),
+            25, "Implausible financial promise", "Guaranteed or risk-free returns are a serious warning sign."
+        ),
+        (
+            expression([
+                "act immediately", "act now", "final warning",
+                "account will be suspended", "account will be closed", "account is suspended", "account is closed"
+            ], wholeWords: false),
+            10, "Urgency or account-threat language", "Pressure to act immediately can prevent careful checking."
+        )
+    ]
+
+    private static let remoteTerms = expression(["anydesk", "teamviewer", "remote desktop", "remote access"], wholeWords: true)
+    private static let actionTerms = expression([
+        "install", "download", "open", "run", "launch", "connect", "allow",
+        "grant", "give", "provide", "share", "enable"
+    ], wholeWords: true)
+    private static let contextTerms = expression([
+        "support", "technician", "refund", "bank", "payment", "account",
+        "security alert", "virus", "infected", "immediately", "urgent", "now",
+        "verify", "call"
+    ], wholeWords: true)
+
+    /// How far either side of a remote-access term the instruction and the
+    /// pressure are looked for, in characters.
+    private static let remoteWindowCharacters = 180
+
     /// Merely discussing remote-desktop software is ordinary technical content.
     /// Raise a signal only when a nearby passage also asks for an action and uses
     /// pressure, support, account, security, or payment context typical of a request.
+    ///
+    /// "Nearby" is counted in characters — graphemes — on both runtimes, found
+    /// the same way on both: where each character starts, then the characters
+    /// a match covers. JavaScript used to count UTF-16 units, so a run of
+    /// emoji pushed an instruction out of its window in one runtime only.
     private static func containsContextualRemoteAccessRequest(_ text: String) -> Bool {
-        let remoteTerms = ["anydesk", "teamviewer", "remote desktop", "remote access"]
-        let actionTerms = [
-            "install", "download", "open", "run", "launch", "connect", "allow",
-            "grant", "give", "provide", "share", "enable"
-        ]
-        let contextTerms = [
-            "support", "technician", "refund", "bank", "payment", "account",
-            "security alert", "virus", "infected", "immediately", "urgent", "now",
-            "verify", "call"
-        ]
-
-        for remoteTerm in remoteTerms {
-            var searchRange = text.startIndex..<text.endIndex
-            while let match = text.range(of: remoteTerm, range: searchRange) {
-                let windowStart = text.index(match.lowerBound, offsetBy: -180, limitedBy: text.startIndex)
-                    ?? text.startIndex
-                let windowEnd = text.index(match.upperBound, offsetBy: 180, limitedBy: text.endIndex)
-                    ?? text.endIndex
-                let window = String(text[windowStart..<windowEnd])
-                if actionTerms.contains(where: { containsWholeTerm($0, in: window) }) &&
-                    contextTerms.contains(where: { containsWholeTerm($0, in: window) }) {
-                    return true
-                }
-                searchRange = match.upperBound..<text.endIndex
+        let starts = text.indices.map { $0.utf16Offset(in: text) }
+        guard !starts.isEmpty else { return false }
+        let length = text.utf16.count
+        for match in remoteTerms.matches(in: text, range: whole(text)) {
+            let first = character(containing: match.range.location, in: starts)
+            let last = character(containing: match.range.location + match.range.length - 1, in: starts)
+            let windowStart = starts[max(0, first - remoteWindowCharacters)]
+            let end = last + 1 + remoteWindowCharacters
+            let windowEnd = end < starts.count ? starts[end] : length
+            let window = NSRange(location: windowStart, length: windowEnd - windowStart)
+            if actionTerms.firstMatch(in: text, range: window) != nil,
+               contextTerms.firstMatch(in: text, range: window) != nil {
+                return true
             }
         }
         return false
     }
 
-    private static func containsWholeTerm(_ term: String, in text: String) -> Bool {
-        let pattern = "\\b\(NSRegularExpression.escapedPattern(for: term))\\b"
-        return text.range(of: pattern, options: .regularExpression) != nil
+    /// The character a UTF-16 offset falls in: the last one starting at or
+    /// before it.
+    private static func character(containing offset: Int, in starts: [Int]) -> Int {
+        var low = 0
+        var high = starts.count - 1
+        while low < high {
+            let middle = (low + high + 1) / 2
+            if starts[middle] <= offset { low = middle } else { high = middle - 1 }
+        }
+        return low
     }
 }
 

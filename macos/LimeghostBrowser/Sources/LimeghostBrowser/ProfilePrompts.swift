@@ -55,6 +55,9 @@ enum ProfilePrompts {
     // MARK: - The centered column
 
     /// Keeps the button targets alive for the length of the modal session.
+    /// On the main actor like the buttons that call it: `@MainActor` on the
+    /// enclosing type does not reach a nested one, and `NSApp` is main-actor.
+    @MainActor
     private final class Responder: NSObject {
         @objc func primary() { NSApp.stopModal(withCode: .OK) }
         @objc func cancel() { NSApp.stopModal(withCode: .cancel) }

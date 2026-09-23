@@ -10,6 +10,79 @@ Dates are commit dates. Test counts are the totals at the end of each period, ve
 
 ## Unreleased
 
+### Week of September 17–23, 2026
+
+**A deep audit of both browsers, September 22**
+
+Each fix below has a test that was watched failing before the fix went in, except where an entry says no test covers it. The work sits on `fix/deep-audit-2026-09-22`.
+
+*Profiles and private windows keep to themselves*
+
+- "Clear local browsing data" emptied the original profile's WebKit store from whichever window it was chosen in: from a second profile's window it signed the original profile out of everything, left its own logins in place, and said the data had been cleared. It clears the window's own profile now.
+- The address bar's site panel read, and its Remove button deleted, the original profile's data in every other profile, and the person's *saved* data for a site from inside a private tab. Settings' site list did the same. Both read the tab's own store now.
+- "Save browsing history on this Mac" and "Load every restored tab at start" were written where only the original profile reads, so in any other profile turning history off changed nothing and visits went on being recorded. Both belong to the profile now.
+- Deleting a profile asked WebKit to remove its store once, while the profile's window still held it, which WebKit refuses — so its cookies and logins stayed on disk. It left the profile's picture folder too, and closed only the window in front. Erasure now removes the whole profile folder and retries the store, and a record in the app's preferences lets the next launch finish what WebKit still refused. It closes every window of the profile, which no test covers, because the suite has no windows.
+- A private window's last tab closing left an ordinary tab in a window still marked private, with persistent cookies and recorded history. A file opened into a private window did the same, and so did an address another app handed over. The reset's replacement tab is private in a private window too, by the same one-word change, which no test covers.
+- A redirect a private tab followed reached disk in the site-icon table as soon as an ordinary visit wrote the table.
+- Every save copies the previous value into a last-known-good backup. A visit deleted from history, a bookmark removed and a page unstarred stayed in that backup on disk until the next unrelated write. They go with the deletion now.
+
+*Links, pages and titles*
+
+- ⌘-click and a middle click on a link open it in a tab behind the page, and ⇧⌘-click opens it in front. Both used to replace the page being read. Only a clicked link moves; a script's navigation and a submitted form stay where they are. It is not a door: nothing is selected and the assistant stays put, and `CLAUDE.md` lists it with the deliberate exclusions.
+- Reload after a failed load reloaded the page from *before* the failure, which WebKit still holds, and never asked for the failed address again. It retries now; on the phone this is the menu's Reload.
+- A page with no title of its own — plain text, an image, a bare document — and one that names itself from a script after it finished were recorded in history as "Loading…" for good, on both platforms. An untitled page is named by its address (`example.com/docs/notes.txt`). The first real title after a page finished replaces the recorded one, once. A repeat visit within 30 seconds corrects the title rather than being dropped. The star refused neither "Loading…" nor "Opening …", which Add Bookmark already refused; it does now.
+- An address typed without a scheme went over HTTPS even when it was this machine or the local network, so `localhost:3000`, `printer.local` and `192.168.1.1` were asked for over HTTPS, which a development server or a router rarely answers. Those go over HTTP now. Everything else still goes over HTTPS, and a test holds both.
+- Extraction cuts a page at 48,000 UTF-16 units. A cut inside an emoji left half a surrogate pair, which WebKit cannot hand back, so Analyze Page, Copy for AI and Reader failed on any long page whose cut fell there. The cut steps back one unit instead, in the app and in the extension's own copy.
+- The document under every start surface was a page from before the AI guide: the Clearframe "C", a ⇧⌘C hint a phone has no key for, and "the bar above" on a phone whose bar is below. It showed around the Mac's progress card and, on the phone, with nothing over it, while a new tab loaded. It is a blank page in the system's light or dark now.
+- A window closed while comparing came back still comparing, with a second column whose conversation had been torn down. An assistant that had stepped aside for a narrow window came back by itself into the revived window, a panel nobody opened. A closed window's assistant starts clean now.
+- New Tab in Group, from a tab group's menu, was a door that made no room for its page. It is the fourteenth door and was the only one with no row in the doors test; it has one now.
+
+*Bookmarks, completion and import*
+
+- Renaming a bookmark or changing its address moved it to the end of its folder: `updateBookmark` rebuilt the record without its position.
+- Deleting a folder moved what it held up a level with the positions it had *inside* the folder, so they interleaved with the parent's: X, Y and the folder's A, B came back as A, X, B, Y.
+- Deleting the folder open in the Bookmark Manager left the page on a folder that no longer existed. It showed nothing, as though every bookmark had been deleted. It goes to the parent now, or to everything when the folder went from somewhere else.
+- A timestamp near `Int64.min` in a Chrome bookmarks file underflowed the importer's epoch subtraction, which Swift traps on, so importing that file quit the app. That field is dropped now and the import continues.
+- A name typed with its own punctuation, `node.js`, found nothing: titles were split at every non-letter and the typed term only at spaces. Both split the same way now.
+- With a pinned tab selected, the tab strip divided its width as if there were one more tab than there were. Every tab drew narrower than it needed to, and a strip that fitted could scroll.
+
+*Risk signals: the app and the extension agree again*
+
+- The phrase lists had drifted apart between Swift and JavaScript. The extension bounded words with `\b`, which is ASCII in JavaScript. It also counted its ±180-character windows and 30,000-character prefix in UTF-16 units where Swift counts characters. As a result, the same page could raise a signal in one runtime and not the other. The lists are one list now, every term is bounded with the lookarounds `CLAUDE.md` prescribes, and both runtimes count graphemes.
+- `local-analysis-contract.json` gains eight `riskCases` and a new `riskWindowCases` key, which describes pages too long to write out: 20,000 emoji before a phrase that only a grapheme count reaches. 46 cases across 8 keys.
+
+*Downloads and dialogs*
+
+- A name a site suggests is reduced to a plain file name: folders, control characters and leading dots are removed. `../../etc/passwd` arrives as `passwd`. Replace in the save dialog no longer removes a folder that happens to have the chosen name, with everything in it.
+- The downloads panel's empty state no longer promises a save dialog when "Ask where to save each file" is off.
+- From a site's second JavaScript dialog on, both platforms offer to stop that site's dialogs (`PageDialogGuard`, shared). A page asking in a loop held the whole window, because each dialog must be answered before anything else can be touched. The guard and the phone's button are tested. The Mac's checkbox is an `NSAlert` suppression button, which no test presses.
+
+*The phone*
+
+- A page's `alert()`, `confirm()` or `prompt()` froze the page for the life of its tab whenever a sheet was up. The tab switcher, the menu, Bookmarks, History and the address sheet are all sheets. The dialog was presented from the window's root, UIKit refused that without a word, and nothing ever answered the page. Dialogs now go over whatever is on top and wait for a sheet still arriving or leaving. When they truly cannot be shown, they are answered as a dismissal would answer them. Each is answered exactly once.
+- Touch and hold on a picture offers Save to Photos, and iOS ends an app that adds to the photo library without `NSPhotoLibraryAddUsageDescription`. The key was missing, so saving any picture crashed the app.
+- Setting the application name for the user agent replaced WebKit's own `Mobile/15E148` token. The phone told websites it was desktop Safari, and sites that look for "Mobi" sent it their desktop pages. Proven by removing the fix and watching `navigator.userAgent` lose the token.
+- A failed load drew nothing: the tab kept the previous page, or a blank one, under the failed address. It now says so in the Mac's words, with Try Again and Start Page.
+- The address pill's outline fills as a page loads. The phone showed nothing while loading.
+- A link to a file the phone cannot save did nothing at all, not even a message. It now says "This file was not downloaded: Limeghost cannot save files on this device yet."
+
+*The test suite*
+
+- `testAProfilePictureIsCopiedInAndCroppedSquare` copied a picture into the real `~/Library/Application Support/Limeghost/Profiles/<uuid>` and never removed it, so every run of the Mac suite left one more folder. The development Mac held 147. Three belong to real profiles and 144 to none; they were counted, not removed. The test removes its folder now: one run went from 147 to 148 before the fix and left 148 after it.
+
+*Found and not fixed*
+
+- A typed address on a port WebKit restricts, such as `:1`, commits `about:blank`, and the tab reads it as the AI guide.
+- On the phone, a tab whose web content process iOS ended in the background is not reloaded on return. Reload and Try Again recover it now.
+- Applying an import calls `BookmarkCollection.addBookmark` once per record, and each call scans every bookmark twice and inserts at the front, so the work grows with the square of the file. It has not been measured on a large file.
+- The Bookmark Manager sorts by name or date, while the bar keeps the order somebody arranged. It is not decided which is intended.
+- `IdentityColor` imports SwiftUI inside `LimeghostShared`, whose boundary promises none.
+- Neither app declares location access: no usage description on either, and no location entitlement on the Mac. A page that asks where you are, such as a map or a store finder, cannot find out. Whether it should is a product decision.
+- The phone's target includes iPad (`TARGETED_DEVICE_FAMILY = "1,2"`), and its plist lists three orientations. Apple's upload check requires all four for an iPad app that supports multitasking (ITMS-90474). Untested: nothing has been uploaded.
+- When files save without asking, `decideDestinationUsing` never checks whether the download was cancelled a moment earlier; the save-dialog path does. A Cancel that lands there can end as "Failed" rather than "Cancelled". Not reproduced.
+
+Tests: the Mac 590, up from 525; `LimeghostSharedLayer` 322 on both destinations, up from 276; the phone 92, up from 83; the extension's 14 and `validate` clean. On a fresh simulator, the first WebKit page took 64 seconds to load, so the shared tests wait up to 90 seconds for it.
+
 ### Week of September 10–16, 2026
 
 **The phone gets your own assistant**

@@ -97,6 +97,11 @@ public final class FaviconStore: ObservableObject {
     /// every URL in the redirect chain, Firefox attaches it to the redirect
     /// sources, prioritising bookmarked ones.
     private var aliases: [String: String] = [:]
+    /// Redirects learned in private tabs. Consulted like `aliases` for the
+    /// rest of the run and never written: they were one table once, and the
+    /// next ordinary redirect wrote the whole table — private entries included
+    /// — to disk.
+    private var privateAliases: [String: String] = [:]
 
     public init(
         directory: URL? = FaviconStore.defaultDirectory,
@@ -121,8 +126,15 @@ public final class FaviconStore: ObservableObject {
         guard !key.isEmpty else { return nil }
         if let own = storedIcon(forNormalizedHost: key) { return own }
         // One hop only. A chain of aliases would be a way to loop.
-        guard let target = aliases[key], target != key else { return nil }
+        guard let target = alias(for: key), target != key else { return nil }
         return storedIcon(forNormalizedHost: target)
+    }
+
+    /// Where a host redirected to, the private table first: it is the more
+    /// recent of the two whenever both know the host, because an ordinary
+    /// redirect clears the private entry for its host.
+    private func alias(for host: String) -> String? {
+        privateAliases[host] ?? aliases[host]
     }
 
     /// Decode with ImageIO, which exists on both platforms. `NSImage(data:)`
@@ -193,13 +205,21 @@ public final class FaviconStore: ObservableObject {
     func recordRedirectAlias(from requestedURL: URL?, to finalHost: String, isPrivate: Bool) {
         guard let requestedURL, let requestedHost = Self.captureHost(for: requestedURL), requestedHost != finalHost
         else { return }
-        guard aliases[requestedHost] != finalHost else { return }
-        aliases[requestedHost] = finalHost
+        let before = alias(for: requestedHost)
+        if isPrivate {
+            // Private tabs leave nothing behind, aliases included.
+            privateAliases[requestedHost] = finalHost
+        } else {
+            privateAliases[requestedHost] = nil
+            if aliases[requestedHost] != finalHost {
+                aliases[requestedHost] = finalHost
+                writeAliases()
+            }
+        }
+        guard alias(for: requestedHost) != before else { return }
         // A host that had nothing may now resolve through the alias.
         missingOnDisk.remove(requestedHost)
         revision += 1
-        // Private tabs leave nothing behind, aliases included.
-        if !isPrivate { writeAliases() }
     }
 
     /// The capture step without WebKit, so the policy is unit-testable:
@@ -241,6 +261,7 @@ public final class FaviconStore: ObservableObject {
         missingOnDisk.removeAll()
         failedThisSession.removeAll()
         aliases.removeAll()
+        privateAliases.removeAll()
         if let directory {
             try? FileManager.default.removeItem(at: directory)
         }

@@ -37,6 +37,27 @@ test("shared contract: risk signals", () => {
   }
 });
 
+// Pages too long to write into the fixture, built from parts the same way the
+// Swift harness builds them.
+test("shared contract: risk scan window", () => {
+  for (const testCase of contract.riskWindowCases) {
+    const risk = assessRisk(extensionPage({
+      title: testCase.id,
+      url: `https://example.org/${testCase.id}`,
+      hostname: "example.org",
+      scheme: "https",
+      language: "en",
+      text: testCase.repeat.repeat(testCase.count) + testCase.suffix,
+      wordCount: 0,
+      hasPasswordField: false,
+      formActions: []
+    }));
+    assert.equal(risk.score, testCase.expected.score, `${testCase.id}: score`);
+    assert.equal(risk.level, testCase.expected.level, `${testCase.id}: level`);
+    assert.deepEqual(risk.signals.map((signal) => signal.title), testCase.expected.signalTitles, testCase.id);
+  }
+});
+
 test("shared contract: reading time", () => {
   for (const testCase of contract.readingTimeCases) {
     assert.equal(Math.max(1, Math.ceil(testCase.wordCount / 220)), testCase.expectedMinutes);

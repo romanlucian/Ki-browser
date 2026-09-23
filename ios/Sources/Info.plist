@@ -58,5 +58,10 @@
 	<string>A website you are visiting is asking to use the camera.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>A website you are visiting is asking to use the microphone.</string>
+	<!-- Touch and hold a picture on a page and WebKit offers Save to Photos.
+	     iOS ends an app that adds to the photo library without this key, so
+	     without it saving any picture from any page crashed Limeghost. -->
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Saving a picture from a page you are visiting adds it to your photo library.</string>
 </dict>
 </plist>

@@ -157,10 +157,16 @@ public enum AddressCompletion {
         guard !terms.isEmpty else { return [] }
         // Only a single unbroken word can be the start of an address.
         let needle = terms.count == 1 ? normalized(trimmed) : ""
+        // Titles are split into words at every character that is not a letter
+        // or a number, so a term has to be split the same way to be compared
+        // with them: "node.js" is the words "node" and "js", which is how
+        // "Node.js" was stored. Split once here, not once per candidate.
+        let termWords = terms.map(Self.words(in:))
 
         let matches = candidates
             .compactMap { candidate -> (AddressCandidate, MatchStrength)? in
-                guard let strength = strength(of: candidate, terms: terms, needle: needle) else { return nil }
+                guard let strength = strength(of: candidate, terms: terms, termWords: termWords, needle: needle)
+                else { return nil }
                 return (candidate, strength)
             }
             .sorted { left, right in
@@ -202,17 +208,27 @@ public enum AddressCompletion {
     private static func strength(
         of candidate: AddressCandidate,
         terms: [String],
+        termWords: [[String]],
         needle: String
     ) -> MatchStrength? {
         let url = candidate.comparableURL
         if !needle.isEmpty, url.hasPrefix(needle) { return .addressPrefix }
 
         let words = candidate.titleWords
-        if !words.isEmpty, terms.allSatisfy({ term in words.contains { $0.hasPrefix(term) } }) {
+        // A term with no letters or numbers in it — "…" — says nothing about
+        // a title, so it can never be the reason one matches.
+        if !words.isEmpty, termWords.allSatisfy({ parts in
+            !parts.isEmpty && parts.allSatisfy { part in words.contains { $0.hasPrefix(part) } }
+        }) {
             return .titleWord
         }
         if terms.allSatisfy({ url.contains($0) }) { return .addressContains }
         return nil
+    }
+
+    /// The same split `AddressCandidate` applies to a title.
+    private static func words(in term: String) -> [String] {
+        term.split(whereSeparator: { !$0.isLetter && !$0.isNumber }).map(String.init)
     }
 
     /// What the field should show for what has been typed so far, or `nil` to

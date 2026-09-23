@@ -227,12 +227,24 @@ public final class AICompanion: ObservableObject {
         isExpanded = false
     }
 
+    /// The window is closing. SwiftUI may bring the same window back from the
+    /// Dock, and what comes back has to be a window as new as any other: no
+    /// comparison with a column whose conversation was torn down here, no
+    /// assistant that opens itself because it once left for lack of room, and
+    /// no conversation parked from the window that closed. The assistant
+    /// chosen is kept; a new window opens on it anyway.
     public func teardown() {
         dismissPopup()
         live.values.forEach { $0.teardown() }
         live = [:]
         recency = []
+        parked = [:]
         awaitingReopen = []
+        lastAutomaticReopen = [:]
+        comparisonTool = nil
+        isExpanded = false
+        wasExpandedBeforeComparing = false
+        hiddenBecauseThereWasNoRoom = false
         isVisible = false
     }
 

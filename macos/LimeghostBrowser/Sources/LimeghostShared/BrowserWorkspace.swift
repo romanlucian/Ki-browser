@@ -462,6 +462,9 @@ public final class BrowserWorkspace: ObservableObject {
                 session.onRequestNewTab = { [weak self] url in
                     self?.addTab(url: url, isPrivate: self?.isPrivate ?? false)
                 }
+                session.onRequestBackgroundTab = { [weak self] url in
+                    self?.addTab(url: url, select: false, isPrivate: self?.isPrivate ?? false)
+                }
                 session.onRequestPopupWebView = { [weak self] configuration in
                     self?.openAssistantPopup(configuration: configuration)
                 }
@@ -806,7 +809,10 @@ public final class BrowserWorkspace: ObservableObject {
         removed.teardown()
 
         if tabs.isEmpty {
-            let replacement = makeTab(url: nil, isPrivate: false)
+            // As private as the window: a private window's last tab closing
+            // must not leave an ordinary tab — persistent cookies, recorded
+            // history — in a window that still shows itself as private.
+            let replacement = makeTab(url: nil, isPrivate: isPrivate)
             tabs = [replacement]
             configure(replacement)
             selectedTabID = replacement.id
@@ -1009,6 +1015,8 @@ public final class BrowserWorkspace: ObservableObject {
         configure(tab)
         setCollapsed(false, forGroup: groupID)
         selectTab(tab.id)
+        // ⌘T inside a group: a door like ⌘T itself.
+        makeRoomForPage()
         schedulePersistence()
     }
 
@@ -1253,6 +1261,9 @@ public final class BrowserWorkspace: ObservableObject {
             popup.onRequestNewTab = { [weak self] url in
                 self?.addTab(url: url, isPrivate: self?.isPrivate ?? false)
             }
+            popup.onRequestBackgroundTab = { [weak self] url in
+                self?.addTab(url: url, select: false, isPrivate: self?.isPrivate ?? false)
+            }
             aiCompanion.presentPopup(popup)
             return popup.webView
         }
@@ -1319,7 +1330,8 @@ public final class BrowserWorkspace: ObservableObject {
     public func openLocalFile(_ url: URL) {
         guard url.isFileURL else { return }
         makeRoomForPage()
-        let tab = makeTab(url: nil, isPrivate: false)
+        // As private as the window, like every other tab it opens.
+        let tab = makeTab(url: nil, isPrivate: isPrivate)
         tabs.append(tab)
         configure(tab)
         enforcePinnedTabsPrecedeUnpinnedTabs()
@@ -1329,9 +1341,11 @@ public final class BrowserWorkspace: ObservableObject {
         schedulePersistence()
     }
 
+    /// A link another app handed over. It lands in the window in front, and
+    /// is as private as that window.
     public func openExternalURL(_ url: URL) {
         guard let safeURL = WebURLPolicy.validatedURL(url) else { return }
-        addTab(url: safeURL, isPrivate: false)
+        addTab(url: safeURL)
     }
 
     public func toggleBookmarkForSelectedTab() {
@@ -1573,9 +1587,12 @@ public final class BrowserWorkspace: ObservableObject {
         // erases bookmarks and history erases them from disk and memory.
         favicons.clearAll()
 
-        let dataStore = WKWebsiteDataStore.default()
+        // This profile's own WebKit store. `.default()` belongs to the
+        // original profile alone: resetting from a second profile's window
+        // cleared the first profile's logins and left its own untouched.
+        let webStore = websiteDataStore ?? WKWebsiteDataStore.default()
         await withCheckedContinuation { continuation in
-            dataStore.removeData(
+            webStore.removeData(
                 ofTypes: WKWebsiteDataStore.allWebsiteDataTypes(),
                 modifiedSince: .distantPast
             ) {
@@ -1585,7 +1602,7 @@ public final class BrowserWorkspace: ObservableObject {
 
         await contentBlocking.clearSiteExceptions()
 
-        let replacement = makeTab(url: nil, isPrivate: false)
+        let replacement = makeTab(url: nil, isPrivate: isPrivate)
         tabs = [replacement]
         selectedTabID = replacement.id
         configure(replacement)
@@ -1598,6 +1615,12 @@ public final class BrowserWorkspace: ObservableObject {
         // opened it sets the location a moment later.
         tab.session.onRequestNewTab = { [weak self] url in
             self?.addTab(url: url, isPrivate: isPrivate)
+        }
+        // ⌘-click and a middle click: behind the page, as private as the tab
+        // it came from, and not a door — nobody asked to see it yet, so the
+        // selection and the assistant stay exactly where they are.
+        tab.session.onRequestBackgroundTab = { [weak self] url in
+            self?.addTab(url: url, select: false, isPrivate: isPrivate)
         }
         // A popup inherits the opener's private/normal session along with the
         // configuration WebKit handed over.

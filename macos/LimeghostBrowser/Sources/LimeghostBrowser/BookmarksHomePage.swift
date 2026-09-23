@@ -49,6 +49,12 @@ struct BookmarksHomePage: View {
             content(stats: stats)
         }
         .background(LimeghostTheme.bg0)
+        // The folder on screen can be deleted from elsewhere — the bar's menu,
+        // another window — and a page filtered by a folder that is gone shows
+        // nothing at all.
+        .onChange(of: store.bookmarkFolders) { _, folders in
+            currentFolderID = BookmarksHomeNavigation.folderToShow(current: currentFolderID, existing: folders)
+        }
         .sheet(item: $editorRequest) { request in
             BookmarkFolderEditor(request: request) { title, iconID, colorID in
                 if let folderID = request.folderID {
@@ -68,6 +74,7 @@ struct BookmarksHomePage: View {
             presenting: pendingDeletion
         ) { folder in
             Button("Delete folder", role: .destructive) {
+                currentFolderID = BookmarksHomeNavigation.folderToShow(current: currentFolderID, afterDeleting: folder)
                 store.deleteBookmarkFolderPreservingContents(folder)
                 pendingDeletion = nil
             }
@@ -464,7 +471,7 @@ struct BookmarksHomePage: View {
         if store.bookmarkFolderContainsItems(folder) {
             pendingDeletion = folder
         } else {
-            if currentFolderID == folder.id { currentFolderID = folder.parentID }
+            currentFolderID = BookmarksHomeNavigation.folderToShow(current: currentFolderID, afterDeleting: folder)
             store.deleteBookmarkFolderPreservingContents(folder)
         }
     }
@@ -785,5 +792,25 @@ private struct BookmarkTreeRowView: View {
         }
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(isSelected ? [.isSelected] : [])
+    }
+}
+
+/// Which folder the Bookmark Manager shows once the one it was showing is gone.
+///
+/// Deleting the open folder from its own row, when it held anything, left the
+/// page on a folder that no longer existed: the header fell back to
+/// "Bookmarks" while the lists filtered by the missing folder and showed
+/// nothing, so a full library read as an empty one.
+enum BookmarksHomeNavigation {
+    /// Deleted here: its parent, which is where its contents just went.
+    static func folderToShow(current: UUID?, afterDeleting folder: BookmarkFolderRecord) -> UUID? {
+        current == folder.id ? folder.parentID : current
+    }
+
+    /// Deleted anywhere else — the bar's menu, another window — the parent is
+    /// no longer known, and everything is better than nothing.
+    static func folderToShow(current: UUID?, existing: [BookmarkFolderRecord]) -> UUID? {
+        guard let current else { return nil }
+        return existing.contains { $0.id == current } ? current : nil
     }
 }

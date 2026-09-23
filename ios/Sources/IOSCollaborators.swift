@@ -50,6 +50,9 @@ enum IOSPageSharing: PageSharing {
 /// needs the collaborator to exist.
 @MainActor
 final class NoDownloads: DownloadTracking {
+    /// So a session stops a download and says it cannot be saved, rather than
+    /// handing it here to disappear without a word.
+    var acceptsDownloads: Bool { false }
     func track(_ download: WKDownload, sourceURL: URL?) {}
     let objectWillChange = ObservableObjectPublisher()
     func clearAllRecords() {}

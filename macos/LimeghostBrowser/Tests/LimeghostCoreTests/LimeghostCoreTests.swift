@@ -988,6 +988,28 @@ final class LimeghostCoreTests: XCTestCase {
         }
     }
 
+    /// Pages too long to write into the fixture, built from parts the same way
+    /// the JavaScript harness builds them.
+    func testSharedContractRiskScanWindow() throws {
+        for testCase in try localAnalysisContract().riskWindowCases {
+            let page = PageSnapshot(
+                title: testCase.id,
+                url: "https://example.org/\(testCase.id)",
+                hostname: "example.org",
+                scheme: "https",
+                language: "en",
+                text: String(repeating: testCase.repeat, count: testCase.count) + testCase.suffix,
+                wordCount: 0,
+                hasPasswordField: false,
+                formActions: []
+            )
+            let risk = RiskAnalyzer.assess(page: page)
+            XCTAssertEqual(risk.score, testCase.expected.score, "\(testCase.id): score")
+            XCTAssertEqual(risk.level, testCase.expected.level, "\(testCase.id): level")
+            XCTAssertEqual(risk.signals.map(\.title), testCase.expected.signalTitles, testCase.id)
+        }
+    }
+
     func testSharedContractReadingTime() throws {
         let contract = try localAnalysisContract()
         for testCase in contract.readingTimeCases {
@@ -1064,6 +1086,7 @@ final class LimeghostCoreTests: XCTestCase {
 private struct LocalAnalysisContract: Decodable {
     let structureCases: [StructureContractCase]
     let riskCases: [RiskContractCase]
+    let riskWindowCases: [RiskWindowContractCase]
     let readingTimeCases: [ReadingTimeContractCase]
     let segmentationCases: [SegmentationContractCase]
     let boilerplateCases: [BoilerplateContractCase]
@@ -1111,6 +1134,15 @@ private struct RiskContractExpectation: Decodable {
     let score: Int
     let level: RiskLevel
     let signalTitles: [String]
+}
+
+/// A page's text as `repeat` written `count` times, then `suffix`.
+private struct RiskWindowContractCase: Decodable {
+    let id: String
+    let `repeat`: String
+    let count: Int
+    let suffix: String
+    let expected: RiskContractExpectation
 }
 
 private struct ReadingTimeContractCase: Decodable {

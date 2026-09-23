@@ -93,7 +93,19 @@ export function extractPage() {
     .map(clean)
     .filter(Boolean)
     .join("\n");
-  const text = (paragraphs.length >= 2 ? paragraphs.join("\n") : fallbackText).slice(0, 48000);
+  // At most 48,000 UTF-16 code units, and never half a character: a cut between
+  // the two halves of a surrogate pair leaves a lone surrogate, which reaches the
+  // reader as a character the page never contained. The same rule as the app's
+  // extractor in `BrowserSession.swift`, written inline because this function is
+  // serialized into the page by `chrome.scripting.executeScript` and can call
+  // nothing outside itself.
+  const whole = paragraphs.length >= 2 ? paragraphs.join("\n") : fallbackText;
+  let end = Math.min(whole.length, 48000);
+  if (end < whole.length) {
+    const unit = whole.charCodeAt(end - 1);
+    if (unit >= 0xd800 && unit <= 0xdbff) end -= 1;
+  }
+  const text = whole.slice(0, end);
 
   const pageUrl = new URL(location.href);
   let canonicalUrl = location.href;

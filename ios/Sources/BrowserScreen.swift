@@ -88,7 +88,8 @@ struct BrowserScreen: View {
             openAddress: { isPresentingAddressSheet = true },
             toggleAssistant: { host.workspace.aiCompanion.toggle() },
             openTabs: { isPresentingTabSwitcher = true },
-            openMenu: { menu.open() }
+            openMenu: { menu.open() },
+            session: host.workspace.selectedTab?.session
         )
     }
 
@@ -217,6 +218,16 @@ struct TabSurface: View {
         !showsTheGuide && tab.readerArticle != nil
     }
 
+    /// What the tab's last load failed with, drawn over the page. A failure
+    /// drew nothing on the phone: the tab kept whatever WebKit still held —
+    /// the page before, or the blank document behind a new tab — under the
+    /// failed page's address, with no word of what went wrong and no way to
+    /// try again but a Reload that asked for the wrong page.
+    var shownFailure: BrowserFailure? {
+        guard case .failed(let failure) = session.loadState else { return nil }
+        return failure
+    }
+
     var body: some View {
         if showsTheGuide {
             StartSurfaceScreen(workspace: workspace)
@@ -235,8 +246,66 @@ struct TabSurface: View {
                             headerStyle: .touch
                         )
                         .transition(.opacity)
+                    } else if let failure = shownFailure {
+                        PageFailureView(
+                            failure: failure,
+                            tryAgain: { session.retry() },
+                            startPage: {
+                                // The Mac's Start Page is a door, like Home.
+                                workspace.makeRoomForPage()
+                                tab.goHome()
+                            }
+                        )
                     }
                 }
         }
+    }
+}
+
+/// A page that could not be opened, in the Mac's words and with its two ways
+/// on — try again, or go back to the start page — at a finger's size.
+struct PageFailureView: View {
+    let failure: BrowserFailure
+    let tryAgain: () -> Void
+    let startPage: () -> Void
+
+    /// The Mac's own symbol for each kind of failure (`BrowserErrorView`).
+    private var symbol: String {
+        switch failure.kind {
+        case .offline: return "wifi.slash"
+        case .timedOut: return "clock.badge.exclamationmark"
+        case .cannotReachHost: return "network.slash"
+        case .blocked: return "hand.raised.fill"
+        case .other: return "exclamationmark.triangle"
+        }
+    }
+
+    var body: some View {
+        VStack(spacing: 12) {
+            Image(systemName: symbol)
+                .font(.system(size: 34, weight: .medium))
+                .foregroundStyle(failure.kind == .offline ? Color.orange : Color.secondary)
+                .accessibilityHidden(true)
+            Text(failure.title)
+                .font(.system(size: 22, weight: .bold, design: .serif))
+                .multilineTextAlignment(.center)
+            Text(failure.message)
+                .font(.system(size: 15))
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+            HStack(spacing: 12) {
+                if failure.retryable {
+                    Button("Try Again", action: tryAgain)
+                        .buttonStyle(.borderedProminent)
+                }
+                Button("Start Page", action: startPage)
+                    .buttonStyle(.bordered)
+            }
+            .controlSize(.large)
+            .padding(.top, 6)
+        }
+        .padding(.horizontal, 32)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color(uiColor: .systemBackground))
     }
 }

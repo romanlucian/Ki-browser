@@ -249,8 +249,74 @@ enum ProfileStorage {
         return WKWebsiteDataStore(forIdentifier: profileID)
     }
 
-    /// Removes everything a deleted profile owned.
-    static func erase(profileID: UUID) {
+    /// The folder holding everything a profile keeps on disk beside its
+    /// preferences: its site icons and its picture. Nil for the original
+    /// profile, whose files are the application's own and are never erased.
+    static func profileDirectory(for profileID: UUID) -> URL? {
+        guard profileID != BrowserProfileRecord.defaultID else { return nil }
+        return faviconDirectory(for: profileID)?.deletingLastPathComponent()
+    }
+
+    /// Profiles the person deleted whose erasure has not been confirmed
+    /// finished, kept in the application's own preferences so a later launch
+    /// can finish it. Only ever profiles somebody deleted: nothing is erased
+    /// for being absent from a list, which a damaged list would turn into
+    /// erasing everything.
+    static let awaitingErasureKey = "clearframe.profiles.awaitingErasure"
+
+    static func profilesAwaitingErasure(in ledger: UserDefaults) -> [UUID] {
+        (ledger.stringArray(forKey: awaitingErasureKey) ?? []).compactMap(UUID.init(uuidString:))
+    }
+
+    private static func recordAwaitingErasure(_ profileID: UUID, in ledger: UserDefaults) {
+        var awaiting = profilesAwaitingErasure(in: ledger)
+        guard !awaiting.contains(profileID) else { return }
+        awaiting.append(profileID)
+        ledger.set(awaiting.map(\.uuidString), forKey: awaitingErasureKey)
+    }
+
+    private static func forgetAwaitingErasure(_ profileID: UUID, in ledger: UserDefaults) {
+        let awaiting = profilesAwaitingErasure(in: ledger).filter { $0 != profileID }
+        if awaiting.isEmpty {
+            ledger.removeObject(forKey: awaitingErasureKey)
+        } else {
+            ledger.set(awaiting.map(\.uuidString), forKey: awaitingErasureKey)
+        }
+    }
+
+    /// Removes everything a deleted profile owned: its preferences, its
+    /// folder — site icons and picture both — and its WebKit store, which is
+    /// its cookies and logins.
+    ///
+    /// WebKit refuses to remove a store anything still uses, and when a
+    /// profile is deleted its windows are still closing. That refusal used to
+    /// be ignored, so a deleted profile's logins stayed on disk. The erasure
+    /// is now recorded before it is tried, retried while the windows let go,
+    /// and finished at the next launch if it still could not be done.
+    @MainActor
+    static func erase(profileID: UUID, ledger: UserDefaults = .standard) {
+        guard profileID != BrowserProfileRecord.defaultID else { return }
+        recordAwaitingErasure(profileID, in: ledger)
+        removeFiles(of: profileID)
+        removeWebsiteData(of: profileID, ledger: ledger, attemptsLeft: 6)
+    }
+
+    /// Called once at launch, before any window exists: whatever a previous
+    /// run could not finish erasing — and anything a closing window wrote
+    /// back afterwards — goes now, while nothing is using it.
+    @MainActor
+    static func finishErasures(ledger: UserDefaults = .standard) {
+        for profileID in profilesAwaitingErasure(in: ledger) {
+            guard profileID != BrowserProfileRecord.defaultID else {
+                forgetAwaitingErasure(profileID, in: ledger)
+                continue
+            }
+            removeFiles(of: profileID)
+            removeWebsiteData(of: profileID, ledger: ledger, attemptsLeft: 3)
+        }
+    }
+
+    private static func removeFiles(of profileID: UUID) {
         guard profileID != BrowserProfileRecord.defaultID else { return }
         let suite = suiteName(for: profileID)
         UserDefaults.standard.removePersistentDomain(forName: suite)
@@ -262,9 +328,39 @@ enum ProfileStorage {
                 at: library.appendingPathComponent("Preferences/\(suite).plist")
             )
         }
-        if let directory = faviconDirectory(for: profileID) {
+        // The whole folder: site icons and the picture somebody chose. Only
+        // the icons used to go, and the photograph stayed on disk.
+        if let directory = profileDirectory(for: profileID) {
             try? FileManager.default.removeItem(at: directory)
         }
-        WKWebsiteDataStore.remove(forIdentifier: profileID) { _ in }
+    }
+
+    @MainActor
+    private static func removeWebsiteData(of profileID: UUID, ledger: UserDefaults, attemptsLeft: Int) {
+        WKWebsiteDataStore.fetchAllDataStoreIdentifiers { identifiers in
+            MainActor.assumeIsolated {
+                guard identifiers.contains(profileID) else {
+                    // Nothing of it left for WebKit to remove.
+                    forgetAwaitingErasure(profileID, in: ledger)
+                    return
+                }
+                WKWebsiteDataStore.remove(forIdentifier: profileID) { error in
+                    MainActor.assumeIsolated {
+                        if error == nil {
+                            forgetAwaitingErasure(profileID, in: ledger)
+                            return
+                        }
+                        // Still in use. The ledger keeps it for the next
+                        // launch if the windows have not let go by the end.
+                        guard attemptsLeft > 1 else { return }
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+                            MainActor.assumeIsolated {
+                                removeWebsiteData(of: profileID, ledger: ledger, attemptsLeft: attemptsLeft - 1)
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }

@@ -329,11 +329,79 @@ export function assessStructure(page) {
   return mostlyUnpunctuated && littleProseMass ? "listing" : "article";
 }
 
+// A term is whole when no letter or number touches either end of it. Never `\b`:
+// JavaScript's is ASCII, so it finds a boundary after "é" and read "installé" as
+// the English word "install", where Swift's ICU `\b` did not. `BOUND_START` alone
+// guards the scam phrases: "contact immediately" is not "act immediately", but
+// "gift cards" is still "gift card".
+const BOUND_START = "(?<![\\p{L}\\p{N}])";
+const BOUND_END = "(?![\\p{L}\\p{N}])";
+const wholeTerms = (terms, flags = "u") => new RegExp(`${BOUND_START}(?:${terms.join("|")})${BOUND_END}`, flags);
+const phraseStarts = (terms) => new RegExp(`${BOUND_START}(?:${terms.join("|")})`, "u");
+
+// The same lists, in the same order, as `RiskAnalyzer.swift`. They had drifted:
+// only this runtime knew "send bitcoin", "risk free investment" and "account is
+// suspended".
+const RISK_PHRASES = [
+  {
+    regex: phraseStarts(["seed phrase", "recovery phrase", "private key"]),
+    points: 35,
+    title: "Requests a wallet secret",
+    detail: "Legitimate support should never ask for a seed phrase or private key."
+  },
+  {
+    regex: phraseStarts(["gift card", "wire transfer", "pay in bitcoin", "pay in crypto", "send bitcoin", "send crypto"]),
+    points: 18,
+    title: "Hard-to-reverse payment language",
+    detail: "Gift cards, wire transfers, and crypto payments are common in scams."
+  },
+  {
+    regex: phraseStarts(["guaranteed returns", "double your money", "risk-free investment", "risk free investment"]),
+    points: 25,
+    title: "Implausible financial promise",
+    detail: "Guaranteed or risk-free returns are a serious warning sign."
+  },
+  {
+    regex: phraseStarts([
+      "act immediately", "act now", "final warning",
+      "account will be suspended", "account will be closed", "account is suspended", "account is closed"
+    ]),
+    points: 10,
+    title: "Urgency or account-threat language",
+    detail: "Pressure to act immediately can prevent careful checking."
+  }
+];
+
+const REMOTE_TERMS = wholeTerms(["anydesk", "teamviewer", "remote desktop", "remote access"], "gu");
+const ACTION_TERMS = wholeTerms([
+  "install", "download", "open", "run", "launch", "connect", "allow",
+  "grant", "give", "provide", "share", "enable"
+]);
+const CONTEXT_TERMS = wholeTerms([
+  "support", "technician", "refund", "bank", "payment", "account",
+  "security alert", "virus", "infected", "immediately", "urgent", "now",
+  "verify", "call"
+]);
+
+// Swift reads the first 30,000 `Character`s, and a `Character` is a grapheme,
+// not a UTF-16 unit: `.slice(0, 30000)` stopped halfway through a page of emoji
+// that Swift read to the end.
+const RISK_SCAN_CHARACTERS = 30000;
+
+function prefixGraphemes(value, limit) {
+  let count = 0;
+  for (const { index } of GRAPHEME_SEGMENTER.segment(value)) {
+    if (count === limit) return value.slice(0, index);
+    count += 1;
+  }
+  return value;
+}
+
 export function assessRisk(page) {
   const signals = [];
   let score = 0;
   const host = page.hostname || "";
-  const text = (page.text || "").slice(0, 30000).toLowerCase();
+  const text = prefixGraphemes(page.text || "", RISK_SCAN_CHARACTERS).toLowerCase();
 
   const addSignal = (points, title, detail) => {
     score += points;
@@ -349,7 +417,7 @@ export function assessRisk(page) {
   }
 
   if (host.startsWith("xn--") || host.includes(".xn--")) {
-    addSignal(25, "Encoded domain name", "Internationalized domains can be legitimate, but also deserve a closer look.");
+    addSignal(25, "Encoded domain name", "Internationalized domains can be legitimate, but deserve a closer look.");
   }
 
   const unwrappedHost = host.replace(/^\[|\]$/g, "");
@@ -393,34 +461,7 @@ export function assessRisk(page) {
     addSignal(15, "A form sends data to another site", "That can be normal for payments, but confirm the destination before submitting.");
   }
 
-  const patterns = [
-    {
-      regex: /seed phrase|recovery phrase|private key/,
-      points: 35,
-      title: "Requests a wallet secret",
-      detail: "Legitimate support should never ask for a seed phrase or private key."
-    },
-    {
-      regex: /gift card|wire transfer|pay in (bitcoin|crypto)|send (bitcoin|crypto)/,
-      points: 18,
-      title: "Hard-to-reverse payment language",
-      detail: "Gift cards, wire transfers, and crypto payments are common in scams."
-    },
-    {
-      regex: /guaranteed returns|double your money|risk[- ]free investment/,
-      points: 25,
-      title: "Implausible financial promise",
-      detail: "Guaranteed or risk-free returns are a serious warning sign."
-    },
-    {
-      regex: /account (will be|is) (closed|suspended)|act (now|immediately)|final warning/,
-      points: 10,
-      title: "Urgency or account-threat language",
-      detail: "Pressure to act immediately can be used to prevent careful checking."
-    }
-  ];
-
-  for (const pattern of patterns) {
+  for (const pattern of RISK_PHRASES) {
     if (pattern.regex.test(text)) {
       addSignal(pattern.points, pattern.title, pattern.detail);
     }
@@ -442,16 +483,37 @@ export function assessRisk(page) {
   };
 }
 
-function containsContextualRemoteAccessRequest(text) {
-  const remotePattern = /\b(?:anydesk|teamviewer|remote desktop|remote access)\b/giu;
-  const actionPattern = /\b(?:install|download|open|run|launch|connect|allow|grant|give|provide|share|enable)\b/iu;
-  const contextPattern = /\b(?:support|technician|refund|bank|payment|account|security alert|virus|infected|immediately|urgent|now|verify|call)\b/iu;
+// The window around a remote-access term reaches 180 characters either side —
+// graphemes, as Swift counts them, so a run of emoji cannot push an instruction
+// out of the window in one runtime and not the other.
+const REMOTE_WINDOW_CHARACTERS = 180;
 
-  for (const match of text.matchAll(remotePattern)) {
-    const start = Math.max(0, match.index - 180);
-    const end = Math.min(text.length, match.index + match[0].length + 180);
-    const window = text.slice(start, end);
-    if (actionPattern.test(window) && contextPattern.test(window)) return true;
+// Where each grapheme starts, as a UTF-16 offset, and the grapheme a given
+// offset falls in: the last start at or before it.
+function graphemeStarts(text) {
+  return [...GRAPHEME_SEGMENTER.segment(text)].map(({ index }) => index);
+}
+
+function graphemeContaining(offset, starts) {
+  let low = 0;
+  let high = starts.length - 1;
+  while (low < high) {
+    const middle = (low + high + 1) >> 1;
+    if (starts[middle] <= offset) low = middle; else high = middle - 1;
+  }
+  return low;
+}
+
+function containsContextualRemoteAccessRequest(text) {
+  const starts = graphemeStarts(text);
+  for (const match of text.matchAll(REMOTE_TERMS)) {
+    const first = graphemeContaining(match.index, starts);
+    const last = graphemeContaining(match.index + match[0].length - 1, starts);
+    const windowStart = starts[Math.max(0, first - REMOTE_WINDOW_CHARACTERS)];
+    const end = last + 1 + REMOTE_WINDOW_CHARACTERS;
+    const windowEnd = end < starts.length ? starts[end] : text.length;
+    const window = text.slice(windowStart, windowEnd);
+    if (ACTION_TERMS.test(window) && CONTEXT_TERMS.test(window)) return true;
   }
   return false;
 }

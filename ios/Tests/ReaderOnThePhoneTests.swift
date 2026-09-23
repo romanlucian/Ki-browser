@@ -56,6 +56,44 @@ final class ReaderOnThePhoneTests: XCTestCase {
         XCTAssertFalse(TabSurface(tab: tab, workspace: host.workspace).showsTheReader)
     }
 
+    // MARK: - A page that failed to load
+
+    /// A failed load drew nothing on the phone. The tab kept whatever WebKit
+    /// still held — the page before, or the blank document behind a new tab —
+    /// under the failed page's address, with no word of what went wrong.
+    func testAFailedLoadIsSaidOverThePage() async throws {
+        let host = try makeHost()
+        let tab = try XCTUnwrap(host.workspace.selectedTab)
+
+        tab.session.load(URL(string: "https://127.0.0.1:65530/unreachable")!)
+        let failed = await eventually {
+            if case .failed = tab.session.loadState { return true }
+            return false
+        }
+        XCTAssertTrue(failed, "the unreachable address did not fail")
+
+        let failure = TabSurface(tab: tab, workspace: host.workspace).shownFailure
+        XCTAssertEqual(failure?.title, "Couldn’t connect to this website")
+        XCTAssertEqual(failure?.retryable, true)
+    }
+
+    /// Nothing failed on a fresh tab, and the guide is never covered.
+    func testNoFailureIsDrawnOverTheGuide() throws {
+        let host = try makeHost()
+        let tab = try XCTUnwrap(host.workspace.selectedTab)
+
+        XCTAssertNil(TabSurface(tab: tab, workspace: host.workspace).shownFailure)
+    }
+
+    private func eventually(timeout: TimeInterval = 5, _ condition: @MainActor () -> Bool) async -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if condition() { return true }
+            try? await Task.sleep(nanoseconds: 50_000_000)
+        }
+        return condition()
+    }
+
     // MARK: - The header
 
     /// Reader's header on a phone is two rows of 44 points, the smallest

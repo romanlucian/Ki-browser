@@ -16,4 +16,27 @@ final class BrowserUserAgentTests: XCTestCase {
             BrowserUserAgent.fallbackVersion(for: ProcessInfo.processInfo.operatingSystemVersion)
         )
     }
+
+    /// Setting WebKit's application name *replaces* its platform default. On
+    /// an iPhone that default is the `Mobile/…` token, and sites that choose
+    /// their mobile layout by looking for "Mobi" — MDN's own recommendation —
+    /// sent the phone their desktop pages. The platform's token is kept.
+    func testThePlatformsOwnTokenStaysInTheApplicationName() {
+        XCTAssertEqual(
+            BrowserUserAgent.applicationName(platformDefault: "Mobile/15E148", safariVersion: "18.7"),
+            "Version/18.7 Mobile/15E148 Safari/605.1.15"
+        )
+    }
+
+    /// With no platform token — the Mac — the name is what it always was.
+    func testWithNoPlatformTokenTheApplicationNameIsUnchanged() {
+        XCTAssertEqual(
+            BrowserUserAgent.applicationName(platformDefault: nil, safariVersion: "26.5"),
+            "Version/26.5 Safari/605.1.15"
+        )
+        XCTAssertEqual(
+            BrowserUserAgent.applicationName(platformDefault: "  ", safariVersion: "26.5"),
+            "Version/26.5 Safari/605.1.15"
+        )
+    }
 }

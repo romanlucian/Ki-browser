@@ -115,17 +115,24 @@ public enum ChromiumBookmarkImporter {
     /// precision, but a hand-built fixture may reasonably use a JSON number
     /// instead — both are accepted. `0` means "never set" and comes back as
     /// `nil`, not the year 1601.
+    ///
+    /// A file can hold any number here. One the arithmetic cannot represent is
+    /// dropped like a missing date: `Int64` subtraction traps on overflow, so
+    /// a value near `Int64.min` used to end the app mid-import, and
+    /// `NSNumber.int64Value` has no defined answer for a number beyond `Int64`.
     private static func date(from rawValue: Any?) -> Date? {
         let microseconds: Int64?
         if let stringValue = rawValue as? String {
             microseconds = Int64(stringValue)
         } else if let numberValue = rawValue as? NSNumber {
-            microseconds = numberValue.int64Value
+            let magnitude = abs(numberValue.doubleValue)
+            microseconds = magnitude.isFinite && magnitude < 9.2e18 ? numberValue.int64Value : nil
         } else {
             microseconds = nil
         }
         guard let microseconds, microseconds != 0 else { return nil }
-        let unixMicroseconds = microseconds - microsecondsFromWindowsToUnixEpoch
+        let (unixMicroseconds, overflowed) = microseconds.subtractingReportingOverflow(microsecondsFromWindowsToUnixEpoch)
+        guard !overflowed else { return nil }
         return Date(timeIntervalSince1970: Double(unixMicroseconds) / 1_000_000)
     }
 }

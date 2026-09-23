@@ -38,6 +38,11 @@ public protocol BrowserSessionPlatform: AnyObject {
     /// none — iOS follows its trait collection without being asked.
     func observeAppearance(_ apply: @escaping () -> Void) -> Any?
 
+    /// Whether the click behind `action` asked for the link in a tab of its
+    /// own, and where. `nil` for everything else — a plain click, a script, a
+    /// form — which stays in the tab it happened in.
+    func newTabPlacement(for action: WKNavigationAction) -> NewTabPlacement?
+
     /// Called once, immediately after `BrowserSession` builds its web view.
     /// The one-time setup only the platform can do lives here — macOS sets
     /// the web view's starting appearance and turns on trackpad
@@ -47,4 +52,16 @@ public protocol BrowserSessionPlatform: AnyObject {
     /// weakly tracks its own web view — anchoring an alert or a file panel to
     /// the right window needs one — learns which web view that is.
     func prepareWebView(_ webView: WKWebView)
+}
+
+/// Where a link somebody opened in a tab of its own should go.
+public enum NewTabPlacement: Equatable, Sendable {
+    /// Behind the page being read.
+    case background
+    /// In front of it.
+    case foreground
+}
+
+extension BrowserSessionPlatform {
+    public func newTabPlacement(for action: WKNavigationAction) -> NewTabPlacement? { nil }
 }

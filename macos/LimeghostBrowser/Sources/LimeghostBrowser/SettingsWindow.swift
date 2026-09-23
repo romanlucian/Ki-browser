@@ -205,13 +205,15 @@ private struct SearchSettingsPage: View {
 // MARK: - Tabs
 
 private struct TabsSettingsPage: View {
+    /// The current profile's store, which is where this choice is read. It was
+    /// once an `@AppStorage` switch on the standard suite, which only the
+    /// original profile reads, so it did nothing in any other.
     @ObservedObject private var dataStore = BrowserServices.shared.dataStore
-    @AppStorage("clearframe.reloadRestoredTabs") private var reloadsRestoredTabs = false
 
     var body: some View {
         Form {
             Section("Restoring") {
-                Toggle("Load every restored tab at start", isOn: $reloadsRestoredTabs)
+                Toggle("Load every restored tab at start", isOn: $dataStore.reloadsRestoredTabs)
                     .disabled(dataStore.startupBehaviour != .restore)
                 Text("Off by default, as in other browsers: the tab you were on loads, and the rest load the first time you open them. They are all there with their names and site icons either way. Turning this on opens every page at start, which costs a burst of network and memory in exchange for pages already loaded when you get to them.")
                     .font(.caption)
@@ -235,8 +237,12 @@ private struct PrivacySettingsPage: View {
     @ObservedObject private var dataStore = BrowserServices.shared.dataStore
     @ObservedObject private var downloads = BrowserServices.shared.downloads
     @ObservedObject private var webFeatures = BrowserServices.shared.webFeatures
-    @AppStorage("clearframe.saveHistory") private var savesHistory = true
-    @StateObject private var siteData = SiteDataInventory()
+    /// This profile's sites, from this profile's WebKit store. `.default()`
+    /// belongs to the original profile alone, and listing it here showed — and
+    /// removed — another profile's data.
+    @StateObject private var siteData = SiteDataInventory(
+        dataStore: BrowserServices.shared.currentServices.websiteDataStore
+    )
     @State private var showsResetConfirmation = false
     @State private var isResettingBrowserData = false
     @State private var browserDataStatus = ""
@@ -258,8 +264,8 @@ private struct PrivacySettingsPage: View {
             }
 
             Section("History") {
-                Toggle("Save browsing history on this Mac", isOn: $savesHistory)
-                Text("History stays in this Mac user profile and is never included in AI requests. Turning this off stops Limeghost recording new visits; visits it already saved stay until you clear them from History (⌘Y) or with Clear local browsing data below.")
+                Toggle("Save browsing history on this Mac", isOn: $dataStore.savesHistory)
+                Text("History stays on this Mac, in this profile, and Limeghost never sends it anywhere. Turning this off stops Limeghost recording new visits; visits it already saved stay until you clear them from History (⌘Y) or with Clear local browsing data below.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)

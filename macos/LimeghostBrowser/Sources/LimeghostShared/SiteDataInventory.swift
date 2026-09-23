@@ -139,11 +139,13 @@ public struct SiteDataEntry: Identifiable, Equatable {
     public var kindSummary: String { SiteDataKind.summary(of: kinds) }
 }
 
-/// Reads and removes per-site website data.
+/// Reads and removes per-site website data, in one WebKit store.
 ///
-/// Only `WKWebsiteDataStore.default()` is consulted: private tabs run on
-/// non-persistent stores, so nothing they touched is ever listed here or left
-/// behind for this type to remove.
+/// Which store is the caller's to say, and it has to be the one the pages in
+/// question use: the site panel passes its page's own (`init(for:)`), and
+/// Settings passes the current profile's. `.default()` belongs to the original
+/// profile only; every other profile has a store of its own, and a private
+/// tab's store is ephemeral and forgotten with the tab.
 @MainActor
 public final class SiteDataInventory: ObservableObject {
     public enum LoadState: Equatable {
@@ -158,7 +160,7 @@ public final class SiteDataInventory: ObservableObject {
     /// instead of appearing to do nothing.
     @Published public private(set) var removingSite: String?
 
-    private let dataStore: WKWebsiteDataStore
+    let dataStore: WKWebsiteDataStore
 
     /// Defaults to the shared persistent store. Resolved inside the initializer
     /// rather than in the parameter list because `WKWebsiteDataStore.default()`
@@ -166,6 +168,16 @@ public final class SiteDataInventory: ObservableObject {
     /// isolation.
     public init(dataStore: WKWebsiteDataStore? = nil) {
         self.dataStore = dataStore ?? .default()
+    }
+
+    /// The store the page in `session` actually uses: its profile's, or — in
+    /// a private tab — its own ephemeral one. What a site panel lists and
+    /// removes has to be where that page's cookies are. Before profiles every
+    /// page used `.default()`; since them, reaching for `.default()` read and
+    /// deleted another profile's data, and from a private tab the person's
+    /// saved cookies.
+    public convenience init(for session: BrowserSession) {
+        self.init(dataStore: session.webView.configuration.websiteDataStore)
     }
 
     public var isEmpty: Bool { state == .loaded && sites.isEmpty }

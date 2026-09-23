@@ -29,6 +29,17 @@ final class BottomBarTests: XCTestCase {
         XCTAssertEqual(model.addressLabel, "about:blank")
     }
 
+    /// The phone showed nothing at all while a page loaded: a tap on Go, and
+    /// then silence until the page appeared. The pill's own outline now fills
+    /// as the page arrives, as the Mac's does — a sliver from the moment the
+    /// load starts, and nothing once it is done.
+    func testThePillShowsAPageArriving() {
+        XCTAssertNil(AddressProgress.fraction(isLoading: false, estimated: 0.5), "a line with nothing loading")
+        XCTAssertEqual(AddressProgress.fraction(isLoading: true, estimated: 0), 0.02, "nothing shown as a load starts")
+        XCTAssertEqual(AddressProgress.fraction(isLoading: true, estimated: 0.6), 0.6)
+        XCTAssertEqual(AddressProgress.fraction(isLoading: true, estimated: 1.4), 1)
+    }
+
     /// The assistant button says what a tap will do next, as the menu's labels do.
     func testTheAssistantButtonSaysWhatATapWillDo() {
         XCTAssertEqual(BottomBarModel(urlString: "", tabCount: 1, canGoBack: false).assistantLabel, "Show Assistant")

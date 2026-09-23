@@ -368,9 +368,20 @@ struct LimeghostBrowserApp: App {
               profiles.canDelete(profileID),
               ProfilePrompts.confirmDeletion(of: profile.name)
         else { return }
-        BrowserServices.shared.discardServices(for: profileID)
+        let services = BrowserServices.shared
+        // Every window of the profile goes, not only the one in front. A
+        // second window left open went on writing into the stores erased
+        // below, and held the profile's WebKit store in use, so its logins
+        // could not be removed.
+        var windows = services.liveWorkspaces
+            .filter { $0.profileID == profileID }
+            .compactMap { services.window(for: $0) }
+        if let front = NSApplication.shared.keyWindow, !windows.contains(where: { $0 === front }) {
+            windows.append(front)
+        }
+        services.discardServices(for: profileID)
         profiles.deleteProfile(profileID)
-        NSApplication.shared.keyWindow?.performClose(nil)
+        windows.forEach { $0.performClose(nil) }
     }
 
     /// A window whose every tab is private. The flag is left for the scene to

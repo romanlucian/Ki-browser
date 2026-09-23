@@ -1006,6 +1006,15 @@ final class BrowserBehaviorTests: XCTestCase {
     func testAProfilePictureIsCopiedInAndCroppedSquare() throws {
         let store = ProfileStore(defaults: emptyDefaults("pictures"))
         let created = store.addProfile(name: "Personal")
+        // The picture is copied into the real Application Support, under a
+        // folder named for this profile, and nothing else ever removes it:
+        // every run of the suite left one more `Profiles/<uuid>` behind.
+        let createdID = created.id
+        addTeardownBlock {
+            if let folder = ProfileStorage.profileDirectory(for: createdID) {
+                try? FileManager.default.removeItem(at: folder)
+            }
+        }
 
         // A deliberately non-square source, so a squashed result would show.
         let source = FileManager.default.temporaryDirectory
@@ -2243,7 +2252,8 @@ final class BrowserBehaviorTests: XCTestCase {
     /// clients they cannot identify. Presenting Safari's is a claim about the
     /// engine, and it has to keep both tokens sites actually read.
     func testLimeghostAsksForThePageSafariWouldGet() {
-        let name = BrowserUserAgent.applicationName
+        // A Mac's fresh configuration names no platform token of its own.
+        let name = BrowserUserAgent.applicationName(platformDefault: WKWebViewConfiguration().applicationNameForUserAgent)
 
         XCTAssertTrue(name.hasPrefix("Version/"), "sites read the Version token")
         XCTAssertTrue(name.hasSuffix("Safari/\(BrowserUserAgent.safariBuild)"), "and the Safari build")
@@ -2398,6 +2408,34 @@ final class BrowserBehaviorTests: XCTestCase {
         // One tab either side of the threshold: 8 tabs still fit, 9 do not.
         XCTAssertFalse(TabStripMetrics.resolve(availableWidth: 520, tabCount: 8, hasSelectedTab: true).scrolls)
         XCTAssertTrue(TabStripMetrics.resolve(availableWidth: 520, tabCount: 12, hasSelectedTab: true).scrolls)
+    }
+
+    /// Selecting a pinned tab leaves no *unpinned* tab selected. The width was
+    /// then split into one share more than there were tabs — four tabs sharing
+    /// as if there were five — so every tab drew narrower than the strip
+    /// allowed, and a strip that fitted could start scrolling.
+    func testWithNoUnpinnedTabSelectedTheWidthIsSharedEvenly() {
+        // 400 wide, one pinned tab and its gap reserved (44 + 4), three gaps
+        // between four tabs: 400 - 48 - 12 = 340, which is 85 each.
+        let fourTabs = TabStripMetrics.resolve(
+            availableWidth: 400,
+            tabCount: 4,
+            hasSelectedTab: false,
+            reservedWidth: 48
+        )
+        XCTAssertEqual(fourTabs.unselectedTabWidth, 85, accuracy: 0.001)
+        XCTAssertFalse(fourTabs.scrolls)
+
+        // Six tabs at 56 each fit without scrolling; a phantom seventh share
+        // made them 48, under the comfortable minimum of 54, and scrolled.
+        let sixTabs = TabStripMetrics.resolve(
+            availableWidth: 336 + 20 + 48,
+            tabCount: 6,
+            hasSelectedTab: false,
+            reservedWidth: 48
+        )
+        XCTAssertEqual(sixTabs.unselectedTabWidth, 56, accuracy: 0.001)
+        XCTAssertFalse(sixTabs.scrolls, "a strip that fits scrolled")
     }
 
     func testTabStripReservesRoomForGroupChipsBeforeSharingWidth() {
@@ -2839,6 +2877,40 @@ final class BrowserBehaviorTests: XCTestCase {
 
         let files = (try? FileManager.default.contentsOfDirectory(atPath: directory.path)) ?? []
         XCTAssertFalse(files.contains("redirects.json"), "a private visit writes no alias file")
+    }
+
+    /// The test above holds only while a private alias is the last one
+    /// recorded. The aliases shared one table, and the next ordinary redirect
+    /// wrote the whole table out — so where a private tab had been went to disk
+    /// the moment an ordinary tab followed any redirect.
+    func testAPrivateVisitsRedirectAliasStaysOffDiskWhenAnOrdinaryOneIsWritten() async throws {
+        let directory = Self.makeFaviconDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = FaviconStore(directory: directory, fetch: RecordingFaviconFetcher(response: Self.pngFixture()).fetch)
+
+        store.recordRedirectAlias(
+            from: try XCTUnwrap(URL(string: "https://private-start.example/")),
+            to: "private-end.example",
+            isPrivate: true
+        )
+        store.recordRedirectAlias(
+            from: try XCTUnwrap(URL(string: "https://ordinary-start.example/")),
+            to: "ordinary-end.example",
+            isPrivate: false
+        )
+
+        let written = try String(contentsOf: directory.appendingPathComponent("redirects.json"), encoding: .utf8)
+        XCTAssertTrue(written.contains("ordinary-start.example"), "the ordinary alias was not saved")
+        XCTAssertFalse(written.contains("private-start.example"), "a private tab's redirect was written to disk")
+        XCTAssertFalse(written.contains("private-end.example"), "a private tab's redirect was written to disk")
+
+        // Still usable for the rest of this run, in memory.
+        await store.capture(
+            pageURL: try XCTUnwrap(URL(string: "https://private-end.example/")),
+            declaredIconURLs: FaviconStore.PageIcons(),
+            isPrivate: true
+        )
+        XCTAssertNotNil(store.icon(forHost: "private-start.example"), "the private alias stopped working in memory")
     }
 
     /// Only a real cross-host redirect records anything.
