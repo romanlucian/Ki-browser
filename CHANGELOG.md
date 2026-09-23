@@ -69,6 +69,7 @@ Each fix below has a test that was watched failing before the fix went in, excep
 *The test suite*
 
 - `testAProfilePictureIsCopiedInAndCroppedSquare` copied a picture into the real `~/Library/Application Support/Limeghost/Profiles/<uuid>` and never removed it, so every run of the Mac suite left one more folder. The development Mac held 147. Three belong to real profiles and 144 to none; they were counted, not removed. The test removes its folder now: one run went from 147 to 148 before the fix and left 148 after it.
+- CI's iOS simulator failed pull request #4 twice, each time in a different page test, and neither failure was a bug. One page's web process stalled for minutes while other test processes loaded pages normally, as one had on `main` for 750 seconds on September 13. The result bundle, which CI now keeps when this job fails, showed that WebKit had not committed a new tab's blank document after 90 seconds. The iOS job now retries a failed test twice, and only that job does. A page test also now ends at the first wait that runs out, instead of reporting three more failures caused by the first.
 
 *Found and not fixed*
 

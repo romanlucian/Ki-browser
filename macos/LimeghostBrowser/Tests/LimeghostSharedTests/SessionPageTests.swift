@@ -16,11 +16,16 @@ final class SessionPageTests: XCTestCase {
         // Finished, not merely idle: WebKit reports `isLoading == false` for a
         // moment before it has even started a document it was just handed.
         // Generous, because the first web page in a fresh Simulator process
-        // took over twenty seconds to arrive on September 22, 2026, while
-        // every later one took about one; a met condition returns at once.
+        // took over a minute to arrive on September 22, 2026, while every
+        // later one took about one second; a met condition returns at once.
         let started = Date()
         let settled = await eventually(timeout: 90) { tab.session.hasCommittedNavigation && !tab.session.webView.isLoading }
-        XCTAssertTrue(
+        // The test ends here if the document never settled. A page handed to
+        // WebKit before the tab's own document finished is never registered
+        // by the tab, so every later assertion would fail for this reason
+        // alone and bury it: CI's first report of a stalled web process on
+        // September 23, 2026 was four failures, three of them about titles.
+        try require(
             settled,
             "the new tab's own document never finished loading: \(Self.seconds(since: started)); "
                 + "committed=\(tab.session.hasCommittedNavigation) isLoading=\(tab.session.webView.isLoading)"
@@ -32,11 +37,23 @@ final class SessionPageTests: XCTestCase {
         let started = Date()
         session.webView.loadHTMLString(html, baseURL: URL(string: address)!)
         let loaded = await eventually(timeout: 60) { session.loadState == .content && !session.isLoading }
-        XCTAssertTrue(
+        try require(
             loaded,
             "\(address) did not finish loading: \(Self.seconds(since: started)); loadState=\(session.loadState) "
                 + "isLoading=\(session.isLoading) url=\(session.webView.url?.absoluteString ?? "none")"
         )
+    }
+
+    /// Records `message` as the test's failure and ends the test when
+    /// `condition` does not hold, reported at the caller's line.
+    private func require(
+        _ condition: Bool,
+        _ message: @autoclosure () -> String,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) throws {
+        guard !condition else { return }
+        _ = try XCTUnwrap(Bool?.none, message(), file: file, line: line)
     }
 
     /// How long a wait took, for a failure message. A wait that ran out and a

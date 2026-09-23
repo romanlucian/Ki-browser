@@ -108,10 +108,22 @@ jobs:
           print(f"SIM_RUNTIME={runtime}")
           PY
           grep '^SIM_' "$GITHUB_ENV"
+      # A failed test gets two more tries here, and only here. On this runner a
+      # web process in the shared suite's bare xctest host can stop responding
+      # for minutes, while other test processes on the same simulator load
+      # pages normally. That is not a slow machine but one page's process
+      # stalling: 750 s in testASchemeTheBrowserDoesNotRenderGoesToThePlatform
+      # on main (September 13, 2026), then 956 s, 157 s and at least 155 s in
+      # three different tests across pull request #4's first two runs, on an
+      # iOS 26.2 simulator. The same tests take about a second on a
+      # developer's Mac and in the macOS job. Every failed attempt is still
+      # recorded in the result bundle, and the macOS job and local runs
+      # retry nothing, so a real failure still fails fast there.
       - run: >-
           xcodebuild test -scheme LimeghostSharedLayer
           -destination "platform=iOS Simulator,id=$SIM_UDID"
           -resultBundlePath "$RUNNER_TEMP/LimeghostSharedLayer.xcresult"
+          -retry-tests-on-failure -test-iterations 3
       # The app, on the same simulator this job already found. `working-directory`
       # overrides the job default above, because the Xcode project lives at
       # `ios/` while everything else in this job runs from the package.
