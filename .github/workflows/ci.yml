@@ -111,6 +111,7 @@ jobs:
       - run: >-
           xcodebuild test -scheme LimeghostSharedLayer
           -destination "platform=iOS Simulator,id=$SIM_UDID"
+          -resultBundlePath "$RUNNER_TEMP/LimeghostSharedLayer.xcresult"
       # The app, on the same simulator this job already found. `working-directory`
       # overrides the job default above, because the Xcode project lives at
       # `ios/` while everything else in this job runs from the package.
@@ -119,6 +120,18 @@ jobs:
         run: >-
           xcodebuild test -scheme Limeghost
           -destination "platform=iOS Simulator,id=$SIM_UDID"
+          -resultBundlePath "$RUNNER_TEMP/Limeghost.xcresult"
+      # A parallel test run prints which tests failed, and how long each took,
+      # but never why: the assertion messages live only in the result bundle.
+      # Without it, the first failure of this job's WebKit page tests (pull
+      # request #4, September 23, 2026) was a test name and a duration.
+      - name: Keep the result bundles of a failed run
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-simulator-results
+          path: ${{ runner.temp }}/*.xcresult
+          retention-days: 14
 
   cef-contract:
     runs-on: macos-15

@@ -18,15 +18,32 @@ final class SessionPageTests: XCTestCase {
         // Generous, because the first web page in a fresh Simulator process
         // took over twenty seconds to arrive on September 22, 2026, while
         // every later one took about one; a met condition returns at once.
+        let started = Date()
         let settled = await eventually(timeout: 90) { tab.session.hasCommittedNavigation && !tab.session.webView.isLoading }
-        XCTAssertTrue(settled, "the new tab's own document never finished loading")
+        XCTAssertTrue(
+            settled,
+            "the new tab's own document never finished loading: \(Self.seconds(since: started)); "
+                + "committed=\(tab.session.hasCommittedNavigation) isLoading=\(tab.session.webView.isLoading)"
+        )
         return (isolated, tab)
     }
 
     private func load(_ html: String, at address: String, in session: BrowserSession) async throws {
+        let started = Date()
         session.webView.loadHTMLString(html, baseURL: URL(string: address)!)
         let loaded = await eventually(timeout: 60) { session.loadState == .content && !session.isLoading }
-        XCTAssertTrue(loaded, "\(address) did not finish loading; loadState=\(session.loadState)")
+        XCTAssertTrue(
+            loaded,
+            "\(address) did not finish loading: \(Self.seconds(since: started)); loadState=\(session.loadState) "
+                + "isLoading=\(session.isLoading) url=\(session.webView.url?.absoluteString ?? "none")"
+        )
+    }
+
+    /// How long a wait took, for a failure message. A wait that ran out and a
+    /// condition that turned false are different failures, and on a slow
+    /// runner only the time tells them apart.
+    private nonisolated static func seconds(since start: Date) -> String {
+        String(format: "%.1f s", Date().timeIntervalSince(start))
     }
 
     // MARK: - Retrying
@@ -110,11 +127,16 @@ final class SessionPageTests: XCTestCase {
         """
 
         try await load(html, at: "https://late.example/page", in: tab.session)
+        let started = Date()
         let corrected = await eventually(timeout: 5) {
             isolated.workspace.dataStore.history.first?.title == "Arrived Late"
         }
 
-        XCTAssertTrue(corrected, "history kept \(isolated.workspace.dataStore.history.first?.title ?? "nothing")")
+        XCTAssertTrue(
+            corrected,
+            "history kept \(isolated.workspace.dataStore.history.first?.title ?? "nothing") after "
+                + "\(Self.seconds(since: started)); the tab is called \(tab.session.pageTitle)"
+        )
         XCTAssertEqual(isolated.workspace.dataStore.history.count, 1, "the corrected title became a second visit")
         XCTAssertEqual(tab.session.pageTitle, "Arrived Late")
     }
