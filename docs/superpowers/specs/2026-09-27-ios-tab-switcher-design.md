@@ -32,12 +32,17 @@ grid you have to guess at.
 **In:** page previews, the card's shape, the favicon, the selected ring, and
 the switcher drawing on Limeghost's surfaces like every other sheet.
 
-**Out, deliberately:** tab groups, and search across tabs. Search is real once
-somebody has twenty tabs and should come later on its own evidence; groups are
-a control Chrome needs because Chrome has users with eighty tabs, and adding
-them here would be copying a competitor rather than answering a need. The
-private/regular segment is also held back to its own change, because it
-restructures what the screen *is* rather than how it looks.
+**In the first change:** page previews, the card's shape, the favicon, the
+selected ring, and the switcher drawing on Limeghost's surfaces. Shipped as
+pull request #6.
+
+**In the second change (§8):** search across tabs, and the private/regular
+segment. Held back from the first because they restructure what the screen
+*is* rather than how it looks.
+
+**Out, permanently:** tab groups. Chrome needs them because Chrome has users
+with eighty tabs; adding them here would be copying a competitor's control
+rather than answering a need this product has.
 
 ## 3. Previews
 
@@ -160,3 +165,61 @@ shows tabs in the order they were opened, and that is all it knows.
 Nothing here is user-validated. It answers one founder's use of their own app
 on one phone, which is dogfooding, and the card geometry was measured off a
 screenshot of a competitor rather than tested with anybody.
+
+---
+
+## 8. The segment and the search, September 27
+
+### 8.1 What the two sections cost
+
+The screen had two always-visible sections, Ordinary and Private, each with its
+own `+`. The private one stays on screen with nothing in it, and the code
+comment beside it explains why in the tone of an apology: its `+` is the only
+door into private browsing, so hiding the empty section hides the door and the
+section can then never hold anything.
+
+A segment is a better door. It is one control instead of a permanently empty
+section, it says how many tabs are on each side, and it cannot be scrolled past.
+
+### 8.2 Search never crosses the segment
+
+Searching the ordinary tabs must never surface a private one. This is the same
+line the address sheet draws when it completes nothing at all in a private tab,
+and the same reason `rows` and `privateRows` were split rather than flagged.
+Because the search filters the segment already on screen, it holds by
+construction — and a test says so, because the next refactor is exactly where
+it would stop holding.
+
+### 8.3 Where the filter lives
+
+Beside `TabSwitcherModel`, not in `LimeghostCore` next to `BookmarksHomeSearch`
+and `HistoryHomeSearch`. Those two are shared because *both platforms* search
+the same saved records and must not come to disagree. The Mac's tab strip has
+no search and `TabRow` is the phone's own type, so a shared helper would be a
+generic written for one caller.
+
+Matching follows theirs: trimmed, case-insensitive `contains`, over the title
+and the host.
+
+### 8.4 Judgment calls
+
+- **The segment sits in the navigation bar's centre**, Chrome's own position,
+  with Done to its right — chosen over a full-width row below the search field,
+  which costs a third row of chrome on a screen that is meant to show pages.
+  **Measured before it was kept**, because two segments carrying counts may not
+  fit a narrow phone, and that is measurable rather than arguable. It fits with
+  room to spare: photographed on an iPhone SE (3rd generation) Simulator at 375
+  points, the segment and Done together take a little under half the bar.
+  `ImageRenderer` cannot answer this — it draws SwiftUI, and a navigation bar is
+  UIKit, so it returns its unsupported placeholder — so the app was built,
+  installed and launched into the switcher on a booted Simulator and
+  photographed with `simctl io screenshot`.
+- **Counts ride in the segment** (`Tabs 3`, `Private 1`), so the other side is
+  legible without switching to it — except that the private side drops its
+  count when it is zero, which is most of the time. Seeing "Private 0" on the
+  375-point screenshot is what decided that, not taste. The ordinary side
+  always shows its count, because the workspace never lets it reach zero.
+- **The `+` follows the segment** and says which kind of tab it makes.
+- The search field is always present rather than appearing past some number of
+  tabs. A control that materialises at a threshold is a control nobody can
+  find on purpose.
