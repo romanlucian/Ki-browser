@@ -27,6 +27,16 @@ struct AssistantLayer: View {
             if companion.isVisible {
                 Color.black.opacity(0.45)
                     .transition(.opacity)
+                // The page is drawn under the keyboard and the assistant is
+                // not, so while somebody typed, the page showed through the
+                // strip between them — a headline behind the keyboard's own
+                // bar. This carries the assistant's surface down there. It
+                // starts below the corner radius so the rounded top still
+                // shows the page behind it.
+                LimeghostTheme.bg1
+                    .padding(.top, 10 + LimeghostTheme.radius14)
+                    .ignoresSafeArea(.keyboard, edges: .bottom)
+                    .transition(.opacity)
                 panel
                     .padding(.top, 10)
                     .offset(y: dragOffset)
