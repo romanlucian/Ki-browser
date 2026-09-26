@@ -1,3 +1,4 @@
+import CoreGraphics
 import LimeghostCore
 @testable import LimeghostShared
 import Foundation
@@ -60,6 +61,26 @@ final class BrowsingDataTests: XCTestCase {
         XCTAssertFalse(leftInThisProfile.contains { $0.name == mine.name }, "the reset left this profile's cookies")
         let leftInOriginal = await original.httpCookieStore.allCookies()
         XCTAssertTrue(leftInOriginal.contains { $0.name == theirs.name }, "the reset wiped another profile's cookies")
+    }
+
+    /// What each tab looked like is browsing evidence too. These pictures are
+    /// never written to disk, but the reset is also what somebody presses to
+    /// clear the screen behind them, and a switcher still holding photographs
+    /// of the pages they just erased would not be cleared.
+    func testTheResetErasesWhatEachTabLookedLike() async throws {
+        let workspace = try IsolatedWorkspace.make(for: self).workspace
+        let tab = try XCTUnwrap(workspace.selectedTab?.id)
+        let context = try XCTUnwrap(CGContext(
+            data: nil, width: 4, height: 4, bitsPerComponent: 8, bytesPerRow: 0,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ))
+        workspace.tabPreviews.store(try XCTUnwrap(context.makeImage()), for: tab)
+        XCTAssertNotNil(workspace.tabPreviews.preview(for: tab), "nothing was stored to erase")
+
+        await workspace.resetLocalBrowsingData()
+
+        XCTAssertNil(workspace.tabPreviews.preview(for: tab), "a page picture survived the reset")
     }
 
     // MARK: - Listing a site's data

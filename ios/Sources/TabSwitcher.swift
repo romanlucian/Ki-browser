@@ -1,3 +1,4 @@
+import CoreGraphics
 import LimeghostShared
 import SwiftUI
 
@@ -33,6 +34,17 @@ struct TabSwitcherModel {
 
     var canReopenClosed: Bool { workspace.canReopenClosedTab }
 
+    /// Which card to ring. Without this the grid says nothing about where you
+    /// already are, which is survivable in a list of titles and not in a wall
+    /// of page pictures that all look like pages.
+    var selectedID: UUID? { workspace.selectedTabID }
+
+    /// What a tab last looked like, or `nil` until it has been looked at once.
+    /// Reading the preview store keeps this type's promise: a store is a
+    /// cache, not a session, so the grid still lays out without a live
+    /// `WKWebView` and the three tests above still run without one.
+    func preview(for id: UUID) -> CGImage? { workspace.tabPreviews.preview(for: id) }
+
     /// Selecting a tab that already exists is not a request for a *different*
     /// page, so this reaches `selectTab` directly and never
     /// `makeRoomForPage()` — the same distinction the Mac's strip draws.
@@ -60,12 +72,17 @@ struct TabSwitcherModel {
 /// its address pill.
 struct TabSwitcher: View {
     @ObservedObject private var workspace: BrowserWorkspace
+    /// Observed separately from the workspace: a picture landing changes the
+    /// store, and nothing about that reaches the workspace's own publisher.
+    /// `StoredSiteIcon` subscribes to `FaviconStore` for the same reason.
+    @ObservedObject private var previews: TabPreviewStore
     private let dismiss: () -> Void
 
-    private let columns = [GridItem(.adaptive(minimum: 140), spacing: 12)]
+    private let columns = [GridItem(.adaptive(minimum: 150), spacing: 12)]
 
     init(workspace: BrowserWorkspace, dismiss: @escaping () -> Void) {
         self.workspace = workspace
+        self.previews = workspace.tabPreviews
         self.dismiss = dismiss
     }
 
@@ -83,6 +100,7 @@ struct TabSwitcher: View {
                 Button("Done", action: dismiss)
             }
             .padding()
+            .background(LimeghostTheme.bg1)
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
@@ -113,6 +131,8 @@ struct TabSwitcher: View {
                 .padding(.vertical)
             }
         }
+        .background(LimeghostTheme.bg1)
+        .limeghostListSheet()
     }
 
     @ViewBuilder
@@ -144,6 +164,8 @@ struct TabSwitcher: View {
                     ForEach(rows) { row in
                         TabCard(
                             row: row,
+                            preview: previews.preview(for: row.id),
+                            isSelected: row.id == model.selectedID,
                             select: { select(row.id) },
                             close: { model.close(row.id) }
                         )
@@ -160,42 +182,98 @@ struct TabSwitcher: View {
     }
 }
 
-/// One card: title, host, and a close control — the least a tab can show and
-/// still be told apart from its neighbors in a grid with no room for more.
-private struct TabCard: View {
+/// One card: the page as it last looked, under a strip carrying the site's
+/// mark, its title and a close control.
+///
+/// The height is **not a number**. It comes from the preview's 3:4 aspect
+/// ratio, so one rule covers an iPhone SE, a Pro Max and landscape rather than
+/// three constants kept in step by hand — the same reasoning that made the
+/// Mac's address pill a `Capsule`. It replaced a fixed height of 110, which
+/// left a card too short to say anything about the page inside it.
+///
+/// Internal rather than private only so `testACardIsTallerThanItIsWide` can
+/// render one: a height the layout system alone knows is a height no
+/// arithmetic in a test can check.
+struct TabCard: View {
     let row: TabRow
+    /// `nil` until this tab has been looked at once. Not an error state: it is
+    /// what every tab shows after a relaunch, because previews are never
+    /// written to disk.
+    let preview: CGImage?
+    let isSelected: Bool
     let select: () -> Void
     let close: () -> Void
 
+    private var cornerRadius: CGFloat { LimeghostTheme.radius12 }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack {
-                Spacer()
-                Button(action: close) {
-                    Image(systemName: "xmark.circle.fill")
-                        .foregroundStyle(.secondary)
-                }
-                .accessibilityLabel("Close tab")
-            }
-
-            Spacer(minLength: 24)
-
-            Text(row.title)
-                .font(.subheadline.weight(.medium))
-                .foregroundStyle(.primary)
-                .lineLimit(2)
-            Text(row.host)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
+        VStack(spacing: 0) {
+            header
+            page
         }
-        .padding(10)
-        .frame(height: 110, alignment: .topLeading)
-        .background(RoundedRectangle(cornerRadius: 12).fill(.quaternary))
+        .background(LimeghostTheme.bg2)
+        .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
+        .overlay {
+            // Limeghost's accent, not Chrome's blue. A ring rather than a
+            // tint, because a tinted card would fight the page inside it.
+            RoundedRectangle(cornerRadius: cornerRadius)
+                .strokeBorder(
+                    isSelected ? LimeghostTheme.accent : Color.white.opacity(0.08),
+                    lineWidth: isSelected ? 2 : 1
+                )
+        }
         // A plain tap surface, not an outer `Button`: the close control above
         // is a real `Button` of its own, and a `Button` nested inside another
         // `Button`'s label is exactly the ambiguous hit-testing this avoids.
         .contentShape(Rectangle())
         .onTapGesture(perform: select)
+        .accessibilityElement(children: .contain)
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
+    }
+
+    private var header: some View {
+        HStack(spacing: 6) {
+            SiteIconView(host: row.host, size: LimeghostTheme.siteIconSize)
+            Text(row.title)
+                .font(.footnote.weight(.medium))
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+            Spacer(minLength: 2)
+            Button(action: close) {
+                Image(systemName: "xmark")
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 28, height: 28)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Close tab")
+        }
+        .padding(.leading, 8)
+        .frame(height: 34)
+    }
+
+    private var page: some View {
+        LimeghostTheme.bg1
+            .aspectRatio(3.0 / 4.0, contentMode: .fit)
+            .overlay(alignment: .top) {
+                if let preview {
+                    // Cropped from the top, not centred: a page reads from its
+                    // first line, and a centre crop of a long article shows
+                    // the middle of a paragraph.
+                    Image(decorative: preview, scale: 1)
+                        .resizable()
+                        .scaledToFill()
+                }
+            }
+            .overlay {
+                if preview == nil {
+                    // What an unvisited site already shows everywhere else in
+                    // the product — never a grey rectangle, which reads as a
+                    // page that failed rather than one not yet seen.
+                    SiteIconView(host: row.host, size: 40)
+                }
+            }
+            .clipped()
     }
 }

@@ -317,6 +317,10 @@ public final class BrowserWorkspace: ObservableObject {
     /// Site icons captured during real visits, shared by every tab so a site
     /// is fetched at most once per run (see `FaviconStore` for the policy).
     public let favicons: FaviconStore
+    /// A picture of what each tab last showed, for a switcher that draws
+    /// cards rather than a strip. Memory only, for every tab — see
+    /// `TabPreviewStore` for why that is stricter than the icons beside it.
+    public let tabPreviews: TabPreviewStore
     /// HTTPS upgrading and the Web Inspector switch, shared so a change in
     /// Settings reaches tabs that are already open.
     let webFeatures: WebFeatureSettingsStore
@@ -380,6 +384,7 @@ public final class BrowserWorkspace: ObservableObject {
         searchSettings: SearchSettingsStore? = nil,
         contentBlocking: ContentRuleListProvider? = nil,
         favicons: FaviconStore? = nil,
+        tabPreviews: TabPreviewStore? = nil,
         webFeatures: WebFeatureSettingsStore? = nil,
         /// Only the first window takes the saved session. A second window
         /// restoring the same tabs would show them twice and then race the
@@ -408,6 +413,7 @@ public final class BrowserWorkspace: ObservableObject {
         let resolvedContentBlocking = contentBlocking
             ?? ContentRuleListProvider(settings: ContentBlockingSettingsStore())
         let resolvedFavicons = favicons ?? FaviconStore()
+        let resolvedTabPreviews = tabPreviews ?? TabPreviewStore()
         let resolvedWebFeatures = webFeatures ?? WebFeatureSettingsStore()
         self.webFeatures = resolvedWebFeatures
         self.dataStore = resolvedDataStore
@@ -418,6 +424,7 @@ public final class BrowserWorkspace: ObservableObject {
         self.searchSettings = resolvedSearchSettings
         self.contentBlocking = resolvedContentBlocking
         self.favicons = resolvedFavicons
+        self.tabPreviews = resolvedTabPreviews
         let chosenTool = AICompanion.choices.first { $0.id == resolvedDataStore.aiCompanionToolID }
             ?? AICompanion.choices.first
             ?? AIToolCatalog.tools[0]
@@ -806,6 +813,10 @@ public final class BrowserWorkspace: ObservableObject {
         let removed = tabs.remove(at: index)
         rememberClosedTab(removed, atIndex: index)
         tabSubscriptions.removeValue(forKey: id)
+        // The tab is gone, so its picture has no reader left. Closed tabs are
+        // remembered in memory for `reopenClosedTab`, but a *photograph* of
+        // the page is not part of what that restores.
+        tabPreviews.forget(id)
         removed.teardown()
 
         if tabs.isEmpty {
@@ -1586,6 +1597,10 @@ public final class BrowserWorkspace: ObservableObject {
         // Captured site icons are browsing evidence too: the same reset that
         // erases bookmarks and history erases them from disk and memory.
         favicons.clearAll()
+        // And what each tab looked like. These were never on disk, but the
+        // reset is also what somebody presses to clear the screen behind
+        // them, and a grid still holding pictures would not be cleared.
+        tabPreviews.clearAll()
 
         // This profile's own WebKit store. `.default()` belongs to the
         // original profile alone: resetting from a second profile's window

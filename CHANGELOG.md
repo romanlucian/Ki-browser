@@ -10,6 +10,48 @@ Dates are commit dates. Test counts are the totals at the end of each period, ve
 
 ## Unreleased
 
+### Week of September 24–30, 2026
+
+**The phone's tab switcher shows the pages, September 27**
+
+The first piece of step 5, the phone's look, prompted by the founder using the
+app on an iPhone 13 Pro Max and comparing it with Chrome's tab grid. Design in
+[docs/superpowers/specs/2026-09-27-ios-tab-switcher-design.md](docs/superpowers/specs/2026-09-27-ios-tab-switcher-design.md).
+Every change below has a test that was watched failing before the fix went in.
+
+- Cards show the page. A tab is photographed with `WKWebView.takeSnapshot` at
+  the moment it stops being visible — the switcher opening, or the app going
+  to the background — and never on a timer, which would photograph pages
+  nobody is looking at. Only the tab that was on screen: twelve snapshots at
+  once hitch the animation they decorate, and a tab that has not been
+  displayed has nothing rendered to photograph.
+- **The pictures are never written to disk, for any tab.** That is stricter
+  than the site icons beside them, on purpose: a favicon is a site's mark and
+  the same for everyone, while a preview is a photograph of what one page
+  showed one person. The workspace already keeps closed tabs in memory only
+  for that reason. They are dropped when a tab closes and by the local-data
+  reset.
+- A card's height is no longer the fixed 110 that made it too short to say
+  anything about the page inside it. It comes from the preview's 3:4 aspect
+  ratio, so one rule covers an iPhone SE, a Pro Max and landscape — the same
+  reasoning that made the Mac's address pill a `Capsule`. A test renders a
+  card and fails if it ever stops growing with its width.
+- **Nothing marked the tab you were on.** Survivable in a list of titles,
+  not in a wall of page pictures that all look like pages. The current card
+  now takes a ring in Limeghost's accent.
+- The card carries the site's mark, from the `SiteIconView` the rest of the
+  product uses. A tab with no picture yet — every tab, after a relaunch —
+  falls back to that same identity square rather than a grey rectangle, which
+  would read as a page that failed rather than one not yet seen.
+- The switcher was the one sheet still opening system-grey while Bookmarks and
+  History opened on Limeghost's surfaces. It calls `limeghostListSheet()` now.
+
+Search across tabs and a private/regular segment were considered and left out:
+search earns its place once somebody has twenty tabs, and the segment
+restructures what the screen is rather than how it looks. Tab groups were
+rejected — Chrome needs them because Chrome has users with eighty tabs, and
+copying the control would not answer a need this product has.
+
 ### Week of September 17–23, 2026
 
 **A deep audit of both browsers, September 22**
