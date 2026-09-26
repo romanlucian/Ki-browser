@@ -125,4 +125,53 @@ final class TabSwitcherTests: XCTestCase {
             "the card stopped growing with its width — a fixed height is back"
         )
     }
+
+    // MARK: - Searching
+
+    /// Matches the title or the host, case-insensitively, like the bookmark
+    /// and history searches it is modelled on.
+    func testSearchingMatchesTitleAndHostWhicheverWasTyped() throws {
+        let rows = [
+            TabRow(id: UUID(), title: "Owl - Wikipedia", host: "en.wikipedia.org", isPrivate: false),
+            TabRow(id: UUID(), title: "Hacker News", host: "news.ycombinator.com", isPrivate: false),
+        ]
+
+        XCTAssertEqual(TabSearch.rows(rows, matching: "OWL").map(\.host), ["en.wikipedia.org"])
+        XCTAssertEqual(TabSearch.rows(rows, matching: "ycombinator").map(\.title), ["Hacker News"])
+        XCTAssertTrue(TabSearch.rows(rows, matching: "kestrel").isEmpty)
+    }
+
+    /// An empty field shows every tab, and so does one holding only spaces —
+    /// the phone's address sheet had a whitespace hole of exactly this shape.
+    func testAnEmptyOrBlankSearchShowsEveryTab() throws {
+        let rows = [
+            TabRow(id: UUID(), title: "One", host: "one.example", isPrivate: false),
+            TabRow(id: UUID(), title: "Two", host: "two.example", isPrivate: false),
+        ]
+
+        XCTAssertEqual(TabSearch.rows(rows, matching: "").count, 2)
+        XCTAssertEqual(TabSearch.rows(rows, matching: "   ").count, 2)
+    }
+
+    /// **Searching the ordinary tabs must never surface a private one**, and
+    /// the reverse. The same line the address sheet draws when it completes
+    /// nothing at all in a private tab. It holds because the search filters
+    /// one side of the segment rather than everything, and this is the test
+    /// that notices when a refactor stops that being true.
+    func testASearchNeverCrossesFromOneSideOfTheSegmentToTheOther() throws {
+        let host = try makeHost()
+        host.workspace.addTab(url: URL(string: "https://kestrel.example/")!, isPrivate: false)
+        host.workspace.addTab(url: URL(string: "https://kestrel.example/")!, isPrivate: true)
+        let model = TabSwitcherModel(workspace: host.workspace)
+
+        let ordinary = model.rows(isPrivate: false, matching: "kestrel")
+        let hidden = model.rows(isPrivate: true, matching: "kestrel")
+
+        // Both sides hold a tab on the same host, so a search that leaked
+        // would return two on one side rather than nothing at all.
+        XCTAssertEqual(ordinary.count, 1)
+        XCTAssertEqual(hidden.count, 1)
+        XCTAssertTrue(ordinary.allSatisfy { !$0.isPrivate }, "an ordinary search found a private tab")
+        XCTAssertTrue(hidden.allSatisfy(\.isPrivate), "a private search found an ordinary tab")
+    }
 }

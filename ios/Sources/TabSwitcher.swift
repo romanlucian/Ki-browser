@@ -12,6 +12,26 @@ struct TabRow: Identifiable, Equatable {
     let isPrivate: Bool
 }
 
+/// Filtering open tabs by what was typed.
+///
+/// Beside the switcher rather than in `LimeghostCore` next to
+/// `BookmarksHomeSearch` and `HistoryHomeSearch`: those are shared because both
+/// platforms search the same saved records and must not come to disagree about
+/// what a search finds. The Mac's tab strip has no search and `TabRow` is the
+/// phone's own type, so a shared helper would be a generic written for one
+/// caller. Matching follows theirs — trimmed, case-insensitive `contains`,
+/// over the title and the host.
+enum TabSearch {
+    static func rows(_ rows: [TabRow], matching query: String) -> [TabRow] {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return rows }
+        return rows.filter {
+            $0.title.localizedCaseInsensitiveContains(trimmed)
+                || $0.host.localizedCaseInsensitiveContains(trimmed)
+        }
+    }
+}
+
 /// What the switcher shows and does, apart from how it draws it, so a test
 /// can assert the private split without standing up SwiftUI. A struct, not a
 /// class: it holds only the workspace reference and reads it fresh on every
@@ -45,6 +65,16 @@ struct TabSwitcherModel {
     /// `WKWebView` and the three tests above still run without one.
     func preview(for id: UUID) -> CGImage? { workspace.tabPreviews.preview(for: id) }
 
+    /// The tabs one side of the segment is showing, filtered by what was
+    /// typed. **Takes `isPrivate` rather than searching everything and sorting
+    /// the results**, so a search of the ordinary tabs cannot surface a private
+    /// one — the line the address sheet draws when it completes nothing at all
+    /// in a private tab. It holds by construction here, and a test says so,
+    /// because the next refactor is exactly where it would stop holding.
+    func rows(isPrivate: Bool, matching query: String) -> [TabRow] {
+        TabSearch.rows(rows(isPrivate: isPrivate), matching: query)
+    }
+
     /// Selecting a tab that already exists is not a request for a *different*
     /// page, so this reaches `selectTab` directly and never
     /// `makeRoomForPage()` — the same distinction the Mac's strip draws.
@@ -70,6 +100,13 @@ struct TabSwitcherModel {
 /// — this is the only way to see or manage tabs here. Presented as a sheet
 /// from `BottomBar`'s tab button, the way `AddressSheet` is presented from
 /// its address pill.
+///
+/// Ordinary and private tabs were two stacked sections once, each with its own
+/// `+`. The private one had to stay on screen holding nothing, because its `+`
+/// was the only door into private browsing and hiding the empty section hid
+/// the door. A segment is that door in one control instead of a permanently
+/// empty section, and it says how many tabs are on the side you are not
+/// looking at.
 struct TabSwitcher: View {
     @ObservedObject private var workspace: BrowserWorkspace
     /// Observed separately from the workspace: a picture landing changes the
@@ -77,6 +114,9 @@ struct TabSwitcher: View {
     /// `StoredSiteIcon` subscribes to `FaviconStore` for the same reason.
     @ObservedObject private var previews: TabPreviewStore
     private let dismiss: () -> Void
+
+    @State private var query = ""
+    @State private var showingPrivate = false
 
     private let columns = [GridItem(.adaptive(minimum: 150), spacing: 12)]
 
@@ -91,77 +131,57 @@ struct TabSwitcher: View {
     // and the model must re-read the workspace's current tabs when it does.
     private var model: TabSwitcherModel { TabSwitcherModel(workspace: workspace) }
 
+    private var visibleRows: [TabRow] {
+        model.rows(isPrivate: showingPrivate, matching: query)
+    }
+
     var body: some View {
-        VStack(spacing: 0) {
-            HStack {
-                Text("Tabs")
-                    .font(.headline)
-                Spacer()
-                Button("Done", action: dismiss)
-            }
-            .padding()
-            .background(LimeghostTheme.bg1)
-
-            ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    if model.canReopenClosed {
-                        Button("Reopen closed tab") {
-                            model.reopenClosedTab()
-                            // A door, the same as adding a tab and selecting
-                            // one: it produces a specific page to look at, so
-                            // the switcher steps aside for it rather than
-                            // leaving somebody staring at the list they just
-                            // acted on. `reopenClosedTab()` already calls
-                            // `makeRoomForPage()` in the shared layer — this
-                            // is only the sheet following that lead.
-                            dismiss()
-                        }
-                        .padding(.horizontal)
+        NavigationStack {
+            grid
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .principal) { segment }
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Done", action: dismiss)
                     }
-
-                    section(rows: model.rows, isPrivate: false)
-
-                    // Always shown, even with zero private tabs: its `+` is
-                    // the only way this screen can ever start one. Hiding
-                    // the section until it holds something — tried first —
-                    // hides the one door into it, so it can never hold
-                    // anything in real use.
-                    section(rows: model.privateRows, isPrivate: true)
                 }
-                .padding(.vertical)
-            }
+                .searchable(
+                    text: $query,
+                    placement: .navigationBarDrawer(displayMode: .always),
+                    prompt: "Search tabs"
+                )
+                // Switching sides is a change of subject, and a query typed
+                // for one side quietly hiding tabs on the other is the kind of
+                // empty screen nobody can explain.
+                .onChange(of: showingPrivate) { _, _ in query = "" }
+                .safeAreaInset(edge: .bottom) { bottomRow }
         }
-        .background(LimeghostTheme.bg1)
         .limeghostListSheet()
     }
 
-    @ViewBuilder
-    private func section(rows: [TabRow], isPrivate: Bool) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                if isPrivate {
-                    Label("Private", systemImage: "eye.slash.fill")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.purple)
-                }
-                Spacer()
-                Button {
-                    model.addTab(isPrivate: isPrivate)
-                    dismiss()
-                } label: {
-                    Image(systemName: "plus")
-                }
-                .accessibilityLabel(isPrivate ? "New private tab" : "New tab")
-            }
-            .padding(.horizontal)
+    private var segment: some View {
+        Picker("Which tabs", selection: $showingPrivate) {
+            Text("Tabs \(model.rows.count)").tag(false)
+            // The private side drops its count when it is zero, which is most
+            // of the time: "Private 0" is a number nobody needs, and seeing it
+            // on a 375-point screen is what decided this rather than taste.
+            // The ordinary side keeps its count always, because the workspace
+            // never lets it reach zero.
+            Text(model.privateRows.isEmpty ? "Private" : "Private \(model.privateRows.count)").tag(true)
+        }
+        .pickerStyle(.segmented)
+        .frame(maxWidth: 240)
+    }
 
-            // Omitted rather than left to render empty: an empty `LazyVGrid`
-            // still claims its own spacing from the `VStack` above, which
-            // would leave a dangling gap under a section with nothing in it
-            // yet — the private section's ordinary state before its first tab.
-            if !rows.isEmpty {
+    private var grid: some View {
+        ScrollView {
+            if visibleRows.isEmpty {
+                empty
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 60)
+            } else {
                 LazyVGrid(columns: columns, spacing: 12) {
-                    ForEach(rows) { row in
+                    ForEach(visibleRows) { row in
                         TabCard(
                             row: row,
                             preview: previews.preview(for: row.id),
@@ -172,8 +192,56 @@ struct TabSwitcher: View {
                     }
                 }
                 .padding(.horizontal)
+                .padding(.vertical, 12)
             }
         }
+        .background(LimeghostTheme.bg1)
+    }
+
+    @ViewBuilder
+    private var empty: some View {
+        if !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            ContentUnavailableView.search(text: query)
+        } else if showingPrivate {
+            // The one empty state worth words: somebody who has never opened a
+            // private tab is looking at this to find out what one is.
+            ContentUnavailableView {
+                Label("No private tabs", systemImage: "eye.slash.fill")
+            } description: {
+                Text("A private tab keeps no history, and nothing it loads is saved.")
+            }
+        }
+    }
+
+    private var bottomRow: some View {
+        HStack(spacing: 16) {
+            Button {
+                model.addTab(isPrivate: showingPrivate)
+                dismiss()
+            } label: {
+                Label(
+                    showingPrivate ? "New Private Tab" : "New Tab",
+                    systemImage: showingPrivate ? "plus.square.fill.on.square.fill" : "plus"
+                )
+            }
+            Spacer(minLength: 0)
+            if model.canReopenClosed {
+                Button("Reopen closed tab") {
+                    model.reopenClosedTab()
+                    // A door, the same as adding a tab and selecting one: it
+                    // produces a specific page to look at, so the switcher
+                    // steps aside rather than leaving somebody staring at the
+                    // list they just acted on. `reopenClosedTab()` already
+                    // calls `makeRoomForPage()` in the shared layer — this is
+                    // only the sheet following that lead.
+                    dismiss()
+                }
+            }
+        }
+        .font(.subheadline)
+        .padding(.horizontal)
+        .padding(.vertical, 12)
+        .background(LimeghostTheme.bg2)
     }
 
     private func select(_ id: UUID) {

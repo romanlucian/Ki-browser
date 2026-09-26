@@ -46,11 +46,32 @@ Every change below has a test that was watched failing before the fix went in.
 - The switcher was the one sheet still opening system-grey while Bookmarks and
   History opened on Limeghost's surfaces. It calls `limeghostListSheet()` now.
 
-Search across tabs and a private/regular segment were considered and left out:
-search earns its place once somebody has twenty tabs, and the segment
-restructures what the screen is rather than how it looks. Tab groups were
-rejected — Chrome needs them because Chrome has users with eighty tabs, and
-copying the control would not answer a need this product has.
+Tab groups were rejected — Chrome needs them because Chrome has users with
+eighty tabs, and copying the control would not answer a need this product has.
+
+**A segment and a search for the switcher, September 27**
+
+The other two of Chrome's four top controls, the ones judged worth taking.
+
+- Ordinary and private tabs were two stacked sections, and the private one had
+  to stay on screen holding nothing, because its `+` was the only door into
+  private browsing from that screen and hiding the empty section hid the door.
+  The code comment beside it said so in the tone of an apology. They are a
+  segment in the navigation bar now — one control instead of a permanently
+  empty section, carrying the count on each side so the one you are not looking
+  at is still legible. The `+` follows the segment and says which kind of tab
+  it makes.
+- **A search across the open tabs**, matching the title or the host, trimmed
+  and case-insensitive, like the bookmark and history searches it is modelled
+  on. It searches the side of the segment already on screen, so **a search of
+  the ordinary tabs can never surface a private one** — the line the address
+  sheet draws when it completes nothing at all in a private tab. A test opens
+  the same host in both an ordinary and a private tab and fails if either
+  search returns the other. Switching sides clears the field, because a query
+  typed for one side quietly hiding tabs on the other is an empty screen nobody
+  can explain.
+- The field is always there rather than appearing past some number of tabs: a
+  control that materialises at a threshold is one nobody can find on purpose.
 
 ### Week of September 17–23, 2026
 
