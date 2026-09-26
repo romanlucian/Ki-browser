@@ -50,6 +50,7 @@
 		AA000000000000000000210B /* BookmarkMovePickerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000220B /* BookmarkMovePickerTests.swift */; };
 		AA000000000000000000210C /* HistorySheetTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000220C /* HistorySheetTests.swift */; };
 		AA000000000000000000210D /* AssistantOnThePhoneTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000220D /* AssistantOnThePhoneTests.swift */; };
+		AA0000000000000000003103 /* TabPreviewCamera.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000003102 /* TabPreviewCamera.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -107,6 +108,7 @@
 		AA000000000000000000220C /* HistorySheetTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistorySheetTests.swift; sourceTree = "<group>"; };
 		AA000000000000000000220D /* AssistantOnThePhoneTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssistantOnThePhoneTests.swift; sourceTree = "<group>"; };
 		AA0000000000000000002301 /* LimeghostTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = LimeghostTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		AA0000000000000000003102 /* TabPreviewCamera.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TabPreviewCamera.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -142,6 +144,7 @@
 		AA0000000000000000000601 /* Sources */ = {
 			isa = PBXGroup;
 			children = (
+				AA0000000000000000003102 /* TabPreviewCamera.swift */,
 				AA0000000000000000000201 /* LimeghostApp.swift */,
 				AA0000000000000000000202 /* IOSSessionPlatform.swift */,
 				AA0000000000000000000203 /* IOSCollaborators.swift */,
@@ -319,6 +322,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				AA0000000000000000003103 /* TabPreviewCamera.swift in Sources */,
 				AA0000000000000000000101 /* LimeghostApp.swift in Sources */,
 				AA0000000000000000000102 /* IOSSessionPlatform.swift in Sources */,
 				AA0000000000000000000103 /* IOSCollaborators.swift in Sources */,

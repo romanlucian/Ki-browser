@@ -11,6 +11,7 @@ struct BrowserScreen: View {
     /// the real value, so the first opening hardly moves.
     @State private var menuHeight: CGFloat = 540
     @StateObject private var keyboard = KeyboardObserver()
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         VStack(spacing: 0) {
@@ -74,6 +75,13 @@ struct BrowserScreen: View {
         // on the phone draws what a visit captured rather than its fallback
         // square: the guide's, and both lists'. The phone had never done this.
         .environment(\.faviconStore, host.workspace.favicons)
+        // The other moment a tab stops being visible. Leaving to the home
+        // screen and coming back through the app switcher is how most people
+        // reach the tab grid at all, and without this the card for the page
+        // they were just reading would still be a square.
+        .onChange(of: scenePhase) { _, phase in
+            if phase != .active { TabPreviewCamera.captureSelectedTab(of: host.workspace) }
+        }
     }
 
     private var bottomBar: BottomBar {
@@ -87,7 +95,14 @@ struct BrowserScreen: View {
             goBack: { host.workspace.goBackInSelectedTab() },
             openAddress: { isPresentingAddressSheet = true },
             toggleAssistant: { host.workspace.aiCompanion.toggle() },
-            openTabs: { isPresentingTabSwitcher = true },
+            openTabs: {
+                // Photograph the page on the way out, so the switcher opens
+                // showing it rather than a square. This is the moment the tab
+                // stops being visible — see `TabPreviewCamera` for why it is
+                // not a timer and not every tab at once.
+                TabPreviewCamera.captureSelectedTab(of: host.workspace)
+                isPresentingTabSwitcher = true
+            },
             openMenu: { menu.open() },
             session: host.workspace.selectedTab?.session
         )
