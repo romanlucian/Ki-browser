@@ -6,6 +6,14 @@
 	<string>en</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
+	<!-- Xcode injects this itself only when it generates the Info.plist. This
+	     project supplies its own (GENERATE_INFOPLIST_FILE = NO), so the asset
+	     catalog writes the CFBundleIcons dictionaries and leaves the top-level
+	     key out — and App Store Connect rejects an upload without it, with
+	     "Missing Info.plist value ... CFBundleIconName". The home screen looks
+	     right either way, so nothing short of a submission would notice. -->
+	<key>CFBundleIconName</key>
+	<string>AppIcon</string>
 	<key>CFBundleIdentifier</key>
 	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
 	<key>CFBundleInfoDictionaryVersion</key>

@@ -149,6 +149,28 @@ final class IOSSessionPlatformTests: XCTestCase {
         XCTAssertFalse((reason ?? "").isEmpty, "saving a picture from a page would crash the app")
     }
 
+    /// The phone had **no app icon at all** until September 27, 2026: no asset
+    /// catalog, no `ASSETCATALOG_COMPILER_APPICON_NAME`, nothing in the bundle
+    /// but the in-app brand mark. iOS drew its grey placeholder on the home
+    /// screen, and an app cannot be submitted without one either.
+    ///
+    /// Two assertions because they fail apart: the name can be set while the
+    /// catalog compiles nothing, which is a build that looks configured and
+    /// still shows a placeholder.
+    func testTheAppHasAnIconForTheHomeScreen() throws {
+        // The top-level key, which the asset catalog does not write when the
+        // Info.plist is supplied rather than generated — and whose absence
+        // App Store Connect rejects an upload for, while the home screen
+        // looks perfectly correct. Nothing short of a submission notices.
+        let named = Bundle.main.object(forInfoDictionaryKey: "CFBundleIconName") as? String
+        XCTAssertEqual(named, "AppIcon", "an upload would be rejected for a missing CFBundleIconName")
+
+        let icons = Bundle.main.object(forInfoDictionaryKey: "CFBundleIcons") as? [String: Any]
+        let primary = icons?["CFBundlePrimaryIcon"] as? [String: Any]
+        let files = primary?["CFBundleIconFiles"] as? [String] ?? []
+        XCTAssertFalse(files.isEmpty, "the catalog named an icon it did not compile")
+    }
+
     // MARK: - Helpers
 
     /// A sheet over the window's root, the way the tab switcher or the menu
