@@ -119,10 +119,19 @@ jobs:
       # developer's Mac and in the macOS job. Every failed attempt is still
       # recorded in the result bundle, and the macOS job and local runs
       # retry nothing, so a real failure still fails fast there.
+      # `-parallel-testing-enabled NO` because this scheme has two test
+      # targets, so xcodebuild clones the simulator and runs them side by side
+      # — and every multi-minute WebKit stall this repository has recorded
+      # (750 s, 956 s, 157 s, 155 s, 521 s) has been in this step and never in
+      # the app's, which has one target and no clones. Several cloned
+      # simulators each hosting WebKit on a three-core runner is the suspect.
+      # The clones also suppress the `Executed N tests` summary, which is why
+      # AGENTS.md says never to read the count from this run's log.
       - run: >-
           xcodebuild test -scheme LimeghostSharedLayer
           -destination "platform=iOS Simulator,id=$SIM_UDID"
           -resultBundlePath "$RUNNER_TEMP/LimeghostSharedLayer.xcresult"
+          -parallel-testing-enabled NO
           -retry-tests-on-failure -test-iterations 3
       # The app, on the same simulator this job already found. `working-directory`
       # overrides the job default above, because the Xcode project lives at
