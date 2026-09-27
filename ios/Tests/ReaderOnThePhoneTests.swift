@@ -85,15 +85,6 @@ final class ReaderOnThePhoneTests: XCTestCase {
         XCTAssertNil(TabSurface(tab: tab, workspace: host.workspace).shownFailure)
     }
 
-    private func eventually(timeout: TimeInterval = 5, _ condition: @MainActor () -> Bool) async -> Bool {
-        let deadline = Date().addingTimeInterval(timeout)
-        while Date() < deadline {
-            if condition() { return true }
-            try? await Task.sleep(nanoseconds: 50_000_000)
-        }
-        return condition()
-    }
-
     // MARK: - The header
 
     /// Reader's header on a phone is two rows of 44 points, the smallest

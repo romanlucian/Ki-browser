@@ -49,6 +49,26 @@ Every change below has a test that was watched failing before the fix went in.
 Tab groups were rejected — Chrome needs them because Chrome has users with
 eighty tabs, and copying the control would not answer a need this product has.
 
+**The phone's tests get the waits the shared layer already learned to use, September 27**
+
+Caught by CI on the branch above, not by anything local.
+
+- `ReaderOnThePhoneTests.testAFailedLoadIsSaidOverThePage` failed with "the
+  unreachable address did not fail" after 5.7 seconds. WebKit had not yet
+  reported a refused connection to `127.0.0.1:65530` — which is not the same
+  thing as the connection having succeeded, and the test read one as the other.
+- The phone's test target had **two private `eventually` helpers of its own**,
+  five seconds and three, written before anyone measured that the first page
+  WebKit loads in a fresh Simulator process can take 64 seconds. The shared
+  suite learned that on September 22 and wrote it into its own copy; a lesson
+  written into one copy does not reach the others.
+- There is one helper now, `ios/Tests/EventuallyOnThePhone.swift`, at thirty
+  seconds. A met condition returns at once, so the ceiling is paid only by a
+  test that was going to fail anyway — the phone's suite still runs in eight
+  and a half seconds. It is deliberately not raised far enough to cover a
+  *stall*: at 956 seconds a real regression in page loading would take hours to
+  fail on the Mac.
+
 **The iPhone project gains the Release configuration it never had, September 27**
 
 Found by installing a build and watching a *second* Limeghost appear on the
