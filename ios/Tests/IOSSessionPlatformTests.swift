@@ -165,16 +165,6 @@ final class IOSSessionPlatformTests: XCTestCase {
         return sheet
     }
 
-    @MainActor
-    private func eventually(timeout: TimeInterval = 3, _ condition: @MainActor () -> Bool) async -> Bool {
-        let deadline = Date().addingTimeInterval(timeout)
-        while Date() < deadline {
-            if condition() { return true }
-            try? await Task.sleep(nanoseconds: 50_000_000)
-        }
-        return condition()
-    }
-
     /// What a dialog answered, or nil if it had not answered within the time
     /// allowed — so a dialog that never returns fails the test instead of
     /// hanging the suite.

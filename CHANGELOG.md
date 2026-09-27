@@ -49,6 +49,63 @@ Every change below has a test that was watched failing before the fix went in.
 Tab groups were rejected — Chrome needs them because Chrome has users with
 eighty tabs, and copying the control would not answer a need this product has.
 
+**The phone's tests get the waits the shared layer already learned to use, September 27**
+
+Caught by CI on the branch above, not by anything local.
+
+- `ReaderOnThePhoneTests.testAFailedLoadIsSaidOverThePage` failed with "the
+  unreachable address did not fail" after 5.7 seconds. WebKit had not yet
+  reported a refused connection to `127.0.0.1:65530` — which is not the same
+  thing as the connection having succeeded, and the test read one as the other.
+- The phone's test target had **two private `eventually` helpers of its own**,
+  five seconds and three, written before anyone measured that the first page
+  WebKit loads in a fresh Simulator process can take 64 seconds. The shared
+  suite learned that on September 22 and wrote it into its own copy; a lesson
+  written into one copy does not reach the others.
+- There is one helper now, `ios/Tests/EventuallyOnThePhone.swift`, at thirty
+  seconds. A met condition returns at once, so the ceiling is paid only by a
+  test that was going to fail anyway — the phone's suite still runs in eight
+  and a half seconds. It is deliberately not raised far enough to cover a
+  *stall*: at 956 seconds a real regression in page loading would take hours to
+  fail on the Mac.
+
+**The iPhone project gains the Release configuration it never had, September 27**
+
+Found by installing a build and watching a *second* Limeghost appear on the
+founder's phone beside the first, with the same name and an empty container.
+
+- The project had **one build configuration, Debug**, across all three of its
+  configuration lists. `PRODUCT_BUNDLE_IDENTIFIER` was `com.zincoo.limeghost`,
+  and every build ever put on a real iPhone overrode it to
+  `com.zincoo.limeghost.dev` on the command line — an override recorded only in
+  the procedural part of the foundation document, while the same document
+  stated the plain identifier flatly a hundred lines earlier.
+- There is now a **Release** configuration for the project and both targets,
+  with whole-module optimisation, `-O`, no `DEBUG` condition, testability off,
+  and dSYM debug information. Release carries `com.zincoo.limeghost`; **Debug
+  carries `com.zincoo.limeghost.dev`**, so a build from a cable and a build
+  from TestFlight are two apps that sit on one phone at once. Without the
+  split, every switch between them wipes the other's bookmarks, history and
+  logins: an iOS app's `UserDefaults.standard` and `WKWebsiteDataStore
+  .default()` both live in its container, keyed by the identifier, with no
+  migration API.
+- `.dev` rather than any other suffix because it is exactly what the founder's
+  phone already holds, so committing it orphaned nothing.
+- Done now rather than before publishing because **a published bundle
+  identifier can never be changed** — App Store Connect binds a record to one
+  permanently — and today the whole cost was one device holding one bookmark.
+
+The Release build was made and launched, not merely compiled: it builds with no
+new warnings under optimisation and runs on a Simulator. Every performance
+impression of the iPhone app before this date was formed on an unoptimised
+binary. `xcodebuild test -scheme Limeghost` still resolves to Debug through the
+auto-generated scheme, so CI and `@testable import` are untouched, and the
+suite passes at 98.
+
+A Release configuration is necessary for distribution, not sufficient: the App
+Store Connect record, the icon set, screenshots and review are all still ahead,
+and creating that record is the point of no return for the identifier.
+
 **A segment and a search for the switcher, September 27**
 
 The other two of Chrome's four top controls, the ones judged worth taking.
