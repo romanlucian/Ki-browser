@@ -69,6 +69,26 @@ Caught by CI on the branch above, not by anything local.
   *stall*: at 956 seconds a real regression in page loading would take hours to
   fail on the Mac.
 
+**The system's own password manager reaches inside the phone's web view, September 27**
+
+Observed on a real iPhone by the founder, and the first item ever ticked off
+the device-only checklist: the **Passwords key appears above the keyboard** in
+Limeghost's web view. iOS's AutoFill reaches inside `WKWebView` here, so
+somebody can fill a sign-in from iCloud Keychain or their own password manager
+with nothing passing through Limeghost.
+
+That settles a question the product had already answered on principle. Limeghost
+builds no password manager — decided September 1–2, 2026, because "building a
+credential store is how a solo project acquires a security incident" — and this
+is the evidence that the decision costs the person nothing on iPhone. It does
+cost something on the Mac, where a `WKWebView` app gets no equivalent; that gap
+is real and is not being papered over.
+
+Still unobserved, and recorded as such: whether tapping the key fills the form
+correctly, and whether iOS offers a *domain-matched* suggestion rather than the
+generic key — the latter needs the managed default-browser entitlement, which
+is Apple-approved rather than automatic with enrolment.
+
 **The iPhone gets an app icon, and the key an upload needs to accept it, September 27**
 
 Reported by the founder from the home screen: no icon. There was none to have
