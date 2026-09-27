@@ -74,7 +74,12 @@ final class TypedAddressAndFileTests: XCTestCase {
         XCTAssertTrue(loaded, "the page with the file never loaded")
 
         _ = try await evaluate("document.getElementById('file').click()", in: session)
-        let said = await eventually(timeout: 20) { session.pageNotice != nil }
+        // Sixty, like the load waits above it, not twenty. On CI this test
+        // failed at 26 seconds with "tapping a file did nothing at all" and
+        // passed on retry: the page had loaded, and WebKit simply had not
+        // yet run the click through to a notice. A met condition returns at
+        // once, so the ceiling is paid only by a test that was going to fail.
+        let said = await eventually(timeout: 60) { session.pageNotice != nil }
 
         XCTAssertTrue(said, "tapping a file did nothing at all")
         XCTAssertEqual(downloads.tracked, 0, "a download was handed to a collaborator that cannot save it")
