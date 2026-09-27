@@ -71,11 +71,12 @@ Caught by CI on the branch above, not by anything local.
 
 **The system's own password manager reaches inside the phone's web view, September 27**
 
-Observed on a real iPhone by the founder, and the first item ever ticked off
-the device-only checklist: the **Passwords key appears above the keyboard** in
-Limeghost's web view. iOS's AutoFill reaches inside `WKWebView` here, so
-somebody can fill a sign-in from iCloud Keychain or their own password manager
-with nothing passing through Limeghost.
+Run on a real iPhone by the founder, and the first item ever ticked off the
+device-only checklist. On X's sign-in form: the **Passwords key appears above
+the keyboard** in Limeghost's web view, and choosing a saved login from it
+**fills the correct email address and the password into the form**. End to end,
+with nothing passing through Limeghost — the credentials stay in iCloud Keychain
+or whichever password manager the person uses, and the app never sees them.
 
 That settles a question the product had already answered on principle. Limeghost
 builds no password manager — decided September 1–2, 2026, because "building a
@@ -84,10 +85,12 @@ is the evidence that the decision costs the person nothing on iPhone. It does
 cost something on the Mac, where a `WKWebView` app gets no equivalent; that gap
 is real and is not being papered over.
 
-Still unobserved, and recorded as such: whether tapping the key fills the form
-correctly, and whether iOS offers a *domain-matched* suggestion rather than the
-generic key — the latter needs the managed default-browser entitlement, which
-is Apple-approved rather than automatic with enrolment.
+One thing still unrecorded: whether iOS offered that login as a *domain-matched*
+suggestion on the keyboard bar itself — one tap, the right account for the site
+— or whether the person opened the Passwords list and found it. The first needs
+no entitlement; the second is the generic path. It decides whether the managed
+default-browser entitlement, Apple-approved rather than automatic with
+enrolment, is worth requesting.
 
 **The iPhone gets an app icon, and the key an upload needs to accept it, September 27**
 
