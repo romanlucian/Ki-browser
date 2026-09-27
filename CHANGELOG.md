@@ -69,6 +69,28 @@ Caught by CI on the branch above, not by anything local.
   *stall*: at 956 seconds a real regression in page loading would take hours to
   fail on the Mac.
 
+**The iPhone gets an app icon, and the key an upload needs to accept it, September 27**
+
+Reported by the founder from the home screen: no icon. There was none to have
+— no asset catalog, no `ASSETCATALOG_COMPILER_APPICON_NAME`, nothing in the
+bundle but the in-app brand mark — so iOS drew its own grey placeholder.
+
+- `ios/scripts/generate-app-icon.swift` renders the full owl mark on the Mac
+  icon's own near-black gradient at 1024 pixels: a full square with no rounded
+  corners, since iOS masks its own, no hairline for the same reason, and **no
+  alpha channel**, which app-icon validation rejects even when the image is
+  opaque everywhere. It is a second script rather than a mode of the Mac's,
+  because the two are not the same drawing; what must not drift between them —
+  the palette, the artwork, and the 92 percent visible-share correction that
+  lands the owl rather than its transparent box — is stated in both.
+- **Writing a test for it found the bug underneath.** Xcode injects the
+  top-level `CFBundleIconName` only when it *generates* the Info.plist, and
+  this project supplies its own, so the asset catalog wrote the `CFBundleIcons`
+  dictionaries and left the top-level key out. The home screen is correct
+  either way — and App Store Connect rejects an upload without it. Nothing
+  short of a submission would have noticed. It is in `Info.plist` now, with a
+  test that fails when it is removed.
+
 **The iPhone project gains the Release configuration it never had, September 27**
 
 Found by installing a build and watching a *second* Limeghost appear on the

@@ -52,6 +52,7 @@
 		AA000000000000000000210D /* AssistantOnThePhoneTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000220D /* AssistantOnThePhoneTests.swift */; };
 		AA0000000000000000003103 /* TabPreviewCamera.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000003102 /* TabPreviewCamera.swift */; };
 		AA0000000000000000003107 /* EventuallyOnThePhone.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000003106 /* EventuallyOnThePhone.swift */; };
+		AA0000000000000000003109 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000003108 /* Assets.xcassets */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -111,6 +112,7 @@
 		AA0000000000000000002301 /* LimeghostTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = LimeghostTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		AA0000000000000000003102 /* TabPreviewCamera.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TabPreviewCamera.swift; sourceTree = "<group>"; };
 		AA0000000000000000003106 /* EventuallyOnThePhone.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventuallyOnThePhone.swift; sourceTree = "<group>"; };
+		AA0000000000000000003108 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -147,6 +149,7 @@
 			isa = PBXGroup;
 			children = (
 				AA0000000000000000003102 /* TabPreviewCamera.swift */,
+				AA0000000000000000003108 /* Assets.xcassets */,
 				AA0000000000000000000201 /* LimeghostApp.swift */,
 				AA0000000000000000000202 /* IOSSessionPlatform.swift */,
 				AA0000000000000000000203 /* IOSCollaborators.swift */,
@@ -315,6 +318,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				AA0000000000000000000676 /* limeghost-mark-small.png in Resources */,
+				AA0000000000000000003109 /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -423,6 +427,7 @@
 				   signed in. See docs/ios-browser-foundation.md for the steps. */
 				"CODE_SIGNING_ALLOWED[sdk=iphonesimulator*]" = NO;
 				"CODE_SIGNING_REQUIRED[sdk=iphonesimulator*]" = NO;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = "";
@@ -505,6 +510,7 @@
 				   repository. Pass it on the command line. */
 				"CODE_SIGNING_ALLOWED[sdk=iphonesimulator*]" = NO;
 				"CODE_SIGNING_REQUIRED[sdk=iphonesimulator*]" = NO;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = "";
