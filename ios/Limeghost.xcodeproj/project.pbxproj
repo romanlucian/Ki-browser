@@ -426,7 +426,21 @@
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Sources/Info.plist;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.zincoo.limeghost;
+				/* Debug carries the `.dev` suffix and Release does not, so a
+				   build from a cable and a build from TestFlight are two apps
+				   and can sit on one phone at once. Without the split, every
+				   switch between them wipes the other's bookmarks, history and
+				   logins: on iOS `UserDefaults.standard` and
+				   `WKWebsiteDataStore.default()` both live in the app container,
+				   keyed by this identifier, and there is no migration API —
+				   the same reason the Mac's `com.clearframe.browser` must never
+				   be tidied. `.dev` rather than any other suffix because it is
+				   what device builds have always overridden this to on the
+				   command line, so committing it orphans nothing. Release keeps
+				   `com.zincoo.limeghost`, which is what an App Store record
+				   would be created against, and that record is the point of no
+				   return: a published bundle identifier cannot be changed. */
+				PRODUCT_BUNDLE_IDENTIFIER = com.zincoo.limeghost.dev;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -456,6 +470,75 @@
 			};
 			name = Debug;
 		};
+		AA0000000000000000000D02 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_NO_COMMON_BLOCKS = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				ONLY_ACTIVE_ARCH = NO;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		AA0000000000000000000E02 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				/* Same conditional signing as Debug, and for the same reason:
+				   CI's Simulator run has no identity, a device build needs one,
+				   and `DEVELOPMENT_TEAM` stays empty because a team identifier
+				   belongs to whoever holds the Apple ID rather than in a shared
+				   repository. Pass it on the command line. */
+				"CODE_SIGNING_ALLOWED[sdk=iphonesimulator*]" = NO;
+				"CODE_SIGNING_REQUIRED[sdk=iphonesimulator*]" = NO;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				/* Off here, on in Debug: `@testable import` needs it, and it
+				   disables the cross-module optimisation this configuration
+				   exists to turn on. */
+				ENABLE_TESTABILITY = NO;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Sources/Info.plist;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.zincoo.limeghost;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		AA0000000000000000002B02 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				"CODE_SIGNING_ALLOWED[sdk=iphonesimulator*]" = NO;
+				"CODE_SIGNING_REQUIRED[sdk=iphonesimulator*]" = NO;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				/* The test bundle never ships, so it takes no `.dev` split and
+				   keeps one identifier in both configurations. */
+				PRODUCT_BUNDLE_IDENTIFIER = com.zincoo.limeghost.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Limeghost.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Limeghost";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -463,25 +546,28 @@
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				AA0000000000000000000D01 /* Debug */,
+				AA0000000000000000000D02 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Debug;
+			defaultConfigurationName = Release;
 		};
 		AA0000000000000000000901 /* Build configuration list for PBXNativeTarget "Limeghost" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				AA0000000000000000000E01 /* Debug */,
+				AA0000000000000000000E02 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Debug;
+			defaultConfigurationName = Release;
 		};
 		AA0000000000000000002901 /* Build configuration list for PBXNativeTarget "LimeghostTests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				AA0000000000000000002B01 /* Debug */,
+				AA0000000000000000002B02 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Debug;
+			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
 
