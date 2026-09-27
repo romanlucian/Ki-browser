@@ -85,12 +85,14 @@ is the evidence that the decision costs the person nothing on iPhone. It does
 cost something on the Mac, where a `WKWebView` app gets no equivalent; that gap
 is real and is not being papered over.
 
-One thing still unrecorded: whether iOS offered that login as a *domain-matched*
-suggestion on the keyboard bar itself — one tap, the right account for the site
-— or whether the person opened the Passwords list and found it. The first needs
-no entitlement; the second is the generic path. It decides whether the managed
-default-browser entitlement, Apple-approved rather than automatic with
-enrolment, is worth requesting.
+It is the **generic path**, seen rather than inferred: the keyboard bar offers a
+plain "Passwords" key naming no account, and the sheet it opens *does* name the
+domain in its header while listing every saved login alphabetically, the
+matching entry sitting among unrelated sites rather than promoted. iOS holds the
+domain context and declines to act on it — the documented behaviour without the
+managed default-browser entitlement, which Safari and Chrome have. The cost is a
+few taps, not a missing feature. The reason to want that entitlement is not
+autofill polish but **being registerable as the default browser**.
 
 **The iPhone gets an app icon, and the key an upload needs to accept it, September 27**
 
