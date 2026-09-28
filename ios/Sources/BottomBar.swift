@@ -143,13 +143,24 @@ struct BottomBar: View {
     var session: BrowserSession? = nil
 
     var body: some View {
-        // Everything unlit is `.primary` rather than the system tint, which
-        // painted the whole bar iOS blue — a colour Limeghost's own surfaces
-        // were never built for, and one that made every control look equally
-        // like the thing to press. Chrome's bar is neutral for the same
-        // reason. The accent is kept for the one control that is *on*.
-        HStack(spacing: 16) {
-            Button(action: goBack) { Image(systemName: "chevron.backward") }
+        // Neutral, not the system tint: iOS blue painted every control as
+        // though it were the one to press, and Limeghost's surfaces were never
+        // built for it. Chrome's bar is neutral for the same reason. The accent
+        // is kept for the one control that is *on* — the assistant while it is
+        // open — and the tint that does the neutralising is set once, on the
+        // whole bar, below.
+        //
+        // Every tap area is 44 by 44 points, Apple's floor. The back button's
+        // was its chevron alone, about 12 by 20, and the tab count's was the
+        // 24-point box it draws: the most-used control in any browser had the
+        // smallest target in the bar. The spacing came down as the areas grew,
+        // so the address capsule kept its width.
+        HStack(spacing: 4) {
+            Button(action: goBack) {
+                Image(systemName: "chevron.backward")
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
+            }
                 .disabled(!model.canGoBack)
                 .accessibilityLabel("Back")
 
@@ -180,7 +191,7 @@ struct BottomBar: View {
                         model.isAssistantOpen ? LimeghostTheme.accent : Color.clear,
                         in: RoundedRectangle(cornerRadius: LimeghostTheme.radius8)
                     )
-                    .frame(width: 44, height: 38)
+                    .frame(width: 44, height: 44)
                     .contentShape(Rectangle())
             }
             .accessibilityLabel(model.assistantLabel)
@@ -190,6 +201,8 @@ struct BottomBar: View {
                     .font(.footnote.weight(.semibold))
                     .frame(minWidth: 24, minHeight: 24)
                     .overlay(RoundedRectangle(cornerRadius: 6).stroke(lineWidth: 1.5))
+                    .frame(minWidth: 44, minHeight: 44)
+                    .contentShape(Rectangle())
             }
             .accessibilityLabel("Tabs, \(model.tabCount) open")
 
@@ -197,7 +210,7 @@ struct BottomBar: View {
             // the address pill: the glyph alone is a target a finger misses.
             Button(action: openMenu) {
                 Image(systemName: "ellipsis")
-                    .frame(width: 44, height: 38)
+                    .frame(width: 44, height: 44)
                     .contentShape(Rectangle())
             }
             .accessibilityLabel("Menu")
@@ -211,7 +224,9 @@ struct BottomBar: View {
         // whole bar is what actually reaches them.
         .tint(LimeghostTheme.textPrimary)
         .padding(.horizontal, 16)
-        .padding(.vertical, 8)
+        // Five, down from eight, because the tap areas grew to 44: the bar is
+        // the same height it was.
+        .padding(.vertical, 5)
         // Limeghost's own surfaces, not the system's, and therefore the same
         // in a lit room as a dark one. The chrome is dark because that is the
         // product — the Mac says so in as many words — and a bar that went

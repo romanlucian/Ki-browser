@@ -5,19 +5,30 @@ import WebKit
 import XCTest
 
 /// A workspace that touches nothing outside its test: a preferences suite of
-/// its own, a rule store of its own, and an icon folder of its own. The last
-/// one is not tidiness — the browsing-data reset deletes the icon folder it is
-/// handed, and a workspace built without one is handed the real profile's.
+/// its own, a rule store of its own, an icon folder of its own and a preview
+/// folder of its own. The last two are not tidiness — the browsing-data reset
+/// deletes the folders it is handed, and a workspace built without them is
+/// handed the real ones. The preview folder was missing from this list for a
+/// day after previews started being kept: the reset test deleted the machine's
+/// real preview folder, and every test that stored a picture left one there.
 @MainActor
 struct IsolatedWorkspace {
     let workspace: BrowserWorkspace
     let defaults: UserDefaults
     let iconDirectory: URL
+    let previewDirectory: URL
 
+    /// - Parameter restoresSession: `true` builds the window that owns the
+    ///   saved session — the only one that sweeps pictures of tabs that did not
+    ///   come back.
+    /// - Parameter prepare: runs on the preview folder before the workspace is
+    ///   built, so a test can put pictures there for the launch sweep to find.
     static func make(
         for testCase: XCTestCase,
         isPrivate: Bool = false,
-        websiteDataStore: WKWebsiteDataStore? = nil
+        restoresSession: Bool = false,
+        websiteDataStore: WKWebsiteDataStore? = nil,
+        prepare: (URL) throws -> Void = { _ in }
     ) throws -> IsolatedWorkspace {
         let suiteName = "clearframe.isolatedWorkspace.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
@@ -27,7 +38,10 @@ struct IsolatedWorkspace {
             .appendingPathComponent("limeghost-isolated-\(UUID().uuidString)", isDirectory: true)
         let rules = scratch.appendingPathComponent("Rules", isDirectory: true)
         let icons = scratch.appendingPathComponent("Favicons", isDirectory: true)
+        let previews = scratch.appendingPathComponent("TabPreviews", isDirectory: true)
         try FileManager.default.createDirectory(at: rules, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: previews, withIntermediateDirectories: true)
+        try prepare(previews)
         testCase.addTeardownBlock { try? FileManager.default.removeItem(at: scratch) }
 
         let ruleStore = try XCTUnwrap(WKContentRuleListStore(url: rules), "no rule store at \(rules.path)")
@@ -45,11 +59,14 @@ struct IsolatedWorkspace {
             searchSettings: SearchSettingsStore(defaults: defaults),
             contentBlocking: blocking,
             favicons: FaviconStore(directory: icons, fetch: { _ in nil }),
-            restoresSession: false,
+            tabPreviews: TabPreviewStore(directory: previews),
+            restoresSession: restoresSession,
             isPrivate: isPrivate,
             websiteDataStore: websiteDataStore
         )
-        return IsolatedWorkspace(workspace: workspace, defaults: defaults, iconDirectory: icons)
+        return IsolatedWorkspace(
+            workspace: workspace, defaults: defaults, iconDirectory: icons, previewDirectory: previews
+        )
     }
 }
 

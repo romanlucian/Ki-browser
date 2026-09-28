@@ -117,6 +117,7 @@ struct TabSwitcher: View {
 
     @State private var query = ""
     @State private var showingPrivate = false
+    @Environment(\.scenePhase) private var scenePhase
 
     private let columns = [GridItem(.adaptive(minimum: 150), spacing: 12)]
 
@@ -156,6 +157,9 @@ struct TabSwitcher: View {
                 .onChange(of: showingPrivate) { _, _ in query = "" }
                 .safeAreaInset(edge: .bottom) { bottomRow }
         }
+        // The private side shows pictures of private pages, so it is hidden
+        // the same way the page is when the app leaves — see `PrivacyCover`.
+        .privacyCover(scenePhase != .active && showingPrivate)
         .limeghostListSheet()
     }
 

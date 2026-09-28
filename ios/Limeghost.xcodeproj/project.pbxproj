@@ -53,6 +53,7 @@
 		AA0000000000000000003103 /* TabPreviewCamera.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000003102 /* TabPreviewCamera.swift */; };
 		AA0000000000000000003107 /* EventuallyOnThePhone.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000003106 /* EventuallyOnThePhone.swift */; };
 		AA0000000000000000003109 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000003108 /* Assets.xcassets */; };
+		AA000000000000000000310B /* PrivacyCoverTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000310A /* PrivacyCoverTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -113,6 +114,7 @@
 		AA0000000000000000003102 /* TabPreviewCamera.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TabPreviewCamera.swift; sourceTree = "<group>"; };
 		AA0000000000000000003106 /* EventuallyOnThePhone.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventuallyOnThePhone.swift; sourceTree = "<group>"; };
 		AA0000000000000000003108 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		AA000000000000000000310A /* PrivacyCoverTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrivacyCoverTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -183,6 +185,7 @@
 				AA0000000000000000002203 /* BottomBarTests.swift */,
 				AA0000000000000000002204 /* AddressSheetTests.swift */,
 				AA0000000000000000002205 /* TabSwitcherTests.swift */,
+				AA000000000000000000310A /* PrivacyCoverTests.swift */,
 				AA0000000000000000003106 /* EventuallyOnThePhone.swift */,
 				AA0000000000000000002206 /* StartSurfaceTests.swift */,
 				AA0000000000000000002207 /* ReaderOnThePhoneTests.swift */,
@@ -369,6 +372,7 @@
 				AA0000000000000000002103 /* BottomBarTests.swift in Sources */,
 				AA0000000000000000002104 /* AddressSheetTests.swift in Sources */,
 				AA0000000000000000002105 /* TabSwitcherTests.swift in Sources */,
+				AA000000000000000000310B /* PrivacyCoverTests.swift in Sources */,
 				AA0000000000000000003107 /* EventuallyOnThePhone.swift in Sources */,
 				AA0000000000000000002106 /* StartSurfaceTests.swift in Sources */,
 				AA0000000000000000002107 /* ReaderOnThePhoneTests.swift in Sources */,

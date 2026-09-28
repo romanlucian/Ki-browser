@@ -203,4 +203,59 @@ final class TabPreviewStoreTests: XCTestCase {
         let next = TabPreviewStore(directory: directory)
         XCTAssertNil(next.preview(for: tab))
     }
+
+    // MARK: - Pictures of tabs that did not come back
+
+    /// A relaunch restores at most twelve tabs, and none when restoring is off.
+    /// Pictures of the rest had no card to go on and nothing ever removed them.
+    func testKeepingOnlyTheReturnedTabsRemovesTheRest() throws {
+        let directory = makeDirectory()
+        let returned = UUID(), dropped = UUID(), alsoDropped = UUID()
+        let store = TabPreviewStore(directory: directory)
+        for tab in [returned, dropped, alsoDropped] {
+            store.store(try makeImage(width: 40, height: 86), for: tab, isPrivate: false)
+        }
+        let stranger = directory.appendingPathComponent("notes.txt")
+        try Data("not a picture".utf8).write(to: stranger)
+
+        TabPreviewStore(directory: directory).keepOnly([returned])
+
+        let next = TabPreviewStore(directory: directory)
+        XCTAssertNotNil(next.preview(for: returned), "the sweep removed a tab that did come back")
+        XCTAssertNil(next.preview(for: dropped), "a picture outlived its tab")
+        XCTAssertNil(next.preview(for: alsoDropped))
+        // Anything that is not a tab's picture is left alone: a sweep that
+        // deletes what it does not recognise is one wrong path from disaster.
+        XCTAssertTrue(FileManager.default.fileExists(atPath: stranger.path))
+    }
+
+    /// The window that owns the saved session sweeps at launch. Here nothing is
+    /// restored — an empty session, as when restoring is switched off — so the
+    /// one fresh tab is all that came back and every old picture goes.
+    func testALaunchThatRestoresNothingLeavesNoOldPictures() throws {
+        let orphan = UUID()
+        let isolated = try IsolatedWorkspace.make(for: self, restoresSession: true) { folder in
+            try Data([0xFF, 0xD8, 0xFF]).write(to: folder.appendingPathComponent("\(orphan.uuidString).jpg"))
+        }
+
+        let left = try FileManager.default.contentsOfDirectory(atPath: isolated.previewDirectory.path)
+        XCTAssertFalse(left.contains { $0.hasPrefix(orphan.uuidString) }, "a picture survived with no tab")
+    }
+
+    /// A second Mac window restores nothing and must not sweep, or it would
+    /// take the first window's pictures with it.
+    func testAWindowThatDoesNotOwnTheSessionSweepsNothing() throws {
+        let belongsToAnotherWindow = UUID()
+        let isolated = try IsolatedWorkspace.make(for: self, restoresSession: false) { folder in
+            try Data([0xFF, 0xD8, 0xFF]).write(
+                to: folder.appendingPathComponent("\(belongsToAnotherWindow.uuidString).jpg")
+            )
+        }
+
+        let left = try FileManager.default.contentsOfDirectory(atPath: isolated.previewDirectory.path)
+        XCTAssertTrue(
+            left.contains { $0.hasPrefix(belongsToAnotherWindow.uuidString) },
+            "a window that restored nothing swept another window's pictures"
+        )
+    }
 }

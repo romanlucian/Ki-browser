@@ -91,9 +91,15 @@ struct AddressSheet: View {
     /// are.
     @State private var text = ""
     @FocusState private var isFocused: Bool
+    @Environment(\.scenePhase) private var scenePhase
+
+    /// Held rather than rebuilt in `body`, since the view keeps no workspace
+    /// of its own; it reads the tab in front each time it is asked.
+    private let privacy: PrivacyCover
 
     init(workspace: BrowserWorkspace, dismiss: @escaping () -> Void) {
         self.model = AddressSheetModel(workspace: workspace)
+        self.privacy = PrivacyCover(workspace: workspace)
         self.dismiss = dismiss
     }
 
@@ -132,6 +138,9 @@ struct AddressSheet: View {
         // here asks for focus, so grabbing it on appear does not fight
         // another control for the keyboard.
         .onAppear { isFocused = true }
+        // What is being typed in a private tab is as private as the page, and
+        // the app switcher would photograph it just the same.
+        .privacyCover(privacy.covers(scenePhase))
     }
 
     /// A search row's destination is decided by the engine at the moment it

@@ -103,6 +103,33 @@ public final class TabPreviewStore: ObservableObject {
         revision += 1
     }
 
+    /// Removes every kept picture whose tab is not in `tabIDs`.
+    ///
+    /// Called once at launch by the workspace that restores the saved session,
+    /// with the tabs that actually came back. A relaunch restores at most
+    /// twelve, and none when restoring is switched off, so without this every
+    /// picture of a tab that did not return stayed on disk with no card to go
+    /// on — a page photograph outliving its tab, which is the thing this type
+    /// refuses private tabs for, arriving for ordinary ones by the side door.
+    ///
+    /// A file whose name is not a tab's identifier is left alone. This folder
+    /// holds nothing else, and a sweep that deletes whatever it does not
+    /// recognise is one wrong path away from deleting something it should not.
+    public func keepOnly(_ tabIDs: Set<UUID>) {
+        guard let directory,
+              let names = try? FileManager.default.contentsOfDirectory(atPath: directory.path) else { return }
+        var removedAny = false
+        for name in names {
+            guard let id = UUID(uuidString: (name as NSString).deletingPathExtension),
+                  !tabIDs.contains(id) else { continue }
+            try? FileManager.default.removeItem(at: directory.appendingPathComponent(name))
+            memory.removeObject(forKey: id as NSUUID)
+            missing.insert(id)
+            removedAny = true
+        }
+        if removedAny { revision += 1 }
+    }
+
     /// Called by the local-data reset, beside `FaviconStore.clearAll()`.
     public func clearAll() {
         memory.removeAllObjects()

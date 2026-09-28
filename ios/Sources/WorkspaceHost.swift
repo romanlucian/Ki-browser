@@ -48,9 +48,10 @@ final class WorkspaceHost: ObservableObject {
         ))
     }
 
-    /// A workspace on a throwaway defaults suite that restores nothing. These
-    /// tests run inside the app, so anything else would write into the
-    /// simulator's real session.
+    /// A workspace on a throwaway defaults suite that restores nothing, with
+    /// tab pictures kept in memory only. These tests run inside the app, so
+    /// anything else would write into the simulator's real session — and,
+    /// once pictures started being kept, into its real preview folder.
     static func forTesting(defaults: UserDefaults) -> WorkspaceHost {
         WorkspaceHost(workspace: BrowserWorkspace(
             dataStore: BrowserDataStore(defaults: defaults),
@@ -59,6 +60,7 @@ final class WorkspaceHost: ObservableObject {
             clipboard: IOSClipboard(),
             makeSessionPlatform: { IOSSessionPlatform() },
             searchSettings: SearchSettingsStore(defaults: defaults),
+            tabPreviews: TabPreviewStore(directory: nil),
             restoresSession: false,
             assistantPopups: .overAssistant
         ))

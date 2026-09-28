@@ -49,6 +49,41 @@ Every change below has a test that was watched failing before the fix went in.
 Tab groups were rejected — Chrome needs them because Chrome has users with
 eighty tabs, and copying the control would not answer a need this product has.
 
+**A review of the whole session, and what it found, September 28**
+
+Asked for by the founder: go back over everything and check it was right. Six
+things were not, and every one of them had passed its tests.
+
+- **Pictures of tabs that did not come back stayed on disk.** A relaunch
+  restores at most twelve tabs, and none when restoring is off, and nothing
+  removed the pictures of the rest — a page photograph outliving its tab, the
+  thing refused for private tabs, arriving for ordinary ones by the side door.
+  The window that owns the saved session now sweeps at launch, keeping only the
+  tabs that came back. A second Mac window, which restores nothing, must not
+  sweep and has a test saying so.
+- **Private pages reached the disk through iOS itself.** iOS photographs an app
+  for the app switcher as it leaves and keeps the picture in the app's own
+  container; four were found there. With a private page in front, that picture
+  was the private page. The page, the bar, the typing screen and the tab
+  switcher's private side are now covered as the app leaves — on `.inactive`,
+  not only `.background`, since the switcher is already showing the app by
+  then — and only when the tab in front is private.
+- **The back button's tap area was its chevron — about 12 by 20 points** — and
+  the tab count's was its 24-point box. Apple's floor is 44. The most-used
+  control in any browser had the smallest target in the bar. Every control is
+  44 by 44 now, with the spacing reduced so the address capsule kept its width.
+- **The tests wrote page pictures into the machine's real caches, and the reset
+  test deleted the real preview folder.** The helper that builds a test
+  workspace gives the favicon store a folder of its own, with a comment saying
+  exactly why; the preview store was added a day earlier without one. Both
+  helpers isolate it now.
+- **Test counts in the documents were out of date**, and a comment in the bar
+  still described the colour approach it had replaced.
+
+Each fix was watched failing first, including four deliberate breaks of the new
+cover and sweep: covering only in the background, covering whenever any private
+tab exists, dropping the launch sweep, and sweeping from every window.
+
 **A tab's picture survives the app closing, unless the tab was private, September 28**
 
 The founder quit Limeghost, reopened it, and found eleven cards showing site
