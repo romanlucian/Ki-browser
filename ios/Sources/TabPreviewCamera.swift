@@ -42,10 +42,14 @@ enum TabPreviewCamera {
         configuration.snapshotWidth = NSNumber(value: Double(TabPreviewStore.captureWidth / scale))
 
         let id = tab.id
+        // Read here, not inside the task: whether this tab is private decides
+        // whether its picture may be written to disk, and it must be the answer
+        // for the tab that was photographed.
+        let isPrivate = tab.isPrivate
         Task { @MainActor in
             guard let image = try? await webView.takeSnapshot(configuration: configuration),
                   let bitmap = image.cgImage else { return }
-            workspace.tabPreviews.store(bitmap, for: id)
+            workspace.tabPreviews.store(bitmap, for: id, isPrivate: isPrivate)
         }
     }
 }

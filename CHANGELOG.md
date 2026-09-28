@@ -49,6 +49,36 @@ Every change below has a test that was watched failing before the fix went in.
 Tab groups were rejected — Chrome needs them because Chrome has users with
 eighty tabs, and copying the control would not answer a need this product has.
 
+**A tab's picture survives the app closing, unless the tab was private, September 28**
+
+The founder quit Limeghost, reopened it, and found eleven cards showing site
+icons instead of pages. That was the design working: previews were held in
+memory and written nowhere, for every tab.
+
+The reasoning was that a photograph of a page — a balance, a result, a draft —
+is a different kind of thing to leave behind than a site's mark, and the
+workspace already keeps closed tabs in memory only for a related reason. It was
+too strict, and what undid it is that the same container already holds WebKit's
+own cache of those pages, the history and the cookies: a hard line at "no page
+pictures on disk" had been drawn in a place where more revealing data already
+sat.
+
+- **An ordinary tab's preview is kept now**, so the next launch shows the pages
+  rather than eleven icons.
+- **A private tab's is still written nowhere.** Its WebKit store is
+  non-persistent — no cookie, no cache, no history entry survives it — so a
+  preserved preview would be the *only* trace left behind. A test opens one of
+  each and fails if the private one reaches the folder, or comes back after a
+  relaunch.
+- They live in **Caches**, not Application Support. A preview can always be
+  retaken, so iOS may purge the folder under pressure instead of ending the
+  app; and a caches folder is left out of device backups, so the pictures never
+  travel to a computer or to iCloud.
+- JPEG rather than PNG, since a page is a photograph: tens of kilobytes instead
+  of hundreds, with twelve of them sharing that folder.
+- Closing a tab and the local-data reset both remove the files, not only the
+  memory.
+
 **A page may play its own video again, September 28**
 
 Found by the founder on his own site: a background video that plays by itself in
