@@ -43,6 +43,9 @@ struct BrowserScreen: View {
                 bottomBar
             }
         }
+        // The bar too, not only the page: its capsule shows the private tab's
+        // address.
+        .privacyCover(PrivacyCover(workspace: host.workspace).covers(scenePhase))
         .sheet(isPresented: $isPresentingAddressSheet) {
             AddressSheet(workspace: host.workspace) {
                 isPresentingAddressSheet = false
@@ -324,3 +327,54 @@ struct PageFailureView: View {
         .background(Color(uiColor: .systemBackground))
     }
 }
+
+/// Whether the screen is hidden because a private page is on it and the app is
+/// leaving the foreground.
+///
+/// iOS photographs an app for the app switcher as it leaves, and keeps the
+/// picture **inside the app's own container** — four of them were found in
+/// `Library/SplashBoard/Snapshots` on September 28, 2026. So a private page on
+/// screen at that moment reached the disk: the one thing a private tab promises
+/// it never does, and through nothing Limeghost wrote itself. This is the cover
+/// banking apps use for the same reason.
+///
+/// On anything short of `.active`, not only `.background`: the switcher is
+/// already showing the app while it is merely inactive, and the photograph is
+/// taken from what was on screen then. And only when the tab **in front** is
+/// private — a private tab behind an ordinary page puts nothing private on the
+/// screen, and hiding that page would be a cover with nothing under it.
+@MainActor
+struct PrivacyCover {
+    let workspace: BrowserWorkspace
+
+    func covers(_ phase: ScenePhase) -> Bool {
+        phase != .active && workspace.selectedTab?.isPrivate == true
+    }
+}
+
+/// What sits over a private screen while the app is away: Limeghost's own
+/// ground and one word, so the app switcher shows that something is hidden
+/// rather than a blank that looks like a crash.
+struct PrivacyCoverView: View {
+    var body: some View {
+        ZStack {
+            LimeghostTheme.bg1
+            Label("Private", systemImage: "eye.slash.fill")
+                .font(.headline)
+                .foregroundStyle(LimeghostTheme.textSecondary)
+        }
+        .ignoresSafeArea()
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Private tab hidden")
+    }
+}
+
+extension View {
+    /// Lays `PrivacyCoverView` over this view while `hidden` holds.
+    func privacyCover(_ hidden: Bool) -> some View {
+        overlay {
+            if hidden { PrivacyCoverView() }
+        }
+    }
+}
+

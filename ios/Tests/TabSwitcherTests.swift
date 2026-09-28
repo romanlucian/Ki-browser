@@ -97,7 +97,7 @@ final class TabSwitcherTests: XCTestCase {
         let photographed = try XCTUnwrap(model.rows.first).id
         let unseen = try XCTUnwrap(model.rows.last { $0.id != photographed }).id
 
-        host.workspace.tabPreviews.store(try makeImage(), for: photographed)
+        host.workspace.tabPreviews.store(try makeImage(), for: photographed, isPrivate: false)
 
         XCTAssertNotNil(model.preview(for: photographed))
         // The unseen tab falls back to its identity square, which is what an

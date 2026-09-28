@@ -542,6 +542,16 @@ public final class BrowserWorkspace: ObservableObject {
         // what let a later ⌘N open the launch page mid-session.
         if !isPrivate { BrowserWorkspace.launchWindowWasBuilt = true }
 
+        // Only the window that owns the saved session knows which tabs came
+        // back, so only it sweeps. Every picture of a tab that did not — past
+        // the twelve a relaunch restores, or all of them when restoring is off
+        // and this branch built a fresh tab instead — goes now, rather than
+        // sitting on disk for a tab nobody will see again. A second Mac
+        // window restores nothing and must not sweep, or it would take the
+        // first window's pictures with it.
+        // `self.`: in this initializer the bare name is the optional parameter.
+        if persistsSession { self.tabPreviews.keepOnly(Set(tabs.map(\.id))) }
+
         tabs.forEach(configure)
         selectedTab?.activate()
         observeSelectedPagePrintability()

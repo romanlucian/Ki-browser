@@ -75,7 +75,7 @@ final class BrowsingDataTests: XCTestCase {
             space: CGColorSpaceCreateDeviceRGB(),
             bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
         ))
-        workspace.tabPreviews.store(try XCTUnwrap(context.makeImage()), for: tab)
+        workspace.tabPreviews.store(try XCTUnwrap(context.makeImage()), for: tab, isPrivate: false)
         XCTAssertNotNil(workspace.tabPreviews.preview(for: tab), "nothing was stored to erase")
 
         await workspace.resetLocalBrowsingData()
