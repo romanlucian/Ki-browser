@@ -69,6 +69,31 @@ Caught by CI on the branch above, not by anything local.
   *stall*: at 956 seconds a real regression in page loading would take hours to
   fail on the Mac.
 
+**The system's own password manager reaches inside the phone's web view, September 27**
+
+Run on a real iPhone by the founder, and the first item ever ticked off the
+device-only checklist. On X's sign-in form: the **Passwords key appears above
+the keyboard** in Limeghost's web view, and choosing a saved login from it
+**fills the correct email address and the password into the form**. End to end,
+with nothing passing through Limeghost — the credentials stay in iCloud Keychain
+or whichever password manager the person uses, and the app never sees them.
+
+That settles a question the product had already answered on principle. Limeghost
+builds no password manager — decided September 1–2, 2026, because "building a
+credential store is how a solo project acquires a security incident" — and this
+is the evidence that the decision costs the person nothing on iPhone. It does
+cost something on the Mac, where a `WKWebView` app gets no equivalent; that gap
+is real and is not being papered over.
+
+It is the **generic path**, seen rather than inferred: the keyboard bar offers a
+plain "Passwords" key naming no account, and the sheet it opens *does* name the
+domain in its header while listing every saved login alphabetically, the
+matching entry sitting among unrelated sites rather than promoted. iOS holds the
+domain context and declines to act on it — the documented behaviour without the
+managed default-browser entitlement, which Safari and Chrome have. The cost is a
+few taps, not a missing feature. The reason to want that entitlement is not
+autofill polish but **being registerable as the default browser**.
+
 **The iPhone gets an app icon, and the key an upload needs to accept it, September 27**
 
 Reported by the founder from the home screen: no icon. There was none to have
