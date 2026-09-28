@@ -49,6 +49,43 @@ Every change below has a test that was watched failing before the fix went in.
 Tab groups were rejected — Chrome needs them because Chrome has users with
 eighty tabs, and copying the control would not answer a need this product has.
 
+**The typing screen takes Safari's layout, and none of Safari's sources, September 28**
+
+Asked for by the founder with a screenshot of Safari. The layout came across;
+one section of it did not, on purpose.
+
+- **A top hit**, drawn large with the site's mark: `AddressCompletion`'s first
+  place, which it already put first. Nothing new decides what matters most —
+  deciding that afresh would be a ranking this layer has no business making.
+- **One "Search for …" row**, an action somebody chooses, sent to the search
+  engine only when tapped.
+- **"Bookmarks and History"**, each row saying *example.com · Visited 2 weeks
+  ago* — and only what is true: "Bookmark" only for a bookmark, "Visited …" only
+  when there was a visit, so a page saved yesterday and never opened does not
+  claim a visit fifty-six years ago. The date is looked up on the phone's side
+  rather than added to `AddressSuggestion`, which lives in `LimeghostCore` and
+  is the Mac's too.
+- **The field sits at the bottom, over the keyboard**, because the bar that
+  opened the sheet is at the bottom and a field at the top made the eye and the
+  thumb travel the height of the phone. Safari moved its field for the same
+  reason when it moved its bar.
+- **Not Safari's "Google Suggestions".** That section is Safari sending each
+  letter to a search engine before anybody presses go.
+  `docs/privacy-and-safety.md` names that as the deliberate difference from
+  Chrome, and the one search row here stays an action rather than a feed.
+- In a private tab the sheet shows the field and one quiet line saying the
+  history is not shown, so an empty sheet does not read as a broken one.
+- It draws on Limeghost's surfaces now, like every other sheet; it was the last
+  one still following the phone into light mode.
+
+**Rendering it caught a bug the tests had passed.** A place's address is stored
+without a scheme — `example.com/` — and the Mac's own list adds `https://`
+before asking for an icon. This did not, so every site drew the same grey square
+and Wikipedia's line showed a whole path instead of a host. The test for that
+line had passed against the bug, because it was written with `https://`
+addresses — a form real suggestions never have. It uses the real form now, and
+was watched failing with the exact text from the screenshot.
+
 **A review of the whole session, and what it found, September 28**
 
 Asked for by the founder: go back over everything and check it was right. Six

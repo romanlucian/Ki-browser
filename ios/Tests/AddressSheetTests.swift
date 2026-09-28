@@ -98,4 +98,89 @@ final class AddressSheetTests: XCTestCase {
 
         XCTAssertTrue(model.suggestions(for: "exam").isEmpty)
     }
+
+    // MARK: - The typing screen's three parts
+
+    /// The best place is drawn large at the top, and is not drawn a second
+    /// time in the list beneath it. The search row is its own part, never one
+    /// of the places.
+    func testTheBestPlaceIsTheTopHitAndIsNotRepeatedBelow() throws {
+        let host = try makeHost()
+        host.workspace.dataStore.recordVisit(title: "Example Domain", url: "https://example.com/")
+        host.workspace.dataStore.recordVisit(title: "Example Org", url: "https://example.org/")
+        let model = AddressSheetModel(workspace: host.workspace)
+
+        let results = model.results(for: "exam")
+
+        let top = try XCTUnwrap(results.topHit, "a matching visit produced no top hit")
+        XCTAssertNotEqual(top.kind, .search)
+        XCTAssertFalse(results.places.contains { $0.url == top.url }, "the top hit was listed twice")
+        XCTAssertEqual(results.search?.kind, .search)
+        XCTAssertFalse(results.places.contains { $0.kind == .search }, "the search row was filed as a place")
+        // No new order: the top hit is simply what completion already put first.
+        XCTAssertEqual(top, model.suggestions(for: "exam").first { $0.kind != .search })
+    }
+
+    /// A place says when it was last visited, which is what lets it read
+    /// "visited 2 weeks ago" rather than being a bare address.
+    func testAPlaceKnowsWhenItWasLastVisited() throws {
+        let host = try makeHost()
+        let when = Date(timeIntervalSinceNow: -14 * 24 * 60 * 60)
+        host.workspace.dataStore.recordVisit(title: "Example Domain", url: "https://example.com/", at: when)
+        let model = AddressSheetModel(workspace: host.workspace)
+
+        let results = model.results(for: "exam")
+
+        let top = try XCTUnwrap(results.topHit)
+        let recorded = try XCTUnwrap(results.lastVisits[top.url], "the visit date was lost on the way")
+        XCTAssertEqual(recorded.timeIntervalSince1970, when.timeIntervalSince1970, accuracy: 1)
+    }
+
+    /// A bookmark nobody has opened has no visit to report, and must not
+    /// borrow a date that means nothing — "visited 56 years ago" for a page
+    /// saved yesterday.
+    func testANeverOpenedBookmarkClaimsNoVisit() throws {
+        let host = try makeHost()
+        _ = host.workspace.dataStore.addBookmark(title: "Kestrel", url: "https://kestrel.example/", folderID: nil)
+        let model = AddressSheetModel(workspace: host.workspace)
+
+        let results = model.results(for: "kestrel")
+
+        let top = try XCTUnwrap(results.topHit, "the bookmark has to be offered, or the assertion below proves nothing")
+        XCTAssertNil(results.lastVisits[top.url], "a bookmark never opened claimed a visit")
+    }
+
+    /// A private tab shows none of it — no top hit, no places, and not even the
+    /// search row, as the sheet has always behaved there.
+    func testAPrivateTabShowsNothingAtAll() throws {
+        let host = try makeHost()
+        host.workspace.dataStore.recordVisit(title: "Example Domain", url: "https://example.com/")
+        let model = AddressSheetModel(workspace: host.workspace)
+        XCTAssertNotNil(model.results(for: "exam").topHit, "the visit has to be offered in an ordinary tab first")
+
+        host.workspace.addTab(url: URL(string: "https://example.org/")!, isPrivate: true)
+
+        XCTAssertTrue(model.results(for: "exam").isEmpty)
+    }
+
+    /// The line under a place says as much as is true and nothing more: the
+    /// host without `www.`, "Bookmark" only for a bookmark, "Visited …" only
+    /// when there was a visit.
+    func testAPlacesDetailSaysOnlyWhatIsTrue() {
+        let now = Date()
+        // Scheme-less, because that is the form a real suggestion carries —
+        // written with `https://` at first, this test passed against the very
+        // bug it exists for.
+        let visited = AddressSuggestion(kind: .place(isBookmarked: false), title: "Owl", url: "en.wikipedia.org/wiki/Owl")
+        let saved = AddressSuggestion(kind: .place(isBookmarked: true), title: "Kestrel", url: "www.kestrel.example/")
+
+        let twoWeeks = AddressSheet.detail(for: visited, lastVisit: now.addingTimeInterval(-14 * 86_400), now: now)
+        XCTAssertTrue(twoWeeks.hasPrefix("en.wikipedia.org \u{00B7} Visited "), "the line shows a path, not a host: \(twoWeeks)")
+        XCTAssertTrue(twoWeeks.contains("2 weeks ago"), twoWeeks)
+        XCTAssertFalse(twoWeeks.contains("Bookmark"), "a visit that is not a bookmark was called one")
+
+        let neverOpened = AddressSheet.detail(for: saved, lastVisit: nil, now: now)
+        XCTAssertEqual(neverOpened, "kestrel.example \u{00B7} Bookmark")
+    }
 }
+
