@@ -52,6 +52,20 @@ public protocol BrowserSessionPlatform: AnyObject {
     /// weakly tracks its own web view — anchoring an alert or a file panel to
     /// the right window needs one — learns which web view that is.
     func prepareWebView(_ webView: WKWebView)
+
+    /// Called once, **before** the web view exists, on the configuration it is
+    /// about to be built from. Anything that can only be set before construction
+    /// belongs here rather than in `prepareWebView`, which is handed a web view
+    /// already made.
+    ///
+    /// The phone needs it and the Mac does not: iOS defaults a web view to
+    /// refusing autoplay and to playing video outside the page, in its own
+    /// player with a scrubber and a mute button, and neither default can be
+    /// changed afterwards. macOS plays a page's video in the page already.
+    ///
+    /// Not applied to a popup, which is built from the configuration WebKit
+    /// hands over and inherits its opener's settings along with its data store.
+    func prepareConfiguration(_ configuration: WKWebViewConfiguration)
 }
 
 /// Where a link somebody opened in a tab of its own should go.
@@ -64,4 +78,8 @@ public enum NewTabPlacement: Equatable, Sendable {
 
 extension BrowserSessionPlatform {
     public func newTabPlacement(for action: WKNavigationAction) -> NewTabPlacement? { nil }
+
+    /// Nothing, which is right for every platform but the phone — and keeps a
+    /// test's stand-in platform from having to know this exists at all.
+    public func prepareConfiguration(_ configuration: WKWebViewConfiguration) {}
 }

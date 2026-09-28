@@ -276,6 +276,10 @@ public final class BrowserSession: NSObject, ObservableObject {
             // the navigation only; it is not a promise that every subresource
             // the page then loads is encrypted.
             configuration.upgradeKnownHostsToHTTPS = webFeatures?.upgradesToHTTPS ?? true
+            // Last, and before the web view exists: whatever this platform can
+            // only decide now. The phone allows a page to play its own video in
+            // the page; the Mac needs nothing and does nothing.
+            platform.prepareConfiguration(configuration)
         }
         webView = WKWebView(frame: .zero, configuration: configuration)
         super.init()

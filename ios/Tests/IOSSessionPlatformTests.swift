@@ -171,6 +171,33 @@ final class IOSSessionPlatformTests: XCTestCase {
         XCTAssertFalse(files.isEmpty, "the catalog named an icon it did not compile")
     }
 
+    /// A site with a background video looked broken on the phone and correct
+    /// in every other browser: it would not start on its own, and the tap that
+    /// started it pulled the video out of the page into iOS's own player, with
+    /// a scrubber, a pause button and a mute button laid over the design.
+    ///
+    /// Both are iOS defaults on a fresh `WKWebViewConfiguration`, and neither
+    /// can be changed once the web view is built — which is why this is set on
+    /// the configuration rather than in `prepareWebView`.
+    @MainActor
+    func testAPageMayPlayItsOwnVideoInThePage() {
+        let configuration = WKWebViewConfiguration()
+        IOSSessionPlatform().prepareConfiguration(configuration)
+
+        XCTAssertTrue(
+            configuration.allowsInlineMediaPlayback,
+            "a page's video would be taken out of the page into iOS's own player"
+        )
+        // `.audio`, not `[]`: a muted video starts by itself and anything that
+        // would make a sound still waits to be asked, which is Safari's rule.
+        // `[]` would let any page start talking on its own.
+        XCTAssertEqual(configuration.mediaTypesRequiringUserActionForPlayback, .audio)
+        XCTAssertTrue(
+            configuration.mediaTypesRequiringUserActionForPlayback.contains(.audio),
+            "a page could start making a sound nobody asked for"
+        )
+    }
+
     // MARK: - Helpers
 
     /// A sheet over the window's root, the way the tab switcher or the menu

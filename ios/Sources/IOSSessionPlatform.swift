@@ -133,6 +133,26 @@ final class IOSSessionPlatform: BrowserSessionPlatform {
         self.webView = webView
     }
 
+    /// Let a page play its own video, the way Safari does.
+    ///
+    /// Both of these are iOS defaults that no other browser keeps, and neither
+    /// can be changed once the web view is built. Left alone, a site with a
+    /// background video looked broken on the phone and correct everywhere else:
+    ///
+    /// - `mediaTypesRequiringUserActionForPlayback` defaults to `.all`, so
+    ///   nothing plays until it is tapped — a hero video sits on its poster.
+    /// - `allowsInlineMediaPlayback` defaults to `false`, so the tap that
+    ///   finally starts it takes the video *out of the page* into iOS's own
+    ///   player, with a scrubber, a pause button and a mute button over it.
+    ///
+    /// `.audio` rather than `[]`: a muted video plays by itself, and anything
+    /// that would make a sound still waits to be asked. That is Safari's rule,
+    /// and `[]` would let any page start talking on its own.
+    func prepareConfiguration(_ configuration: WKWebViewConfiguration) {
+        configuration.allowsInlineMediaPlayback = true
+        configuration.mediaTypesRequiringUserActionForPlayback = .audio
+    }
+
     // MARK: - Presenting
 
     private func makeAlert(message: String) -> UIAlertController {
