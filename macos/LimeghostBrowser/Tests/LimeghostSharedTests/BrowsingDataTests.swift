@@ -83,6 +83,39 @@ final class BrowsingDataTests: XCTestCase {
         XCTAssertNil(workspace.tabPreviews.preview(for: tab), "a page picture survived the reset")
     }
 
+    /// Recently closed tabs are sites visited before the reset. They survived
+    /// it, so "Reopen closed tab" could bring back a page the person had just
+    /// asked to forget.
+    func testTheResetForgetsRecentlyClosedTabs() async throws {
+        let workspace = try IsolatedWorkspace.make(for: self).workspace
+        workspace.addTab(url: URL(string: "https://example.com/")!)
+        let closing = try XCTUnwrap(workspace.selectedTabID)
+        workspace.closeTab(closing)
+        XCTAssertTrue(workspace.canReopenClosedTab, "a closed tab has to be remembered first")
+
+        await workspace.resetLocalBrowsingData()
+
+        XCTAssertFalse(workspace.canReopenClosedTab, "a tab closed before the reset could still be reopened")
+    }
+
+    /// The reset signed the person out of their assistant — it shares the
+    /// tabs' website data — but left the conversation that was already loaded
+    /// on screen until the panel was closed.
+    func testTheResetClosesTheAssistantAndForgetsItsConversations() async throws {
+        let workspace = try IsolatedWorkspace.make(for: self).workspace
+        workspace.aiCompanion.toggle()
+        XCTAssertTrue(workspace.aiCompanion.isVisible)
+        XCTAssertFalse(workspace.aiCompanion.live.isEmpty, "opening the assistant has to load a conversation first")
+
+        await workspace.resetLocalBrowsingData()
+
+        XCTAssertFalse(workspace.aiCompanion.isVisible, "the assistant stayed open over a reset")
+        XCTAssertTrue(workspace.aiCompanion.live.isEmpty, "a conversation stayed loaded after the reset")
+        // And it is usable again at once, on the assistant the person chose.
+        workspace.aiCompanion.toggle()
+        XCTAssertTrue(workspace.aiCompanion.isVisible)
+    }
+
     // MARK: - Listing a site's data
 
     /// The address bar's site panel lists and removes what a site stored. In a

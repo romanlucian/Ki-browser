@@ -12,6 +12,52 @@ Dates are commit dates. Test counts are the totals at the end of each period, ve
 
 ### Week of September 24–30, 2026
 
+**The phone gets Settings, and clearing stops leaving things behind, September 29**
+
+Step 4 of the phone's plan. One screen from the page menu's third card, and
+every value on it is one the Mac's Settings changes too, read from the same
+stores: the phone offers fewer settings, never different ones.
+
+- **General**: what opens at start-up — the tabs you had open (up to twelve,
+  as on the Mac) or the AI guide — and the text size. The Mac's third start-up
+  answer, a page of one's own choosing, is left out: an iPhone app is resumed
+  far more often than it is started. The text size also resizes the pages
+  already open, because the phone has no ⌘+ to reach them; on the Mac it still
+  changes only the size new pages open at.
+- **Search**: the engine, with the Mac's promise shortened — only a submitted
+  search is sent, and nothing while typing.
+- **Privacy**: Save History, Upgrade to HTTPS, and Website Data — each site
+  holding cookies or storage in the phone's WebKit store, removable one at a
+  time, with kinds of data and never an amount, since WebKit reports none.
+- **Tracker Blocking** on or off, with the Mac's caveats: a list, not a
+  complete ad blocker, nothing counted.
+- **Clear Browsing Data**, which is the Mac's reset. Its confirmation says in
+  so many words that bookmarks go too, because Safari's and Chrome's
+  equivalents keep them and somebody coming from either would not expect it.
+- **About**: Limeghost by Zincoo, and the version.
+
+Left out on purpose: default browser (an entitlement not yet granted),
+downloads (the phone keeps none), developer tools, and per-site tracker
+exceptions, which nothing on the phone can make yet.
+
+Building it turned up three things that were not true, and fixed them:
+
+- **The reset left recently closed tabs behind**, so Reopen Closed Tab could
+  bring back a page from before it, on the Mac as much as the phone. It
+  empties that list now.
+- **The reset signed the assistant out and left its conversation on screen.**
+  It now closes the assistant and drops its conversations before the website
+  data goes, so no page it still holds can write a cookie back. This changes
+  the Mac too; its caption says so.
+- **History's footnote said "Stored only on this device".** History is kept in
+  the app's preferences, and an iPhone's own backups include those. It now
+  promises only Limeghost's part: history is never sent anywhere.
+  `docs/privacy-and-safety.md` had a matching error — it said the reset clears
+  tracker blocking's on/off switch, which it has never done — and says what
+  the code does now.
+
+Each fix has a test that was watched failing with the fix taken out.
+
 **The phone's tab switcher shows the pages, September 27**
 
 The first piece of step 5, the phone's look, prompted by the founder using the

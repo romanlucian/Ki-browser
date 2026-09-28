@@ -7,7 +7,7 @@ enum PageMenuItem: CaseIterable, Hashable {
     case reader, copyForAI
     case reload, forward, newTab, newPrivateTab
     case bookmark, find, share, desktopSite
-    case bookmarks, history
+    case bookmarks, history, settings
 }
 
 /// What the menu shows, apart from how it draws, so a test can read it without
@@ -22,7 +22,7 @@ struct PageMenuModel: Equatable {
 
     func isEnabled(_ item: PageMenuItem) -> Bool {
         switch item {
-        case .newTab, .newPrivateTab, .bookmarks, .history:
+        case .newTab, .newPrivateTab, .bookmarks, .history, .settings:
             return true
         case .forward:
             return canGoForward
@@ -52,6 +52,7 @@ struct PageMenuModel: Equatable {
         case .desktopSite: return prefersDesktopSite ? "Request Mobile Site" : "Request Desktop Site"
         case .bookmarks: return "Bookmarks"
         case .history: return "History"
+        case .settings: return "Settings"
         }
     }
 
@@ -71,6 +72,7 @@ struct PageMenuModel: Equatable {
         case .desktopSite: return prefersDesktopSite ? "iphone" : "desktopcomputer"
         case .bookmarks: return "book"
         case .history: return "clock"
+        case .settings: return "gearshape"
         }
     }
 }
@@ -92,24 +94,24 @@ extension PageMenuModel {
     }
 }
 
+/// The rows that open a sheet over the page rather than act on it.
+enum PageMenuDestination: Identifiable {
+    case bookmarks, history, settings
+
+    var id: Self { self }
+}
+
 /// The menu's one rule about timing: a row closes the sheet first, and acts
 /// once the sheet has gone. `IOSPageSharing.share` presents the system's share
 /// sheet from the window's root view controller, which cannot present anything
 /// while this sheet is still up. The find bar's keyboard and Reader want a
 /// clear screen too.
-/// The two rows that open a list over the page rather than act on it.
-enum PageMenuDestination: Identifiable {
-    case bookmarks, history
-
-    var id: Self { self }
-}
-
 struct PageMenuPresentation {
     var isPresented = false
     private(set) var chosen: PageMenuItem?
-    /// Bookmarks or History, open over the page. Set only once the menu has
-    /// gone, because SwiftUI presents one sheet at a time; the list's sheet
-    /// clears it again when it closes.
+    /// Bookmarks, History or Settings, open over the page. Set only once the
+    /// menu has gone, because SwiftUI presents one sheet at a time; the
+    /// destination's sheet clears it again when it closes.
     var destination: PageMenuDestination?
 
     mutating func open() {
@@ -123,9 +125,9 @@ struct PageMenuPresentation {
         isPresented = false
     }
 
-    /// The sheet has gone. Hands back the row to act on, once. Bookmarks and
-    /// History are lists rather than actions: those open instead, and nothing
-    /// is handed back.
+    /// The sheet has gone. Hands back the row to act on, once. Bookmarks,
+    /// History and Settings are sheets rather than actions: those open
+    /// instead, and nothing is handed back.
     mutating func didDismiss() -> PageMenuItem? {
         defer { chosen = nil }
         switch chosen {
@@ -134,6 +136,9 @@ struct PageMenuPresentation {
             return nil
         case .history?:
             destination = .history
+            return nil
+        case .settings?:
+            destination = .settings
             return nil
         default:
             return chosen
@@ -163,7 +168,7 @@ struct PageMenuActions {
             workspace.findInSelectedTab()
         case .share: workspace.shareSelectedPage()
         case .desktopSite: workspace.toggleDesktopSiteInSelectedTab()
-        case .bookmarks, .history: break // Lists, which `PageMenuPresentation` opens.
+        case .bookmarks, .history, .settings: break // Sheets, which `PageMenuPresentation` opens.
         }
     }
 
@@ -219,7 +224,7 @@ struct PageMenu: View {
                     .padding(.top, 20)
                 card([.bookmark, .find, .share, .desktopSite])
                     .padding(.top, 16)
-                card([.bookmarks, .history])
+                card([.bookmarks, .history, .settings])
                     .padding(.top, 16)
             }
             .padding(.horizontal, 16)

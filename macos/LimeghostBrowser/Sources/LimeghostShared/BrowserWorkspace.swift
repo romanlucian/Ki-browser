@@ -322,8 +322,9 @@ public final class BrowserWorkspace: ObservableObject {
     /// `TabPreviewStore` for why that is stricter than the icons beside it.
     public let tabPreviews: TabPreviewStore
     /// HTTPS upgrading and the Web Inspector switch, shared so a change in
-    /// Settings reaches tabs that are already open.
-    let webFeatures: WebFeatureSettingsStore
+    /// Settings reaches tabs that are already open. Public because the phone's
+    /// Settings drives it too.
+    public let webFeatures: WebFeatureSettingsStore
     /// The profile this window belongs to. A window keeps it for life:
     /// swapping a live window's cookie store underneath its open pages would
     /// mean tearing down every web view in it.
@@ -1602,14 +1603,24 @@ public final class BrowserWorkspace: ObservableObject {
         tabs = []
         tabGroups = []
         selectedTabID = nil
+        // Recently closed tabs are addresses and titles of sites visited before
+        // the reset. They were left behind, so "Reopen closed tab" could bring
+        // back a page the person had just asked to forget.
+        closedTabs = []
+        // The assistant too, and before the website data goes, so no page it
+        // still holds can write a cookie back after the clear. Clearing signed
+        // the person out of their assistant but left the conversation on
+        // screen until the panel was closed. `teardown` leaves it as new as a
+        // fresh window's — conversations and their parked addresses gone, the
+        // chosen assistant kept — and usable again at once.
+        aiCompanion.teardown()
         dataStore.clearAllBrowserRecords()
         downloads.clearAllRecords()
         // Captured site icons are browsing evidence too: the same reset that
         // erases bookmarks and history erases them from disk and memory.
         favicons.clearAll()
-        // And what each tab looked like. These were never on disk, but the
-        // reset is also what somebody presses to clear the screen behind
-        // them, and a grid still holding pictures would not be cleared.
+        // And what each tab looked like, on disk and in memory: an ordinary
+        // tab's picture is kept between launches, so this is what removes it.
         tabPreviews.clearAll()
 
         // This profile's own WebKit store. `.default()` belongs to the

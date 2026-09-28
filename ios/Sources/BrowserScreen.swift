@@ -72,6 +72,8 @@ struct BrowserScreen: View {
                 BookmarksSheet(workspace: host.workspace) { menu.destination = nil }
             case .history:
                 HistorySheet(workspace: host.workspace) { menu.destination = nil }
+            case .settings:
+                SettingsSheet(workspace: host.workspace) { menu.destination = nil }
             }
         }
         // Handed down once, as the Mac's `BrowserView` does, so every site icon
