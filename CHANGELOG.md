@@ -49,6 +49,55 @@ Every change below has a test that was watched failing before the fix went in.
 Tab groups were rejected — Chrome needs them because Chrome has users with
 eighty tabs, and copying the control would not answer a need this product has.
 
+**A page may play its own video again, September 28**
+
+Found by the founder on his own site: a background video that plays by itself in
+Safari and Chrome sat still in Limeghost, and tapping it threw the video out of
+the page into iOS's player, with a scrubber, a pause button and a mute button
+laid over the design.
+
+Two iOS defaults, neither of which any other browser keeps, and neither
+changeable once the web view is built:
+
+- `mediaTypesRequiringUserActionForPlayback` defaults to `.all`, so nothing
+  plays until it is tapped.
+- `allowsInlineMediaPlayback` defaults to `false`, so whatever does play is
+  taken out of the page.
+
+Both are set now — to `.audio` rather than `[]`, so a muted video starts by
+itself and anything that would make a sound still waits to be asked, which is
+Safari's rule; `[]` would let any page start talking on its own. The setting
+goes through a new `BrowserSessionPlatform` member that prepares the
+*configuration* before the web view exists, since `LimeghostShared` takes no
+`#if os` and `prepareWebView` is handed a web view already made. The Mac
+implements nothing: it plays a page's video in the page already.
+
+**The bar stops being iOS blue, and the assistant says what it is, September 28**
+
+The first of step 5, the phone's look, and all three faults were found by the
+founder using the app rather than by any test.
+
+- **The assistant's mark was two speech bubbles**, which is the universal glyph
+  for a conversation *between two people* — comments, replies, Messages. Not
+  vague, wrong: the button opens one person's own ChatGPT, Claude or Gemini.
+  One party, one machine. It is the same bubble with **the word inside it**
+  now, because no drawing ever said *which kind* of conversation — the reason
+  Copy for AI has no icon either and lives in the menu with a label.
+- A sparkle and Limeghost's own owl were both drawn and both rejected. A
+  sparkle reads instantly and says *this app is clever*; Limeghost holds no API
+  key and runs no model. The owl reads instantly and says Limeghost **is** the
+  assistant; it is a door to somebody else's, on the person's own account.
+- **The whole bar was iOS blue.** Setting each control's level individually
+  fixed some and not others, because `.primary` and `.quaternary` are
+  hierarchical — they resolve against the current foreground, which inside a
+  `Button` is the tint. Retinting the bar is what reaches them.
+- **And the bar went white in a lit room.** The chrome is dark because that is
+  the product; the phone's bar was the one part still following the system. It
+  paints `bg1` with a `bg3` address capsule now — the Mac's own climb — and
+  looks the same in either appearance. The page is deliberately left out of
+  that override: a web view told the phone prefers dark reports it to every
+  site, which the Mac's session code already guards against.
+
 **The phone's tests get the waits the shared layer already learned to use, September 27**
 
 Caught by CI on the branch above, not by anything local.
