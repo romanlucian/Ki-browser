@@ -75,6 +75,14 @@ and their icons to stay were watched failing against the old reset first; the
 two parts a stand-in could not show failing — a private tab's icon, a redirect
 only visited — were broken on purpose and caught.
 
+**The Mac's Privacy page stops burying its Clear button.** Testing the reset,
+the founder had to scroll past every site with stored data to reach Clear
+local browsing data. The list now opens from **Website data → Manage…** in a
+sheet of its own, as Safari's Manage Website Data does and as the phone's
+Settings already did, so the page fits on screen with the button under
+History. The list's own text said the button was "above"; it was below, and
+now names the Privacy page instead.
+
 **The phone's tab switcher shows the pages, September 27**
 
 The first piece of step 5, the phone's look, prompted by the founder using the
