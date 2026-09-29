@@ -1620,10 +1620,10 @@ public final class BrowserWorkspace: ObservableObject {
         downloads.clearAllRecords()
         // Captured site icons are browsing evidence too — an icon exists
         // only because a site was visited — so the same reset that erases
-        // history erases them from disk and memory, a kept bookmark's
-        // included. It shows its colour square until its site is visited
-        // again, as a bookmark of a site never visited always has.
-        favicons.clearAll()
+        // history erases them from disk and memory. Except a kept bookmark's:
+        // Chrome keeps a bookmarked page's icon through the same clearing,
+        // and a bookmark that survives only to lose its mark looks broken.
+        favicons.clearAll(keepingIconsFor: dataStore.bookmarks.map(\.url))
         // And what each tab looked like, on disk and in memory: an ordinary
         // tab's picture is kept between launches, so this is what removes it.
         tabPreviews.clearAll()

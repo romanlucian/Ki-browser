@@ -118,6 +118,12 @@ final class BrowserBehaviorTests: XCTestCase {
         let iconDirectory = FileManager.default.temporaryDirectory
             .appendingPathComponent("clearframe.favicons.\(UUID().uuidString)", isDirectory: true)
         defer { try? FileManager.default.removeItem(at: iconDirectory) }
+        // One icon for the bookmarked site, one for a site only visited.
+        try FileManager.default.createDirectory(at: iconDirectory, withIntermediateDirectories: true)
+        let bookmarkedIcon = iconDirectory.appendingPathComponent("example.com.png")
+        let visitedIcon = iconDirectory.appendingPathComponent("elsewhere.example.png")
+        try Self.pngFixture().write(to: bookmarkedIcon)
+        try Self.pngFixture().write(to: visitedIcon)
         let workspace = BrowserWorkspace(
             dataStore: store,
             downloads: DownloadCenter(),
@@ -143,9 +149,11 @@ final class BrowserBehaviorTests: XCTestCase {
         // what keeps the reset pointed at a directory the test owns rather
         // than at whatever profile happens to be on the machine running it.
         XCTAssertFalse(
-            FileManager.default.fileExists(atPath: iconDirectory.path),
-            "the reset must erase the icon directory it was handed"
+            FileManager.default.fileExists(atPath: visitedIcon.path),
+            "the reset must erase the icons in the directory it was handed"
         )
+        // Except a bookmarked site's, which stays with its bookmark.
+        XCTAssertTrue(FileManager.default.fileExists(atPath: bookmarkedIcon.path), "a bookmarked site's icon went with the rest")
         // Bookmarks stay, folders and all, as Safari's and Chrome's do through
         // the same action: they are what somebody chose to keep, not a trace
         // of where they went. Until September 29, 2026 this asserted the
@@ -2868,6 +2876,63 @@ final class BrowserBehaviorTests: XCTestCase {
         let afterReset = FaviconStore(directory: directory, fetch: Self.forbiddenFaviconFetcher)
         XCTAssertNil(afterReset.icon(forHost: "old.example"), "the reset takes the alias with the icons")
         XCTAssertNil(afterReset.icon(forHost: "new.example"))
+    }
+
+    // MARK: - Site icons through the data reset
+
+    /// The reset keeps bookmarks, as Safari's and Chrome's do, and Chrome
+    /// keeps a bookmarked page's icon through the same clearing. Every other
+    /// icon goes: the store keeps exactly what a kept bookmark draws.
+    func testClearingKeepsTheIconsOfBookmarkedSitesAndNoOthers() async throws {
+        let directory = Self.makeFaviconDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = FaviconStore(directory: directory, fetch: RecordingFaviconFetcher(response: Self.pngFixture()).fetch)
+        await store.capture(pageURL: try XCTUnwrap(URL(string: "https://kept.example/")), declaredIconURLs: FaviconStore.PageIcons(), isPrivate: false)
+        await store.capture(pageURL: try XCTUnwrap(URL(string: "https://visited.example/")), declaredIconURLs: FaviconStore.PageIcons(), isPrivate: false)
+
+        store.clearAll(keepingIconsFor: ["https://www.kept.example/recipes/soup"])
+
+        XCTAssertNotNil(store.icon(forHost: "kept.example"), "a bookmarked site lost its icon")
+        XCTAssertNil(store.icon(forHost: "visited.example"), "the icon of a site only visited survived")
+        let reopened = FaviconStore(directory: directory, fetch: Self.forbiddenFaviconFetcher)
+        XCTAssertNotNil(reopened.icon(forHost: "kept.example"), "what is kept is the file, not the memory")
+        XCTAssertNil(reopened.icon(forHost: "visited.example"))
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: directory.path), ["kept.example.png"])
+    }
+
+    /// A bookmark saved at an address that redirects draws the icon of where
+    /// it lands, so the reset keeps that redirect and that icon, and drops a
+    /// redirect learned from a visit alone.
+    func testClearingKeepsABookmarksRedirectAndDropsOneOnlyVisited() async throws {
+        let directory = Self.makeFaviconDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = FaviconStore(directory: directory, fetch: RecordingFaviconFetcher(response: Self.pngFixture()).fetch)
+        await store.capture(pageURL: try XCTUnwrap(URL(string: "https://uk.pinterest.com/")), declaredIconURLs: FaviconStore.PageIcons(), isPrivate: false)
+        store.recordRedirectAlias(from: try XCTUnwrap(URL(string: "https://www.pinterest.co.uk/")), to: "uk.pinterest.com", isPrivate: false)
+        await store.capture(pageURL: try XCTUnwrap(URL(string: "https://new.example/")), declaredIconURLs: FaviconStore.PageIcons(), isPrivate: false)
+        store.recordRedirectAlias(from: try XCTUnwrap(URL(string: "https://old.example/")), to: "new.example", isPrivate: false)
+
+        store.clearAll(keepingIconsFor: ["https://www.pinterest.co.uk/gtedesign/"])
+
+        let reopened = FaviconStore(directory: directory, fetch: Self.forbiddenFaviconFetcher)
+        XCTAssertNotNil(reopened.icon(forHost: "pinterest.co.uk"), "the bookmark lost the icon it borrows through its redirect")
+        XCTAssertNil(reopened.icon(forHost: "old.example"), "a redirect learned from a visit alone survived")
+        XCTAssertNil(reopened.icon(forHost: "new.example"))
+    }
+
+    /// A private tab's icon lives in memory only. It must not outlast the
+    /// reset, even for a bookmarked site: nothing kept was ever private.
+    func testClearingKeepsNothingAPrivateTabCaptured() async throws {
+        let directory = Self.makeFaviconDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = FaviconStore(directory: directory, fetch: RecordingFaviconFetcher(response: Self.pngFixture()).fetch)
+        await store.capture(pageURL: try XCTUnwrap(URL(string: "https://secret.example/")), declaredIconURLs: FaviconStore.PageIcons(), isPrivate: true)
+        XCTAssertNotNil(store.icon(forHost: "secret.example"), "the private capture has to exist first")
+
+        store.clearAll(keepingIconsFor: ["https://secret.example/"])
+
+        XCTAssertNil(store.icon(forHost: "secret.example"), "a private tab's icon outlived the reset")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: directory.path), "nothing was kept, so nothing is left")
     }
 
     /// A private window leaves nothing behind, aliases included.

@@ -119,6 +119,34 @@ final class BrowsingDataTests: XCTestCase {
         XCTAssertTrue(store.history.isEmpty, "history is still what the reset is for")
     }
 
+    /// A kept bookmark keeps its icon, as a bookmark does through Chrome's
+    /// clearing. Erasing it too left every kept bookmark a colour square
+    /// until its site was visited again. Every other icon still goes.
+    func testTheResetKeepsTheIconsOfBookmarkedSites() async throws {
+        let isolated = try IsolatedWorkspace.make(for: self)
+        let workspace = isolated.workspace
+        XCTAssertNotNil(workspace.dataStore.addBookmark(title: "Soup", url: "https://example.com/soup", folderID: nil))
+        let png = try XCTUnwrap(FaviconStore.pngData(from: try Self.onePixel()))
+        try FileManager.default.createDirectory(at: isolated.iconDirectory, withIntermediateDirectories: true)
+        try png.write(to: isolated.iconDirectory.appendingPathComponent("example.com.png"))
+        try png.write(to: isolated.iconDirectory.appendingPathComponent("elsewhere.example.png"))
+
+        await workspace.resetLocalBrowsingData()
+
+        XCTAssertNotNil(workspace.favicons.icon(forHost: "example.com"), "a bookmarked site lost its icon")
+        XCTAssertNil(workspace.favicons.icon(forHost: "elsewhere.example"), "the icon of a site only visited survived")
+    }
+
+    private static func onePixel() throws -> CGImage {
+        let context = try XCTUnwrap(CGContext(
+            data: nil, width: 1, height: 1, bitsPerComponent: 8, bytesPerRow: 4,
+            space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ))
+        context.setFillColor(red: 0.2, green: 0.8, blue: 0.5, alpha: 1)
+        context.fill(CGRect(x: 0, y: 0, width: 1, height: 1))
+        return try XCTUnwrap(context.makeImage())
+    }
+
     /// The reset signed the person out of their assistant — it shares the
     /// tabs' website data — but left the conversation that was already loaded
     /// on screen until the panel was closed.

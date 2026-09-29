@@ -292,7 +292,7 @@ private struct PrivacySettingsPage: View {
                 .disabled(isResettingBrowserData || downloads.activeCount > 0)
                 Text(downloads.activeCount > 0
                      ? "Cancel or finish active downloads before clearing browser data. Saved files are never deleted."
-                     : "Clears open and recently closed tabs, history, site icons, the in-app download list, cookies, caches, local website storage, per-site tracker-blocking exceptions, and recovery backups, and closes the assistant. Bookmarks, saved files, search choice, and onboarding state are kept.")
+                     : "Clears open and recently closed tabs, history, the icons of sites you have not bookmarked, the in-app download list, cookies, caches, local website storage, per-site tracker-blocking exceptions, and recovery backups, and closes the assistant. Bookmarks and their icons, saved files, search choice, and onboarding state are kept.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)

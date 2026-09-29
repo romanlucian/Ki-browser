@@ -177,6 +177,7 @@ final class SettingsTests: XCTestCase {
         XCTAssertFalse(SettingsWording.clearFooter.contains("history, bookmarks"), "the list of what goes still names bookmarks")
         XCTAssertTrue(SettingsWording.clearMessage.contains("Your bookmarks and settings stay."))
         XCTAssertTrue(SettingsWording.clearFooter.contains("closes the assistant"))
+        XCTAssertTrue(SettingsWording.clearFooter.contains("the icons of sites you have not bookmarked"))
     }
 
     // MARK: - About

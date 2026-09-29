@@ -64,10 +64,16 @@ or Chrome presses that button to forget their browsing, not to lose what they
 saved, and cannot undo it. `BrowserDataStore.clearAllBrowserRecords` became
 `clearBrowsingRecords`, which takes history and the saved session and leaves
 bookmarks alone; the Mac's caption, both confirmations, the README, the data
-inventory and the privacy notes all say so. Site icons still go — an icon is
-a record of a visit — so a kept bookmark shows its colour square until its
-site is visited again. The three tests that now expect bookmarks to stay were
-watched failing against the old reset first.
+inventory and the privacy notes all say so. A bookmarked site's icon stays
+too, as Chrome keeps it: the founder saw that a bookmark surviving as a plain
+colour square would look broken. `FaviconStore.clearAll(keepingIconsFor:)`
+keeps each bookmarked host's icon file and, for a bookmark saved at an address
+that redirects, that redirect and the icon it points at. Every other icon
+goes, with every redirect learned from a visit alone and anything a private
+tab captured, which lived only in memory. The tests that now expect bookmarks
+and their icons to stay were watched failing against the old reset first; the
+two parts a stand-in could not show failing — a private tab's icon, a redirect
+only visited — were broken on purpose and caught.
 
 **The phone's tab switcher shows the pages, September 27**
 
