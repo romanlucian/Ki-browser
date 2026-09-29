@@ -12,6 +12,29 @@ Dates are commit dates. Test counts are the totals at the end of each period, ve
 
 ### Week of September 24–30, 2026
 
+**Select several bookmarks and folders, and move or delete them together, September 29**
+
+After an import, the founder faced dozens of things inside one folder and
+Move to… one at a time. They chose Files' pattern from two designs, and asked
+for Delete beside Move.
+
+- **Select**, beside Done, whenever there is something to select. Ticks as
+  Files draws them, **Select All** or **Deselect All**, the count as the
+  title, and **Cancel**; while selecting, a tap ticks a row, and opening,
+  swiping and touch and hold wait.
+- **Move to… (n)** files everything ticked at the end of the place chosen, in
+  the order it was listed, each folder with what it holds. Its list leaves
+  out every ticked folder and the folders inside them, and a folder that
+  could only go inside itself stays while the rest move.
+- **Delete (n)**, red, asks first and says what happens in numbers. A ticked
+  folder keeps the rule deleting one folder always had: it goes, and what it
+  held moves up — no bookmark is deleted by deleting its folder.
+- One batch each, so the store writes once however many are ticked.
+
+Five tests, the model's watched failing against stand-ins. Seen on a
+375-point Simulator browsing, selecting and asking; the Delete button drew in
+the sheet's green until tinted.
+
 **Imported folders keep their icons, and any folder can move, September 29**
 
 The founder imported their bookmarks from Limeghost on the Mac and found two

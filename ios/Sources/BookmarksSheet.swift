@@ -172,6 +172,13 @@ struct BookmarkFolderScreen: View {
     @State private var folderEditor: FolderEditorRequest?
     @State private var folderToMove: BookmarkFolderRecord?
     @State private var isImporting = false
+    /// Selecting several at once, to move or delete them together — the
+    /// founder asked for it after an import left dozens of things in one
+    /// folder. The rows keep their one-at-a-time actions when not selecting.
+    @State private var isSelecting = false
+    @State private var selection = Set<BookmarkItemID>()
+    @State private var isMovingSelection = false
+    @State private var isConfirmingSelectionDelete = false
 
     init(workspace: BrowserWorkspace, folderID: UUID?, query: String, close: @escaping () -> Void) {
         self.store = workspace.dataStore
@@ -191,7 +198,7 @@ struct BookmarkFolderScreen: View {
         let folders = isSearching ? model.folders(matching: query) : model.folders(in: folderID)
         let bookmarks = isSearching ? model.bookmarks(matching: query) : model.bookmarks(in: folderID)
 
-        List {
+        List(selection: $selection) {
             if isSearching {
                 if !folders.isEmpty {
                     Section("Folders") {
@@ -210,6 +217,7 @@ struct BookmarkFolderScreen: View {
         }
         .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)
+        .environment(\.editMode, .constant(isSelecting ? .active : .inactive))
         .overlay {
             if folders.isEmpty && bookmarks.isEmpty {
                 emptyState
@@ -217,35 +225,34 @@ struct BookmarkFolderScreen: View {
         }
         .navigationTitle(model.title(of: folderID))
         .navigationBarTitleDisplayMode(.inline)
+        .navigationBarBackButtonHidden(isSelecting)
         .toolbar {
-            ToolbarItem(placement: .confirmationAction) {
-                Button("Done", action: close)
+            if isSelecting {
+                selectingToolbar(listed: listedItems(folders: folders, bookmarks: bookmarks))
+            } else {
+                browsingToolbar(hasItems: !(folders.isEmpty && bookmarks.isEmpty))
             }
-            // Both in words, at the bottom where a thumb is: touch and hold
-            // alone was too hidden for anybody to learn that a folder can
-            // have its own icon. Words only, because iOS 26 draws a toolbar
-            // `Label` as its icon alone whatever its label style — measured on
-            // September 29, 2026, when these showed as a bare folder and a
-            // bare pencil that said nothing about what they do.
-            ToolbarItemGroup(placement: .bottomBar) {
-                Button("New Folder") {
-                    folderEditor = .create(parentID: folderID)
-                }
-                if let current = folderID.flatMap(store.bookmarkFolder(id:)) {
-                    Spacer()
-                    Button("Edit Folder") {
-                        folderEditor = .edit(current)
-                    }
-                } else {
-                    // Import belongs to the top: what it brings lands there
-                    // or in one new folder there, never inside the folder on
-                    // screen.
-                    Spacer()
-                    Button("Import") {
-                        isImporting = true
-                    }
-                }
+        }
+        .sheet(isPresented: $isMovingSelection) {
+            BookmarkMovePicker(
+                destinations: BookmarkDestinations.rows(folders: store.bookmarkFolders, excludingAll: selectedFolderIDs),
+                currentFolderID: folderID
+            ) { destination in
+                model.move(listedItems(folders: folders, bookmarks: bookmarks).filter(selection.contains), to: destination)
+                endSelecting()
             }
+        }
+        .alert(
+            BookmarkSelectionWording.deleteTitle(folders: selectedFolderIDs.count, bookmarks: selection.count - selectedFolderIDs.count),
+            isPresented: $isConfirmingSelectionDelete
+        ) {
+            Button("Delete", role: .destructive) {
+                model.delete(listedItems(folders: folders, bookmarks: bookmarks).filter(selection.contains))
+                endSelecting()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text(BookmarkSelectionWording.deleteMessage(folders: selectedFolderIDs.count, bookmarks: selection.count - selectedFolderIDs.count))
         }
         .alert(nameEdit?.title ?? "", isPresented: isNaming, presenting: nameEdit) { edit in
             TextField("Name", text: $typedName)
@@ -285,7 +292,133 @@ struct BookmarkFolderScreen: View {
         }
     }
 
+    /// Browsing: Done, Select when there is anything to select, and the
+    /// bottom bar's New Folder with Edit Folder inside a folder or Import at
+    /// the top. All in words, at the bottom where a thumb is: touch and hold
+    /// alone was too hidden for anybody to learn that a folder can have its
+    /// own icon. Words only, because iOS 26 draws a toolbar `Label` as its
+    /// icon alone whatever its label style — measured on September 29, 2026,
+    /// when these showed as a bare folder and a bare pencil.
+    @ToolbarContentBuilder
+    private func browsingToolbar(hasItems: Bool) -> some ToolbarContent {
+        ToolbarItem(placement: .confirmationAction) {
+            Button("Done", action: close)
+        }
+        if hasItems {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button("Select") { isSelecting = true }
+            }
+        }
+        ToolbarItemGroup(placement: .bottomBar) {
+            Button("New Folder") {
+                folderEditor = .create(parentID: folderID)
+            }
+            if let current = folderID.flatMap(store.bookmarkFolder(id:)) {
+                Spacer()
+                Button("Edit Folder") {
+                    folderEditor = .edit(current)
+                }
+            } else {
+                // Import belongs to the top: what it brings lands there or in
+                // one new folder there, never inside the folder on screen.
+                Spacer()
+                Button("Import") {
+                    isImporting = true
+                }
+            }
+        }
+    }
+
+    /// Selecting, as Files does: Select All at the left, the count as the
+    /// title, Cancel at the right, and what can be done with the ticked rows
+    /// at the bottom, each saying how many it will act on.
+    @ToolbarContentBuilder
+    private func selectingToolbar(listed: [BookmarkItemID]) -> some ToolbarContent {
+        let allTicked = !listed.isEmpty && Set(listed).isSubset(of: selection)
+        ToolbarItem(placement: .topBarLeading) {
+            Button(allTicked ? "Deselect All" : "Select All") {
+                selection = allTicked ? [] : Set(listed)
+            }
+        }
+        ToolbarItem(placement: .principal) {
+            Text(BookmarkSelectionWording.selectedCount(selection.count))
+                .font(.headline)
+                .foregroundStyle(LimeghostTheme.textPrimary)
+        }
+        ToolbarItem(placement: .confirmationAction) {
+            Button("Cancel") { endSelecting() }
+        }
+        ToolbarItemGroup(placement: .bottomBar) {
+            Button("Move to\u{2026} (\(selection.count))") { isMovingSelection = true }
+                .disabled(selection.isEmpty)
+            Spacer()
+            // Red, as a delete is everywhere else: in the bottom bar the
+            // destructive role alone drew it in the sheet's green.
+            Button("Delete (\(selection.count))", role: .destructive) { isConfirmingSelectionDelete = true }
+                .tint(.red)
+                .disabled(selection.isEmpty)
+        }
+    }
+
+    /// Everything listed, in the order it is shown: folders, then bookmarks.
+    /// What is ticked is acted on in this order, so it arrives in it.
+    private func listedItems(folders: [BookmarkFolderRecord], bookmarks: [BookmarkRecord]) -> [BookmarkItemID] {
+        folders.map { .folder($0.id) } + bookmarks.map { .bookmark($0.id) }
+    }
+
+    private var selectedFolderIDs: Set<UUID> {
+        Set(selection.compactMap { item in
+            if case .folder(let id) = item { return id }
+            return nil
+        })
+    }
+
+    private func endSelecting() {
+        isSelecting = false
+        selection = []
+    }
+
+    /// While selecting, a row is only its tick, mark and name: a tap ticks
+    /// it, and opening, swiping and touch and hold wait until Cancel.
+    @ViewBuilder
     private func folderRow(_ folder: BookmarkFolderRecord) -> some View {
+        if isSelecting {
+            HStack(spacing: 12) {
+                BookmarkFolderIcon(folder: folder)
+                Text(folder.title)
+                    .foregroundStyle(LimeghostTheme.textPrimary)
+                    .lineLimit(1)
+            }
+            .listRowBackground(LimeghostTheme.bg2)
+            .tag(BookmarkItemID.folder(folder.id))
+        } else {
+            browsingFolderRow(folder)
+        }
+    }
+
+    @ViewBuilder
+    private func bookmarkRow(_ bookmark: BookmarkRecord) -> some View {
+        if isSelecting {
+            HStack(spacing: 12) {
+                SiteIconView(urlString: bookmark.url)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(bookmark.title)
+                        .foregroundStyle(LimeghostTheme.textPrimary)
+                        .lineLimit(1)
+                    Text(URL(string: bookmark.url)?.host ?? bookmark.url)
+                        .font(.caption)
+                        .foregroundStyle(LimeghostTheme.textTertiary)
+                        .lineLimit(1)
+                }
+            }
+            .listRowBackground(LimeghostTheme.bg2)
+            .tag(BookmarkItemID.bookmark(bookmark.id))
+        } else {
+            browsingBookmarkRow(bookmark)
+        }
+    }
+
+    private func browsingFolderRow(_ folder: BookmarkFolderRecord) -> some View {
         NavigationLink(value: folder.id) {
             HStack(spacing: 12) {
                 BookmarkFolderIcon(folder: folder)
@@ -325,7 +458,7 @@ struct BookmarkFolderScreen: View {
         }
     }
 
-    private func bookmarkRow(_ bookmark: BookmarkRecord) -> some View {
+    private func browsingBookmarkRow(_ bookmark: BookmarkRecord) -> some View {
         Button {
             model.open(bookmark)
             close()
