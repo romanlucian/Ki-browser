@@ -452,7 +452,11 @@ public final class BrowserSession: NSObject, ObservableObject {
         setPageZoom(Self.defaultPageZoom)
     }
 
-    private func setPageZoom(_ value: CGFloat) {
+    /// One size, set directly. The phone has no ⌘+ or ⌘−: its Settings is
+    /// its only size control, so a change there reaches the pages already
+    /// open through this, or it would look as though it did nothing. On the
+    /// Mac, Settings changes only the size new pages open at.
+    public func setPageZoom(_ value: CGFloat) {
         pageZoom = value
         webView.pageZoom = value
     }

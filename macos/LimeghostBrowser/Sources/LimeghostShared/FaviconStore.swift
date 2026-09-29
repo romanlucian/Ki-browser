@@ -34,8 +34,9 @@ import ImageIO
 ///   Bookmarks of unvisited sites keep the deterministic `IdentityColor`
 ///   square instead (see `SiteIconView`).
 /// - Private tabs stay memory-only: nothing they load is written to disk.
-/// - Everything stored is erased by `clearAll()`, which the local-data reset
-///   calls alongside `BrowserDataStore.clearAllBrowserRecords()`.
+/// - The local-data reset erases everything stored except what a kept
+///   bookmark draws (`clearAll(keepingIconsFor:)`), alongside
+///   `BrowserDataStore.clearBrowsingRecords()`, which keeps the bookmarks.
 ///
 /// Capture is best-effort and silent: short timeouts, one attempt per
 /// navigation, failures remembered for the session only, and no UI anywhere
@@ -254,6 +255,57 @@ public final class FaviconStore: ObservableObject {
         failedThisSession[host, default: []].insert(Set(candidates))
     }
 
+    /// Erases every stored icon except the ones a kept bookmark draws.
+    ///
+    /// The browsing-data reset keeps bookmarks, as Safari's and Chrome's do,
+    /// and Chrome keeps a bookmarked page's icon through the same clearing.
+    /// Erasing the icons with the history left every kept bookmark a colour
+    /// square until its site was visited again, which read as the reset
+    /// breaking the bookmarks it had just promised to keep.
+    ///
+    /// Kept: each bookmarked host's icon file and, for a bookmark saved at an
+    /// address that redirects, its alias and the icon that alias points at.
+    /// Nothing else — not the icon of a site only visited, not a redirect
+    /// learned from a visit alone, and nothing held only in memory, because
+    /// a private tab's icon lives there and must not outlast the reset. A kept
+    /// icon is read back from its file the next time it is drawn.
+    ///
+    /// Hosts are derived as `SiteIconView` derives them, so what is kept is
+    /// exactly what a bookmark asks for.
+    public func clearAll(keepingIconsFor bookmarkedAddresses: [String]) {
+        let bookmarkedHosts = Set(bookmarkedAddresses.compactMap { address -> String? in
+            let host = IdentityColor.normalizedHost(URL(string: address)?.host ?? "")
+            return host.isEmpty ? nil : host
+        })
+        // One hop, as `icon(forHost:)` follows it. The ordinary table only:
+        // a redirect a private tab followed is never kept.
+        let keptAliases = aliases.filter { bookmarkedHosts.contains($0.key) }
+        let keptHosts = bookmarkedHosts.union(keptAliases.values)
+
+        memory.removeAllObjects()
+        missingOnDisk.removeAll()
+        failedThisSession.removeAll()
+        privateAliases.removeAll()
+        aliases = keptAliases
+
+        if let directory {
+            let keptFiles = Set(keptHosts.compactMap(Self.fileName(forNormalizedHost:)))
+            let files = (try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)) ?? []
+            // The alias file goes with the rest and is written back below
+            // holding only what was kept.
+            for file in files where !keptFiles.contains(file.lastPathComponent) {
+                try? FileManager.default.removeItem(at: file)
+            }
+            if !aliases.isEmpty { writeAliases() }
+            // Nothing kept leaves nothing behind, the directory included, as
+            // `clearAll()` does.
+            if let left = try? FileManager.default.contentsOfDirectory(atPath: directory.path), left.isEmpty {
+                try? FileManager.default.removeItem(at: directory)
+            }
+        }
+        revision += 1
+    }
+
     /// Erases every stored icon: the on-disk directory and the in-memory
     /// caches, including the session's negative results.
     public func clearAll() {
@@ -470,8 +522,8 @@ public final class FaviconStore: ObservableObject {
         return directory.appendingPathComponent(name, isDirectory: false)
     }
 
-    /// The alias table sits beside the icons, so the browsing-data reset —
-    /// which deletes the whole directory — takes it too.
+    /// The alias table sits beside the icons, so the browsing-data reset
+    /// takes it with them, keeping only the entries of bookmarked addresses.
     private static func aliasFileURL(in directory: URL?) -> URL? {
         directory?.appendingPathComponent("redirects.json", isDirectory: false)
     }

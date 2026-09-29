@@ -50,9 +50,15 @@ enum HistoryWording {
         return "This removes \(visits) from this device and cannot be undone. Your bookmarks and open tabs are not affected."
     }
 
-    /// Both already true. The workspace records a visit only when its tab is
-    /// not private, and history never syncs.
-    static let footnote = "Stored only on this device. Private tabs are never recorded."
+    /// What is true, and nothing more. The workspace records a visit only
+    /// when its tab is not private, and history never syncs. It used to say
+    /// "Stored only on this device", which is not so: history is kept in the
+    /// app's preferences, and an iPhone's own backups — iCloud or a computer —
+    /// include that folder. Limeghost can promise its own part, that it sends
+    /// history nowhere. Only a caches folder stays out of backups, which is
+    /// why tab pictures, which can always be retaken, were put in one; history
+    /// cannot be retaken, so it cannot live where the system may purge it.
+    static let footnote = "Limeghost never sends your history anywhere, though your iPhone\u{2019}s own backups may include it. Private tabs are never recorded."
 
     /// A visit with no title shows its address, so no row is blank.
     static func title(of visit: HistoryRecord) -> String {

@@ -34,11 +34,14 @@ final class PageMenuTests: XCTestCase {
     // MARK: - What the menu offers
 
     /// On the AI guide there is no page to act on. The rows that need no page
-    /// work: the two that open a new tab, and the two that open a list. The
-    /// rest stay in place, greyed, and light up when a page opens.
+    /// work: the two that open a new tab, and the three that open a sheet.
+    /// The rest stay in place, greyed, and light up when a page opens.
     func testOnTheGuideOnlyTheRowsThatNeedNoPageWork() {
         let guide = model(hasPage: false)
-        XCTAssertEqual(PageMenuItem.allCases.filter(guide.isEnabled), [.newTab, .newPrivateTab, .bookmarks, .history])
+        XCTAssertEqual(
+            PageMenuItem.allCases.filter(guide.isEnabled),
+            [.newTab, .newPrivateTab, .bookmarks, .history, .settings]
+        )
     }
 
     /// On a page every row works except Forward, while there is nowhere to
@@ -78,12 +81,14 @@ final class PageMenuTests: XCTestCase {
         XCTAssertEqual(model(isReaderOpen: true).title(.reader), "Close Reader")
     }
 
-    /// The two list rows say where they go.
+    /// The three rows that open a sheet say where they go.
     func testTheListRowsSayWhereTheyGo() {
         XCTAssertEqual(model().title(.bookmarks), "Bookmarks")
         XCTAssertEqual(model().symbol(.bookmarks), "book")
         XCTAssertEqual(model().title(.history), "History")
         XCTAssertEqual(model().symbol(.history), "clock")
+        XCTAssertEqual(model().title(.settings), "Settings")
+        XCTAssertEqual(model().symbol(.settings), "gearshape")
     }
 
     /// The model reads the tab in front, not a copy of it.
@@ -234,9 +239,21 @@ final class PageMenuTests: XCTestCase {
         XCTAssertEqual(presentation.destination, .history)
     }
 
-    /// Every other row runs as before and opens no list.
+    /// Settings likewise.
+    func testChoosingSettingsOpensItOnceTheMenuHasGone() {
+        var presentation = PageMenuPresentation()
+        presentation.open()
+        presentation.choose(.settings)
+
+        XCTAssertNil(presentation.destination)
+        XCTAssertNil(presentation.didDismiss())
+        XCTAssertEqual(presentation.destination, .settings)
+    }
+
+    /// Every other row runs as before and opens no sheet.
     func testEveryOtherRowRunsAndOpensNoList() {
-        for item in PageMenuItem.allCases where item != .bookmarks && item != .history {
+        let sheets: Set<PageMenuItem> = [.bookmarks, .history, .settings]
+        for item in PageMenuItem.allCases where !sheets.contains(item) {
             var presentation = PageMenuPresentation()
             presentation.open()
             presentation.choose(item)

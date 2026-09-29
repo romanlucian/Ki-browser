@@ -43,7 +43,7 @@ struct SiteDataSettingsSection: View {
 
     var body: some View {
         Section("Site data") {
-            Text("Websites you visit can store cookies, cached files, and local storage on this Mac. Remove a single site here, or clear everything with Clear local browsing data above. Private tabs are not listed: their storage is discarded when the tab closes.")
+            Text("Websites you visit can store cookies, cached files, and local storage on this Mac. Remove a single site here, or every site at once with Clear local browsing data on the Privacy page. Private tabs are not listed: their storage is discarded when the tab closes.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
 

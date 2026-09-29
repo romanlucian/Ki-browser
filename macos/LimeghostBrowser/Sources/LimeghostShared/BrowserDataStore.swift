@@ -425,12 +425,16 @@ public final class BrowserDataStore: ObservableObject {
         removeStoredValue(forKey: historyKey)
     }
 
-    public func clearAllBrowserRecords() {
-        bookmarks = []
-        bookmarkFolders = []
+    /// What the local-data reset takes from this store: history and the saved
+    /// session, with their recovery copies. **Not bookmarks.** They are what
+    /// somebody chose to keep rather than a trace of where they went, and
+    /// Safari's and Chrome's equivalents of the reset keep them. This took
+    /// them, folders and all, until the founder decided on September 29, 2026
+    /// that it should not: somebody coming from either browser would press it
+    /// to forget their browsing and lose what they had saved. Deleting a
+    /// bookmark is an act of its own, in Bookmarks.
+    public func clearBrowsingRecords() {
         history = []
-        removeStoredValue(forKey: bookmarksKey)
-        removeStoredValue(forKey: bookmarkFoldersKey)
         removeStoredValue(forKey: historyKey)
         removeStoredValue(forKey: workspaceKey)
         recoveryNotice = nil

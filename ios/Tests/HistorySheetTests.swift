@@ -101,6 +101,16 @@ final class HistorySheetTests: XCTestCase {
         XCTAssertFalse(HistoryWording.clearMessage(visitCount: 3).contains("Mac"))
     }
 
+    /// The footnote promises only Limeghost's own part. It said "Stored only
+    /// on this device", which an iPhone's own backups make untrue: history is
+    /// kept in the app's preferences, and backups include them.
+    func testTheFootnotePromisesOnlyWhatLimeghostControls() {
+        XCTAssertFalse(HistoryWording.footnote.localizedCaseInsensitiveContains("only on this device"))
+        XCTAssertTrue(HistoryWording.footnote.contains("never sends your history anywhere"))
+        XCTAssertTrue(HistoryWording.footnote.contains("backups may include it"))
+        XCTAssertTrue(HistoryWording.footnote.contains("Private tabs are never recorded."))
+    }
+
     /// A visit with no title shows its address, so no row is blank.
     func testAVisitWithNoTitleShowsItsAddress() {
         XCTAssertEqual(

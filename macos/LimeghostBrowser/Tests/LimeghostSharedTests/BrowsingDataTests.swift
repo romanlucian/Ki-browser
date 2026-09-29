@@ -83,6 +83,88 @@ final class BrowsingDataTests: XCTestCase {
         XCTAssertNil(workspace.tabPreviews.preview(for: tab), "a page picture survived the reset")
     }
 
+    /// Recently closed tabs are sites visited before the reset. They survived
+    /// it, so "Reopen closed tab" could bring back a page the person had just
+    /// asked to forget.
+    func testTheResetForgetsRecentlyClosedTabs() async throws {
+        let workspace = try IsolatedWorkspace.make(for: self).workspace
+        workspace.addTab(url: URL(string: "https://example.com/")!)
+        let closing = try XCTUnwrap(workspace.selectedTabID)
+        workspace.closeTab(closing)
+        XCTAssertTrue(workspace.canReopenClosedTab, "a closed tab has to be remembered first")
+
+        await workspace.resetLocalBrowsingData()
+
+        XCTAssertFalse(workspace.canReopenClosedTab, "a tab closed before the reset could still be reopened")
+    }
+
+    /// Bookmarks are what somebody chose to keep, not a trace of where they
+    /// went, and Safari's and Chrome's equivalents of this reset keep them.
+    /// Limeghost's took them, folders and all, until the founder decided on
+    /// September 29, 2026 that it should not: somebody coming from either
+    /// would press it to forget their browsing and lose what they had saved.
+    func testTheResetKeepsBookmarksAndTheirFolders() async throws {
+        let workspace = try IsolatedWorkspace.make(for: self).workspace
+        let store = workspace.dataStore
+        let recipes = try XCTUnwrap(store.createBookmarkFolder(title: "Recipes", iconID: "folder", parentID: nil))
+        XCTAssertNotNil(store.addBookmark(title: "Soup", url: "https://example.com/soup", folderID: recipes.id))
+        XCTAssertNotNil(store.addBookmark(title: "Bread", url: "https://example.com/bread", folderID: nil))
+        store.recordVisit(title: "Soup", url: "https://example.com/soup")
+
+        await workspace.resetLocalBrowsingData()
+
+        XCTAssertEqual(Set(store.bookmarks.map(\.title)), ["Soup", "Bread"], "the reset took bookmarks")
+        XCTAssertEqual(store.bookmarkFolders.map(\.title), ["Recipes"], "the reset took a folder")
+        XCTAssertEqual(store.bookmarks(in: recipes.id).map(\.title), ["Soup"], "a bookmark left its folder")
+        XCTAssertTrue(store.history.isEmpty, "history is still what the reset is for")
+    }
+
+    /// A kept bookmark keeps its icon, as a bookmark does through Chrome's
+    /// clearing. Erasing it too left every kept bookmark a colour square
+    /// until its site was visited again. Every other icon still goes.
+    func testTheResetKeepsTheIconsOfBookmarkedSites() async throws {
+        let isolated = try IsolatedWorkspace.make(for: self)
+        let workspace = isolated.workspace
+        XCTAssertNotNil(workspace.dataStore.addBookmark(title: "Soup", url: "https://example.com/soup", folderID: nil))
+        let png = try XCTUnwrap(FaviconStore.pngData(from: try Self.onePixel()))
+        try FileManager.default.createDirectory(at: isolated.iconDirectory, withIntermediateDirectories: true)
+        try png.write(to: isolated.iconDirectory.appendingPathComponent("example.com.png"))
+        try png.write(to: isolated.iconDirectory.appendingPathComponent("elsewhere.example.png"))
+
+        await workspace.resetLocalBrowsingData()
+
+        XCTAssertNotNil(workspace.favicons.icon(forHost: "example.com"), "a bookmarked site lost its icon")
+        XCTAssertNil(workspace.favicons.icon(forHost: "elsewhere.example"), "the icon of a site only visited survived")
+    }
+
+    private static func onePixel() throws -> CGImage {
+        let context = try XCTUnwrap(CGContext(
+            data: nil, width: 1, height: 1, bitsPerComponent: 8, bytesPerRow: 4,
+            space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ))
+        context.setFillColor(red: 0.2, green: 0.8, blue: 0.5, alpha: 1)
+        context.fill(CGRect(x: 0, y: 0, width: 1, height: 1))
+        return try XCTUnwrap(context.makeImage())
+    }
+
+    /// The reset signed the person out of their assistant — it shares the
+    /// tabs' website data — but left the conversation that was already loaded
+    /// on screen until the panel was closed.
+    func testTheResetClosesTheAssistantAndForgetsItsConversations() async throws {
+        let workspace = try IsolatedWorkspace.make(for: self).workspace
+        workspace.aiCompanion.toggle()
+        XCTAssertTrue(workspace.aiCompanion.isVisible)
+        XCTAssertFalse(workspace.aiCompanion.live.isEmpty, "opening the assistant has to load a conversation first")
+
+        await workspace.resetLocalBrowsingData()
+
+        XCTAssertFalse(workspace.aiCompanion.isVisible, "the assistant stayed open over a reset")
+        XCTAssertTrue(workspace.aiCompanion.live.isEmpty, "a conversation stayed loaded after the reset")
+        // And it is usable again at once, on the assistant the person chose.
+        workspace.aiCompanion.toggle()
+        XCTAssertTrue(workspace.aiCompanion.isVisible)
+    }
+
     // MARK: - Listing a site's data
 
     /// The address bar's site panel lists and removes what a site stored. In a

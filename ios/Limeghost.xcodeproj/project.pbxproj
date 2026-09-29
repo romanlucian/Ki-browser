@@ -25,6 +25,7 @@
 		AA000000000000000000010F /* SheetLook.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000210 /* SheetLook.swift */; };
 		AA0000000000000000000111 /* BookmarkMovePicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000212 /* BookmarkMovePicker.swift */; };
 		AA0000000000000000000112 /* HistorySheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000213 /* HistorySheet.swift */; };
+		AA000000000000000000310D /* SettingsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000310C /* SettingsSheet.swift */; };
 		AA0000000000000000000113 /* AssistantLayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000214 /* AssistantLayer.swift */; };
 		AA0000000000000000000114 /* KeyboardObserver.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000215 /* KeyboardObserver.swift */; };
 		AA0000000000000000000671 /* AIToolStartPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000661 /* AIToolStartPage.swift */; };
@@ -54,6 +55,7 @@
 		AA0000000000000000003107 /* EventuallyOnThePhone.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000003106 /* EventuallyOnThePhone.swift */; };
 		AA0000000000000000003109 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000003108 /* Assets.xcassets */; };
 		AA000000000000000000310B /* PrivacyCoverTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000310A /* PrivacyCoverTests.swift */; };
+		AA000000000000000000310F /* SettingsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000310E /* SettingsTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -86,6 +88,7 @@
 		AA0000000000000000000210 /* SheetLook.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SheetLook.swift; sourceTree = "<group>"; };
 		AA0000000000000000000212 /* BookmarkMovePicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookmarkMovePicker.swift; sourceTree = "<group>"; };
 		AA0000000000000000000213 /* HistorySheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistorySheet.swift; sourceTree = "<group>"; };
+		AA000000000000000000310C /* SettingsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsSheet.swift; sourceTree = "<group>"; };
 		AA0000000000000000000214 /* AssistantLayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssistantLayer.swift; sourceTree = "<group>"; };
 		AA0000000000000000000215 /* KeyboardObserver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardObserver.swift; sourceTree = "<group>"; };
 		AA0000000000000000000661 /* AIToolStartPage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "../macos/LimeghostBrowser/Sources/LimeghostBrowser/AIToolStartPage.swift"; sourceTree = "<group>"; };
@@ -115,6 +118,7 @@
 		AA0000000000000000003106 /* EventuallyOnThePhone.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventuallyOnThePhone.swift; sourceTree = "<group>"; };
 		AA0000000000000000003108 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		AA000000000000000000310A /* PrivacyCoverTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrivacyCoverTests.swift; sourceTree = "<group>"; };
+		AA000000000000000000310E /* SettingsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -171,6 +175,7 @@
 				AA0000000000000000000210 /* SheetLook.swift */,
 				AA0000000000000000000212 /* BookmarkMovePicker.swift */,
 				AA0000000000000000000213 /* HistorySheet.swift */,
+				AA000000000000000000310C /* SettingsSheet.swift */,
 				AA0000000000000000000214 /* AssistantLayer.swift */,
 				AA0000000000000000000215 /* KeyboardObserver.swift */,
 			);
@@ -186,6 +191,7 @@
 				AA0000000000000000002204 /* AddressSheetTests.swift */,
 				AA0000000000000000002205 /* TabSwitcherTests.swift */,
 				AA000000000000000000310A /* PrivacyCoverTests.swift */,
+				AA000000000000000000310E /* SettingsTests.swift */,
 				AA0000000000000000003106 /* EventuallyOnThePhone.swift */,
 				AA0000000000000000002206 /* StartSurfaceTests.swift */,
 				AA0000000000000000002207 /* ReaderOnThePhoneTests.swift */,
@@ -351,6 +357,7 @@
 				AA000000000000000000010F /* SheetLook.swift in Sources */,
 				AA0000000000000000000111 /* BookmarkMovePicker.swift in Sources */,
 				AA0000000000000000000112 /* HistorySheet.swift in Sources */,
+				AA000000000000000000310D /* SettingsSheet.swift in Sources */,
 				AA0000000000000000000113 /* AssistantLayer.swift in Sources */,
 				AA0000000000000000000114 /* KeyboardObserver.swift in Sources */,
 				AA0000000000000000000671 /* AIToolStartPage.swift in Sources */,
@@ -373,6 +380,7 @@
 				AA0000000000000000002104 /* AddressSheetTests.swift in Sources */,
 				AA0000000000000000002105 /* TabSwitcherTests.swift in Sources */,
 				AA000000000000000000310B /* PrivacyCoverTests.swift in Sources */,
+				AA000000000000000000310F /* SettingsTests.swift in Sources */,
 				AA0000000000000000003107 /* EventuallyOnThePhone.swift in Sources */,
 				AA0000000000000000002106 /* StartSurfaceTests.swift in Sources */,
 				AA0000000000000000002107 /* ReaderOnThePhoneTests.swift in Sources */,

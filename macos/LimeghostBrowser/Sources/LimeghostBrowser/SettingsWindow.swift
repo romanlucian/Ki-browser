@@ -246,6 +246,11 @@ private struct PrivacySettingsPage: View {
     @State private var showsResetConfirmation = false
     @State private var isResettingBrowserData = false
     @State private var browserDataStatus = ""
+    /// The list of sites opens in a sheet of its own, as Safari's Manage
+    /// Website Data does. It sat on this page until September 29, 2026, which
+    /// put Clear local browsing data — the one action somebody comes here
+    /// for — below every site in the list.
+    @State private var showsSiteData = false
 
     var body: some View {
         Form {
@@ -271,7 +276,15 @@ private struct PrivacySettingsPage: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
-            SiteDataSettingsSection(inventory: siteData)
+            Section("Website data") {
+                LabeledContent("Data websites keep on this Mac") {
+                    Button("Manage\u{2026}") { showsSiteData = true }
+                }
+                Text("Cookies, cached files, and local storage, listed site by site. Remove one site there, or every site at once with Clear local browsing data below.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
 
             Section("Clear everything") {
                 if let notice = dataStore.recoveryNotice {
@@ -292,7 +305,7 @@ private struct PrivacySettingsPage: View {
                 .disabled(isResettingBrowserData || downloads.activeCount > 0)
                 Text(downloads.activeCount > 0
                      ? "Cancel or finish active downloads before clearing browser data. Saved files are never deleted."
-                     : "Clears tabs, history, bookmarks, the in-app download list, cookies, caches, local website storage, per-site tracker-blocking exceptions, and recovery backups. Saved files, search choice, and onboarding state are kept.")
+                     : "Clears open and recently closed tabs, history, the icons of sites you have not bookmarked, the in-app download list, cookies, caches, local website storage, per-site tracker-blocking exceptions, and recovery backups, and closes the assistant. Bookmarks and their icons, saved files, search choice, and onboarding state are kept.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -307,7 +320,9 @@ private struct PrivacySettingsPage: View {
             }
         }
         .formStyle(.grouped)
-        .task { await siteData.refresh() }
+        .sheet(isPresented: $showsSiteData) {
+            SiteDataSheet(inventory: siteData)
+        }
         // Deliberately no `onChange` for `savesHistory`: switching it off used
         // to delete every stored visit as a side effect of a preference. The
         // preference decides what Limeghost records next (`recordVisit`
@@ -333,8 +348,34 @@ private struct PrivacySettingsPage: View {
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("This cannot be undone. Your general preferences will remain.")
+            Text("This cannot be undone. Your bookmarks and general preferences will remain.")
         }
+    }
+}
+
+/// Every site holding data in this profile, each with its Remove button:
+/// the list that used to fill the Privacy page. Read afresh each time it
+/// opens, so a site visited since the last look is there.
+private struct SiteDataSheet: View {
+    @ObservedObject var inventory: SiteDataInventory
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Form {
+                SiteDataSettingsSection(inventory: inventory)
+            }
+            .formStyle(.grouped)
+            Divider()
+            HStack {
+                Spacer()
+                Button("Done") { dismiss() }
+                    .keyboardShortcut(.defaultAction)
+            }
+            .padding(12)
+        }
+        .frame(minWidth: 520, idealWidth: 580, minHeight: 420, idealHeight: 600)
+        .task { await inventory.refresh() }
     }
 }
 
