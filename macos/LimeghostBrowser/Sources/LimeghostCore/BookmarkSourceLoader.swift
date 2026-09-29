@@ -58,6 +58,17 @@ public enum BookmarkSourceLoader {
     /// the bytes — Safari's plist read, for instance — is not made to write
     /// them back out just to read them again.
     public static func load(_ data: Data) -> Outcome {
+        // A ZIP archive is named for what it is, and nothing inside it is
+        // read. Safari on the iPhone exports one holding the bookmarks file
+        // beside the passwords, unencrypted; the person unpacks it and
+        // chooses the bookmarks file alone. Before this check an archive
+        // whose entries were stored uncompressed was read as bookmarks.
+        if data.starts(with: [0x50, 0x4B, 0x03, 0x04]) {
+            return .failure(
+                "That's a ZIP archive, not the bookmarks file itself. Open it to unpack it, "
+                + "then choose the bookmarks HTML file inside."
+            )
+        }
         switch sniffFormat(data) {
         case .chromiumJSON:
             return parseChromium(data)

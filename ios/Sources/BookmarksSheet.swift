@@ -162,6 +162,7 @@ struct BookmarkFolderScreen: View {
     @State private var folderToConfirm: BookmarkFolderRecord?
     @State private var bookmarkToMove: BookmarkRecord?
     @State private var folderEditor: FolderEditorRequest?
+    @State private var isImporting = false
 
     init(workspace: BrowserWorkspace, folderID: UUID?, query: String, close: @escaping () -> Void) {
         self.store = workspace.dataStore
@@ -226,6 +227,14 @@ struct BookmarkFolderScreen: View {
                     Button("Edit Folder") {
                         folderEditor = .edit(current)
                     }
+                } else {
+                    // Import belongs to the top: what it brings lands there
+                    // or in one new folder there, never inside the folder on
+                    // screen.
+                    Spacer()
+                    Button("Import") {
+                        isImporting = true
+                    }
                 }
             }
         }
@@ -247,6 +256,9 @@ struct BookmarkFolderScreen: View {
             ) { destination in
                 model.move(bookmark, to: destination)
             }
+        }
+        .sheet(isPresented: $isImporting) {
+            BookmarkImportSheet(store: store)
         }
         .sheet(item: $folderEditor) { request in
             switch request {
@@ -350,11 +362,17 @@ struct BookmarkFolderScreen: View {
         if isSearching {
             ContentUnavailableView.search(text: query)
         } else if folderID == nil {
-            ContentUnavailableView(
-                "No Bookmarks Yet",
-                systemImage: "book",
-                description: Text("Add Bookmark in the menu saves the page you're on.")
-            )
+            // The moment somebody wants their old bookmarks is the moment
+            // the list is empty, so Import is offered here too.
+            ContentUnavailableView {
+                Label("No Bookmarks Yet", systemImage: "book")
+            } description: {
+                Text("Add Bookmark in the menu saves the page you're on.")
+            } actions: {
+                Button("Import Bookmarks\u{2026}") {
+                    isImporting = true
+                }
+            }
         } else {
             ContentUnavailableView(
                 "This Folder Is Empty",

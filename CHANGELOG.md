@@ -12,6 +12,40 @@ Dates are commit dates. Test counts are the totals at the end of each period, ve
 
 ### Week of September 24–30, 2026
 
+**The phone imports bookmarks, September 29**
+
+Step 2 of the founder's list, placed where they chose from two designs: an
+**Import** button in words at the bottom of Bookmarks, and **Import
+Bookmarks…** in the list while it is still empty — the moment somebody wants
+it.
+
+- **A guide to getting the file**, because an iPhone cannot read another
+  browser's data. Safari on the phone exports a ZIP from Settings › Apps ›
+  Safari › Export, unpacked in Files; a computer's browser — Chrome, Safari,
+  Firefox, or Limeghost's own Export Bookmarks — saves an HTML file, sent by
+  AirDrop or iCloud Drive.
+- **Then the Mac's flow, through the Mac's own code.** A preview counting what
+  will be added, what is already saved and left alone, and what the file
+  repeats; the one question worth asking, where it goes — at the top of
+  Bookmarks, or in one dated folder — defaulted by what is already saved; and
+  a result with Undo Import. `BookmarkSourceLoader` and
+  `BookmarkImportFolderNaming` moved from the Mac's screens into
+  `LimeghostCore`, and `BookmarkImportApplier` into `LimeghostShared`, so the
+  two apps cannot disagree about what an import did. The Mac's 27 import
+  tests passed unchanged across the move.
+- **A ZIP chosen as it is is named and explained, on both apps**, and nothing
+  inside it is read. Safari's holds the passwords, unencrypted, beside the
+  bookmarks. Its test showed the old loader *reading* an archive whose entries
+  were stored uncompressed as bookmarks.
+- The choice of place is two rows drawn by hand: an inline picker's tick drew
+  in iOS blue, and no tint reached it.
+
+Seven phone tests, watched failing against a stand-in; one of them expected
+the wrong shape and was corrected to the reader's real one — a file's loose
+top-level bookmarks keep their "Bookmarks" folder. Seen on a 375-point
+Simulator at every stage, including a file whose bookmarks were all saved
+already.
+
 **The phone can change a folder's icon and colour, September 29**
 
 Asked for by the founder, who uses folder icons on the Mac. Touch and hold a
