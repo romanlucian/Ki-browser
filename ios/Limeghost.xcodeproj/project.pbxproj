@@ -54,6 +54,7 @@
 		AA0000000000000000003103 /* TabPreviewCamera.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000003102 /* TabPreviewCamera.swift */; };
 		AA0000000000000000003107 /* EventuallyOnThePhone.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000003106 /* EventuallyOnThePhone.swift */; };
 		AA0000000000000000003109 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000003108 /* Assets.xcassets */; };
+		AA0000000000000000003111 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000003110 /* PrivacyInfo.xcprivacy */; };
 		AA000000000000000000310B /* PrivacyCoverTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000310A /* PrivacyCoverTests.swift */; };
 		AA000000000000000000310F /* SettingsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000310E /* SettingsTests.swift */; };
 /* End PBXBuildFile section */
@@ -117,6 +118,7 @@
 		AA0000000000000000003102 /* TabPreviewCamera.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TabPreviewCamera.swift; sourceTree = "<group>"; };
 		AA0000000000000000003106 /* EventuallyOnThePhone.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventuallyOnThePhone.swift; sourceTree = "<group>"; };
 		AA0000000000000000003108 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		AA0000000000000000003110 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		AA000000000000000000310A /* PrivacyCoverTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrivacyCoverTests.swift; sourceTree = "<group>"; };
 		AA000000000000000000310E /* SettingsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -156,6 +158,7 @@
 			children = (
 				AA0000000000000000003102 /* TabPreviewCamera.swift */,
 				AA0000000000000000003108 /* Assets.xcassets */,
+				AA0000000000000000003110 /* PrivacyInfo.xcprivacy */,
 				AA0000000000000000000201 /* LimeghostApp.swift */,
 				AA0000000000000000000202 /* IOSSessionPlatform.swift */,
 				AA0000000000000000000203 /* IOSCollaborators.swift */,
@@ -328,6 +331,7 @@
 			files = (
 				AA0000000000000000000676 /* limeghost-mark-small.png in Resources */,
 				AA0000000000000000003109 /* Assets.xcassets in Resources */,
+				AA0000000000000000003111 /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -426,6 +430,14 @@
 		AA0000000000000000000E01 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				/* What the home screen shows, through CFBundleDisplayName in
+				   Sources/Info.plist. Debug is the cable build, and it sits on
+				   one phone beside the TestFlight build as a second app; under
+				   one name the two were identical icons. "Dev" goes first
+				   because a home-screen label is cut from the end: measured on
+				   a 375-point screen, "Limeghost Dev" showed as "Limegh…",
+				   which is the one part both apps share. */
+				APP_DISPLAY_NAME = "Dev Limeghost";
 				/* Signing is off for the Simulator and on for a device, and the
 				   `[sdk=iphonesimulator*]` condition is what keeps both true at
 				   once. Unconditional `CODE_SIGNING_ALLOWED = NO` — what this
@@ -515,6 +527,7 @@
 		AA0000000000000000000E02 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				APP_DISPLAY_NAME = Limeghost;
 				/* Same conditional signing as Debug, and for the same reason:
 				   CI's Simulator run has no identity, a device build needs one,
 				   and `DEVELOPMENT_TEAM` stays empty because a team identifier

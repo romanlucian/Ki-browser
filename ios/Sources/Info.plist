@@ -20,12 +20,28 @@
 	<string>6.0</string>
 	<key>CFBundleName</key>
 	<string>Limeghost</string>
+	<!-- What the home screen shows: "Limeghost" for Release and "Dev Limeghost"
+	     for Debug, from APP_DISPLAY_NAME in the project. The cable build and
+	     the TestFlight build are two apps on one phone, with two identifiers
+	     and two sets of data, and under one name they were two identical
+	     icons. -->
+	<key>CFBundleDisplayName</key>
+	<string>$(APP_DISPLAY_NAME)</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
+	<!-- From the build settings rather than written here, so an upload can
+	     raise the build number on the command line: App Store Connect refuses
+	     a build number it has already seen. -->
 	<key>CFBundleShortVersionString</key>
-	<string>1.0</string>
+	<string>$(MARKETING_VERSION)</string>
 	<key>CFBundleVersion</key>
-	<string>1</string>
+	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<!-- Answers App Store Connect's export-compliance question once, here,
+	     instead of on every upload. Limeghost's only encryption is the
+	     system's own HTTPS, through WebKit, which is exempt; it ships no cipher
+	     of its own. -->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>UILaunchScreen</key>
 	<dict/>
 	<!-- False because the architecture cannot serve a second window, and this
@@ -46,6 +62,17 @@
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+	<!-- iPad takes all four. App Store Connect rejects an iPad app that does
+	     not (ITMS-90474), because iPad multitasking needs every orientation;
+	     the iPhone keeps its three. How the app looks on an iPad has not been
+	     designed or tried. -->
+	<key>UISupportedInterfaceOrientations~ipad</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationPortraitUpsideDown</string>
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
