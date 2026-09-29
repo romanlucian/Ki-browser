@@ -80,14 +80,6 @@ struct BookmarksModel {
         store.updateBookmark(id: bookmark.id, title: name, url: bookmark.url)
     }
 
-    /// Changes the name and nothing else. The store's update takes an icon and
-    /// a tint too; handed the folder's own, it leaves both as they are. An
-    /// empty icon ID leaves a folder that never chose one still resolving its
-    /// old emoji. An empty name keeps the old one, which is the store's rule.
-    func rename(_ folder: BookmarkFolderRecord, to name: String) {
-        store.updateBookmarkFolder(id: folder.id, title: name, iconID: folder.iconID ?? "", colorID: folder.colorID)
-    }
-
     /// Files a bookmark at the end of another folder, or of the top level.
     func move(_ bookmark: BookmarkRecord, to folderID: UUID?) {
         store.moveBookmark(bookmark, to: folderID)
@@ -107,18 +99,17 @@ struct BookmarksModel {
     }
 }
 
-/// A name being typed into an alert: a new folder, or a new name for a folder
-/// or a bookmark. One value, so each screen has one alert and a test can read
-/// what each case shows and does.
+/// A name being typed into an alert: a new folder, or a new name for a
+/// bookmark. One value, so each screen has one alert and a test can read what
+/// each case shows and does. A folder is renamed in Edit Folder instead
+/// (`FolderEditorSheet`), with its icon and colour.
 enum BookmarkNameEdit {
     case newFolder(parentID: UUID?)
-    case renameFolder(BookmarkFolderRecord)
     case renameBookmark(BookmarkRecord)
 
     var title: String {
         switch self {
         case .newFolder: return "New Folder"
-        case .renameFolder: return "Rename Folder"
         case .renameBookmark: return "Rename Bookmark"
         }
     }
@@ -126,7 +117,7 @@ enum BookmarkNameEdit {
     var confirmLabel: String {
         switch self {
         case .newFolder: return "Create"
-        case .renameFolder, .renameBookmark: return "Save"
+        case .renameBookmark: return "Save"
         }
     }
 
@@ -135,7 +126,6 @@ enum BookmarkNameEdit {
     var startingName: String {
         switch self {
         case .newFolder: return ""
-        case .renameFolder(let folder): return folder.title
         case .renameBookmark(let bookmark): return bookmark.title
         }
     }
@@ -144,7 +134,6 @@ enum BookmarkNameEdit {
     func commit(_ name: String, with model: BookmarksModel) {
         switch self {
         case .newFolder(let parentID): model.createFolder(named: name, in: parentID)
-        case .renameFolder(let folder): model.rename(folder, to: name)
         case .renameBookmark(let bookmark): model.rename(bookmark, to: name)
         }
     }
@@ -190,6 +179,7 @@ struct BookmarkFolderScreen: View {
     @State private var typedName = ""
     @State private var folderToConfirm: BookmarkFolderRecord?
     @State private var bookmarkToMove: BookmarkRecord?
+    @State private var folderToEdit: BookmarkFolderRecord?
 
     init(workspace: BrowserWorkspace, folderID: UUID?, query: String, close: @escaping () -> Void) {
         self.store = workspace.dataStore
@@ -267,6 +257,9 @@ struct BookmarkFolderScreen: View {
                 model.move(bookmark, to: destination)
             }
         }
+        .sheet(item: $folderToEdit) { folder in
+            FolderEditorSheet(folder: folder, store: store)
+        }
     }
 
     private func folderRow(_ folder: BookmarkFolderRecord) -> some View {
@@ -291,9 +284,9 @@ struct BookmarkFolderScreen: View {
         }
         .contextMenu {
             Button {
-                beginNaming(.renameFolder(folder))
+                folderToEdit = folder
             } label: {
-                Label("Rename…", systemImage: "pencil")
+                Label("Edit Folder…", systemImage: "pencil")
             }
             Divider()
             Button(role: .destructive) {

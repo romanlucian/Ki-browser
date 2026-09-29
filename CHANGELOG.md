@@ -12,6 +12,28 @@ Dates are commit dates. Test counts are the totals at the end of each period, ve
 
 ### Week of September 24–30, 2026
 
+**The phone can change a folder's icon and colour, September 29**
+
+Asked for by the founder, who uses folder icons on the Mac. Touch and hold a
+folder, then **Edit Folder…**: its name, icon and colour on one screen, as the
+Mac's folder editor has them — the layout the founder chose from two shown
+side by side.
+
+- **The Mac's own picker**, compiled into the phone by reference (the eighth
+  such file) rather than a second grid that would drift from it. It gained two
+  parameters for a finger — 44-point cells, and a grid that may fill a sheet —
+  and the Mac keeps its 38 and its fixed heights.
+- **The four tints show only for an icon that takes one.** Stickies and Emoji
+  bring their own colours, and their licence credit stays under the grid.
+- **Nothing reaches the store before Save**, an empty name cannot be saved,
+  and the editor opens on the set the folder's icon belongs to.
+- **It replaced Rename… for folders**, so the rename alert's folder case and
+  the model's folder rename went, and their test moved to the editor's.
+
+Four tests: the two about Save watched failing against a stand-in, the other
+two by breaking what they check. Looked at on a 375-point Simulator in both
+sets.
+
 **The iPhone app gets what an upload is checked for, September 29**
 
 The road to TestFlight says nothing until an upload fails, so each of these

@@ -140,21 +140,6 @@ final class BookmarksSheetTests: XCTestCase {
         XCTAssertEqual(renamed.folderID, recipes.id)
     }
 
-    /// The store's folder update takes an icon and a tint as well as a name.
-    /// A rename hands it the folder's own, so both survive.
-    func testRenamingAFolderKeepsItsIconAndTint() throws {
-        let host = try makeHost()
-        let store = host.workspace.dataStore
-        let travel = try XCTUnwrap(store.createBookmarkFolder(title: "Travel", iconID: "palette", colorID: "amber", parentID: nil))
-
-        BookmarksModel(workspace: host.workspace).rename(travel, to: "Holidays")
-
-        let renamed = try XCTUnwrap(store.bookmarkFolder(id: travel.id))
-        XCTAssertEqual(renamed.title, "Holidays")
-        XCTAssertEqual(renamed.iconID, "palette")
-        XCTAssertEqual(renamed.colorID, "amber")
-    }
-
     /// Move to… files a bookmark in a folder, and back at the top level.
     func testMoveToFilesABookmarkAndBringsItBack() throws {
         let host = try makeHost()
@@ -206,13 +191,6 @@ final class BookmarksSheetTests: XCTestCase {
         XCTAssertEqual(newFolder.startingName, "")
         newFolder.commit("Soups", with: model)
         XCTAssertEqual(store.bookmarkFolders(in: recipes.id).map(\.title), ["Soups"])
-
-        let renameFolder = BookmarkNameEdit.renameFolder(recipes)
-        XCTAssertEqual(renameFolder.title, "Rename Folder")
-        XCTAssertEqual(renameFolder.confirmLabel, "Save")
-        XCTAssertEqual(renameFolder.startingName, "Recipes")
-        renameFolder.commit("Cooking", with: model)
-        XCTAssertEqual(store.bookmarkFolder(id: recipes.id)?.title, "Cooking")
 
         let renameBookmark = BookmarkNameEdit.renameBookmark(bread)
         XCTAssertEqual(renameBookmark.title, "Rename Bookmark")
