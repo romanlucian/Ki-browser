@@ -682,4 +682,21 @@ final class BookmarkImportExportTests: XCTestCase {
         XCTAssertEqual(result.roots.count, 1)
         XCTAssertEqual(result.roots[0].role, .ordinary)
     }
+
+    // MARK: - A file somebody chose
+
+    /// Safari on the iPhone exports a ZIP holding a bookmarks HTML file — and,
+    /// unencrypted, the passwords. Handed the ZIP itself, the loader says what
+    /// it is and what to do, rather than calling it unrecognised, and reads
+    /// nothing inside it.
+    func testAZipArchiveIsNamedAndExplainedRatherThanRead() {
+        var zip = Data([0x50, 0x4B, 0x03, 0x04])
+        zip.append(Data("Bookmarks.html<DL><p><DT><A HREF=\"https://example.com/\">Example</A></DL>".utf8))
+
+        guard case .failure(let message) = BookmarkSourceLoader.load(zip) else {
+            return XCTFail("a ZIP archive was read as a bookmarks file")
+        }
+        XCTAssertTrue(message.contains("ZIP archive"), message)
+        XCTAssertTrue(message.contains("unpack"), message)
+    }
 }
