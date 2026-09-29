@@ -171,6 +171,89 @@ final class IOSSessionPlatformTests: XCTestCase {
         XCTAssertFalse(files.isEmpty, "the catalog named an icon it did not compile")
     }
 
+    // MARK: - What an upload is checked for
+
+    /// The app's Info.plist as it was built, every key in it. `Bundle`'s own
+    /// lookups resolve device-suffixed keys for the device they run on, so on
+    /// an iPhone Simulator they cannot see a `~ipad` key at all.
+    private func builtInfoPlist() throws -> [String: Any] {
+        let url = try XCTUnwrap(Bundle.main.url(forResource: "Info", withExtension: "plist"))
+        let plist = try PropertyListSerialization.propertyList(from: Data(contentsOf: url), format: nil)
+        return try XCTUnwrap(plist as? [String: Any])
+    }
+
+    /// Without this every TestFlight build waits in App Store Connect on the
+    /// export-compliance question. Limeghost's only encryption is the system's
+    /// own HTTPS, through WebKit, which is exempt; it has no cipher of its own.
+    func testTheAppSaysItUsesNoEncryptionOfItsOwn() throws {
+        XCTAssertEqual(
+            try builtInfoPlist()["ITSAppUsesNonExemptEncryption"] as? Bool, false,
+            "every upload would wait on the export-compliance question"
+        )
+    }
+
+    /// The target builds for iPad as well as iPhone, and App Store Connect
+    /// rejects an iPad app that cannot take all four orientations
+    /// (ITMS-90474), because iPad multitasking needs them. The iPhone keeps
+    /// its own three.
+    func testAnIPadMayTurnTheAppAnyWayUp() throws {
+        let iPad = try builtInfoPlist()["UISupportedInterfaceOrientations~ipad"] as? [String] ?? []
+        XCTAssertEqual(Set(iPad), [
+            "UIInterfaceOrientationPortrait",
+            "UIInterfaceOrientationPortraitUpsideDown",
+            "UIInterfaceOrientationLandscapeLeft",
+            "UIInterfaceOrientationLandscapeRight",
+        ], "an upload would be rejected for iPad multitasking without all four")
+    }
+
+    /// Apple requires a privacy manifest naming a reason for each of the
+    /// "required reason" APIs an app calls, and the phone calls exactly one:
+    /// `UserDefaults`, for its own settings, bookmarks and history (CA92.1,
+    /// data only this app reads). Audited against every file the target
+    /// compiles on September 29, 2026 — no file dates, disk space, boot time
+    /// or keyboard lists. And it declares nothing collected and nobody
+    /// tracked, because Limeghost sends nothing to its maker.
+    func testThePrivacyManifestIsBundledAndSaysOnlyWhatIsTrue() throws {
+        let url = try XCTUnwrap(
+            Bundle.main.url(forResource: "PrivacyInfo", withExtension: "xcprivacy"),
+            "the app ships no privacy manifest"
+        )
+        let plist = try PropertyListSerialization.propertyList(from: Data(contentsOf: url), format: nil)
+        let manifest = try XCTUnwrap(plist as? [String: Any])
+        XCTAssertEqual(manifest["NSPrivacyTracking"] as? Bool, false)
+        XCTAssertEqual((manifest["NSPrivacyTrackingDomains"] as? [String])?.isEmpty, true)
+        XCTAssertEqual((manifest["NSPrivacyCollectedDataTypes"] as? [Any])?.isEmpty, true, "the manifest claims data is collected")
+        let apis = manifest["NSPrivacyAccessedAPITypes"] as? [[String: Any]] ?? []
+        XCTAssertEqual(apis.map { $0["NSPrivacyAccessedAPIType"] as? String }, ["NSPrivacyAccessedAPICategoryUserDefaults"])
+        XCTAssertEqual(apis.first?["NSPrivacyAccessedAPITypeReasons"] as? [String], ["CA92.1"])
+    }
+
+    /// Apple grants the default-browser entitlement only to an app that
+    /// declares web links. Without the entitlement iOS still sends every http
+    /// and https link to the default browser; with it, they can come here.
+    func testTheAppDeclaresWebLinks() throws {
+        let types = try builtInfoPlist()["CFBundleURLTypes"] as? [[String: Any]] ?? []
+        let schemes = Set(types.flatMap { $0["CFBundleURLSchemes"] as? [String] ?? [] })
+        XCTAssertTrue(schemes.isSuperset(of: ["http", "https"]), "the default-browser request requires both")
+    }
+
+    /// The home-screen name comes from `APP_DISPLAY_NAME`, one per
+    /// configuration, so the cable build and a TestFlight build — two apps on
+    /// one phone — need not be two identical icons. The cable build (Debug,
+    /// which the tests run) stays "Limeghost" while TestFlight waits: the
+    /// founder paused it on September 29, 2026, and the cable app is the only
+    /// one on the phone. When TestFlight starts, Debug becomes "Dev Limeghost"
+    /// — "Dev" first, because the home screen cuts a label from the end and
+    /// "Limeghost Dev" showed as "Limegh…" on a 375-point screen — and this
+    /// expectation changes with it.
+    ///
+    /// Asserting the value is what proves the setting reaches the bundle: an
+    /// unset `APP_DISPLAY_NAME` builds an empty name, and iOS then falls back
+    /// to `CFBundleName` with nothing failing anywhere.
+    func testTheHomeScreenNameComesFromTheBuildSettings() {
+        XCTAssertEqual(Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String, "Limeghost")
+    }
+
     /// A site with a background video looked broken on the phone and correct
     /// in every other browser: it would not start on its own, and the tap that
     /// started it pulled the video out of the page into iOS's own player, with

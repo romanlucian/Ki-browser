@@ -87,6 +87,17 @@ struct BrowserScreen: View {
         .onChange(of: scenePhase) { _, phase in
             if phase != .active { TabPreviewCamera.captureSelectedTab(of: host.workspace) }
         }
+        .onOpenURL { url in
+            if IncomingLink(workspace: host.workspace).open(url) { closeEverythingOverThePage() }
+        }
+    }
+
+    /// A page somebody asked for is shown, so nothing may stay over it: the
+    /// typing screen, the tab grid, the page menu and any list it opened.
+    private func closeEverythingOverThePage() {
+        isPresentingAddressSheet = false
+        isPresentingTabSwitcher = false
+        menu = PageMenuPresentation()
     }
 
     private var bottomBar: BottomBar {
@@ -351,6 +362,27 @@ struct PrivacyCover {
 
     func covers(_ phase: ScenePhase) -> Bool {
         phase != .active && workspace.selectedTab?.isPrivate == true
+    }
+}
+
+/// A web link another app hands over. It reaches Limeghost only once iOS has
+/// made it the default browser, which takes Apple's default-browser
+/// entitlement; the Info.plist declares http and https for that request.
+///
+/// It is a door, like every other way of asking for a page: the shared
+/// `openExternalURL` refuses anything that is not a web page and opens the
+/// rest in a new tab in front, where `addTab` moves the assistant aside. It
+/// says whether a page opened, so the screen closes its sheets only then — a
+/// page opened behind a sheet is a page not shown.
+@MainActor
+struct IncomingLink {
+    let workspace: BrowserWorkspace
+
+    @discardableResult
+    func open(_ url: URL) -> Bool {
+        let before = workspace.tabs.count
+        workspace.openExternalURL(url)
+        return workspace.tabs.count > before
     }
 }
 

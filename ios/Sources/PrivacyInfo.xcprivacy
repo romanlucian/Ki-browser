@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- The phone's privacy manifest, which Apple requires before an upload.
+
+     It names one "required reason" API because the phone calls one:
+     UserDefaults, for its own settings, bookmarks and history, which no other
+     app reads (reason CA92.1). No file dates, disk space, boot time or
+     keyboard lists — audited against every file the target compiles on
+     September 29, 2026. Nothing is collected and nobody is tracked, because
+     Limeghost sends nothing to its maker: pages go to the sites a person
+     opens, searches to the engine they chose, and nothing to Zincoo.
+
+     `IOSSessionPlatformTests.testThePrivacyManifestIsBundledAndSaysOnlyWhatIsTrue`
+     holds it to this. Adding a call to another listed API means adding its
+     reason here first. -->
+<plist version="1.0">
+<dict>
+	<key>NSPrivacyTracking</key>
+	<false/>
+	<key>NSPrivacyTrackingDomains</key>
+	<array/>
+	<key>NSPrivacyCollectedDataTypes</key>
+	<array/>
+	<key>NSPrivacyAccessedAPITypes</key>
+	<array>
+		<dict>
+			<key>NSPrivacyAccessedAPIType</key>
+			<string>NSPrivacyAccessedAPICategoryUserDefaults</string>
+			<key>NSPrivacyAccessedAPITypeReasons</key>
+			<array>
+				<string>CA92.1</string>
+			</array>
+		</dict>
+	</array>
+</dict>
+</plist>

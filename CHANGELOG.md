@@ -12,6 +12,47 @@ Dates are commit dates. Test counts are the totals at the end of each period, ve
 
 ### Week of September 24–30, 2026
 
+**The iPhone app gets what an upload is checked for, September 29**
+
+The road to TestFlight says nothing until an upload fails, so each of these
+was looked for rather than waited for. Seven tests, each watched failing
+first. TestFlight itself is **paused**: the founder chose to finish the phone
+and test the Mac first, so nothing was uploaded and no App Store Connect
+record exists. What is left is written down in
+`docs/ios-browser-foundation.md`, under "TestFlight, prepared and paused".
+
+- **The export-compliance answer**, `ITSAppUsesNonExemptEncryption` false,
+  once in the Info.plist rather than on every build in App Store Connect.
+  Limeghost's only encryption is the system's own HTTPS through WebKit.
+- **All four orientations on iPad.** The target builds for iPad, and App Store
+  Connect rejects an iPad app without them (ITMS-90474). How the app looks on
+  an iPad has still not been designed or tried.
+- **A privacy manifest**, which Apple requires before an upload. Every file
+  the target compiles was searched for the APIs Apple asks about, and the
+  phone calls one: `UserDefaults`, for its own settings, bookmarks and history
+  (reason CA92.1). Nothing collected, nobody tracked — Limeghost sends
+  nothing to its maker.
+- **Versions from the build settings**, so an upload can raise the build
+  number on the command line; App Store Connect refuses one it has seen.
+- **Web links**, http and https, declared in the Info.plist, which Apple
+  requires before it grants the default-browser entitlement, and handled: a
+  link from another app opens in a new tab in front, the assistant steps
+  aside and every sheet closes. It stays untried end to end until the
+  entitlement arrives, because iOS sends no link to a browser that is not
+  the default.
+- **The home-screen name comes from a build setting**, one per
+  configuration, because the cable build and a TestFlight build will be two
+  apps on one phone with two sets of data, and under one name two identical
+  icons. The cable build is to be "Dev Limeghost" — "Limeghost Dev" was tried
+  first and measured on a 375-point screen as "Limegh…", the one part both
+  share — but both say "Limeghost" until TestFlight starts, since the cable
+  app is the only one on the phone.
+
+A Release archive and an App Store export both succeeded on September 29. The
+export registered `com.zincoo.limeghost` with Apple and made the team's
+distribution certificate; the team identifier stayed on the command line and
+out of the repository.
+
 **The phone gets Settings, and clearing stops leaving things behind, September 29**
 
 Step 4 of the phone's plan. One screen from the page menu's third card, and
