@@ -237,13 +237,21 @@ final class IOSSessionPlatformTests: XCTestCase {
         XCTAssertTrue(schemes.isSuperset(of: ["http", "https"]), "the default-browser request requires both")
     }
 
-    /// The cable build and the TestFlight build are two apps on one phone,
-    /// and with one name they were two identical icons. The cable build —
-    /// Debug, which is also what the tests run — says so on the home screen;
-    /// Release keeps the plain name. "Dev" comes first because the home
-    /// screen cuts a label from the end: "Limeghost Dev" showed as "Limegh…".
-    func testTheCableBuildIsNamedApartFromTheTestFlightOne() {
-        XCTAssertEqual(Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String, "Dev Limeghost")
+    /// The home-screen name comes from `APP_DISPLAY_NAME`, one per
+    /// configuration, so the cable build and a TestFlight build — two apps on
+    /// one phone — need not be two identical icons. The cable build (Debug,
+    /// which the tests run) stays "Limeghost" while TestFlight waits: the
+    /// founder paused it on September 29, 2026, and the cable app is the only
+    /// one on the phone. When TestFlight starts, Debug becomes "Dev Limeghost"
+    /// — "Dev" first, because the home screen cuts a label from the end and
+    /// "Limeghost Dev" showed as "Limegh…" on a 375-point screen — and this
+    /// expectation changes with it.
+    ///
+    /// Asserting the value is what proves the setting reaches the bundle: an
+    /// unset `APP_DISPLAY_NAME` builds an empty name, and iOS then falls back
+    /// to `CFBundleName` with nothing failing anywhere.
+    func testTheHomeScreenNameComesFromTheBuildSettings() {
+        XCTAssertEqual(Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String, "Limeghost")
     }
 
     /// A site with a background video looked broken on the phone and correct

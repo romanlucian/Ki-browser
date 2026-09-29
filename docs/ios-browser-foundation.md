@@ -222,6 +222,53 @@ The second is new. It builds and tests the app itself, so a change that satisfie
 
 Both commands pass locally against a real iPhone 17 Pro simulator, and **the CI job itself first ran on September 13, 2026**, on pull request #1 — `ci.yml` triggers only on push to `main` and on `pull_request`, so a branch push runs nothing, and until that pull request the job's simulator discovery and its YAML had never executed. The first run failed before a single test: the picker took the first iPhone in dictionary order, and on that runtime the shared test bundle could not be loaded (`Library not loaded: /usr/lib/swift/libswiftWebKit.dylib`), with no line in the log saying which runtime it was. The picker now sorts by iOS runtime version, takes the newest, and prints the device, its UDID and its runtime; the second run passed, on an iPhone SE (3rd generation). The same pull request's `macos-browser` job caught a Mac fault no local run could have — the traffic lights sat below their title bar on macOS 14 and 15; see `TabStripMetrics.trafficLightOrigin`. And a passing simulator run is not a passing *device* run: the simulator shares the Mac's own libraries and file system, so it cannot show a sandbox, entitlement, or memory-pressure difference.
 
+## TestFlight, prepared and paused
+
+Prepared on September 29, 2026 and paused the same day on the founder's word:
+they chose to finish the phone and test the Mac before anything is uploaded.
+**Nothing has been uploaded, and no App Store Connect record exists.**
+
+Done, and kept:
+
+- Everything an upload is checked for that could be found without one: the
+  export-compliance answer, all four iPad orientations, the privacy manifest
+  (audited, with a test), versions from the build settings, and the web links
+  the default-browser request needs — see the CHANGELOG entry of that date.
+- A Release archive and an App Store export both succeeded:
+
+  ```
+  xcodebuild archive -scheme Limeghost -configuration Release \
+    -destination 'generic/platform=iOS' -project ios/Limeghost.xcodeproj \
+    -archivePath <dir>/Limeghost.xcarchive DEVELOPMENT_TEAM=<paid team> \
+    -allowProvisioningUpdates
+  xcodebuild -exportArchive -archivePath <dir>/Limeghost.xcarchive \
+    -exportPath <dir>/export -exportOptionsPlist <options> -allowProvisioningUpdates
+  ```
+
+  The options file says `method` `app-store-connect`, `destination` `export`
+  (or `upload`), `signingStyle` `automatic` and the team, and lives outside
+  the repository with the team identifier. The archive alone signs with the
+  team's wildcard development profile and registers nothing; **the export is
+  what registered the explicit App ID `com.zincoo.limeghost` with Apple** and
+  made the team's distribution certificate (valid to September 29, 2027).
+
+Left, in order:
+
+1. The founder creates the app in App Store Connect — iOS, name Limeghost,
+   bundle ID `com.zincoo.limeghost`, any private SKU. **This is the point of
+   no return for the identifier**; the visible name can change later.
+2. Upload: the same export with `destination` `upload`, raising
+   `CURRENT_PROJECT_VERSION` on the command line for every upload after the
+   first.
+3. The founder installs TestFlight on the phone and the build from it.
+4. Set Debug's `APP_DISPLAY_NAME` to "Dev Limeghost" (the project's comment
+   says why that order of words), and change
+   `testTheHomeScreenNameComesFromTheBuildSettings` with it.
+5. The entitlement requests: the default-browser one for the phone, and the
+   Mac's passkey one — which Apple takes only from the Account Holder of an
+   organization account (see "What waits on Apple Developer Program
+   enrolment" below).
+
 ## What waits on Apple Developer Program enrolment
 
 Nothing built so far needed it — the shared layer, the app, and both test suites run under free provisioning and in CI with no paid entitlement. Enrolment ($99/year) gates:

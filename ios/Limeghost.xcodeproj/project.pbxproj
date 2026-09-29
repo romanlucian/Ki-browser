@@ -431,13 +431,16 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				/* What the home screen shows, through CFBundleDisplayName in
-				   Sources/Info.plist. Debug is the cable build, and it sits on
-				   one phone beside the TestFlight build as a second app; under
-				   one name the two were identical icons. "Dev" goes first
-				   because a home-screen label is cut from the end: measured on
-				   a 375-point screen, "Limeghost Dev" showed as "Limegh…",
-				   which is the one part both apps share. */
-				APP_DISPLAY_NAME = "Dev Limeghost";
+				   Sources/Info.plist. Debug is the cable build, which will sit
+				   on one phone beside the TestFlight build as a second app.
+				   Plain "Limeghost" while TestFlight waits (paused by the
+				   founder on September 29, 2026), because the cable app is the
+				   only one on the phone. When TestFlight starts, make this
+				   "Dev Limeghost" and change the test with it: "Dev" first,
+				   because a home-screen label is cut from the end, and
+				   "Limeghost Dev" was measured on a 375-point screen as
+				   "Limegh…", the one part both apps share. */
+				APP_DISPLAY_NAME = Limeghost;
 				/* Signing is off for the Simulator and on for a device, and the
 				   `[sdk=iphonesimulator*]` condition is what keeps both true at
 				   once. Unconditional `CODE_SIGNING_ALLOWED = NO` — what this

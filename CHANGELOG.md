@@ -14,9 +14,12 @@ Dates are commit dates. Test counts are the totals at the end of each period, ve
 
 **The iPhone app gets what an upload is checked for, September 29**
 
-TestFlight is next, and the road to it says nothing until an upload fails, so
-each of these was looked for rather than waited for. Seven tests, each watched
-failing first.
+The road to TestFlight says nothing until an upload fails, so each of these
+was looked for rather than waited for. Seven tests, each watched failing
+first. TestFlight itself is **paused**: the founder chose to finish the phone
+and test the Mac first, so nothing was uploaded and no App Store Connect
+record exists. What is left is written down in
+`docs/ios-browser-foundation.md`, under "TestFlight, prepared and paused".
 
 - **The export-compliance answer**, `ITSAppUsesNonExemptEncryption` false,
   once in the Info.plist rather than on every build in App Store Connect.
@@ -37,10 +40,13 @@ failing first.
   aside and every sheet closes. It stays untried end to end until the
   entitlement arrives, because iOS sends no link to a browser that is not
   the default.
-- **The cable build is "Dev Limeghost" on the home screen.** It and the
-  TestFlight build are two apps on one phone with two sets of data, and under
-  one name they would be two identical icons. "Limeghost Dev" was tried first
-  and measured on a 375-point screen as "Limegh…", the one part both share.
+- **The home-screen name comes from a build setting**, one per
+  configuration, because the cable build and a TestFlight build will be two
+  apps on one phone with two sets of data, and under one name two identical
+  icons. The cable build is to be "Dev Limeghost" — "Limeghost Dev" was tried
+  first and measured on a 375-point screen as "Limegh…", the one part both
+  share — but both say "Limeghost" until TestFlight starts, since the cable
+  app is the only one on the phone.
 
 A Release archive and an App Store export both succeeded on September 29. The
 export registered `com.zincoo.limeghost` with Apple and made the team's

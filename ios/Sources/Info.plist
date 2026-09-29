@@ -20,11 +20,12 @@
 	<string>6.0</string>
 	<key>CFBundleName</key>
 	<string>Limeghost</string>
-	<!-- What the home screen shows: "Limeghost" for Release and "Dev Limeghost"
-	     for Debug, from APP_DISPLAY_NAME in the project. The cable build and
-	     the TestFlight build are two apps on one phone, with two identifiers
-	     and two sets of data, and under one name they were two identical
-	     icons. -->
+	<!-- What the home screen shows, from APP_DISPLAY_NAME in the project, one
+	     per configuration. The cable build and a TestFlight build are two apps
+	     on one phone, with two identifiers and two sets of data, and under one
+	     name they would be two identical icons. Both say "Limeghost" while
+	     TestFlight waits; the project's Debug setting says when that
+	     changes. -->
 	<key>CFBundleDisplayName</key>
 	<string>$(APP_DISPLAY_NAME)</string>
 	<key>CFBundlePackageType</key>
