@@ -155,6 +155,7 @@ struct BookmarksHomePage: View {
             bookmarks: store.bookmarks,
             expanded: expandedFolderIDs
         )
+        let destinations = BookmarkFolderDestination.tree(in: store)
         return ScrollView {
             LazyVStack(alignment: .leading, spacing: 1) {
                 BookmarkTreeRowView(
@@ -198,7 +199,9 @@ struct BookmarksHomePage: View {
                         },
                         edit: { presentRename(row.folder) },
                         delete: { requestDeletion(row.folder) },
-                        fileDroppedURL: { fileDroppedURL($0, to: row.folder) }
+                        fileDroppedURL: { fileDroppedURL($0, to: row.folder) },
+                        moveDestinations: BookmarkFolderDestination.places(for: row.folder, among: destinations),
+                        move: { _ = store.moveBookmarkFolder(row.folder, to: $0) }
                     )
                 }
             }
@@ -336,6 +339,9 @@ struct BookmarksHomePage: View {
     @ViewBuilder
     private func folderGrid(stats: BookmarksHomeStats) -> some View {
         let folders = visibleFolders(stats: stats)
+        // Once per body, as the bookmark rows build theirs; each row's own
+        // Move to only filters it.
+        let destinations = BookmarkFolderDestination.tree(in: store)
         VStack(alignment: .leading, spacing: 12) {
             HomeSectionTitle(title: isSearching ? "MATCHING FOLDERS" : "FOLDERS", count: folders.count)
             LazyVStack(spacing: 5) {
@@ -363,7 +369,9 @@ struct BookmarksHomePage: View {
                         },
                         rename: { presentRename(folder) },
                         delete: { requestDeletion(folder) },
-                        fileDroppedURL: { fileDroppedURL($0, to: folder) }
+                        fileDroppedURL: { fileDroppedURL($0, to: folder) },
+                        moveDestinations: BookmarkFolderDestination.places(for: folder, among: destinations),
+                        move: { _ = store.moveBookmarkFolder(folder, to: $0) }
                     )
                 }
             }
@@ -598,6 +606,8 @@ private struct BookmarksHomeFolderRow: View {
     let rename: () -> Void
     let delete: () -> Void
     let fileDroppedURL: (URL) -> Bool
+    var moveDestinations: [BookmarkFolderDestination] = []
+    var move: ((UUID?) -> Void)?
 
     @State private var isHovered = false
     @State private var isDropTargeted = false
@@ -672,7 +682,9 @@ private struct BookmarksHomeFolderRow: View {
                 newSubfolder: newSubfolder,
                 rename: rename,
                 delete: delete,
-                organize: nil
+                organize: nil,
+                moveDestinations: moveDestinations,
+                move: move
             )
         }
         .help("Open \(folder.title), or drop a page link here to file it in this folder")
@@ -704,6 +716,8 @@ private struct BookmarkTreeRowView: View {
     var edit: () -> Void = {}
     var delete: () -> Void = {}
     var fileDroppedURL: (URL) -> Bool = { _ in false }
+    var moveDestinations: [BookmarkFolderDestination] = []
+    var move: ((UUID?) -> Void)?
 
     @State private var isDropTargeted = false
 
@@ -786,7 +800,9 @@ private struct BookmarkTreeRowView: View {
                     newSubfolder: newSubfolder,
                     rename: edit,
                     delete: delete,
-                    organize: nil
+                    organize: nil,
+                    moveDestinations: moveDestinations,
+                    move: move
                 )
             }
         }

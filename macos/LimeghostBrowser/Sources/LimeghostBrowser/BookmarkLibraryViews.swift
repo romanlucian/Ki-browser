@@ -40,7 +40,19 @@ struct BookmarkFolderEditorRequest: Identifiable {
 struct BookmarkFolderDestination: Identifiable {
     let folderID: UUID?
     let label: String
+    /// The folders this one sits inside, outermost first, recorded while the
+    /// tree is built. A folder's own Move to leaves out itself and everything
+    /// beneath it by reading this, without walking the tree again per row —
+    /// the tree is built once per body for exactly that reason.
+    var ancestorIDs: [UUID] = []
     var id: String { folderID?.uuidString ?? "unfiled" }
+
+    /// Where a folder may move: every place but the folder itself and the
+    /// folders inside it, which `BookmarkCollection.moveFolder` would refuse
+    /// anyway. Added on September 29, 2026 with the Mac's Move to for folders.
+    static func places(for folder: BookmarkFolderRecord, among destinations: [BookmarkFolderDestination]) -> [BookmarkFolderDestination] {
+        destinations.filter { $0.folderID != folder.id && !$0.ancestorIDs.contains(folder.id) }
+    }
 
     /// "Unfiled" plus every folder as a "Parent › Child" path. One shared
     /// builder so every accessible Move menu — organizer popover and the
@@ -59,16 +71,16 @@ struct BookmarkFolderDestination: Identifiable {
         }
 
         var result = [BookmarkFolderDestination(folderID: nil, label: "Unfiled")]
-        func appendChildren(of parentID: UUID?, prefix: String) {
+        func appendChildren(of parentID: UUID?, prefix: String, ancestors: [UUID]) {
             for folder in childrenByParent[parentID] ?? [] {
                 let path = prefix.isEmpty
                     ? folder.title
                     : "\(prefix) › \(folder.title)"
-                result.append(BookmarkFolderDestination(folderID: folder.id, label: path))
-                appendChildren(of: folder.id, prefix: path)
+                result.append(BookmarkFolderDestination(folderID: folder.id, label: path, ancestorIDs: ancestors))
+                appendChildren(of: folder.id, prefix: path, ancestors: ancestors + [folder.id])
             }
         }
-        appendChildren(of: nil, prefix: "")
+        appendChildren(of: nil, prefix: "", ancestors: [])
         return result
     }
 }
@@ -168,7 +180,9 @@ struct BookmarkOrganizerView: View {
                                 )
                             },
                             fileDroppedURL: { fileDroppedURL($0, to: folder) },
-                            delete: { requestDeletion(folder) }
+                            delete: { requestDeletion(folder) },
+                            moveDestinations: BookmarkFolderDestination.places(for: folder, among: destinations),
+                            move: { _ = store.moveBookmarkFolder(folder, to: $0) }
                         )
                     }
 
@@ -284,6 +298,8 @@ struct BookmarkFolderRow: View {
     let rename: () -> Void
     let fileDroppedURL: (URL) -> Bool
     let delete: () -> Void
+    var moveDestinations: [BookmarkFolderDestination] = []
+    var move: ((UUID?) -> Void)?
     @State private var isDropTargeted = false
 
     /// The organizer has no page of its own in front of the reader, so the
@@ -299,7 +315,9 @@ struct BookmarkFolderRow: View {
             newSubfolder: newSubfolder,
             rename: rename,
             delete: delete,
-            organize: nil
+            organize: nil,
+            moveDestinations: moveDestinations,
+            move: move
         )
     }
 

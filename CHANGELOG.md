@@ -12,6 +12,19 @@ Dates are commit dates. Test counts are the totals at the end of each period, ve
 
 ### Week of September 24–30, 2026
 
+**The Mac's folder menus get Move to, September 29**
+
+The shared layer could re-file a folder from the same day, and the iPhone
+offered it; the Mac's folder menus had no way to, and the founder asked for
+it. `BookmarkFolderMenuItems` — the one folder menu the bookmarks bar's
+chips, the organizer, and the Bookmark Manager's pane and sidebar tree all
+build — gains the bookmark menu's own **Move to**, with a tick where the
+folder is now. Its list leaves out the folder and every folder inside it;
+each place remembers the folders above it (`ancestorIDs`) while the tree is
+built, which the Manager still does once per body, so a row's own list is a
+filter rather than another walk. Two tests, the first watched failing
+against a stand-in.
+
 **Select several bookmarks and folders, and move or delete them together, September 29**
 
 After an import, the founder faced dozens of things inside one folder and
