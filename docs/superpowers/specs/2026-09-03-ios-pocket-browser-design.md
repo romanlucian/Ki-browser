@@ -193,7 +193,7 @@ Xcode, the founder's personal team, free provisioning, the founder's iPhone. The
 
 ### 7.2 After enrolment
 
-TestFlight for the creator testers `docs/go-to-market.md` describes, then the App Store. Three entitlements, each verified against Apple's current documentation before it is promised: iCloud/CloudKit (self-serve); `com.apple.developer.web-browser` for default browser (Apple-approved); `com.apple.developer.web-browser.public-key-credential` for passkeys (iOS 17.4+, Apple-approved).
+TestFlight for the creator testers `docs/go-to-market.md` describes, then the App Store. Three entitlements, each verified against Apple's current documentation before it is promised: iCloud/CloudKit (self-serve); `com.apple.developer.web-browser` for default browser (Apple-approved); `com.apple.developer.web-browser.public-key-credential` for passkeys (iOS 17.4+, Apple-approved). **Correction, September 29, 2026:** that entitlement's page lists macOS and Mac Catalyst only, not iOS; on the iPhone the request to make is the default-browser one, and whether it switches passkeys on in `WKWebView` is untested. See `docs/ios-browser-foundation.md`.
 
 ### 7.3 App Store facts for a browser
 
