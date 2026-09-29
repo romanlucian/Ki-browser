@@ -19,4 +19,17 @@ final class BookmarkMovePickerTests: XCTestCase {
         XCTAssertNil(rows.first?.folderID, "the first row is the top level")
         XCTAssertEqual(rows[2].folderID, bread.id)
     }
+
+    /// A folder's Move to… leaves out the folder itself and every folder
+    /// inside it — the places it cannot go — and keeps the top and the rest.
+    func testAFoldersDestinationsLeaveOutItselfAndItsOwnFolders() {
+        let recipes = BookmarkFolderRecord(title: "Recipes")
+        let soups = BookmarkFolderRecord(title: "Soups", parentID: recipes.id)
+        let winter = BookmarkFolderRecord(title: "Winter", parentID: soups.id)
+        let travel = BookmarkFolderRecord(title: "Travel")
+
+        let rows = BookmarkDestinations.rows(folders: [recipes, soups, winter, travel], excluding: recipes.id)
+
+        XCTAssertEqual(rows.map(\.title), ["Bookmarks", "Travel"])
+    }
 }

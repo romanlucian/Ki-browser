@@ -81,10 +81,12 @@ public enum BookmarkImportApplier {
             // `flatMap`, not `map`: a parent that could not be created
             // leaves its children filed one level up rather than trapping.
             let parentID = planned.parentIndex.flatMap { createdFolderIDs[$0] }
+            // A Limeghost file's own icon and colour, already checked by the
+            // reader; every other file's folders are made plain.
             let created = store.createBookmarkFolder(
                 title: planned.title,
-                iconID: LimeghostIconCatalog.defaultIconID,
-                colorID: nil,
+                iconID: planned.iconID ?? LimeghostIconCatalog.defaultIconID,
+                colorID: planned.colorID,
                 parentID: parentID
             )
             createdFolderIDs.append(created?.id)

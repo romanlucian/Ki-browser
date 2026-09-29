@@ -12,6 +12,32 @@ Dates are commit dates. Test counts are the totals at the end of each period, ve
 
 ### Week of September 24–30, 2026
 
+**Imported folders keep their icons, and any folder can move, September 29**
+
+The founder imported their bookmarks from Limeghost on the Mac and found two
+things wrong within a minute.
+
+- **Every folder arrived plain.** The export carried no icon and no colour.
+  It now writes each folder's own on its line — `LIMEGHOST_ICON` and
+  `LIMEGHOST_COLOR`, attributes every other browser ignores — and the reader
+  keeps them, on both apps, through every step that rebuilds a folder on the
+  way. The reader keeps only an icon the catalogue holds and a colour
+  Limeghost has; the file is somebody else's text. A plain folder is written
+  plain. Needs an export made after this change: files already made have
+  nothing to carry.
+- **The imported folders could not come out of the dated folder the import
+  made.** Nothing could re-file a folder, on either app — only reorder it
+  beside its siblings. `BookmarkCollection.moveFolder(id:to:)` moves a folder,
+  with everything in it, into another folder or out to the top, and refuses
+  the moves that would cut a branch off: into itself, into one of its own
+  folders, or nowhere. On the phone, touch and hold a folder for **Move to…**,
+  which lists only the places it can go. Until then, deleting the dated
+  folder was the way out — what a folder holds moves up a level, and nothing
+  is deleted.
+
+Seven tests, each watched failing: the Core ones against stand-ins or with
+their guards removed, the phone ones end to end.
+
 **The phone imports bookmarks, September 29**
 
 Step 2 of the founder's list, placed where they chose from two designs: an

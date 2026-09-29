@@ -18,6 +18,13 @@ enum BookmarkDestinations {
     /// alphabetical within a parent: Core's tree with every branch open, the
     /// order the Mac's own tree and Move menu use. The Mac labels each folder
     /// with its whole path instead, which is too wide to read on a phone.
+    /// A folder's own list: every place but the folder itself and the
+    /// folders inside it, which it cannot go into.
+    static func rows(folders: [BookmarkFolderRecord], excluding folderID: UUID) -> [BookmarkDestination] {
+        let collection = BookmarkCollection(folders: folders)
+        return rows(folders: folders).filter { !collection.isFolder($0.folderID, insideOrEqualTo: folderID) }
+    }
+
     static func rows(folders: [BookmarkFolderRecord]) -> [BookmarkDestination] {
         let tree = BookmarkTree.rows(folders: folders, bookmarks: [], expanded: Set(folders.map(\.id)))
         return [BookmarkDestination(folder: nil, depth: 0)]
@@ -25,8 +32,9 @@ enum BookmarkDestinations {
     }
 }
 
-/// Move to…: every place a bookmark can go, with a checkmark where it is now.
-/// A tap files it there and closes; Cancel closes without moving anything.
+/// Move to…: every place a bookmark or a folder can go, with a checkmark where
+/// it is now. A tap files it there and closes; Cancel closes without moving
+/// anything.
 struct BookmarkMovePicker: View {
     let destinations: [BookmarkDestination]
     let currentFolderID: UUID?

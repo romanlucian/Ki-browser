@@ -56,4 +56,24 @@ final class HostileImportInputTests: XCTestCase {
         let bookmark = try onlyBookmark(in: parsed)
         XCTAssertEqual(bookmark.addedAt?.timeIntervalSince1970, 1_655_526_400)
     }
+
+    /// A file is somebody else's text. An icon the catalogue does not hold,
+    /// or a colour Limeghost does not have, is dropped, and the folder is
+    /// made plain rather than drawn with nothing.
+    func testAnUnknownIconOrColourInAFileIsDropped() throws {
+        let html = """
+        <!DOCTYPE NETSCAPE-Bookmark-file-1>
+        <DL><p>
+            <DT><H3 LIMEGHOST_ICON="javascript:alert(1)" LIMEGHOST_COLOR="hotpink">Odd</H3>
+            <DL><p>
+                <DT><A HREF="https://example.com/">Example</A>
+            </DL><p>
+        </DL><p>
+        """
+        let imported = try NetscapeBookmarkImporter.parse(html)
+
+        let odd = try XCTUnwrap(imported.roots.first { $0.title == "Odd" })
+        XCTAssertNil(odd.iconID)
+        XCTAssertNil(odd.colorID)
+    }
 }

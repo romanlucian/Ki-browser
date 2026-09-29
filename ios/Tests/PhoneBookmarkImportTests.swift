@@ -140,6 +140,30 @@ final class PhoneBookmarkImportTests: XCTestCase {
         XCTAssertEqual(store.bookmarks(in: loose.id).map(\.title), ["Kept off the bar"])
     }
 
+    /// A file Limeghost exported brings its folders' own icons and colours.
+    /// The founder's first import, from Limeghost on the Mac, arrived with
+    /// every folder plain.
+    func testALimeghostExportBringsItsFoldersIconsAndColours() throws {
+        let mac = try makeStore()
+        let sticky = try XCTUnwrap(
+            LimeghostIconCategory.allCases.lazy.flatMap { LimeghostIconCatalog.icons(in: $0, style: .stickies) }.first?.id
+        )
+        let travel = try XCTUnwrap(mac.createBookmarkFolder(title: "Travel", iconID: sticky, parentID: nil))
+        let work = try XCTUnwrap(mac.createBookmarkFolder(title: "Work", iconID: "briefcase", colorID: "amber", parentID: nil))
+        XCTAssertNotNil(mac.addBookmark(title: "Map", url: "https://map.example/", folderID: travel.id))
+        XCTAssertNotNil(mac.addBookmark(title: "Mail", url: "https://mail.example/", folderID: work.id))
+        let exported = NetscapeBookmarkExporter.html(folders: mac.bookmarkFolders, bookmarks: mac.bookmarks)
+
+        let phone = try makeStore()
+        let model = BookmarkImportModel(store: phone)
+        _ = model.apply(try preview(model.read(Data(exported.utf8), fileName: "Bookmarks.html")).plan(.bookmarksBar))
+
+        let top = phone.bookmarkFolders(in: nil)
+        XCTAssertEqual(top.first { $0.title == "Travel" }?.iconID, sticky)
+        XCTAssertEqual(top.first { $0.title == "Work" }?.iconID, "briefcase")
+        XCTAssertEqual(top.first { $0.title == "Work" }?.colorID, "amber")
+    }
+
     // MARK: - Files that are not a bookmarks file
 
     /// Safari on this iPhone exports a ZIP, bookmarks and passwords together.

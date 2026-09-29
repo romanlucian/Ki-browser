@@ -47,10 +47,16 @@ public struct BookmarkImportPlan: Equatable, Sendable {
     public struct PlannedFolder: Equatable, Sendable {
         public let title: String
         public let parentIndex: Int?
+        /// The folder's own icon and colour, carried from a Limeghost file;
+        /// nil makes the plain folder, as every other file does.
+        public let iconID: String?
+        public let colorID: String?
 
-        public init(title: String, parentIndex: Int?) {
+        public init(title: String, parentIndex: Int?, iconID: String? = nil, colorID: String? = nil) {
             self.title = title
             self.parentIndex = parentIndex
+            self.iconID = iconID
+            self.colorID = colorID
         }
     }
 
@@ -209,7 +215,10 @@ public enum BookmarkImportMergePlanner {
                     // placement quietly degrades into "the source named no
                     // bar" — which looks exactly like the designed fallback
                     // rather than like a bug.
-                    kept.append(.folder(ImportedFolder(title: folder.title, children: prunedChildren, role: folder.role)))
+                    kept.append(.folder(ImportedFolder(
+                        title: folder.title, children: prunedChildren, role: folder.role,
+                        iconID: folder.iconID, colorID: folder.colorID
+                    )))
                 }
             }
             return kept
@@ -217,7 +226,10 @@ public enum BookmarkImportMergePlanner {
 
         let survivingRoots: [ImportedFolder] = imported.roots.compactMap { root in
             let children = prune(root.children)
-            return children.isEmpty ? nil : ImportedFolder(title: root.title, children: children, role: root.role)
+            return children.isEmpty ? nil : ImportedFolder(
+                title: root.title, children: children, role: root.role,
+                iconID: root.iconID, colorID: root.colorID
+            )
         }
 
         // Second pass: flatten the surviving tree into flat, index-addressed
@@ -241,7 +253,10 @@ public enum BookmarkImportMergePlanner {
                     ))
                 case .folder(let folder):
                     let index = folders.count
-                    folders.append(BookmarkImportPlan.PlannedFolder(title: folder.title, parentIndex: parentIndex))
+                    folders.append(BookmarkImportPlan.PlannedFolder(
+                        title: folder.title, parentIndex: parentIndex,
+                        iconID: folder.iconID, colorID: folder.colorID
+                    ))
                     flatten(folder.children, parentIndex: index)
                 }
             }

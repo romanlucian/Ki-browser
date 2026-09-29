@@ -52,11 +52,24 @@ public struct ImportedFolder: Equatable, Sendable {
     /// otherwise — the safe direction, since mistaking an ordinary folder
     /// for the bar would scatter it across somebody's bookmarks bar.
     public let role: ImportedFolderRole
+    /// Limeghost's own icon and colour for this folder, when the file came
+    /// from Limeghost and named ones it still has. Every other browser's file
+    /// leaves both nil, and so does anything a reader could not trust.
+    public let iconID: String?
+    public let colorID: String?
 
-    public init(title: String, children: [ImportedNode], role: ImportedFolderRole = .ordinary) {
+    public init(
+        title: String,
+        children: [ImportedNode],
+        role: ImportedFolderRole = .ordinary,
+        iconID: String? = nil,
+        colorID: String? = nil
+    ) {
         self.title = title
         self.children = children
         self.role = role
+        self.iconID = iconID
+        self.colorID = colorID
     }
 }
 
@@ -90,7 +103,9 @@ public struct BookmarkImport: Equatable, Sendable {
             return ImportedFolder(
                 title: root.title,
                 children: children,
-                role: keepsRole ? .bookmarksBar : .ordinary
+                role: keepsRole ? .bookmarksBar : .ordinary,
+                iconID: root.iconID,
+                colorID: root.colorID
             )
         }
     }
@@ -118,7 +133,9 @@ public struct BookmarkImport: Equatable, Sendable {
             return .folder(ImportedFolder(
                 title: folder.title,
                 children: demotedToOrdinary(folder.children),
-                role: .ordinary
+                role: .ordinary,
+                iconID: folder.iconID,
+                colorID: folder.colorID
             ))
         }
     }
