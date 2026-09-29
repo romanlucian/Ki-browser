@@ -140,6 +140,25 @@ final class BookmarksSheetTests: XCTestCase {
         XCTAssertEqual(renamed.folderID, recipes.id)
     }
 
+    /// Move to… takes a folder, with everything in it, out of the folder an
+    /// import put it in and onto the top level — the founder's first wish
+    /// after importing their bookmarks — and into another folder.
+    func testMoveToTakesAFolderOutToTheTopAndBack() throws {
+        let host = try makeHost()
+        let store = host.workspace.dataStore
+        let imported = try XCTUnwrap(store.createBookmarkFolder(title: "Imported", iconID: LimeghostIconCatalog.defaultIconID, parentID: nil))
+        let sm = try XCTUnwrap(store.createBookmarkFolder(title: "sm", iconID: LimeghostIconCatalog.defaultIconID, parentID: imported.id))
+        XCTAssertNotNil(store.addBookmark(title: "YouTube", url: "https://www.youtube.com/", folderID: sm.id))
+        let model = BookmarksModel(workspace: host.workspace)
+
+        XCTAssertTrue(model.move(sm, to: nil))
+        XCTAssertEqual(model.folders(in: nil).map(\.title), ["Imported", "sm"])
+        XCTAssertEqual(model.bookmarks(in: sm.id).map(\.title), ["YouTube"], "its bookmark stayed behind")
+
+        XCTAssertTrue(model.move(try XCTUnwrap(store.bookmarkFolder(id: sm.id)), to: imported.id))
+        XCTAssertEqual(model.folders(in: imported.id).map(\.title), ["sm"])
+    }
+
     /// Move to… files a bookmark in a folder, and back at the top level.
     func testMoveToFilesABookmarkAndBringsItBack() throws {
         let host = try makeHost()

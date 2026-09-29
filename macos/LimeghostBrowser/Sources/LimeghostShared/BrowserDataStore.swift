@@ -364,6 +364,17 @@ public final class BrowserDataStore: ObservableObject {
         apply(collection)
     }
 
+    /// Files a folder, with everything in it, in another folder or at the
+    /// top. Returns false, and writes nothing, for a move `BookmarkCollection`
+    /// refuses — into the folder itself or one of its own folders, or nowhere.
+    @discardableResult
+    public func moveBookmarkFolder(_ folder: BookmarkFolderRecord, to parentID: UUID?) -> Bool {
+        var collection = bookmarkCollection
+        guard collection.moveFolder(id: folder.id, to: parentID) else { return false }
+        apply(collection)
+        return true
+    }
+
     public func bookmarkFolder(id: UUID) -> BookmarkFolderRecord? {
         bookmarkCollection.folder(id: id)
     }

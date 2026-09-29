@@ -424,6 +424,53 @@ public struct BookmarkCollection: Codable, Equatable, Sendable {
         }
     }
 
+    /// Files a folder, with everything it holds, inside another folder, or
+    /// at the top when `parentID` is nil. It joins the end of its new row,
+    /// and the row it left is renumbered so no gap stays behind.
+    ///
+    /// Refused, changing nothing, when the destination does not exist, is
+    /// where the folder already is, or is the folder itself or one of its own
+    /// folders — that last would cut the whole branch off from the top, a loop
+    /// `normalizeReferences` could only break by flattening it. Added on
+    /// September 29, 2026: until then a folder could be reordered beside its
+    /// siblings but never re-filed, so an import's folders stayed inside the
+    /// dated folder it made. Returns whether anything moved.
+    @discardableResult
+    public mutating func moveFolder(id: UUID, to parentID: UUID?) -> Bool {
+        guard let index = folders.firstIndex(where: { $0.id == id }) else { return false }
+        if let parentID, folder(id: parentID) == nil { return false }
+        guard !isFolder(parentID, insideOrEqualTo: id) else { return false }
+        let origin = folders[index].parentID
+        guard origin != parentID else { return false }
+
+        // One timestamp for the move and the renumbering it causes.
+        let movedAt = Date()
+        folders[index].position = folders(in: parentID).count
+        folders[index].parentID = parentID
+        folders[index].modifiedAt = movedAt
+        for (offset, record) in folders(in: origin).enumerated() {
+            guard let slot = folders.firstIndex(where: { $0.id == record.id }) else { continue }
+            guard folders[slot].position != offset else { continue }
+            folders[slot].position = offset
+            folders[slot].modifiedAt = movedAt
+        }
+        return true
+    }
+
+    /// Whether `candidate` is `folderID` itself or one of the folders inside
+    /// it, however deep. The top level, nil, is inside nothing. A Move to…
+    /// list asks this to leave out the places a folder cannot go.
+    public func isFolder(_ candidate: UUID?, insideOrEqualTo folderID: UUID) -> Bool {
+        var current = candidate
+        var seen: Set<UUID> = []
+        // `seen` guards a loop that `normalizeReferences` has not broken yet.
+        while let id = current, seen.insert(id).inserted {
+            if id == folderID { return true }
+            current = folder(id: id)?.parentID
+        }
+        return false
+    }
+
     /// The bookmarks in a folder, in the order they should be shown.
     ///
     /// Every record carries a position by the time it gets here — `init`

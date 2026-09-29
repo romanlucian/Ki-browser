@@ -80,6 +80,14 @@ struct BookmarksModel {
         store.updateBookmark(id: bookmark.id, title: name, url: bookmark.url)
     }
 
+    /// Files a folder, with everything in it, at the end of another folder or
+    /// of the top level — how the folders an import brought come out of the
+    /// dated folder it made.
+    @discardableResult
+    func move(_ folder: BookmarkFolderRecord, to parentID: UUID?) -> Bool {
+        store.moveBookmarkFolder(folder, to: parentID)
+    }
+
     /// Files a bookmark at the end of another folder, or of the top level.
     func move(_ bookmark: BookmarkRecord, to folderID: UUID?) {
         store.moveBookmark(bookmark, to: folderID)
@@ -162,6 +170,7 @@ struct BookmarkFolderScreen: View {
     @State private var folderToConfirm: BookmarkFolderRecord?
     @State private var bookmarkToMove: BookmarkRecord?
     @State private var folderEditor: FolderEditorRequest?
+    @State private var folderToMove: BookmarkFolderRecord?
     @State private var isImporting = false
 
     init(workspace: BrowserWorkspace, folderID: UUID?, query: String, close: @escaping () -> Void) {
@@ -257,6 +266,14 @@ struct BookmarkFolderScreen: View {
                 model.move(bookmark, to: destination)
             }
         }
+        .sheet(item: $folderToMove) { folder in
+            BookmarkMovePicker(
+                destinations: BookmarkDestinations.rows(folders: store.bookmarkFolders, excluding: folder.id),
+                currentFolderID: folder.parentID
+            ) { destination in
+                model.move(folder, to: destination)
+            }
+        }
         .sheet(isPresented: $isImporting) {
             BookmarkImportSheet(store: store)
         }
@@ -293,6 +310,11 @@ struct BookmarkFolderScreen: View {
                 folderEditor = .edit(folder)
             } label: {
                 Label("Edit Folder…", systemImage: "pencil")
+            }
+            Button {
+                folderToMove = folder
+            } label: {
+                Label("Move to…", systemImage: "folder")
             }
             Divider()
             Button(role: .destructive) {
