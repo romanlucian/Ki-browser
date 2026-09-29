@@ -29,10 +29,17 @@ side by side.
   and the editor opens on the set the folder's icon belongs to.
 - **It replaced Rename… for folders**, so the rename alert's folder case and
   the model's folder rename went, and their test moved to the editor's.
+- **It has to be findable.** Trying it on the phone, the founder found touch
+  and hold too hidden for anybody to learn a folder can have an icon, and
+  chose visible doors from three designs: **New Folder now opens this
+  screen** (Create waits for a name, as the Mac's does), and **Edit Folder**
+  sits in a folder's bottom bar. Both are words alone — iOS 26 drew the first
+  version's labelled buttons as a bare folder and a bare pencil, which said
+  nothing about what they do.
 
-Four tests: the two about Save watched failing against a stand-in, the other
-two by breaking what they check. Looked at on a 375-point Simulator in both
-sets.
+Seven tests: the Save and Create ones watched failing against stand-ins, the
+rest by breaking what they check. Looked at on a 375-point Simulator: both
+icon sets, the top level, inside a folder, and New Folder with its keyboard.
 
 **The iPhone app gets what an upload is checked for, September 29**
 

@@ -2,13 +2,16 @@ import LimeghostCore
 import LimeghostShared
 import SwiftUI
 
-/// A folder being edited — its name, icon and colour, and the icon set being
-/// browsed — held apart from the store until Save, as the Mac's
-/// `BookmarkFolderEditor` holds them. A value, so a test can make one, change
-/// it and save it. On the main actor, as the icon lookups it asks are.
+/// A folder being edited or made — its name, icon and colour, and the icon
+/// set being browsed — held apart from the store until Save or Create, as the
+/// Mac's `BookmarkFolderEditor` holds them. A value, so a test can make one,
+/// change it and save it. On the main actor, as the icon lookups it asks are.
 @MainActor
 struct FolderEdit {
-    let folder: BookmarkFolderRecord
+    /// The folder being changed, or nil for a new one.
+    let folderID: UUID?
+    /// Where a new folder goes: the folder on screen, or the top level.
+    let parentID: UUID?
     var title: String
     var iconID: String
     var color: LimeghostIconColor
@@ -17,7 +20,8 @@ struct FolderEdit {
     var style: LimeghostIconStyle
 
     init(folder: BookmarkFolderRecord) {
-        self.folder = folder
+        folderID = folder.id
+        parentID = folder.parentID
         title = folder.title
         // The icon the folder actually draws, which for one saved before
         // icons existed is the match for its old emoji: the Mac's rule.
@@ -25,6 +29,22 @@ struct FolderEdit {
         color = LimeghostIconColor(id: folder.colorID) ?? .mint
         style = LimeghostIconCatalog.icon(id: iconID)?.style ?? .limeghost
     }
+
+    /// A new folder inside `parentID`: no name yet, the plain folder, and
+    /// mint, which is what the Mac's New Folder opens with. New Folder opens
+    /// this screen rather than an alert asking only for a name, so everybody
+    /// who makes a folder sees that it can have an icon — the founder found
+    /// touch and hold too hidden to be the only way to learn it.
+    init(newIn parentID: UUID?) {
+        folderID = nil
+        self.parentID = parentID
+        title = ""
+        iconID = LimeghostIconCatalog.defaultIconID
+        color = .mint
+        style = .limeghost
+    }
+
+    var isNew: Bool { folderID == nil }
 
     /// Whether the icon Save would keep takes a tint. Asked of the chosen
     /// icon, not of the set being browsed: browsing Stickies with a Limeghost
@@ -34,29 +54,57 @@ struct FolderEdit {
     /// An empty name cannot be saved, as on the Mac.
     var canSave: Bool { !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
 
-    /// Name, icon and colour in one update, as the Mac's Save writes them.
+    /// Name, icon and colour in one update — or, for a new folder, one
+    /// creation where it was asked for — as the Mac's Save writes them.
     /// The colour is kept even for a multicolour icon, which ignores it, so
     /// going back to a tintable one finds the colour it had.
     func save(to store: BrowserDataStore) {
         guard canSave else { return }
-        store.updateBookmarkFolder(id: folder.id, title: title, iconID: iconID, colorID: color.rawValue)
+        guard let folderID else {
+            _ = store.createBookmarkFolder(title: title, iconID: iconID, colorID: color.rawValue, parentID: parentID)
+            return
+        }
+        store.updateBookmarkFolder(id: folderID, title: title, iconID: iconID, colorID: color.rawValue)
+    }
+}
+
+/// Which folder the editor opens on: one to change, or a new one inside a
+/// parent. One value, so one sheet serves New Folder, Edit Folder in the
+/// bottom bar, and Edit Folder… on touch and hold.
+enum FolderEditorRequest: Identifiable {
+    case edit(BookmarkFolderRecord)
+    case create(parentID: UUID?)
+
+    var id: String {
+        switch self {
+        case .edit(let folder): return "edit-\(folder.id.uuidString)"
+        case .create(let parentID): return "create-\(parentID?.uuidString ?? "top")"
+        }
     }
 }
 
 /// Edit Folder, over Bookmarks: a folder's name, icon and colour on one
 /// screen, as the Mac's folder editor has them, and the Mac's own picker —
 /// compiled here by reference — so both apps offer the same drawings through
-/// the same code. Reached by touching and holding a folder. It replaced
-/// Rename… for folders on September 29, 2026, at the founder's choice, so a
-/// folder has one place to change and its menu stays short.
+/// the same code. Three ways in, two of them in words: New Folder, Edit
+/// Folder in a folder's bottom bar, and Edit Folder… on touch and hold. It
+/// replaced Rename… for folders and the New Folder alert on September 29,
+/// 2026, at the founder's choice, so a folder has one place to change.
 struct FolderEditorSheet: View {
     private let store: BrowserDataStore
     @State private var edit: FolderEdit
+    @FocusState private var isNaming: Bool
     @Environment(\.dismiss) private var dismiss
 
     init(folder: BookmarkFolderRecord, store: BrowserDataStore) {
         self.store = store
         _edit = State(initialValue: FolderEdit(folder: folder))
+    }
+
+    /// New Folder: the same screen, making one inside `parentID`.
+    init(newIn parentID: UUID?, store: BrowserDataStore) {
+        self.store = store
+        _edit = State(initialValue: FolderEdit(newIn: parentID))
     }
 
     var body: some View {
@@ -67,6 +115,7 @@ struct FolderEditorSheet: View {
                     TextField("Folder name", text: $edit.title)
                         .textFieldStyle(.roundedBorder)
                         .submitLabel(.done)
+                        .focused($isNaming)
                 }
                 if edit.selectedIsTintable {
                     colours
@@ -81,20 +130,23 @@ struct FolderEditorSheet: View {
             }
             .padding(.horizontal, 16)
             .padding(.top, 8)
-            .navigationTitle("Edit Folder")
+            .navigationTitle(edit.isNew ? "New Folder" : "Edit Folder")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
+                    Button(edit.isNew ? "Create" : "Save") {
                         edit.save(to: store)
                         dismiss()
                     }
                     .disabled(!edit.canSave)
                 }
             }
+            // A new folder starts with its name, as the alert it replaced
+            // did; an existing one opens on its icons.
+            .onAppear { if edit.isNew { isNaming = true } }
         }
         .limeghostListSheet()
     }

@@ -78,6 +78,57 @@ final class FolderEditorTests: XCTestCase {
         XCTAssertEqual(saved.colorID, "amber")
     }
 
+    // MARK: - A new folder
+
+    /// New Folder opens this screen too, so everybody who makes a folder sees
+    /// that it can have an icon: with no name yet, the plain folder, and mint —
+    /// what the Mac's New Folder opens with — and Create off until it has a
+    /// name.
+    func testANewFolderStartsBlankPlainAndMint() throws {
+        let edit = FolderEdit(newIn: nil)
+
+        XCTAssertTrue(edit.isNew)
+        XCTAssertEqual(edit.title, "")
+        XCTAssertEqual(edit.iconID, LimeghostIconCatalog.defaultIconID)
+        XCTAssertEqual(edit.color, .mint)
+        XCTAssertEqual(edit.style, .limeghost)
+        XCTAssertFalse(edit.canSave, "Create was on with no name")
+    }
+
+    /// Create files the folder inside the one on screen, with the name, icon
+    /// and colour chosen, and nowhere else.
+    func testCreateFilesTheFolderWhereItWasAskedForAsChosen() throws {
+        let store = try makeHost().workspace.dataStore
+        let recipes = try XCTUnwrap(store.createBookmarkFolder(title: "Recipes", iconID: try firstIconID(in: .limeghost), parentID: nil))
+        let other = try firstIconID(in: .limeghost, except: LimeghostIconCatalog.defaultIconID)
+        var edit = FolderEdit(newIn: recipes.id)
+
+        edit.title = "  Soups "
+        edit.iconID = other
+        edit.color = .blue
+        edit.save(to: store)
+
+        let soups = try XCTUnwrap(store.bookmarkFolders(in: recipes.id).first)
+        XCTAssertEqual(store.bookmarkFolders(in: recipes.id).count, 1)
+        XCTAssertEqual(soups.title, "Soups")
+        XCTAssertEqual(soups.iconID, other)
+        XCTAssertEqual(soups.colorID, "blue")
+        XCTAssertEqual(store.bookmarkFolders(in: nil).map(\.title), ["Recipes"], "the folder landed at the top level too")
+    }
+
+    /// A new folder needs a name, as on the Mac: without one, nothing is made.
+    func testANewFolderNeedsAName() throws {
+        let store = try makeHost().workspace.dataStore
+        var edit = FolderEdit(newIn: nil)
+
+        edit.title = "   "
+        edit.save(to: store)
+
+        XCTAssertTrue(store.bookmarkFolders.isEmpty, "a folder was made with no name")
+    }
+
+    // MARK: - Either way
+
     /// An empty name cannot be saved, as on the Mac: Save is off, and saving
     /// anyway changes nothing.
     func testAnEmptyNameCannotBeSaved() throws {
