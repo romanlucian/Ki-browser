@@ -35,7 +35,7 @@ import ImageIO
 ///   square instead (see `SiteIconView`).
 /// - Private tabs stay memory-only: nothing they load is written to disk.
 /// - Everything stored is erased by `clearAll()`, which the local-data reset
-///   calls alongside `BrowserDataStore.clearAllBrowserRecords()`.
+///   calls alongside `BrowserDataStore.clearBrowsingRecords()`.
 ///
 /// Capture is best-effort and silent: short timeouts, one attempt per
 /// navigation, failures remembered for the session only, and no UI anywhere

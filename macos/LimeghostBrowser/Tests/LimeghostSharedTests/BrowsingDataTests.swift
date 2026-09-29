@@ -98,6 +98,27 @@ final class BrowsingDataTests: XCTestCase {
         XCTAssertFalse(workspace.canReopenClosedTab, "a tab closed before the reset could still be reopened")
     }
 
+    /// Bookmarks are what somebody chose to keep, not a trace of where they
+    /// went, and Safari's and Chrome's equivalents of this reset keep them.
+    /// Limeghost's took them, folders and all, until the founder decided on
+    /// September 29, 2026 that it should not: somebody coming from either
+    /// would press it to forget their browsing and lose what they had saved.
+    func testTheResetKeepsBookmarksAndTheirFolders() async throws {
+        let workspace = try IsolatedWorkspace.make(for: self).workspace
+        let store = workspace.dataStore
+        let recipes = try XCTUnwrap(store.createBookmarkFolder(title: "Recipes", iconID: "folder", parentID: nil))
+        XCTAssertNotNil(store.addBookmark(title: "Soup", url: "https://example.com/soup", folderID: recipes.id))
+        XCTAssertNotNil(store.addBookmark(title: "Bread", url: "https://example.com/bread", folderID: nil))
+        store.recordVisit(title: "Soup", url: "https://example.com/soup")
+
+        await workspace.resetLocalBrowsingData()
+
+        XCTAssertEqual(Set(store.bookmarks.map(\.title)), ["Soup", "Bread"], "the reset took bookmarks")
+        XCTAssertEqual(store.bookmarkFolders.map(\.title), ["Recipes"], "the reset took a folder")
+        XCTAssertEqual(store.bookmarks(in: recipes.id).map(\.title), ["Soup"], "a bookmark left its folder")
+        XCTAssertTrue(store.history.isEmpty, "history is still what the reset is for")
+    }
+
     /// The reset signed the person out of their assistant — it shares the
     /// tabs' website data — but left the conversation that was already loaded
     /// on screen until the panel was closed.

@@ -155,9 +155,10 @@ final class SettingsTests: XCTestCase {
 
     // MARK: - Clearing
 
-    /// Clearing is the Mac's reset: bookmarks go too, which Safari's and
-    /// Chrome's do not take, so the words say so twice.
-    func testClearingTakesBookmarksHistoryAndTabsAndSaysSo() async throws {
+    /// Clearing is the Mac's reset, and like Safari's and Chrome's it keeps
+    /// bookmarks. It took them until September 29, 2026, and the words said
+    /// so; now the words say they stay.
+    func testClearingKeepsBookmarksTakesTheRestAndSaysSo() async throws {
         let (workspace, preferences) = try makeWorkspace()
         let model = SettingsModel(workspace: workspace, preferences: preferences)
         let store = workspace.dataStore
@@ -168,12 +169,13 @@ final class SettingsTests: XCTestCase {
 
         await model.clearBrowsingData()
 
-        XCTAssertTrue(store.bookmarks.isEmpty)
+        XCTAssertEqual(store.bookmarks.map(\.title), ["Bread"], "the reset took a bookmark")
         XCTAssertTrue(store.history.isEmpty)
         XCTAssertEqual(workspace.tabs.count, 1)
         XCTAssertFalse(store.savesHistory, "a setting was reset along with the data")
-        XCTAssertTrue(SettingsWording.clearFooter.contains("bookmarks"))
-        XCTAssertTrue(SettingsWording.clearMessage.contains("bookmarks are removed too"))
+        XCTAssertTrue(SettingsWording.clearFooter.contains("Your bookmarks and settings stay."))
+        XCTAssertFalse(SettingsWording.clearFooter.contains("history, bookmarks"), "the list of what goes still names bookmarks")
+        XCTAssertTrue(SettingsWording.clearMessage.contains("Your bookmarks and settings stay."))
         XCTAssertTrue(SettingsWording.clearFooter.contains("closes the assistant"))
     }
 

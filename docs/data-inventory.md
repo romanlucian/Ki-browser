@@ -61,7 +61,7 @@ Exactly four things. Nothing else.
 
 ## 4. User control
 
-- **Clear local browsing data** (Settings) removes tabs, groups, history, bookmarks and folders, the download list, the favicon cache, per-site blocking exceptions, all WebKit site data, and the recovery copies. It deliberately keeps files already downloaded, the search choice, and onboarding state.
+- **Clear local browsing data** (Settings) removes tabs, groups, recently closed tabs, history, the download list, the favicon cache, tab previews, per-site blocking exceptions, all WebKit site data, and the recovery copies, and it closes the assistant. It deliberately keeps bookmarks and their folders — as Safari's and Chrome's equivalents do, since September 29, 2026; before that it removed them — files already downloaded, the search choice, and onboarding state.
 - **Per-site data removal** — Settings lists every site holding data, each with its own remove button; the same control appears in the address-bar site popover.
 - **History can be disabled** so new visits are never recorded, and cleared independently.
 - **Session restore can be disabled**, which also deletes the saved workspace.

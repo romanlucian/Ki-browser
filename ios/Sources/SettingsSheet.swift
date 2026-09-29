@@ -113,14 +113,14 @@ enum SettingsWording {
     /// ad blocker, nothing counted.
     static let blockingFooter = "Blocks requests to a list of common advertising and tracking sites. It is not a complete ad blocker: a site\u{2019}s own analytics, cookies and fingerprinting are not stopped, and Limeghost cannot see how many requests it blocked."
 
-    /// Everything `resetLocalBrowsingData` removes, in words. Bookmarks are
-    /// named twice, here and in the confirmation, because Safari and Chrome
-    /// keep them through the same action and somebody coming from either
-    /// would not expect this to take them.
-    static let clearFooter = "Removes your open and recently closed tabs, history, bookmarks, tab previews, site icons, cookies, caches and website storage, and closes the assistant. You will be signed out of websites, your assistant included. Your settings stay."
+    /// Everything `resetLocalBrowsingData` removes, in words, and the two
+    /// things somebody would most fear losing, which it keeps. It took
+    /// bookmarks until September 29, 2026, when the founder decided it should
+    /// keep them as Safari's and Chrome's do.
+    static let clearFooter = "Removes your open and recently closed tabs, history, tab previews, site icons, cookies, caches and website storage, and closes the assistant. You will be signed out of websites, your assistant included. Your bookmarks and settings stay."
     static let clearLabel = "Clear Browsing Data"
     static let clearTitle = "Clear browsing data?"
-    static let clearMessage = "This cannot be undone. Your bookmarks are removed too; your settings stay."
+    static let clearMessage = "This cannot be undone. Your bookmarks and settings stay."
     static let clearedNotice = "Browsing data cleared."
 
     static let makersAddress = "https://zincoo.com/"

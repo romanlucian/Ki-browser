@@ -103,7 +103,7 @@ final class BrowserBehaviorTests: XCTestCase {
         XCTAssertFalse(workspace.selectedTab?.isPrivate == true)
     }
 
-    func testClearLocalBrowsingDataResetsRecordsAndKeepsOneCleanTab() async throws {
+    func testClearLocalBrowsingDataKeepsBookmarksClearsTheRestAndLeavesOneCleanTab() async throws {
         let suiteName = "clearframe.data.reset.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
         defer { TestSuiteCleanup.destroy(suiteName, defaults: defaults) }
@@ -129,6 +129,8 @@ final class BrowserBehaviorTests: XCTestCase {
             favicons: FaviconStore(directory: iconDirectory, fetch: Self.forbiddenFaviconFetcher)
         )
         _ = store.addBookmark(title: "Saved", url: "https://example.com/saved", folderID: nil)
+        let recipes = try XCTUnwrap(store.createBookmarkFolder(title: "Recipes", iconID: "folder", parentID: nil))
+        _ = store.addBookmark(title: "Soup", url: "https://example.com/soup", folderID: recipes.id)
         store.recordVisit(title: "Visited", url: "https://example.com/visited")
         workspace.addTab(url: URL(string: "https://example.com/open"))
         workspace.persistNow()
@@ -144,8 +146,13 @@ final class BrowserBehaviorTests: XCTestCase {
             FileManager.default.fileExists(atPath: iconDirectory.path),
             "the reset must erase the icon directory it was handed"
         )
-        XCTAssertTrue(store.bookmarks.isEmpty)
-        XCTAssertTrue(store.bookmarkFolders.isEmpty)
+        // Bookmarks stay, folders and all, as Safari's and Chrome's do through
+        // the same action: they are what somebody chose to keep, not a trace
+        // of where they went. Until September 29, 2026 this asserted the
+        // opposite.
+        XCTAssertEqual(Set(store.bookmarks.map(\.title)), ["Saved", "Soup"], "the reset took bookmarks")
+        XCTAssertEqual(store.bookmarkFolders.map(\.title), ["Recipes"], "the reset took a folder")
+        XCTAssertEqual(store.bookmarks(in: recipes.id).map(\.title), ["Soup"], "a bookmark left its folder")
         XCTAssertTrue(store.history.isEmpty)
         XCTAssertNil(store.loadWorkspace())
         XCTAssertEqual(workspace.tabs.count, 1)

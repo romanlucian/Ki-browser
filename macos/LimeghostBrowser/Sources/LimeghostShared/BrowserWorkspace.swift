@@ -1614,10 +1614,15 @@ public final class BrowserWorkspace: ObservableObject {
         // fresh window's — conversations and their parked addresses gone, the
         // chosen assistant kept — and usable again at once.
         aiCompanion.teardown()
-        dataStore.clearAllBrowserRecords()
+        // History and the saved session. Bookmarks stay, as Safari's and
+        // Chrome's do: see `clearBrowsingRecords`.
+        dataStore.clearBrowsingRecords()
         downloads.clearAllRecords()
-        // Captured site icons are browsing evidence too: the same reset that
-        // erases bookmarks and history erases them from disk and memory.
+        // Captured site icons are browsing evidence too — an icon exists
+        // only because a site was visited — so the same reset that erases
+        // history erases them from disk and memory, a kept bookmark's
+        // included. It shows its colour square until its site is visited
+        // again, as a bookmark of a site never visited always has.
         favicons.clearAll()
         // And what each tab looked like, on disk and in memory: an ordinary
         // tab's picture is kept between launches, so this is what removes it.

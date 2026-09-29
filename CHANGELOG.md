@@ -31,9 +31,8 @@ stores: the phone offers fewer settings, never different ones.
   time, with kinds of data and never an amount, since WebKit reports none.
 - **Tracker Blocking** on or off, with the Mac's caveats: a list, not a
   complete ad blocker, nothing counted.
-- **Clear Browsing Data**, which is the Mac's reset. Its confirmation says in
-  so many words that bookmarks go too, because Safari's and Chrome's
-  equivalents keep them and somebody coming from either would not expect it.
+- **Clear Browsing Data**, which is the Mac's reset — and which now keeps
+  bookmarks, on both apps. See below.
 - **About**: Limeghost by Zincoo, and the version.
 
 Left out on purpose: default browser (an entitlement not yet granted),
@@ -57,6 +56,18 @@ Building it turned up three things that were not true, and fixed them:
   the code does now.
 
 Each fix has a test that was watched failing with the fix taken out.
+
+**Clearing browsing data keeps bookmarks, as Safari and Chrome do.** It took
+them, folders and all, on the Mac since the reset existed. Asked plainly
+whether it should, the founder said to keep them: somebody coming from Safari
+or Chrome presses that button to forget their browsing, not to lose what they
+saved, and cannot undo it. `BrowserDataStore.clearAllBrowserRecords` became
+`clearBrowsingRecords`, which takes history and the saved session and leaves
+bookmarks alone; the Mac's caption, both confirmations, the README, the data
+inventory and the privacy notes all say so. Site icons still go — an icon is
+a record of a visit — so a kept bookmark shows its colour square until its
+site is visited again. The three tests that now expect bookmarks to stay were
+watched failing against the old reset first.
 
 **The phone's tab switcher shows the pages, September 27**
 
