@@ -80,62 +80,35 @@ struct BookmarksModel {
         store.updateBookmark(id: bookmark.id, title: name, url: bookmark.url)
     }
 
-    /// Changes the name and nothing else. The store's update takes an icon and
-    /// a tint too; handed the folder's own, it leaves both as they are. An
-    /// empty icon ID leaves a folder that never chose one still resolving its
-    /// old emoji. An empty name keeps the old one, which is the store's rule.
-    func rename(_ folder: BookmarkFolderRecord, to name: String) {
-        store.updateBookmarkFolder(id: folder.id, title: name, iconID: folder.iconID ?? "", colorID: folder.colorID)
-    }
-
     /// Files a bookmark at the end of another folder, or of the top level.
     func move(_ bookmark: BookmarkRecord, to folderID: UUID?) {
         store.moveBookmark(bookmark, to: folderID)
     }
 
-    /// A new folder at the end of the one on screen, drawn with the plain
-    /// folder. The store refuses an empty name, but the person pressed Create
-    /// and asked for a folder, so an empty name makes one called "New Folder".
-    @discardableResult
-    func createFolder(named name: String, in parentID: UUID?) -> BookmarkFolderRecord? {
-        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        return store.createBookmarkFolder(
-            title: trimmed.isEmpty ? "New Folder" : trimmed,
-            iconID: LimeghostIconCatalog.defaultIconID,
-            parentID: parentID
-        )
-    }
 }
 
-/// A name being typed into an alert: a new folder, or a new name for a folder
-/// or a bookmark. One value, so each screen has one alert and a test can read
-/// what each case shows and does.
+/// A name being typed into an alert: a new name for a bookmark. One value, so
+/// a test can read what the alert shows and does. A folder is named in Edit
+/// Folder instead (`FolderEditorSheet`), with its icon and colour — New Folder
+/// included, since September 29, 2026.
 enum BookmarkNameEdit {
-    case newFolder(parentID: UUID?)
-    case renameFolder(BookmarkFolderRecord)
     case renameBookmark(BookmarkRecord)
 
     var title: String {
         switch self {
-        case .newFolder: return "New Folder"
-        case .renameFolder: return "Rename Folder"
         case .renameBookmark: return "Rename Bookmark"
         }
     }
 
     var confirmLabel: String {
         switch self {
-        case .newFolder: return "Create"
-        case .renameFolder, .renameBookmark: return "Save"
+        case .renameBookmark: return "Save"
         }
     }
 
-    /// What the field holds when the alert opens: nothing for a new folder,
-    /// the current name for a rename.
+    /// What the field holds when the alert opens: the current name.
     var startingName: String {
         switch self {
-        case .newFolder: return ""
-        case .renameFolder(let folder): return folder.title
         case .renameBookmark(let bookmark): return bookmark.title
         }
     }
@@ -143,8 +116,6 @@ enum BookmarkNameEdit {
     @MainActor
     func commit(_ name: String, with model: BookmarksModel) {
         switch self {
-        case .newFolder(let parentID): model.createFolder(named: name, in: parentID)
-        case .renameFolder(let folder): model.rename(folder, to: name)
         case .renameBookmark(let bookmark): model.rename(bookmark, to: name)
         }
     }
@@ -190,6 +161,7 @@ struct BookmarkFolderScreen: View {
     @State private var typedName = ""
     @State private var folderToConfirm: BookmarkFolderRecord?
     @State private var bookmarkToMove: BookmarkRecord?
+    @State private var folderEditor: FolderEditorRequest?
 
     init(workspace: BrowserWorkspace, folderID: UUID?, query: String, close: @escaping () -> Void) {
         self.store = workspace.dataStore
@@ -239,12 +211,21 @@ struct BookmarkFolderScreen: View {
             ToolbarItem(placement: .confirmationAction) {
                 Button("Done", action: close)
             }
-            ToolbarItem(placement: .bottomBar) {
-                Button {
-                    beginNaming(.newFolder(parentID: folderID))
-                } label: {
-                    Label("New Folder", systemImage: "folder.badge.plus")
-                        .labelStyle(.titleAndIcon)
+            // Both in words, at the bottom where a thumb is: touch and hold
+            // alone was too hidden for anybody to learn that a folder can
+            // have its own icon. Words only, because iOS 26 draws a toolbar
+            // `Label` as its icon alone whatever its label style — measured on
+            // September 29, 2026, when these showed as a bare folder and a
+            // bare pencil that said nothing about what they do.
+            ToolbarItemGroup(placement: .bottomBar) {
+                Button("New Folder") {
+                    folderEditor = .create(parentID: folderID)
+                }
+                if let current = folderID.flatMap(store.bookmarkFolder(id:)) {
+                    Spacer()
+                    Button("Edit Folder") {
+                        folderEditor = .edit(current)
+                    }
                 }
             }
         }
@@ -265,6 +246,12 @@ struct BookmarkFolderScreen: View {
                 currentFolderID: bookmark.folderID
             ) { destination in
                 model.move(bookmark, to: destination)
+            }
+        }
+        .sheet(item: $folderEditor) { request in
+            switch request {
+            case .edit(let folder): FolderEditorSheet(folder: folder, store: store)
+            case .create(let parentID): FolderEditorSheet(newIn: parentID, store: store)
             }
         }
     }
@@ -291,9 +278,9 @@ struct BookmarkFolderScreen: View {
         }
         .contextMenu {
             Button {
-                beginNaming(.renameFolder(folder))
+                folderEditor = .edit(folder)
             } label: {
-                Label("Rename…", systemImage: "pencil")
+                Label("Edit Folder…", systemImage: "pencil")
             }
             Divider()
             Button(role: .destructive) {
@@ -385,8 +372,7 @@ struct BookmarkFolderScreen: View {
         Binding(get: { folderToConfirm != nil }, set: { if !$0 { folderToConfirm = nil } })
     }
 
-    /// The field starts from the current name for a rename, and empty for a
-    /// new folder.
+    /// The field starts from the current name.
     private func beginNaming(_ edit: BookmarkNameEdit) {
         typedName = edit.startingName
         nameEdit = edit

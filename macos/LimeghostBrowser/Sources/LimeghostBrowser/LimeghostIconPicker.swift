@@ -12,13 +12,25 @@ import SwiftUI
 /// It owns no selection of its own: the caller holds the chosen id and the
 /// tint, because the folder editor stores a colour id and a profile stores a
 /// palette colour, and neither should have to translate for the other.
+///
+/// The iPhone compiles this file too, by reference, since September 29, 2026:
+/// its Edit Folder screen offers the same drawings through the same code
+/// rather than a second grid that would drift from this one.
 struct LimeghostIconPicker: View {
     @Binding var iconID: String
     @Binding var style: LimeghostIconStyle
     /// The colour a tintable icon takes. Nil draws the artwork untinted, which
     /// is what a licensed set wants — it brings its own colours.
     let tint: Color?
-    var gridHeight: CGFloat = 240
+    /// Nil lets the grid take whatever height its container gives it, which is
+    /// what a phone sheet wants; the Mac's editors fix one.
+    var gridHeight: CGFloat? = 240
+    /// One cell's side. 38 suits a pointer; a finger needs the 44 Apple's
+    /// guidelines give as the smallest touch target, which the phone passes.
+    var cellSize: CGFloat = 38
+
+    /// The drawing keeps the proportion the Mac's 22 in 38 gave it.
+    private var artworkSize: CGFloat { (cellSize * 22 / 38).rounded() }
 
     @State private var search = ""
 
@@ -77,7 +89,7 @@ struct LimeghostIconPicker: View {
                                 .tracking(LimeghostTheme.metaTracking)
                                 .foregroundStyle(LimeghostTheme.textTertiary)
                             LazyVGrid(
-                                columns: [GridItem(.adaptive(minimum: 38, maximum: 38), spacing: 6)],
+                                columns: [GridItem(.adaptive(minimum: cellSize, maximum: cellSize), spacing: 6)],
                                 alignment: .leading,
                                 spacing: 6
                             ) {
@@ -98,13 +110,14 @@ struct LimeghostIconPicker: View {
             .padding(.vertical, 2)
         }
         .frame(height: gridHeight)
+        .frame(maxHeight: gridHeight == nil ? .infinity : nil)
     }
 
     private func cell(_ icon: LimeghostIcon) -> some View {
         let isSelected = icon.id == iconID
         return Button { iconID = icon.id } label: {
             artwork(icon, isSelected: isSelected)
-                .frame(width: 38, height: 38)
+                .frame(width: cellSize, height: cellSize)
                 .background(
                     // A tintable icon inverts into its tint when chosen. A
                     // multicolour one cannot — recolouring it would do nothing
@@ -127,7 +140,7 @@ struct LimeghostIconPicker: View {
 
     @ViewBuilder
     private func artwork(_ icon: LimeghostIcon, isSelected: Bool) -> some View {
-        let drawing = LimeghostIconView(iconID: icon.id, size: 22)
+        let drawing = LimeghostIconView(iconID: icon.id, size: artworkSize)
         if isTintable {
             drawing.foregroundStyle(isSelected ? LimeghostTheme.bg0 : (tint ?? LimeghostTheme.accent))
         } else {

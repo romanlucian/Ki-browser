@@ -140,21 +140,6 @@ final class BookmarksSheetTests: XCTestCase {
         XCTAssertEqual(renamed.folderID, recipes.id)
     }
 
-    /// The store's folder update takes an icon and a tint as well as a name.
-    /// A rename hands it the folder's own, so both survive.
-    func testRenamingAFolderKeepsItsIconAndTint() throws {
-        let host = try makeHost()
-        let store = host.workspace.dataStore
-        let travel = try XCTUnwrap(store.createBookmarkFolder(title: "Travel", iconID: "palette", colorID: "amber", parentID: nil))
-
-        BookmarksModel(workspace: host.workspace).rename(travel, to: "Holidays")
-
-        let renamed = try XCTUnwrap(store.bookmarkFolder(id: travel.id))
-        XCTAssertEqual(renamed.title, "Holidays")
-        XCTAssertEqual(renamed.iconID, "palette")
-        XCTAssertEqual(renamed.colorID, "amber")
-    }
-
     /// Move to… files a bookmark in a folder, and back at the top level.
     func testMoveToFilesABookmarkAndBringsItBack() throws {
         let host = try makeHost()
@@ -171,48 +156,16 @@ final class BookmarksSheetTests: XCTestCase {
         XCTAssertTrue(store.bookmarks(in: recipes.id).isEmpty)
     }
 
-    /// New Folder makes a folder inside the one on screen, drawn with the
-    /// plain folder. Left unnamed, it is called "New Folder".
-    func testNewFolderLandsInsideTheFolderOnScreen() throws {
-        let host = try makeHost()
-        let recipes = try host.workspace.dataStore.folder(named: "Recipes")
-        let model = BookmarksModel(workspace: host.workspace)
-
-        let soups = try XCTUnwrap(model.createFolder(named: "  Soups ", in: recipes.id))
-        let unnamed = try XCTUnwrap(model.createFolder(named: "   ", in: nil))
-
-        XCTAssertEqual(soups.title, "Soups")
-        XCTAssertEqual(soups.parentID, recipes.id)
-        XCTAssertEqual(soups.iconID, LimeghostIconCatalog.defaultIconID)
-        XCTAssertNil(soups.colorID)
-        XCTAssertEqual(unnamed.title, "New Folder")
-        XCTAssertNil(unnamed.parentID)
-    }
-
     // MARK: - The name alert
 
-    /// Each case says what it is for, starts from the right text, and its
-    /// button does its own job.
+    /// The alert names bookmarks only — a folder is named in Edit Folder, with
+    /// its icon and colour. It says what it is for, starts from the current
+    /// name, and its button does its job.
     func testTheNameAlertSaysWhatItIsForAndDoesIt() throws {
         let host = try makeHost()
         let store = host.workspace.dataStore
-        let recipes = try store.folder(named: "Recipes")
         let bread = try store.page("Bread", at: "https://example.com/bread")
         let model = BookmarksModel(workspace: host.workspace)
-
-        let newFolder = BookmarkNameEdit.newFolder(parentID: recipes.id)
-        XCTAssertEqual(newFolder.title, "New Folder")
-        XCTAssertEqual(newFolder.confirmLabel, "Create")
-        XCTAssertEqual(newFolder.startingName, "")
-        newFolder.commit("Soups", with: model)
-        XCTAssertEqual(store.bookmarkFolders(in: recipes.id).map(\.title), ["Soups"])
-
-        let renameFolder = BookmarkNameEdit.renameFolder(recipes)
-        XCTAssertEqual(renameFolder.title, "Rename Folder")
-        XCTAssertEqual(renameFolder.confirmLabel, "Save")
-        XCTAssertEqual(renameFolder.startingName, "Recipes")
-        renameFolder.commit("Cooking", with: model)
-        XCTAssertEqual(store.bookmarkFolder(id: recipes.id)?.title, "Cooking")
 
         let renameBookmark = BookmarkNameEdit.renameBookmark(bread)
         XCTAssertEqual(renameBookmark.title, "Rename Bookmark")
