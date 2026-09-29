@@ -228,6 +228,15 @@ final class IOSSessionPlatformTests: XCTestCase {
         XCTAssertEqual(apis.first?["NSPrivacyAccessedAPITypeReasons"] as? [String], ["CA92.1"])
     }
 
+    /// Apple grants the default-browser entitlement only to an app that
+    /// declares web links. Without the entitlement iOS still sends every http
+    /// and https link to the default browser; with it, they can come here.
+    func testTheAppDeclaresWebLinks() throws {
+        let types = try builtInfoPlist()["CFBundleURLTypes"] as? [[String: Any]] ?? []
+        let schemes = Set(types.flatMap { $0["CFBundleURLSchemes"] as? [String] ?? [] })
+        XCTAssertTrue(schemes.isSuperset(of: ["http", "https"]), "the default-browser request requires both")
+    }
+
     /// The cable build and the TestFlight build are two apps on one phone,
     /// and with one name they were two identical icons. The cable build —
     /// Debug, which is also what the tests run — says so on the home screen;

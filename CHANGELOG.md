@@ -15,7 +15,7 @@ Dates are commit dates. Test counts are the totals at the end of each period, ve
 **The iPhone app gets what an upload is checked for, September 29**
 
 TestFlight is next, and the road to it says nothing until an upload fails, so
-each of these was looked for rather than waited for. Four tests, each watched
+each of these was looked for rather than waited for. Seven tests, each watched
 failing first.
 
 - **The export-compliance answer**, `ITSAppUsesNonExemptEncryption` false,
@@ -31,6 +31,12 @@ failing first.
   nothing to its maker.
 - **Versions from the build settings**, so an upload can raise the build
   number on the command line; App Store Connect refuses one it has seen.
+- **Web links**, http and https, declared in the Info.plist, which Apple
+  requires before it grants the default-browser entitlement, and handled: a
+  link from another app opens in a new tab in front, the assistant steps
+  aside and every sheet closes. It stays untried end to end until the
+  entitlement arrives, because iOS sends no link to a browser that is not
+  the default.
 - **The cable build is "Dev Limeghost" on the home screen.** It and the
   TestFlight build are two apps on one phone with two sets of data, and under
   one name they would be two identical icons. "Limeghost Dev" was tried first

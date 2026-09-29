@@ -81,6 +81,26 @@
 	     is still plain http. This exempts *page content* only: the app's own
 	     connections stay under App Transport Security, and Limeghost makes
 	     almost none of its own. The macOS bundle carries the same key. -->
+	<!-- Web links. Apple grants the default-browser entitlement only to an
+	     app that declares both schemes. Without that entitlement iOS still
+	     sends every http and https link to the default browser and none
+	     here; with it, a link another app hands over opens in a new tab
+	     (`IncomingLink`). -->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>Web page</string>
+			<key>CFBundleTypeRole</key>
+			<string>Viewer</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>http</string>
+				<string>https</string>
+			</array>
+		</dict>
+	</array>
+
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsArbitraryLoadsInWebContent</key>

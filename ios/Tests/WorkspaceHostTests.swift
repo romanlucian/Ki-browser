@@ -35,4 +35,34 @@ final class WorkspaceHostTests: XCTestCase {
         XCTAssertEqual(host.workspace.visibleTabs.count, before + 1)
         XCTAssertEqual(host.workspace.selectedTab?.session.currentURLString, "https://example.com/")
     }
+
+    // MARK: - A link from another app
+
+    /// A web link another app hands over — which reaches Limeghost only once
+    /// it is the default browser — is a door, like every other way of asking
+    /// for a page: a new tab in front, holding that page, with the assistant
+    /// out of its way.
+    func testALinkFromAnotherAppOpensInANewTabInFront() throws {
+        let host = try makeHost()
+        host.workspace.aiCompanion.toggle()
+        XCTAssertTrue(host.workspace.aiCompanion.isVisible, "the assistant has to be covering the page first")
+        let before = host.workspace.tabs.count
+
+        let opened = IncomingLink(workspace: host.workspace).open(try XCTUnwrap(URL(string: "https://example.com/recipes")))
+
+        XCTAssertTrue(opened)
+        XCTAssertEqual(host.workspace.tabs.count, before + 1)
+        XCTAssertEqual(host.workspace.selectedTab?.session.currentURLString, "https://example.com/recipes")
+        XCTAssertFalse(host.workspace.aiCompanion.isVisible, "the assistant still covered the page somebody asked for")
+    }
+
+    /// Anything that is not a web page opens nothing, and says so, so the
+    /// screen leaves its sheets where they were.
+    func testALinkThatIsNotAWebPageOpensNothing() throws {
+        let host = try makeHost()
+        let before = host.workspace.tabs.count
+
+        XCTAssertFalse(IncomingLink(workspace: host.workspace).open(try XCTUnwrap(URL(string: "file:///private/etc/hosts"))))
+        XCTAssertEqual(host.workspace.tabs.count, before)
+    }
 }
