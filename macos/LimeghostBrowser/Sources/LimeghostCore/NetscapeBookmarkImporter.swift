@@ -41,6 +41,10 @@ public enum NetscapeBookmarkImporter {
         /// than read at close time because the attribute arrives on the
         /// heading, one tag *before* the `<DL>` it describes.
         var isToolbar: Bool = false
+        /// Limeghost's own icon and colour, from the same `<H3>`, already
+        /// checked against what Limeghost has.
+        var iconID: String?
+        var colorID: String?
         var children: [ImportedNode] = []
     }
 
@@ -59,6 +63,9 @@ public enum NetscapeBookmarkImporter {
         /// cleared in exactly the same places or a marker would leak onto
         /// the next folder.
         var pendingFolderIsToolbar = false
+        /// Handed off the same way, and cleared in the same places.
+        var pendingFolderIconID: String?
+        var pendingFolderColorID: String?
 
         init(characters: [Character]) {
             self.characters = characters
@@ -89,9 +96,16 @@ public enum NetscapeBookmarkImporter {
                 guard stack.count < BookmarkImportLimits.maxNestingDepth else {
                     throw BookmarkImportError.nestingTooDeep
                 }
-                stack.append(OpenList(title: pendingFolderTitle ?? "", isToolbar: pendingFolderIsToolbar))
+                stack.append(OpenList(
+                    title: pendingFolderTitle ?? "",
+                    isToolbar: pendingFolderIsToolbar,
+                    iconID: pendingFolderIconID,
+                    colorID: pendingFolderColorID
+                ))
                 pendingFolderTitle = nil
                 pendingFolderIsToolbar = false
+                pendingFolderIconID = nil
+                pendingFolderColorID = nil
 
             case (true, "DL"):
                 closeCurrentList()
@@ -103,6 +117,14 @@ public enum NetscapeBookmarkImporter {
                 // `true`. Unquoted values parse fine too, so this reads the
                 // same either way.
                 pendingFolderIsToolbar = tag.attributes["personal_toolbar_folder"]?.lowercased() == "true"
+                // Limeghost's own, which `NetscapeBookmarkExporter` writes and
+                // every other browser ignores. Somebody else's text, so an
+                // icon the catalogue does not hold and a colour Limeghost does
+                // not have are dropped, and the folder is made plain.
+                pendingFolderIconID = tag.attributes["limeghost_icon"]
+                    .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                    .flatMap { LimeghostIconCatalog.icon(id: $0) == nil ? nil : $0 }
+                pendingFolderColorID = LimeghostIconColor(id: tag.attributes["limeghost_color"])?.rawValue
 
             case (false, "A"):
                 let rawTitle = NetscapeHTMLEntities.unescape(readText())
@@ -270,7 +292,9 @@ public enum NetscapeBookmarkImporter {
                 let folder = ImportedFolder(
                     title: title.isEmpty ? untitledFolderFallbackTitle : title,
                     children: finished.children,
-                    role: finished.isToolbar ? .bookmarksBar : .ordinary
+                    role: finished.isToolbar ? .bookmarksBar : .ordinary,
+                    iconID: finished.iconID,
+                    colorID: finished.colorID
                 )
                 stack[stack.count - 1].children.append(.folder(folder))
             }

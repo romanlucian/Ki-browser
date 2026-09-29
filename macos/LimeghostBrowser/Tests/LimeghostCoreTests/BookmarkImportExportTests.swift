@@ -699,4 +699,55 @@ final class BookmarkImportExportTests: XCTestCase {
         XCTAssertTrue(message.contains("ZIP archive"), message)
         XCTAssertTrue(message.contains("unpack"), message)
     }
+
+    // MARK: - Limeghost's own folder icons
+
+    /// The founder exported their bookmarks from Limeghost on the Mac and
+    /// imported them on the iPhone, and every folder arrived plain: the file
+    /// carried no icon and no colour. Limeghost now writes both on a folder's
+    /// line — attributes every other browser ignores — and reads them back.
+    func testAFoldersIconAndColourTravelThroughAnExport() throws {
+        let sticky = try XCTUnwrap(
+            LimeghostIconCategory.allCases.lazy.flatMap { LimeghostIconCatalog.icons(in: $0, style: .stickies) }.first?.id
+        )
+        let work = BookmarkFolderRecord(title: "Work", iconID: sticky, colorID: nil)
+        let plain = BookmarkFolderRecord(title: "Plain", parentID: work.id)
+        let tinted = BookmarkFolderRecord(title: "Tinted", iconID: "briefcase", colorID: "amber", parentID: work.id)
+        let bookmarks = [
+            BookmarkRecord(title: "A", url: "https://a.example/", folderID: work.id),
+            BookmarkRecord(title: "B", url: "https://b.example/", folderID: plain.id),
+            BookmarkRecord(title: "C", url: "https://c.example/", folderID: tinted.id),
+        ]
+
+        let html = NetscapeBookmarkExporter.html(folders: [work, plain, tinted], bookmarks: bookmarks)
+        let imported = try NetscapeBookmarkImporter.parse(html)
+
+        let bar = try XCTUnwrap(imported.roots.first { $0.role == .bookmarksBar })
+        guard case .folder(let readWork) = try XCTUnwrap(bar.children.first) else { return XCTFail("Work was not a folder") }
+        XCTAssertEqual(readWork.iconID, sticky)
+        XCTAssertNil(readWork.colorID)
+        let children = readWork.children.compactMap { node -> ImportedFolder? in
+            if case .folder(let folder) = node { return folder }
+            return nil
+        }
+        XCTAssertEqual(children.map(\.title), ["Plain", "Tinted"])
+        XCTAssertNil(children[0].iconID, "a plain folder was written with an icon")
+        XCTAssertEqual(children[1].iconID, "briefcase")
+        XCTAssertEqual(children[1].colorID, "amber")
+
+        // And the plan keeps them, all the way to the folders it will make.
+        let plan = BookmarkImportMergePlanner.plan(imported, into: BookmarkCollection(), placement: .bookmarksBar, importFolderTitle: "Imported")
+        XCTAssertEqual(plan.folders.first { $0.title == "Work" }?.iconID, sticky)
+        XCTAssertEqual(plan.folders.first { $0.title == "Tinted" }?.colorID, "amber")
+    }
+
+    /// A plain folder is written as every browser writes one, with nothing
+    /// of Limeghost's on its line.
+    func testAPlainFolderIsWrittenWithoutLimeghostsAttributes() {
+        let html = NetscapeBookmarkExporter.html(
+            folders: [BookmarkFolderRecord(title: "Plain")],
+            bookmarks: []
+        )
+        XCTAssertFalse(html.contains("LIMEGHOST_"), html)
+    }
 }

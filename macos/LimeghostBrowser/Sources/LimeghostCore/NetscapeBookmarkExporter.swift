@@ -48,12 +48,30 @@ public enum NetscapeBookmarkExporter {
 
     private static func renderFolder(_ folder: BookmarkFolderRecord, collection: BookmarkCollection, indent: String) -> String {
         let addDate = Int(folder.createdAt.timeIntervalSince1970)
-        var output = "\(indent)<DT><H3 ADD_DATE=\"\(addDate)\" LAST_MODIFIED=\"\(addDate)\">"
+        var output = "\(indent)<DT><H3 ADD_DATE=\"\(addDate)\" LAST_MODIFIED=\"\(addDate)\"\(limeghostAttributes(of: folder))>"
         output += "\(NetscapeHTMLEntities.escape(folder.title))</H3>\n"
         output += "\(indent)<DL><p>\n"
         output += renderChildren(of: folder.id, collection: collection, indent: indent + "    ")
         output += "\(indent)</DL><p>\n"
         return output
+    }
+
+    /// Limeghost's own icon and colour for a folder, so an export read by
+    /// Limeghost on another device keeps them — they were lost, and the
+    /// founder's folders arrived on the iPhone plain, on September 29, 2026.
+    /// Every other browser ignores an attribute it does not know. The icon is
+    /// the one the folder draws, a legacy emoji resolved; a plain folder, with
+    /// the default icon and no colour, is written with neither.
+    private static func limeghostAttributes(of folder: BookmarkFolderRecord) -> String {
+        var attributes = ""
+        let iconID = LimeghostIconCatalog.resolvedIconID(iconID: folder.iconID, legacyEmoji: folder.emoji)
+        if iconID != LimeghostIconCatalog.defaultIconID {
+            attributes += " LIMEGHOST_ICON=\"\(NetscapeHTMLEntities.escape(iconID))\""
+        }
+        if let colorID = folder.colorID {
+            attributes += " LIMEGHOST_COLOR=\"\(NetscapeHTMLEntities.escape(colorID))\""
+        }
+        return attributes
     }
 
     private static func renderBookmark(_ bookmark: BookmarkRecord, indent: String) -> String {
