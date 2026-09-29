@@ -229,6 +229,10 @@ struct BookmarkFolderMenuItems: View {
     let delete: () -> Void
     /// Present where a surface can hand the reader the full bookmarks page.
     let organize: (() -> Void)?
+    /// Where this folder may move, from `BookmarkFolderDestination.places`:
+    /// never itself or a folder inside it. Move to is left out without both.
+    var moveDestinations: [BookmarkFolderDestination] = []
+    var move: ((UUID?) -> Void)?
 
     var body: some View {
         // Hidden, not greyed out, when there is nothing to open.
@@ -265,6 +269,25 @@ struct BookmarkFolderMenuItems: View {
         // the reason the icon picker went unnoticed — nobody opens a rename
         // dialog looking for artwork.
         Button("Edit folder…", action: rename)
+        // The bookmark menu's own Move to, for a folder and everything in
+        // it: the shared layer could re-file a folder from September 29,
+        // 2026, the iPhone offered it that day, and the founder asked for it
+        // here. A tick marks where the folder is now.
+        if let move, !moveDestinations.isEmpty {
+            Menu("Move to") {
+                ForEach(moveDestinations) { destination in
+                    Button {
+                        move(destination.folderID)
+                    } label: {
+                        if destination.folderID == folder.parentID {
+                            Label(destination.label, systemImage: "checkmark")
+                        } else {
+                            Text(destination.label)
+                        }
+                    }
+                }
+            }
+        }
         Divider()
         Button("Delete folder", role: .destructive, action: delete)
         if let organize {

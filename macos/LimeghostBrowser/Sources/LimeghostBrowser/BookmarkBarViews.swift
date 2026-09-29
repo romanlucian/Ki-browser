@@ -751,7 +751,9 @@ private struct BookmarkFolderMenu: View {
             newSubfolder: { actions.newSubfolder(folder.id) },
             rename: { actions.rename(folder) },
             delete: { actions.delete(folder) },
-            organize: actions.organize
+            organize: actions.organize,
+            moveDestinations: BookmarkFolderDestination.places(for: folder, among: BookmarkFolderDestination.tree(in: store)),
+            move: { _ = store.moveBookmarkFolder(folder, to: $0) }
         )
     }
 
